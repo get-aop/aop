@@ -129,7 +129,7 @@ describe("runSessionPrompt", () => {
     expect(options?.disallowedTools).toBeUndefined();
     expect(options?.logFilePath).toBeTruthy();
     expect(options?.startupTimeoutMs).toBe(30_000);
-    expect(options?.inactivityTimeoutMs).toBe(5 * 60_000);
+    expect(options?.inactivityTimeoutMs).toBeUndefined();
     expect(options?.env).toMatchObject({
       AOP_CHAT_SESSION_ID: "isess_run",
       AOP_CHAT_WORKSPACE_PATH: "/tmp/repo",

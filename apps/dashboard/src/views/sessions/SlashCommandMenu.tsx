@@ -102,7 +102,7 @@ const handleSlashCommandPickKey = ({
   onPick: (command: string) => void;
 }): boolean => {
   if (event.key !== "Enter" && event.key !== "Tab") return false;
-  // Exact leading commands (e.g. `/status`) execute via onSend; do not complete them.
+  // Exact leading commands (e.g. `/clear`) execute via onSend; do not complete them.
   if (event.key === "Enter" && isExactLeadingSlashCommand(input, caret)) return false;
   const item = items[activeIndex];
   if (!item) return false;

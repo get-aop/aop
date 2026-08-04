@@ -31,7 +31,7 @@ describe("ChatThread user messages", () => {
       parseMessageSegments("codex please ship this").every((segment) => segment.kind === "text"),
     ).toBe(true);
     expect(
-      parseMessageSegments("/task create Fix it %K6", ["K6"]).map((segment) => segment.kind),
+      parseMessageSegments("/skill tdd Fix it %K6", ["K6"]).map((segment) => segment.kind),
     ).toEqual(["command", "text", "mention"]);
 
     render(
@@ -42,7 +42,7 @@ describe("ChatThread user messages", () => {
               id: "segmented-user-message",
               sessionId: "s1",
               role: "user",
-              content: "/task create Fix it %K6",
+              content: "/skill tdd Fix it %K6",
               action: null,
               createdAt: "2026-07-18T12:00:00.000Z",
             },
@@ -53,7 +53,7 @@ describe("ChatThread user messages", () => {
       />,
     );
 
-    expect(screen.getByText("/task create")).toBeTruthy();
+    expect(screen.getByText("/skill")).toBeTruthy();
     const mention = screen.getByText("%K6");
     expect(mention).toBeTruthy();
     expect(mention.className).toContain("text-xs");

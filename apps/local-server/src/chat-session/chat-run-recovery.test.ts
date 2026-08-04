@@ -100,7 +100,6 @@ describe("detectChatRunTerminalState", () => {
       }),
       pollIntervalMs: 5,
       startupTimeoutMs: 20,
-      inactivityTimeoutMs: 10_000,
       getNow: () => {
         now += 15;
         return now;
@@ -232,32 +231,41 @@ describe("detectChatRunTerminalState", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("uses inactivity timeout after non-empty output appears", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-inactivity-"));
+  test("keeps waiting for a quiet run instead of killing it on inactivity", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-quiet-"));
     const logFilePath = join(dir, "partial.jsonl");
     let now = Date.parse("2026-07-12T00:00:00.000Z");
     await writeFile(logFilePath, jsonl([{ type: "text", data: "still working" }]));
-    // Align file mtime with fake clock so inactivity is measured against injected time.
+    // Align file mtime with fake clock so staleness is measured against injected time.
     const epochSeconds = now / 1000;
     await utimes(logFilePath, epochSeconds, epochSeconds);
 
-    const recovered = await waitForChatRunTerminal({
+    const recovery = waitForChatRunTerminal({
       run: runningRun(logFilePath, {
         created_at: new Date(now).toISOString(),
         updated_at: new Date(now).toISOString(),
       }),
       pollIntervalMs: 5,
       startupTimeoutMs: 10_000,
-      inactivityTimeoutMs: 20,
       getNow: () => {
         now += 15;
         return now;
       },
     });
 
-    expect(recovered.status).toBe("failed");
-    expect(recovered.failureKind).toBeNull();
-    expect(recovered.text).toContain("inactivity timeout");
+    // Long after any inactivity deadline, the run is still considered alive.
+    await Bun.sleep(100);
+    await appendFile(
+      logFilePath,
+      `\n${jsonl([
+        { type: "text", data: "finished eventually" },
+        { type: "end", stopReason: "EndTurn" },
+      ])}`,
+    );
+
+    const recovered = await recovery;
+    expect(recovered.status).toBe("completed");
+    expect(recovered.text).toContain("finished eventually");
     await rm(dir, { recursive: true, force: true });
   });
 
@@ -269,7 +277,6 @@ describe("detectChatRunTerminalState", () => {
       run: runningRun(logFilePath),
       pollIntervalMs: 10,
       startupTimeoutMs: 5_000,
-      inactivityTimeoutMs: 5_000,
     });
 
     await Bun.sleep(25);
@@ -316,7 +323,6 @@ describe("detectChatRunTerminalState", () => {
         run: runningRun(logFilePath),
         pollIntervalMs: 10,
         startupTimeoutMs: 5_000,
-        inactivityTimeoutMs: 5_000,
       });
       expect(recovered.status).toBe("completed");
       expect(recovered.text).toContain("recovered after read error");

@@ -21,7 +21,7 @@ import {
   type TransitionResult,
   type WorkflowStateMachine,
 } from "../workflow-engine/workflow-state-machine.ts";
-import { CHAT_INACTIVITY_TIMEOUT_MS, CHAT_STARTUP_TIMEOUT_MS } from "./runtime-engine.ts";
+import { CHAT_STARTUP_TIMEOUT_MS } from "./runtime-engine.ts";
 import { publishChatSessionEvent } from "./session-events.ts";
 
 const logger = getLogger("chat-workflow-run");
@@ -407,7 +407,6 @@ const runStepAgent = async (
     browserControl: opts.agent.browserControl ?? false,
     computerControl: opts.agent.computerControl ?? false,
     startupTimeoutMs: CHAT_STARTUP_TIMEOUT_MS,
-    inactivityTimeoutMs: CHAT_INACTIVITY_TIMEOUT_MS,
     disallowedTools: ["Skill"],
     onSpawn: (pid) => {
       spawnedPid = pid;

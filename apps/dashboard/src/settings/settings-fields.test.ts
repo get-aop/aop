@@ -17,9 +17,19 @@ describe("settings fields", () => {
     expect(SETTINGS_GROUPS.some((group) => group.label === "Task discovery")).toBe(false);
   });
 
+  test("does not expose legacy tasks/workers settings in Settings UI", () => {
+    const keys = SETTINGS_GROUPS.flatMap((group) => group.keys);
+    expect(keys).not.toContain("max_concurrent_tasks");
+    expect(keys).not.toContain("agent_timeout_secs");
+    expect(keys).not.toContain("watcher_poll_interval_secs");
+    expect(keys).not.toContain("queue_poll_interval_secs");
+    expect(SETTINGS_GROUPS.some((group) => group.label === "Agent configuration")).toBe(false);
+    expect(SETTINGS_GROUPS.some((group) => group.label === "Polling")).toBe(false);
+  });
+
   test("keeps remaining settings visible", () => {
-    expect(isSettingVisible("max_concurrent_tasks", {}, [])).toBe(true);
-    expect(resolveSettingOptions("max_concurrent_tasks", {}, [])).toBeUndefined();
+    expect(isSettingVisible("chat_global_instructions", {}, [])).toBe(true);
+    expect(resolveSettingOptions("chat_global_instructions", {}, [])).toBeUndefined();
   });
 
   test("exposes global chat instructions without a mid-run mode selector", () => {

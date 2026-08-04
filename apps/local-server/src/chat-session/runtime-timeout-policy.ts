@@ -1,6 +1,5 @@
 export interface ChatRuntimeTimeoutPolicy {
   startupTimeoutMs: number;
-  inactivityTimeoutMs: number;
   policyName: string;
 }
 
@@ -18,13 +17,11 @@ export type ChatRuntimeTimeoutFacts = Record<string, unknown> &
 
 const DEFAULT_POLICY: ChatRuntimeTimeoutPolicy = {
   startupTimeoutMs: 30_000,
-  inactivityTimeoutMs: 5 * 60_000,
   policyName: "default_v1",
 };
 
 const GROK_POLICY: ChatRuntimeTimeoutPolicy = {
   startupTimeoutMs: 120_000,
-  inactivityTimeoutMs: 5 * 60_000,
   policyName: "grok_slow_start_v1",
 };
 

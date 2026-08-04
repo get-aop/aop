@@ -54,7 +54,6 @@ export const waitForChatRunTerminal = async (input: {
   onProgress?: StreamProgressListener;
   pollIntervalMs?: number;
   startupTimeoutMs?: number;
-  inactivityTimeoutMs?: number;
   getNow?: () => number;
   grokHome?: string;
   signal?: AbortSignal;
@@ -91,7 +90,6 @@ const pollUntilChatRunTerminal = async (input: {
   run: ChatRun;
   pollIntervalMs?: number;
   startupTimeoutMs?: number;
-  inactivityTimeoutMs?: number;
   getNow?: () => number;
   getLastNativeActivityAt?: () => number;
   signal?: AbortSignal;
@@ -99,7 +97,6 @@ const pollUntilChatRunTerminal = async (input: {
   const pollIntervalMs = input.pollIntervalMs ?? 250;
   const policy = resolveChatRuntimeTimeoutPolicy(input.run.runtime);
   const startupTimeoutMs = input.startupTimeoutMs ?? policy.startupTimeoutMs;
-  const inactivityTimeoutMs = input.inactivityTimeoutMs ?? policy.inactivityTimeoutMs;
   const getNow = input.getNow ?? Date.now;
   const runStartedAt = parseActivityTime(input.run.created_at);
   let lastActivityAt = parseActivityTime(input.run.updated_at);
@@ -117,7 +114,6 @@ const pollUntilChatRunTerminal = async (input: {
       lastActivityAt,
       runStartedAt,
       startupTimeoutMs,
-      inactivityTimeoutMs,
       getNow,
       getLastNativeActivityAt: input.getLastNativeActivityAt,
     });
@@ -154,7 +150,6 @@ const pollRecoveryOnce = async (input: {
   lastActivityAt: number;
   runStartedAt: number;
   startupTimeoutMs: number;
-  inactivityTimeoutMs: number;
   getNow: () => number;
   getLastNativeActivityAt?: () => number;
 }): Promise<{
@@ -200,7 +195,6 @@ const pollRecoveryOnce = async (input: {
       runStartedAt: input.runStartedAt,
       lastActivityAt,
       startupTimeoutMs: input.startupTimeoutMs,
-      inactivityTimeoutMs: input.inactivityTimeoutMs,
     }),
   };
 };
@@ -285,16 +279,15 @@ const recoveryTimeoutResult = (input: {
   runStartedAt: number;
   lastActivityAt: number;
   startupTimeoutMs: number;
-  inactivityTimeoutMs: number;
 }): RecoveredChatRun | null => {
+  // A run that already produced output is never declared dead: it may be
+  // working quietly for a long time, and recovery must not kill a live runtime.
   if (!input.sawOutput) {
     if (input.now - input.runStartedAt <= input.startupTimeoutMs) return null;
     logRecoveryTimeout(input, "startup", input.now - input.runStartedAt);
     return startupTimeoutResult(input.run, input.content);
   }
-  if (input.now - input.lastActivityAt <= input.inactivityTimeoutMs) return null;
-  logRecoveryTimeout(input, "inactivity", input.now - input.lastActivityAt);
-  return inactivityTimeoutResult(input.run, input.content);
+  return null;
 };
 
 const logRecoveryTimeout = (
@@ -380,18 +373,6 @@ const resolveRecoveredSessionId = (run: ChatRun, content: string): string | null
   }
   return logSessionId ?? run.runtime_session_id ?? run.resume_session_id;
 };
-
-const inactivityTimeoutResult = (run: ChatRun, content: string): RecoveredChatRun => ({
-  status: "failed",
-  text: "The runtime stopped responding (inactivity timeout). Try again.",
-  runtimeSessionId: resolveRecoveredSessionId(run, content),
-  runtimeSessionState: resolveRecoveredSessionState(
-    run,
-    content,
-    resolveRecoveredSessionId(run, content),
-  ),
-  failureKind: null,
-});
 
 const resolveRecoveredSessionState = (
   run: ChatRun,

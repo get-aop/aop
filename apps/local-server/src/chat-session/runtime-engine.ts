@@ -64,7 +64,6 @@ export type RuntimeControl = Pick<ControlCommand, "provider" | "capability">;
 
 /** Chat live runs share durable recovery timeouts for consistent UX. */
 export const CHAT_STARTUP_TIMEOUT_MS = 30_000;
-export const CHAT_INACTIVITY_TIMEOUT_MS = 5 * 60_000;
 /**
  * Soft size for the AOP capture log (provider stdout). Like t3code observability
  * logs: warn when exceeded, never kill the agent. Finalization reads at most this
@@ -1013,7 +1012,6 @@ const buildRunOptions = (
     allowedDirectories,
     mcpServerUrl: resolveAopMcpUrl(session.runtime, session.id),
     startupTimeoutMs: timeoutPolicy.startupTimeoutMs,
-    inactivityTimeoutMs: timeoutPolicy.inactivityTimeoutMs,
     env: {
       AOP_CHAT_SESSION_ID: session.id,
       AOP_CHAT_WORKSPACE_PATH: repoPath,

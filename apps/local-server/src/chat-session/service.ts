@@ -305,7 +305,6 @@ export interface SendChatMessageInput {
 export interface ChatSessionServiceDeps {
   createProviderFn?: CreateProviderFn;
   recoveryPollIntervalMs?: number;
-  recoveryInactivityTimeoutMs?: number;
   /** Test seam for holding accepted work before provider preparation starts. */
   beforeAssistantReply?: (run: ChatRun) => Promise<void>;
   /** Test seam for observing queued lifecycle ownership before durable claim. */
@@ -1530,7 +1529,6 @@ const recoverChatRun = async (
     recovered = await waitForChatRunTerminal({
       run,
       pollIntervalMs: deps.recoveryPollIntervalMs,
-      inactivityTimeoutMs: deps.recoveryInactivityTimeoutMs,
       signal,
       onProgress: (progress) => {
         activity = progress;

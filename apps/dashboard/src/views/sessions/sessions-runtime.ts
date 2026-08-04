@@ -86,18 +86,8 @@ export const CHAT_COMMANDS = [
   { cmd: "/audit", args: "<runtime>", desc: "Audit the implementation after it completes" },
   { cmd: "/test", args: "<runtime>", desc: "Run tests after the implementation completes" },
   { cmd: "/security", args: "<runtime>", desc: "Run a security review after implementation" },
-  { cmd: "/task create", args: "<request> [%worker]", desc: "Generate a complete backlog task" },
-  {
-    cmd: "/task batch",
-    args: "<several tasks in one request>",
-    desc: "Split a request into multiple backlog tasks",
-  },
-  { cmd: "/task start", args: "<task title or id>", desc: "Start an assigned To-do task" },
-  { cmd: "/assign", args: "<task title or id> %worker", desc: "Prepare a backlog assignment" },
-  { cmd: "/worker", args: "new", desc: "Create a worker" },
   { cmd: "/workflow", args: "run <name>", desc: "Trigger a workflow" },
   { cmd: "/skill", args: "<name>", desc: "Run a runtime skill" },
-  { cmd: "/status", args: "", desc: "Pool snapshot" },
   { cmd: "/clear", args: "", desc: "Settle session and open a fresh one" },
   { cmd: "/goal", args: "", desc: "Run the CLI GOAL command" },
 ] as const;
@@ -261,7 +251,7 @@ export interface SlashTokenMatch {
  */
 export const matchSlashToken = (draft: string, caret = draft.length): SlashTokenMatch | null => {
   const before = draft.slice(0, caret);
-  // Allow spaces so multi-word commands like `/task create` still filter while typing.
+  // Allow spaces so commands still filter while typing a trailing space.
   // Bare `/` is eligible (.* not .+) so the full command menu can open.
   const tokenMatch = before.match(/(?:^|\s)(\/.*)$/);
   if (!tokenMatch) return null;

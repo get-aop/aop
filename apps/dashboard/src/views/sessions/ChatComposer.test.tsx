@@ -1125,9 +1125,7 @@ describe("ChatComposer context chips and typeahead", () => {
   test("Enter on an exact leading slash command sends instead of completing", () => {
     const onSend = mock(() => {});
     const onSlashPick = mock((_cmd: string) => {});
-    render(
-      <ChatComposer {...baseProps} input="/status" onSend={onSend} onSlashPick={onSlashPick} />,
-    );
+    render(<ChatComposer {...baseProps} input="/goal" onSend={onSend} onSlashPick={onSlashPick} />);
 
     const textarea = screen.getByRole("textbox");
     expect(screen.getByTestId("slash-command-menu")).toBeTruthy();

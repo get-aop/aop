@@ -120,7 +120,7 @@ describe("SlashCommandMenu", () => {
     const onPick = mock(() => {});
     const { rerender } = render(
       <SlashCommandMenu
-        input="/ta"
+        input="/sk"
         caret={3}
         activeIndex={0}
         onActiveIndexChange={() => {}}
@@ -131,14 +131,14 @@ describe("SlashCommandMenu", () => {
     expect(menu.className).toContain("rounded-[20px]");
     expect(menu.className).toContain("bg-popover/96");
     expect(menu.className).toContain("backdrop-blur-xs");
-    expect(within(menu).getByText("/task create")).toBeTruthy();
+    expect(within(menu).getByText("/skill")).toBeTruthy();
     expect(within(menu).queryByText("/status")).toBeNull();
-    fireEvent.click(within(menu).getByText("/task create"));
-    expect(onPick).toHaveBeenCalledWith("/task create ");
+    fireEvent.click(within(menu).getByText("/skill"));
+    expect(onPick).toHaveBeenCalledWith("/skill ");
 
     rerender(
       <SlashCommandMenu
-        input="hello /ta"
+        input="hello /sk"
         caret={9}
         activeIndex={0}
         onActiveIndexChange={() => {}}
@@ -146,7 +146,7 @@ describe("SlashCommandMenu", () => {
       />,
     );
     expect(screen.getByTestId("slash-command-menu")).toBeTruthy();
-    expect(within(screen.getByTestId("slash-command-menu")).getByText("/task create")).toBeTruthy();
+    expect(within(screen.getByTestId("slash-command-menu")).getByText("/skill")).toBeTruthy();
   });
 });
 
@@ -274,6 +274,6 @@ describe("ChatThread segments + TerminalDock", () => {
 describe("slash filter helper (segments / auto-title seam)", () => {
   test("filterSlashCommands matches concept list", () => {
     expect(filterSlashCommands("/")).toHaveLength(CHAT_COMMANDS.length);
-    expect(filterSlashCommands("/st").map((c) => c.cmd)).toEqual(["/status"]);
+    expect(filterSlashCommands("/sk").map((c) => c.cmd)).toEqual(["/skill"]);
   });
 });
