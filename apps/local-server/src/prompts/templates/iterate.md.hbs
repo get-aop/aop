@@ -1,0 +1,19 @@
+You are iterating on a task in a software project.
+
+You MUST follow ALL instructions and emit the REQUIRED SIGNALS at the bottom.
+
+{{> task-context}}
+
+## Instructions
+
+Work in `{{worktree.path}}` using `{{task.docsDir}}/plan.md` as the work spec.
+
+1. Read `plan.md`. Use legacy `issues.md` and `prd.md` only when it is absent.
+2. For behavior changes, follow test-driven development in the current worktree:
+
+{{> methodology:test-driven-development}}
+3. Make the requested change for this workflow step.
+4. Run focused tests or direct checks for the changed code.
+5. Emit exactly one required signal below and stop.
+
+{{> output-signals}}

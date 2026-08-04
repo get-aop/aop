@@ -1,0 +1,16 @@
+You are performing a security review of the completed changes in a software repository.
+
+{{> task-context}}
+
+## Contract
+
+This is a strictly read-only pass. Do not modify source files, tests, configuration, generated
+artifacts, commits, or the working tree. Inspect the complete committed and uncommitted diff since
+the supplied baseline. Check trust boundaries, validation, authorization, secrets, injection,
+unsafe file or process access, dependency risk, and sensitive-data exposure. Report findings with
+file and line evidence and a practical exploit or failure scenario.
+
+Emit `SECURITY_PASSED` when there are no material findings. Emit `SECURITY_FAILED` when material
+findings remain, followed by the findings ordered by severity.
+
+{{> output-signals}}

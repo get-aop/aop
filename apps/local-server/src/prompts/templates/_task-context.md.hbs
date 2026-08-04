@@ -1,0 +1,53 @@
+## Task Details
+
+- **Task docs folder**: `{{task.docsDir}}`
+- **Logical task path**: `{{task.changePath}}`
+- Task docs live in AOP storage under `~/.aop/repos/.../tasks/...`, not in the git worktree. Edit them at the absolute path above.
+
+## Task Docs
+
+Read task docs from `{{task.docsDir}}` before changing code:
+
+1. Read `plan.md` as the work spec: implementation steps, acceptance criteria, and scope boundaries.
+2. Read `task.md` for the original request, source metadata, attachments, and status.
+3. Legacy fallback: read `issues.md` and `prd.md` only when `plan.md` is absent (tasks created by the retired modeling flow).
+
+{{#if task.attachments.length}}
+## Attached Images
+
+The user attached images to this task. The task text references them as #image1, #image2, ... in order. View each image file before working:
+{{#each task.attachments}}
+- {{this.label}}: `{{this.path}}`
+{{/each}}
+
+{{/if}}
+## Worktree Information
+
+You are working on the following git worktree for **code changes only**:
+- **Path**: {{worktree.path}}
+- **Branch**: {{worktree.branch}}
+
+Do not create or edit task docs under `{{worktree.path}}/{{task.changePath}}`. Keep implementation in the worktree and task docs in `{{task.docsDir}}`.
+
+## Repository Scope
+
+- The current local runtime supports one developer assignment and one writable primary repository per task.
+- Supporting repositories are reference-only in this runtime. Do not edit them from the current worktree unless the task explicitly says otherwise.
+- If task docs include execution metadata, treat that contract as the source of truth for repository ownership and coordination.
+{{#each task.repositories}}
+- **{{this.repoId}}**: {{this.assignment}} at `{{this.path}}` {{#if this.writable}}(writable){{else}}(read-only){{/if}}
+{{/each}}
+
+{{#if input}}
+
+## Resumed with User Input
+
+This step was previously paused and the user has responded:
+
+> {{input}}
+
+Determine the user's intent from their input:
+- **Approved/accepted** your previous output → signal accordingly and do NOT redo work
+- **Requested changes** or gave feedback → address their feedback, then re-signal accordingly
+- **Answered a question** you asked → use their answer to proceed with the task
+{{/if}}

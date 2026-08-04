@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Install AOP</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a0b;
+      --panel: #141416;
+      --border: #2a2a2e;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --accent: #f472b6;
+      --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 2rem 1rem;
+    }
+
+    main {
+      width: min(720px, 100%);
+    }
+
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .lead {
+      margin: 0 0 2rem;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .install-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .tabs {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      padding: 1rem 0.75rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+
+    .tab[aria-selected="true"] {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    .platforms {
+      margin-left: auto;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    .panel {
+      display: none;
+      padding: 1rem 1rem 1.25rem;
+    }
+
+    .panel[data-active="true"] {
+      display: block;
+    }
+
+    .command-row {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #0d0d0f;
+      overflow: hidden;
+    }
+
+    code.command {
+      flex: 1;
+      display: block;
+      padding: 1rem 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--text);
+    }
+
+    code.command .prompt {
+      color: var(--accent);
+      user-select: none;
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      border: none;
+      border-left: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      padding: 0 1rem;
+      cursor: pointer;
+    }
+
+    .copy-btn:hover {
+      color: var(--text);
+      background: #1a1a1d;
+    }
+
+    .copy-btn.copied {
+      color: #4ade80;
+    }
+
+    .hint {
+      margin: 0.75rem 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    footer {
+      margin-top: 1.25rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--text);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .brand-mark {
+      width: 2rem;
+      height: 2rem;
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <div class="brand">
+      <svg class="brand-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#0f1117" />
+        <circle cx="10" cy="22" r="3" fill="#2dd4bf" opacity="0.9" />
+        <circle cx="16" cy="18" r="2.5" fill="#fb7185" opacity="0.85" />
+        <circle cx="22" cy="20" r="2" fill="#c4b5fd" opacity="0.8" />
+      </svg>
+      <p class="brand-name">AOP</p>
+    </div>
+    <h1>Installation</h1>
+    <p class="lead">
+      Local-first agent orchestration for macOS, Linux, and Windows. Pick a prebuilt binary or
+      install from source with Bun (contributors and latest <code>main</code>).
+    </p>
+
+    <div class="install-card">
+      <div class="tabs" role="tablist" aria-label="Install method">
+        <button type="button" class="tab" role="tab" id="tab-curl" aria-selected="true" aria-controls="panel-curl"
+          data-tab="curl">
+          CURL
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-bun" aria-selected="false" aria-controls="panel-bun"
+          data-tab="bun">
+          BUN
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-windows" aria-selected="false"
+          aria-controls="panel-windows" data-tab="windows">
+          WINDOWS
+        </button>
+        <span class="platforms">MACOS · LINUX · WINDOWS</span>
+      </div>
+
+      <div class="panel" id="panel-curl" role="tabpanel" aria-labelledby="tab-curl" data-active="true">
+        <div class="command-row">
+          <code class="command"
+            id="cmd-curl"><span class="prompt">$ </span>curl -fsSL https://getaop.com/install.sh | sh</code>
+          <button type="button" class="copy-btn" data-copy="cmd-curl">COPY</button>
+        </div>
+        <p class="hint">Downloads the compiled <code>aop</code> binary (CLI + local-server + dashboard). Requires Git
+          and an agent CLI for runs.</p>
+      </div>
+
+      <div class="panel" id="panel-bun" role="tabpanel" aria-labelledby="tab-bun">
+        <div class="command-row">
+          <code class="command" id="cmd-bun"><span class="prompt">$ </span>git clone https://github.com/get-aop/aop-mono.git
+cd aop-mono && ./install</code>
+          <button type="button" class="copy-btn" data-copy="cmd-bun">COPY</button>
+        </div>
+        <p class="hint">Installs from source: <code>bun install</code>, links <code>aop</code>, builds the dashboard,
+          and registers the local-server user service.</p>
+      </div>
+
+      <div class="panel" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows">
+        <div class="command-row">
+          <code class="command"
+            id="cmd-windows-setup"><span class="prompt">DL&gt; </span>https://getaop.com/latest/aop-windows-x64-setup.exe</code>
+          <button type="button" class="copy-btn" data-copy="cmd-windows-setup">COPY</button>
+        </div>
+        <p class="hint">Desktop setup installer (<code>aop-windows-x64-setup.exe</code>) — installs the AOP
+          desktop app. Unsigned in alpha: SmartScreen may warn (More info → Run anyway).</p>
+        <div class="command-row" style="margin-top: 0.75rem;">
+          <code class="command"
+            id="cmd-windows"><span class="prompt">PS&gt; </span>irm https://getaop.com/install.ps1 | iex</code>
+          <button type="button" class="copy-btn" data-copy="cmd-windows">COPY</button>
+        </div>
+        <p class="hint">CLI-only install via PowerShell (prebuilt <code>aop-windows-x64.exe</code> + runtime
+          assets under <code>%LOCALAPPDATA%\aop</code>).
+          <br />WSL users: run the Linux <code>curl</code> command <em>inside your distro</em> instead — AOP runs
+          the sidecar in-distro.</p>
+      </div>
+    </div>
+
+    <footer>
+      <span>MIT</span>
+      <span>Requires Bun 1.2+ (source path) · Git</span>
+      <a href="https://github.com/get-aop/aop-mono">read the source ↗</a>
+    </footer>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll(".tab");
+    const panels = document.querySelectorAll(".panel");
+
+    const selectTab = (name) => {
+      tabs.forEach((tab) => {
+        const active = tab.dataset.tab === name;
+        tab.setAttribute("aria-selected", String(active));
+      });
+      panels.forEach((panel) => {
+        panel.dataset.active = String(panel.id === `panel-${name}`);
+      });
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+    });
+
+    const copyText = (id) => {
+      const el = document.getElementById(id);
+      const raw = el.textContent.replace(/^\$\s*/, "").trim();
+      return raw;
+    };
+
+    document.querySelectorAll(".copy-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const text = copyText(btn.dataset.copy);
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = "COPIED";
+          btn.classList.add("copied");
+          setTimeout(() => {
+            btn.textContent = "COPY";
+            btn.classList.remove("copied");
+          }, 1500);
+        } catch {
+          btn.textContent = "FAILED";
+        }
+      });
+    });
+  </script>
+</body>
+
+</html>

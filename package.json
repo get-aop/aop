@@ -1,0 +1,79 @@
+{
+  "name": "aop",
+  "version": "0.9.31",
+  "packageManager": "bun@1.3.14",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "aop": "./apps/cli/src/main.ts"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "scripts",
+    "e2e-tests"
+  ],
+  "scripts": {
+    "build": "bun run --sequential --filter '*' build",
+    "build:dashboard": "bun run --filter @aop/dashboard build",
+    "dev": "bun run ./scripts/dev.ts",
+    "dev:aop": "bun run ./scripts/dev-aop.ts",
+    "dev:dashboard": "bun run --filter @aop/dashboard dev",
+    "dev:desktop": "bun run --filter @aop/desktop tauri dev",
+    "dev:desktop:isolated": "bun run ./scripts/desktop/dev-isolated-desktop.ts",
+    "dev:workspaces": "bun run --filter '*' dev",
+    "local:aop": "bun run ./scripts/local-aop.ts",
+    "setup:source": "bun run ./scripts/source-install.ts",
+    "test": "bun test apps packages scripts e2e-tests/src/**/*.test.ts",
+    "test:ci": "bun test apps packages scripts e2e-tests/src/**/*.test.ts",
+    "test:integration": "AOP_RUN_INTEGRATION=1 bun test apps/local-server/src/cli.integration.test.ts",
+    "test:e2e": "AOP_RUN_E2E=1 bun test --concurrency 1 ./e2e-tests/src/*.e2e.ts",
+    "test:e2e:dashboard": "AOP_RUN_E2E=1 bun test --concurrency 1 ./e2e-tests/src/dashboard.e2e.ts",
+    "test:e2e:codex-benchmark": "bun run ./scripts/run-codex-e2e-benchmark.ts",
+    "benchmark:codex:aop": "bun run ./scripts/run-aop-codex-benchmark.ts",
+    "benchmark:codex:pure": "bun run ./scripts/run-pure-codex-benchmark.ts",
+    "benchmark:codex:compare": "bun run ./scripts/compare-codex-benchmarks.ts",
+    "test:coverage": "bun test --coverage apps packages scripts && bun run ./scripts/check-coverage-threshold.ts",
+    "typecheck": "bun run --filter '*' typecheck",
+    "check": "bun run lint && bun run docs:check && bun run typecheck && bun run build",
+    "docs:check": "bun run ./scripts/check-docs-facts.ts",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "ralph-loop": "bun run ./scripts/ralph-loop.ts",
+    "license:keygen": "bun run ./scripts/generate-license-keypair.ts",
+    "license:issue": "bun run ./scripts/issue-license.ts",
+    "build:release": "bun run ./scripts/installer/build.ts",
+    "build:desktop": "bun run --filter @aop/desktop build && cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml",
+    "package:desktop": "bun run ./scripts/release/macos-dmg.ts",
+    "package:macos-dmg": "bun run ./scripts/release/macos-dmg.ts",
+    "package:windows": "bun run ./scripts/release/windows-installer.ts",
+    "release": "bun run ./scripts/release/publish.ts",
+    "release:local": "bun run ./scripts/release/local-publish.ts",
+    "release:public": "bun run ./scripts/release/publish-public-snapshot.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.1",
+    "@types/bun": "^1.3.14",
+    "happy-dom": "^20.10.6",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "cac": "^7.0.0",
+    "yaml": "^2.9.0"
+  },
+  "overrides": {
+    "picomatch": "^4.0.4",
+    "uuid": "^11.1.1"
+  },
+  "private": true,
+  "description": "Agents Operating Platform \u2014 local-first orchestrator for coding-agent CLIs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/get-aop/aop-mono.git"
+  },
+  "homepage": "https://getaop.com",
+  "bugs": {
+    "url": "https://github.com/get-aop/aop-mono/issues"
+  },
+  "author": "AOP contributors"
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AOP",
+  "version": "../package.json",
+  "identifier": "com.getaop.aop",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build",
+    "devUrl": "http://127.0.0.1:25170",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "AOP",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 640
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "nsis"],
+    "category": "DeveloperTool",
+    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
+    "resources": {
+      "resources/": ""
+    },
+    "shortDescription": "AOP desktop app",
+    "longDescription": "AOP desktop app for running local coding-agent workflows.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
+  }
+}
