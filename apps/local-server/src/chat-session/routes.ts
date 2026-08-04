@@ -396,6 +396,8 @@ const mapUpdateError = (
       return c.json({ error: "Runtime configuration not found" }, 404);
     case "RUN_IN_PROGRESS":
       return c.json({ error: "Cannot settle or change runtime while a run is in progress" }, 409);
+    case "MODEL_LOCKED":
+      return c.json({ error: "Model cannot be changed after the session has started" }, 409);
   }
 };
 

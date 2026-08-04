@@ -1,5 +1,5 @@
 import type { RuntimeConfigurationProvider } from "@aop/common";
-import { CheckIcon, ChevronDownIcon, StarIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, LockIcon, StarIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -20,6 +20,8 @@ interface ComposerModelPickerProps {
   model: string;
   label: string;
   compact?: boolean;
+  /** Model choice is fixed once the session has its first message. */
+  locked?: boolean;
   onModelChange?: (model: string, runtimeConfigurationId?: string) => void;
 }
 
@@ -129,6 +131,38 @@ export const ComposerModelPicker = (props: ComposerModelPickerProps) => {
     });
   };
 
+  const trigger = (
+    <button
+      type="button"
+      data-testid="composer-runtime-config"
+      aria-label="Model"
+      aria-disabled={props.locked ? "true" : undefined}
+      data-locked={props.locked ? "true" : undefined}
+      className={cn(
+        "flex h-7 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent px-2 text-[12.5px] font-medium text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text",
+        props.locked && "cursor-default",
+        props.compact ? "max-w-42 shrink-0" : "max-w-48 shrink sm:max-w-56",
+      )}
+    >
+      <RuntimeProviderIcon runtime={props.runtime} className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1 overflow-hidden truncate text-left">{props.label}</span>
+      {props.locked ? (
+        <LockIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
+      ) : (
+        <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
+      )}
+    </button>
+  );
+
+  if (props.locked) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+        <TooltipContent side="top">Model is locked after the first message</TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
     <Popover
       open={open}
@@ -137,21 +171,7 @@ export const ComposerModelPicker = (props: ComposerModelPickerProps) => {
         if (!next) setQuery("");
       }}
     >
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          data-testid="composer-runtime-config"
-          aria-label="Model"
-          className={cn(
-            "flex h-7 min-w-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent px-2 text-[12.5px] font-medium text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text",
-            props.compact ? "max-w-42 shrink-0" : "max-w-48 shrink sm:max-w-56",
-          )}
-        >
-          <RuntimeProviderIcon runtime={props.runtime} className="size-4 shrink-0" />
-          <span className="min-w-0 flex-1 overflow-hidden truncate text-left">{props.label}</span>
-          <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
-        </button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
         <div
           data-testid="model-picker-content"

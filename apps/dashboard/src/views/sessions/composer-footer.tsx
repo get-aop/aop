@@ -58,6 +58,8 @@ interface ComposerFooterProps {
   onEffortChange?: (effort: string) => void;
   onAccessModeChange?: (mode: ChatRuntimeAccessMode) => void;
   onToggleFastMode?: () => void;
+  /** Model choice is fixed once the session has its first message. */
+  modelLocked?: boolean;
   onSend: () => void;
   onAbort?: () => void;
 }
@@ -101,6 +103,7 @@ export function ComposerFooter(props: ComposerFooterProps) {
           model={props.model}
           label={props.modelLabel}
           compact={compact}
+          locked={props.modelLocked}
           onModelChange={props.onModelChange}
         />
         {props.workflowChip}

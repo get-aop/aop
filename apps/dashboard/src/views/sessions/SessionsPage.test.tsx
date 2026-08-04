@@ -553,6 +553,44 @@ describe("SessionsPage composer drafts", () => {
     await screen.findByText("Could not update fast mode");
   });
 
+  test("locks the model picker once the session has its first message", async () => {
+    render(
+      <SessionsPage
+        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
+        onNavigate={() => {}}
+      />,
+    );
+
+    const freshTrigger = await screen.findByTestId("composer-runtime-config");
+    expect(freshTrigger.getAttribute("data-locked")).toBeNull();
+    fireEvent.click(freshTrigger);
+    expect(screen.getByPlaceholderText("Search models...")).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    const started = {
+      ...firstSession(),
+      messages: [
+        {
+          id: "m1",
+          sessionId: "one",
+          role: "user" as const,
+          content: "hello",
+          action: null,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+    sessions[0] = started;
+    await act(async () => {
+      sessionStreamHandler?.("session-updated", { sessionId: "one" });
+    });
+
+    const lockedTrigger = await screen.findByTestId("composer-runtime-config");
+    expect(lockedTrigger.getAttribute("data-locked")).toBe("true");
+    fireEvent.click(lockedTrigger);
+    expect(screen.queryByPlaceholderText("Search models...")).toBeNull();
+  });
+
   test("diffstat chip opens the right panel at the Diff tab (PLAN §6.3)", async () => {
     locationBranch = "feature/session-diff";
     gitDiffstat = { filesChanged: 1, additions: 2, deletions: 1 };

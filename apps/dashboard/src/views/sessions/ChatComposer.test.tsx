@@ -389,6 +389,34 @@ describe("ChatComposer context chips and typeahead", () => {
     expect(onRuntimeAccessModeChange).toHaveBeenCalledWith("auto-accept-edits");
   });
 
+  test("locks the model picker once the session has started", async () => {
+    const onModelChange = mock((_model: string) => {});
+    const onEffortChange = mock((_effort: string) => {});
+    render(
+      <ChatComposer
+        {...baseProps}
+        modelLocked
+        onModelChange={onModelChange}
+        onEffortChange={onEffortChange}
+      />,
+    );
+
+    const modelTrigger = screen.getByRole("button", { name: "Model" });
+    expect(modelTrigger.getAttribute("data-locked")).toBe("true");
+    fireEvent.click(modelTrigger);
+    expect(screen.queryByPlaceholderText("Search models...")).toBeNull();
+    expect(screen.queryByTestId("model-picker-content")).toBeNull();
+    expect(onModelChange).not.toHaveBeenCalled();
+
+    // effort stays changeable while the model is locked
+    const effortTrigger = screen.getByRole("button", { name: "Reasoning effort" });
+    fireEvent.pointerDown(effortTrigger, { button: 0, ctrlKey: false });
+    fireEvent.click(effortTrigger);
+    const high = await screen.findByRole("menuitemradio", { name: /High/ });
+    fireEvent.click(high);
+    expect(onEffortChange).toHaveBeenCalledWith("high");
+  });
+
   test("shows access controls for every built-in runtime driver", () => {
     const drivers = ["claude-code", "codex-cli", "grok-build", "opencode", "pi"] as const;
 

@@ -32,6 +32,7 @@ export interface ChatSessionRepository {
     options?: DeleteChatSessionGraphOptions,
   ) => Promise<DeleteChatSessionGraphResult>;
   listMessages: (sessionId: string) => Promise<ChatMessage[]>;
+  countMessages: (sessionId: string) => Promise<number>;
   countUnreadAssistantMessages: (sessionId: string, lastReadAt: string | null) => Promise<number>;
   createMessage: (message: NewChatMessage) => Promise<ChatMessage>;
 }
@@ -137,6 +138,15 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
         .orderBy("created_at")
         .orderBy("id")
         .execute();
+    },
+
+    countMessages: async (sessionId: string): Promise<number> => {
+      const row = await db
+        .selectFrom("chat_messages")
+        .select((eb) => eb.fn.countAll<number>().as("count"))
+        .where("session_id", "=", sessionId)
+        .executeTakeFirst();
+      return Number(row?.count ?? 0);
     },
 
     countUnreadAssistantMessages: (sessionId, lastReadAt) =>
