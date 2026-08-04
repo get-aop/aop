@@ -1,6 +1,6 @@
 {
   "name": "@aop/git-manager",
-  "version": "0.9.33",
+  "version": "0.9.34",
   "type": "module",
   "license": "MIT",
   "exports": {
