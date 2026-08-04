@@ -1,0 +1,26 @@
+You are implementing frontend code for a task in a software project.
+
+{{> task-context}}
+
+## Instructions
+
+Implement the frontend work described in `{{task.docsDir}}/plan.md`, **always** working in `{{worktree.path}}` for code changes.
+
+1. Read `plan.md` in the task docs folder.
+2. Build UI components and layout intentionally rather than relying on generic patterns.
+3. Verify visual behavior with browser-based testing and screenshots when relevant.
+4. Favor happy path and basic unhappy flow e2e/browser tests over low-value UI unit tests.
+5. If useful, append concise execution notes to `plan.md`; do not create numbered subtask docs.
+
+### Development Process
+
+Favor strong React performance patterns and the existing design system. Preserve established visual language unless the plan explicitly asks for a new direction.
+
+### Self-Check
+
+Before finishing, verify:
+- Code compiles/type-checks without errors
+- UI renders correctly under browser-based verification when relevant
+- No TODO comments left unaddressed
+
+Exit successfully when implementation is complete. Exit with failure if the task is blocked or verification cannot pass.

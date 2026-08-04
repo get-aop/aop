@@ -1,0 +1,85 @@
+# dependencies (bun install)
+node_modules
+
+# output
+out
+dist
+*.tgz
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+_.log
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# dotenv environment variable files
+.env
+.env.*
+!.env.example
+
+# Secrets
+*.pem
+*.key
+*.p12
+credentials.json
+secrets.json
+service-account*.json
+
+openspec
+
+# runtime data
+.aop
+.worktrees
+.worktrees/
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea
+.vscode/
+.cursor/
+
+# Finder (MacOS) folder config
+.DS_Store
+
+test-results/
+test-runs/
+playwright-report/
+.playwright-mcp
+link-claude.sh
+
+# desktop generated artifacts
+apps/desktop/src-tauri/resources/*
+!apps/desktop/src-tauri/resources/.gitkeep
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/icons/icon.iconset/
+
+# e2e test temp directories
+e2e-tests/tmp/
+
+# local video/probe scripts (owner's machine only, never committed)
+e2e-tests/*.mjs
+
+# local tooling and scratch files
+__pycache__
+.dex
+.claude-bkp
+.claude/worktrees/
+.leo
+tmp
+
+# local task docs (legacy repo-local layout; canonical storage is ~/.aop)
+/docs/tasks/
+
+# local AOP planning and demo docs
+/aop-docs/
+
+.superpowers/
+
+# Design reference docs (PLAN-*, never committed)
+docs/design/

@@ -1,0 +1,30 @@
+# AOP Planning Run
+
+{{> methodology:_artifact-reuse }}
+
+## Goal
+
+Create the task docs that AOP will use as the work spec. Do not publish to GitHub, GitLab, Linear, Jira, or `.scratch/`.
+
+## Planning Budget
+
+Do not launch subagents, background agents, or delegated planning tasks. Do not use the Task tool.
+
+Stop repo exploration once you have enough evidence to write a useful `plan.md`. Prefer targeted file reads and searches over broad repo sweeps, and record non-blocking unknowns with recommendations instead of continuing to chase them.
+
+## Process
+
+1. Study the request against the repository until you can name the files, modules, and tests the work touches.
+
+2. Write `plan.md` with these sections:
+
+   - `## Summary` — the problem and the intended outcome in a few sentences.
+   - `## Plan` — numbered implementation steps in dependency order. Each step names the files or modules it changes and how to verify it.
+   - `## Acceptance Criteria` — checkbox list of independently verifiable outcomes.
+   - `## Out of Scope` — explicit non-goals.
+
+   Completion criterion: an engineer with no other context could execute `plan.md` top to bottom, and every acceptance criterion is checkable.
+
+## Output
+
+Save the plan to `plan.md` by calling `aop_create_task` with the full plan body as `planMarkdown`. Do not return summaries, JSON, or a prose plan outside the tool call.

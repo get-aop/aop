@@ -1,0 +1,17 @@
+{
+  "name": "@aop/scripts",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aop/cli": "workspace:*",
+    "@aop/common": "workspace:*",
+    "@aop/infra": "workspace:*",
+    "@aop/llm-provider": "workspace:*",
+    "@aop/local-server": "workspace:*",
+    "@aop/license": "workspace:*"
+  }
+}

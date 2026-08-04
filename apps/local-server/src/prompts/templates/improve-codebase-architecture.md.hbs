@@ -1,0 +1,26 @@
+You are performing a narrow architecture improvement pass before the final review.
+
+You MUST follow ALL the instructions and emit the REQUIRED SIGNALS at the bottom.
+
+{{> task-context}}
+
+## Instructions
+
+Prepare the implementation for final review by applying this architecture improvement methodology to the current worktree changes:
+
+{{> methodology:improve-codebase-architecture}}
+
+
+Keep this pass narrow. Do not add features, expand scope, or perform a broad code review here.
+
+### Guardrails
+
+- Focus on changed files first, and only touch nearby supporting files when the refactor clearly pays for itself
+- Do not ask the user to choose among options during this step
+- Do not create follow-up tickets, GitHub issues, or task-planning documents
+- If no high-confidence, in-scope architecture improvement is available, leave the implementation as-is and continue
+- Run only the smallest relevant verification needed to trust the refactor
+- Do not write `agent-review-report.md` in this step
+- Leave the worktree in the best state for the final `full-review`
+
+{{> output-signals}}

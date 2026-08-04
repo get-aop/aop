@@ -1,0 +1,60 @@
+name: AOP E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: "Test name pattern to run within the dashboard E2E suite (optional)"
+        required: false
+        default: ""
+
+concurrency:
+  group: aop-e2e-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7.0.0
+
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bun e2e-tests/node_modules/.bin/playwright install chromium
+
+      - name: Run dashboard E2E tests
+        env:
+          AOP_RUN_E2E: "1"
+          AOP_E2E_AGENT_PROVIDER: e2e-fixture
+          TEST_FILTER: ${{ inputs.test_filter }}
+        run: |
+          if [ -n "$TEST_FILTER" ]; then
+            AOP_RUN_E2E=1 bun test --concurrency 1 ./e2e-tests/src/dashboard.e2e.ts --test-name-pattern "$TEST_FILTER"
+          else
+            bun run test:e2e:dashboard
+          fi
+
+      - name: Upload E2E artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: aop-dashboard-e2e-debug
+          path: |
+            e2e-tests/tmp
+          retention-days: 3
