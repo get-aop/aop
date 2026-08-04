@@ -7,6 +7,7 @@ import { registerCommands, setupLogging } from "@aop/cli/commands";
 import { configureLogging, getLogger } from "@aop/infra";
 import { startServer } from "@aop/local-server/server";
 import cac from "cac";
+import { isSystemdUserServiceActive, stopSystemdUserService } from "./systemd.ts";
 
 declare const BUILD_VERSION: string;
 
@@ -81,6 +82,9 @@ const configureRuntimeEnvironment = (port?: string): number => {
   return Number.parseInt(localServerPort, 10);
 };
 
+const spawnSystemctl = (command: string[]): { exitCode: number | null } =>
+  Bun.spawnSync(command, { stdout: "ignore", stderr: "ignore" });
+
 const cli = cac("aop");
 
 cli
@@ -121,6 +125,24 @@ cli
   });
 
 cli.command("stop", "Stop the local server").action(async () => {
+  // `aop run` under the systemd unit never writes a PID file, so the PID-file stop
+  // below would silently do nothing. Stop the unit when it manages this server; the
+  // unit teardown also reaps server child processes.
+  if (process.platform === "linux") {
+    try {
+      if (isSystemdUserServiceActive(spawnSystemctl)) {
+        if (stopSystemdUserService(spawnSystemctl)) {
+          logger.info("Stopped the AOP local server systemd unit");
+          process.exit(0);
+        }
+        logger.error("Failed to stop the AOP local server systemd unit");
+        process.exit(1);
+      }
+    } catch {
+      // No systemd user session; fall back to the PID-file stop below.
+    }
+  }
+
   const pid = await readPidFile();
 
   if (pid === null) {
