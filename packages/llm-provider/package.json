@@ -1,6 +1,6 @@
 {
   "name": "@aop/llm-provider",
-  "version": "0.9.36",
+  "version": "0.9.38",
   "type": "module",
   "license": "MIT",
   "exports": {
