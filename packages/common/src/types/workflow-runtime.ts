@@ -94,9 +94,12 @@ export const PI_MODEL_OPTIONS = [
   "openai-codex/gpt-5.6-sol",
   "openai-codex/gpt-5.6-terra",
   "kimi-coding/k3",
+  "deepseek-v4-flash",
 ] as const;
 // Kimi K3 only accepts max thinking; pi clamps any other requested level to max.
 const PI_MAX_THINKING_ONLY_MODEL_OPTIONS = new Set<string>(["kimi-coding/k3"]);
+// DeepSeek V4 Flash exposes only high and max thinking.
+const PI_HIGH_MAX_THINKING_MODEL_OPTIONS = new Set<string>(["deepseek-v4-flash"]);
 const CLAUDE_MAX_THINKING_MODEL_OPTIONS = new Set<string>([
   "claude-opus-5",
   "claude-opus-4-8",
@@ -125,6 +128,7 @@ export const WORKFLOW_MODEL_LABELS: Record<string, string> = {
   "openai-codex/gpt-5.6-sol": "GPT 5.6 Sol",
   "openai-codex/gpt-5.6-terra": "GPT 5.6 Terra",
   "kimi-coding/k3": "Kimi K3 Max",
+  "deepseek-v4-flash": "DeepSeek V4 Flash",
   "gpt-5.5": "GPT 5.5",
   "openai/gpt-5.5": "GPT 5.5",
   "openai/gpt-5.5-fast": "GPT 5.5 Fast",
@@ -232,6 +236,15 @@ export const getWorkflowThinkingOptions = (
 ): readonly { value: WorkflowRuntimeReasoning; label: string }[] => {
   if (provider === "pi" && PI_MAX_THINKING_ONLY_MODEL_OPTIONS.has(model)) {
     return WORKFLOW_THINKING_OPTIONS.filter((option) => option.value === "max");
+  }
+
+  if (provider === "pi" && PI_HIGH_MAX_THINKING_MODEL_OPTIONS.has(model)) {
+    return WORKFLOW_THINKING_OPTIONS.filter(
+      (option) => option.value === "high" || option.value === "max",
+    ).map((option) => ({
+      ...option,
+      label: getWorkflowThinkingLabel(provider, option.value, model),
+    }));
   }
 
   if (provider === "opencode" && OPENCODE_GLM_5_2_THINKING_MODEL_OPTIONS.has(model)) {
