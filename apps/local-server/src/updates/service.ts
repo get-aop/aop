@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -152,13 +153,11 @@ export const buildUpgradeSpawnCommand = async (
   return ["sh", scriptPath];
 };
 
-const readOwnCgroup = async (): Promise<string> => {
+export const readOwnCgroup = async (
+  readFile: (path: string) => string = (path) => readFileSync(path, "utf8"),
+): Promise<string> => {
   try {
-    const file = Bun.file("/proc/self/cgroup");
-    if (!(await file.exists())) {
-      return "";
-    }
-    return await file.text();
+    return readFile("/proc/self/cgroup");
   } catch {
     return "";
   }
