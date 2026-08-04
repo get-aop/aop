@@ -27,6 +27,7 @@ const {
   isDesktopManagedWsl,
   isMacosAppBundleInstall,
   isRunningInsideSystemdUnit,
+  readOwnCgroup,
   startBinaryUpgrade,
   verifyMacosDmgDownload,
   verifyReleaseAsset,
@@ -288,6 +289,18 @@ describe("updates/service", () => {
     expect(script).toContain('mv "$AOP_STAGE" "$AOP_APP_BUNDLE"');
     expect(script).toContain('open "$AOP_APP_BUNDLE"');
     expect(script).not.toContain('open "$AOP_DMG_URL"');
+  });
+
+  test("readOwnCgroup reads the cgroup via node fs (compiled bun cannot read procfs with Bun.file)", async () => {
+    const cgroup =
+      "0::/user.slice/user-1000.slice/user@1000.service/app.slice/aop-local-server.service\n";
+
+    await expect(readOwnCgroup(() => cgroup)).resolves.toBe(cgroup);
+    await expect(
+      readOwnCgroup(() => {
+        throw new Error("no procfs");
+      }),
+    ).resolves.toBe("");
   });
 
   test("isRunningInsideSystemdUnit matches only systemd unit cgroups", () => {
