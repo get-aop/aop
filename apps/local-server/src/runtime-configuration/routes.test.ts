@@ -74,7 +74,7 @@ describe("runtime configuration routes", () => {
       "openai-codex/gpt-5.6-sol",
       "openai-codex/gpt-5.6-terra",
       "kimi-coding/k3",
-      "deepseek-v4-flash",
+      "opencode-go/deepseek-v4-flash",
     ]);
     expect(pi?.models.every((model) => model.builtIn)).toBe(true);
     expect(
@@ -110,7 +110,7 @@ describe("runtime configuration routes", () => {
         thinkingLevels: ["max"],
       },
       {
-        model: "deepseek-v4-flash",
+        model: "opencode-go/deepseek-v4-flash",
         description: "DeepSeek V4 Flash",
         thinkingLevels: ["high", "max"],
       },

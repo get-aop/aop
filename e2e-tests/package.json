@@ -1,6 +1,6 @@
 {
   "name": "@aop/e2e-tests",
-  "version": "0.9.32",
+  "version": "0.9.33",
   "private": true,
   "type": "module",
   "license": "MIT",
