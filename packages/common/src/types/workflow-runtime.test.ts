@@ -148,7 +148,9 @@ describe("workflow-runtime", () => {
     expect(formatWorkflowRuntimeModelLabel("openai-codex/gpt-5.6-sol")).toBe("GPT 5.6 Sol");
     expect(formatWorkflowRuntimeModelLabel("openai-codex/gpt-5.6-terra")).toBe("GPT 5.6 Terra");
     expect(formatWorkflowRuntimeModelLabel("kimi-coding/k3")).toBe("Kimi K3 Max");
-    expect(formatWorkflowRuntimeModelLabel("opencode-go/deepseek-v4-flash")).toBe("DeepSeek V4 Flash");
+    expect(formatWorkflowRuntimeModelLabel("opencode-go/deepseek-v4-flash")).toBe(
+      "DeepSeek V4 Flash",
+    );
     expect(isAllowedWorkflowRuntimeModel("pi", "opencode-go/deepseek-v4-flash")).toBe(true);
     expect(isAllowedWorkflowRuntimeModel("pi", "cursor/kimi-k2.6")).toBe(false);
     expect(isAllowedWorkflowRuntimeModel("pi", "default")).toBe(false);
