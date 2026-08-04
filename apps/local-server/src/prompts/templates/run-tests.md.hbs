@@ -1,0 +1,39 @@
+You are running tests for an implementation in a software project.
+
+{{> task-context}}
+
+## Instructions
+
+Run the required local non-E2E verification for the implementation at {{worktree.path}}.
+
+1. Read `.github/workflows/aop-ci.yml` and match the local non-E2E verification bar it defines
+2. Inspect the current worktree diff to determine the smallest command set that still covers the changed code
+3. For docs-only, task-doc-only, or marker/text-only diffs with no source, build, package, or test files changed, use direct file/content validation plus `git diff --check` instead of full repo build/test commands
+4. Run the commands and record exact results in `agent-review-report.md` under `{{task.docsDir}}`
+
+### Verification Rules
+
+- When shared infrastructure or multiple workspaces changed, run:
+  - `bun run build`
+  - `bun run test:ci`
+- When changes are isolated to one workspace or package, you may use the smallest workspace-scoped commands that still cover the touched code instead of the full repo commands
+- When the diff is only documentation, task metadata, or static marker/text output, do not run unrelated repo-wide build/test commands; record the direct validation that proves the changed files satisfy the task
+- If `bun` is unavailable on PATH, use `npx --yes bun ...` for Bun commands rather than failing the task on the environment probe alone
+- If any required command fails, report the failure clearly and emit `TESTS_FAIL`
+- Run every verification command to completion. Do not leave commands running in the background or end your turn while verification is still running
+- Do not claim success unless you ran the commands you list
+- Do NOT fix failing tests in this step. Fixes happen in a separate step.
+
+### Output Requirements
+
+Update `agent-review-report.md` with:
+
+1. Commands run
+2. Pass or fail for each command
+3. Whether the chosen command set matches the local non-E2E CI bar
+4. Any gap you could not validate locally
+
+If all required local verification passed, emit `TESTS_PASS`.
+If any required local verification failed or could not be completed, emit `TESTS_FAIL`.
+
+{{> output-signals}}

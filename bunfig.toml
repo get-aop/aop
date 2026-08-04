@@ -1,0 +1,24 @@
+[test]
+coverageReporter = ["text", "lcov"]
+coverageDir = "coverage"
+coverageSkipTestFiles = true
+preload = ["./apps/dashboard/src/test/ensure-test-env.ts"]
+
+# Ignore migrations, test utilities, and e2e test helpers from coverage
+coveragePathIgnorePatterns = [
+  "**/migrations/**",
+  "**/test-utils.ts",
+  "**/test-setup.ts",
+  "**/e2e-tests/**",
+  # We have code for Mac and Linux and its not possible to achieve coverage in CI
+  # TODO: refactor into two files (linxu and macos), and ignore only macos
+  "**/process-utils.ts",
+  "**/*.integration.test.ts",
+  # React components with hooks require DOM testing environment (happy-dom/jsdom)
+  # TODO: Set up proper React component testing infrastructure
+  "**/DirectoryBrowserDialog.tsx"
+]
+
+# Coverage threshold is enforced by scripts/check-coverage-threshold.ts against
+# aggregate LCOV totals. Bun's built-in threshold currently exits on individual
+# low-coverage files, which does not match this repo's global regression floor.

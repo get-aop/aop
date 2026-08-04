@@ -1,0 +1,219 @@
+/*
+ * AOP desktop setup design system.
+ * Token blocks and animations are ported verbatim from the AOP Desktop Setup design
+ * concept (the `<style>` helmet block). Component layout uses inline styles + the
+ * utility classes defined here so the live screen tracks the comp 1:1.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
+}
+
+:root,
+[data-theme="dark"] {
+  --canvas: #0f1117;
+  --surface: #161923;
+  --raised: #1e2230;
+  --border: #2a2f42;
+  --border2: #3a4156;
+  --text: #f0ede4;
+  --muted: #a69fb8;
+  --subtle: #8a8498;
+  --action: #fbbf24;
+  --onAction: #23202e;
+  --amber: #fbbf24;
+  --teal: #2dd4bf;
+  --ok: #34d399;
+  --okFill: rgba(52, 211, 153, 0.12);
+  --okBd: rgba(52, 211, 153, 0.32);
+  --bad: #f87171;
+  --badFill: rgba(248, 113, 113, 0.12);
+  --badBd: rgba(248, 113, 113, 0.32);
+  --work: #60a5fa;
+  --workFill: rgba(96, 165, 250, 0.12);
+  --workBd: rgba(96, 165, 250, 0.32);
+  --ready: #fbbf24;
+  --readyFill: rgba(251, 191, 36, 0.12);
+  --readyBd: rgba(251, 191, 36, 0.32);
+  --lav: #c4b5fd;
+  --coral: #fb7185;
+  --sky: #7dd3fc;
+  --mint: #6ee7b7;
+  --dots: #1b1f2d;
+  --shadow: 0 24px 70px -30px rgba(0, 0, 0, 0.6);
+  --menuSh: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+  --card1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px -16px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="light"] {
+  --canvas: #fdfbf7;
+  --surface: #ffffff;
+  --raised: #f5f1e8;
+  --border: #e8e2d4;
+  --border2: #d8d0bc;
+  --text: #23202e;
+  --muted: #5a5570;
+  --subtle: #6d6880;
+  --action: #f59e0b;
+  --onAction: #23202e;
+  --amber: #b45309;
+  --teal: #0f766e;
+  --ok: #059669;
+  --okFill: rgba(5, 150, 105, 0.1);
+  --okBd: rgba(5, 150, 105, 0.28);
+  --bad: #dc2626;
+  --badFill: rgba(220, 38, 38, 0.1);
+  --badBd: rgba(220, 38, 38, 0.28);
+  --work: #2563eb;
+  --workFill: rgba(37, 99, 235, 0.1);
+  --workBd: rgba(37, 99, 235, 0.28);
+  --ready: #b45309;
+  --readyFill: rgba(180, 83, 9, 0.1);
+  --readyBd: rgba(180, 83, 9, 0.28);
+  --lav: #7c3aed;
+  --coral: #e11d48;
+  --sky: #0284c7;
+  --mint: #059669;
+  --dots: #ece6da;
+  --shadow: 0 24px 70px -34px rgba(40, 32, 20, 0.2);
+  --menuSh: 0 16px 40px -14px rgba(40, 32, 20, 0.3);
+  --card1: 0 1px 2px rgba(40, 32, 20, 0.04), 0 8px 24px -18px rgba(40, 32, 20, 0.18);
+}
+
+[data-accent="teal"] {
+  --action: #2dd4bf;
+  --onAction: #0b1418;
+}
+[data-theme="light"][data-accent="teal"] {
+  --action: #0f9488;
+  --onAction: #ffffff;
+}
+[data-accent="violet"] {
+  --action: #c4b5fd;
+  --onAction: #1a1530;
+}
+[data-theme="light"][data-accent="violet"] {
+  --action: #7c3aed;
+  --onAction: #ffffff;
+}
+
+@keyframes aop-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes aop-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes aop-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes aop-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  62% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes aop-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+/* Indeterminate fill for install progress while the synchronous backend action runs. */
+@keyframes aop-fill {
+  0% {
+    width: 6%;
+  }
+  100% {
+    width: 92%;
+  }
+}
+
+.aop-spin {
+  animation: aop-spin 1.05s linear infinite;
+}
+.aop-card {
+  transition:
+    border-color 0.28s,
+    box-shadow 0.28s,
+    background 0.28s;
+}
+.aop-h {
+  transition:
+    transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+}
+.aop-h:hover {
+  transform: translateY(-2px);
+}
+.aop-line {
+  animation: aop-rise 0.24s ease;
+}
+.aop-pop {
+  animation: aop-pop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+.aop-blink {
+  animation: aop-blink 1s steps(1) infinite;
+}
+.aop-fill {
+  animation: aop-fill 9s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.aop-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.aop-scroll::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+}
+
+[data-theme] ::selection {
+  background: color-mix(in srgb, var(--action) 35%, transparent);
+}

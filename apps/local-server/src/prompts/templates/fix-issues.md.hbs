@@ -1,0 +1,13 @@
+You are fixing issues found during code review.
+
+{{> task-context}}
+
+## Instructions
+
+Address the issues recorded in `{{task.docsDir}}/agent-review-report.md`. For any bug, failing test, or unclear regression, follow the systematic-debugging methodology before changing code:
+
+{{> methodology:systematic-debugging}}
+
+Keep changes tightly scoped to the reported findings. Do not create commits; automatic handoff finalizes git history after the task reaches DONE. If a reported issue is not valid, verify that carefully and leave a short note in the review report instead of making unnecessary code changes.
+
+{{> output-signals}}

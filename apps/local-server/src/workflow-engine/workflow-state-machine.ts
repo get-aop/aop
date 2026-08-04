@@ -1,0 +1,167 @@
+import {
+  TERMINAL_BLOCKED,
+  TERMINAL_DRAFT,
+  TERMINAL_PAUSED,
+  TERMINAL_SUCCESS,
+  type Transition,
+  TransitionCondition,
+  type WorkflowDefinition,
+  type WorkflowStep,
+} from "./types.ts";
+
+export interface StepResult {
+  status: "success" | "failure";
+  signal?: string;
+}
+
+export interface IterationContext {
+  iteration: number;
+  visitedSteps: string[];
+}
+
+export interface TerminalTransitionResult {
+  type: "done" | "paused" | "blocked" | "draft";
+  shouldIncrementIteration?: boolean;
+  reason?: "missing_required_signal";
+  expectedSignals?: string[];
+}
+
+export interface StepTransitionResult {
+  type: "step";
+  stepId: string;
+  step: WorkflowStep;
+  shouldIncrementIteration?: boolean;
+}
+
+export type TransitionResult = TerminalTransitionResult | StepTransitionResult;
+
+export interface WorkflowStateMachine {
+  getInitialStep: () => WorkflowStep;
+  evaluateTransition: (
+    stepId: string,
+    result: StepResult,
+    context?: IterationContext,
+  ) => TransitionResult;
+  getStep: (stepId: string) => WorkflowStep | undefined;
+}
+
+const resolveTarget = (target: string, steps: Record<string, WorkflowStep>): TransitionResult => {
+  if (target === TERMINAL_SUCCESS) {
+    return { type: "done" };
+  }
+  if (target === TERMINAL_BLOCKED) {
+    return { type: "blocked" };
+  }
+  if (target === TERMINAL_PAUSED) {
+    return { type: "paused" };
+  }
+  if (target === TERMINAL_DRAFT) {
+    return { type: "draft" };
+  }
+
+  const nextStep = steps[target];
+  if (!nextStep) {
+    throw new Error(`Target step "${target}" not found`);
+  }
+  return { type: "step", stepId: target, step: nextStep };
+};
+
+const isLoopingBack = (result: TransitionResult, visitedSteps: string[]): boolean =>
+  result.type === "step" && visitedSteps.includes(result.stepId);
+
+const withIterationFlag = (result: TransitionResult, shouldIncrement: boolean): TransitionResult =>
+  shouldIncrement ? { ...result, shouldIncrementIteration: true } : result;
+
+const resolveTransitionWithIteration = (
+  transition: Transition,
+  steps: Record<string, WorkflowStep>,
+  context?: IterationContext,
+): TransitionResult => {
+  const { maxIterations, onMaxIterations, afterIteration, thenTarget, target } = transition;
+  const iteration = context?.iteration ?? 0;
+  const visitedSteps = context?.visitedSteps ?? [];
+
+  if (maxIterations !== undefined && iteration >= maxIterations) {
+    return resolveTarget(onMaxIterations ?? TERMINAL_BLOCKED, steps);
+  }
+
+  if (afterIteration !== undefined && thenTarget !== undefined && iteration >= afterIteration) {
+    const result = resolveTarget(thenTarget, steps);
+    return withIterationFlag(result, isLoopingBack(result, visitedSteps));
+  }
+
+  const result = resolveTarget(target, steps);
+  const shouldIncrement = afterIteration === undefined && isLoopingBack(result, visitedSteps);
+  return withIterationFlag(result, shouldIncrement);
+};
+
+const getExpectedSignals = (transitions: Transition[]): string[] =>
+  transitions
+    .map((transition) => transition.condition)
+    .filter(
+      (condition) =>
+        condition !== TransitionCondition.SUCCESS &&
+        condition !== TransitionCondition.FAILURE &&
+        condition !== TransitionCondition.NONE,
+    );
+
+const findMatchingTransition = (
+  transitions: Transition[],
+  result: StepResult,
+): Transition | undefined => {
+  // Priority: status(failure) → signal → __none__ → status(success/failure)
+  // Failure takes priority over signal — a failed agent's signal is unreliable
+  if (result.status === "failure") {
+    return transitions.find((t) => t.condition === result.status);
+  }
+
+  if (result.signal) {
+    const signalTransition = transitions.find((t) => t.condition === result.signal);
+    if (signalTransition) return signalTransition;
+  }
+
+  if (!result.signal) {
+    const noneTransition = transitions.find((t) => t.condition === TransitionCondition.NONE);
+    if (noneTransition) return noneTransition;
+  }
+
+  return transitions.find((t) => t.condition === result.status);
+};
+
+export const createWorkflowStateMachine = (
+  definition: WorkflowDefinition,
+): WorkflowStateMachine => {
+  const getStep = (stepId: string): WorkflowStep | undefined => definition.steps[stepId];
+
+  const getInitialStep = (): WorkflowStep => {
+    const step = definition.steps[definition.initialStep];
+    if (!step) {
+      throw new Error(`Initial step "${definition.initialStep}" not found`);
+    }
+    return step;
+  };
+
+  const evaluateTransition = (
+    stepId: string,
+    result: StepResult,
+    context?: IterationContext,
+  ): TransitionResult => {
+    const step = definition.steps[stepId];
+    if (!step) {
+      throw new Error(`Step "${stepId}" not found`);
+    }
+
+    const transition = findMatchingTransition(step.transitions, result);
+    if (!transition) {
+      const expectedSignals = getExpectedSignals(step.transitions);
+      if (result.status === "success" && !result.signal && expectedSignals.length > 0) {
+        return { type: "blocked", reason: "missing_required_signal", expectedSignals };
+      }
+      return { type: "blocked" };
+    }
+
+    return resolveTransitionWithIteration(transition, definition.steps, context);
+  };
+
+  return { getInitialStep, evaluateTransition, getStep };
+};

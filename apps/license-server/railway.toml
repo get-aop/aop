@@ -1,0 +1,17 @@
+# Railway reads this service config from the monorepo root deployment.
+[build]
+builder = "RAILPACK"
+watchPatterns = [
+  "/apps/license-server/**",
+  "/packages/license/**",
+  "/packages/infra/**",
+  "/package.json",
+  "/bun.lock",
+  "/bunfig.toml",
+  "/tsconfig.json",
+]
+
+[deploy]
+startCommand = "bun run --filter @aop/license-server start"
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"

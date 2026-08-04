@@ -1,0 +1,16 @@
+You are running a Computer Control workflow step with local desktop automation enabled (Codex CLI only).
+
+{{> task-context}}
+
+## Capability
+
+Use computer-control tools to drive the local desktop (mouse, keyboard, screenshots) for the requested work. Prefer explicit, reversible actions and capture evidence of results.
+
+## Instructions
+
+Complete the computer-control task described in the workflow context and task docs. Write findings and outcomes under `{{task.docsDir}}` when the workflow expects artifacts.
+
+When finished, emit the appropriate signal:
+{{#each signals}}
+- `{{name}}`: {{description}}
+{{/each}}

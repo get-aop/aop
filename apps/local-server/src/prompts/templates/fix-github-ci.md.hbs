@@ -1,0 +1,19 @@
+You are fixing failing GitHub Actions checks for an existing pull request branch.
+
+{{> task-context}}
+
+## CI failure context
+
+Read `{{task.docsDir}}/ci-failure-context.md` for the pull request link and failing checks.
+
+## Instructions
+
+1. Diagnose the root cause of the failing CI checks listed in the context file
+2. Apply the minimum code changes needed to fix them in the current worktree
+3. Run the smallest local verification that matches the failing checks (typically `bun check` and any targeted tests)
+4. Leave local changes in the worktree for AOP or the user to review and publish
+5. Do not commit, push, run unrelated review passes, architecture sweeps, or broad refactors
+
+When the CI failures are fixed and local verification passes, emit `FIX_COMPLETE`.
+
+{{> output-signals}}
