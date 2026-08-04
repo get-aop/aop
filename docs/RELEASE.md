@@ -6,7 +6,7 @@ One command from a clean checkout on `main`:
 bun run release patch
 ```
 
-That bumps every workspace `package.json`, runs `bun check`, commits, tags `vX.Y.Z`, and pushes. GitHub Actions then builds binaries, publishes the GitHub Release, and deploys to getaop.com when deploy secrets are configured.
+That bumps the version in the root `package.json` (the single source of truth for the AOP version), runs `bun check`, commits, tags `vX.Y.Z`, and pushes. GitHub Actions then builds binaries, publishes the GitHub Release, and deploys to getaop.com when deploy secrets are configured.
 
 ## Commands
 

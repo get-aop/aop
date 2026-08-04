@@ -120,7 +120,8 @@ bun run release patch        # or: minor | major | 0.2.0
 ```
 
 This verifies a clean tree, runs `bun check` (skip with `--skip-check`), bumps
-every workspace `package.json`, commits `chore: release vX.Y.Z`, tags, and pushes
+the root `package.json` (the single source of truth for the AOP version),
+commits `chore: release vX.Y.Z`, tags, and pushes
 (skip the push with `--no-push`).
 
 ### 2. Publish the primary release on macOS

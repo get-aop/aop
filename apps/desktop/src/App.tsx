@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
-import pkg from "../package.json";
+import pkg from "../../../package.json";
 import type { DesktopBackend, SidecarState } from "./backend/types";
 import { SetupScreen } from "./setup/SetupScreen";
 import type { DesktopSetupState } from "./setup/types";
