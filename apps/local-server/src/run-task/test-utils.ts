@@ -70,6 +70,7 @@ export const createMockContext = (): LocalServerContext => {
       delete: async () => false,
       deleteGraph: async () => ({ deleted: false, cleanupJobIds: [] }),
       listMessages: async () => [],
+      countMessages: async () => 0,
       countUnreadAssistantMessages: async () => 0,
       createMessage: async () => {
         throw new Error("chatSessionRepository.createMessage not implemented in mock context");

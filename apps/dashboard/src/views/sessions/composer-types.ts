@@ -86,6 +86,8 @@ export interface ChatComposerProps {
   onEffortMenu?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onModelChange?: (model: string, runtimeConfigurationId?: string) => void;
   onEffortChange?: (effort: string) => void;
+  /** Model choice is fixed once the session has its first message. */
+  modelLocked?: boolean;
   runtimeAccessMode?: ChatRuntimeAccessMode;
   onRuntimeAccessModeChange?: (mode: ChatRuntimeAccessMode) => void;
   onMoreMenu?: (event: React.MouseEvent<HTMLButtonElement>) => void;

@@ -78,6 +78,7 @@ export const SessionsComposer = ({ view }: { view: SessionsPageViewModel }) => {
       runtimeConfigurationName={activeRuntimeConfigurationName}
       model={active.model}
       effort={active.reasoningEffort}
+      modelLocked={active.messages.length > 0}
       runtimeAccessMode={runtimeAccessModeFor(active)}
       onModelChange={(model, runtimeConfigurationId) =>
         patchComposerSetting(

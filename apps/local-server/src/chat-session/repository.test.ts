@@ -233,4 +233,14 @@ describe("chat session repository deletion", () => {
     const jobs = await listCleanupJobs(db);
     expect(JSON.parse(jobs[0]?.refs_json ?? "[]")).toHaveLength(1220);
   }, 60_000);
+
+  test("counts messages per session", async () => {
+    const repository = createChatSessionRepository(db);
+    await seedChatSessionGraph(db, { sessionId: TARGET, turns: 2 });
+    await seedChatSessionGraph(db, { sessionId: KEEP, turns: 1 });
+
+    expect(await repository.countMessages(TARGET)).toBe(4);
+    expect(await repository.countMessages(KEEP)).toBe(2);
+    expect(await repository.countMessages("csess_empty")).toBe(0);
+  });
 });

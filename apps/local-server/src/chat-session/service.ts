@@ -252,6 +252,7 @@ export type UpdateChatSessionResult =
         | { code: "RUNTIME_PROFILE_NOT_FOUND" }
         | { code: "RUNTIME_CONFIGURATION_NOT_FOUND" }
         | { code: "RUN_IN_PROGRESS" }
+        | { code: "MODEL_LOCKED" }
         | { code: "REPOSITORY_REQUIRED" };
     };
 
@@ -593,6 +594,9 @@ const updateChatSession = async (
   const blocked = await sessionUpdateBlocker(input, patch.patch, hasActiveRun);
   if (blocked) return blocked;
 
+  const modelLocked = await startedSessionModelBlocker(ctx, existing, input);
+  if (modelLocked) return modelLocked;
+
   const now = new Date().toISOString();
   const updated = await ctx.chatSessionRepository.update(sessionId, {
     ...patch.patch,
@@ -614,6 +618,23 @@ const sessionUpdateBlocker = async (
   if (input.settledOverride !== "settled") return null;
   if (hasActiveRun) return { success: false, error: { code: "RUN_IN_PROGRESS" } };
   return null;
+};
+
+/**
+ * Once the first message lands, the model is fixed for the session's lifetime.
+ * Only model-picker inputs are rejected; effort, fast mode, access mode, title,
+ * pin, settlement, runtime switches, and profile applies remain editable.
+ */
+const startedSessionModelBlocker = async (
+  ctx: LocalServerContext,
+  session: ChatSession,
+  input: UpdateChatSessionInput,
+): Promise<UpdateChatSessionResult | null> => {
+  const changesModel = input.model !== undefined || input.runtimeConfigurationId !== undefined;
+  if (!changesModel) return null;
+  const messageCount = await ctx.chatSessionRepository.countMessages(session.id);
+  if (messageCount === 0) return null;
+  return { success: false, error: { code: "MODEL_LOCKED" } };
 };
 
 type CreateSessionTargetResult =

@@ -105,6 +105,7 @@ export const ComposerToolbar = ({
           onEffortChange={props.onEffortChange}
           onAccessModeChange={props.onRuntimeAccessModeChange}
           onToggleFastMode={props.onToggleFastMode}
+          modelLocked={props.modelLocked}
           plusMenu={props.plusMenu}
           workflowChip={
             props.defaultWorkflowId !== undefined ? (

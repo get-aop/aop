@@ -3268,6 +3268,60 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
+  test("locks the model after the session has its first message", async () => {
+    const { db, app } = await setup();
+    const session = await createSession(app, "repo_chat_1");
+    await db
+      .insertInto("chat_messages")
+      .values({
+        id: "smsg_model_lock",
+        session_id: session.id,
+        role: "user",
+        content: "first message",
+        action: null,
+        created_at: new Date().toISOString(),
+      })
+      .execute();
+
+    const modelPatch = await app.request(`/api/chat-sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: getWorkflowModelOptions("claude-code")[1] ?? "" }),
+    });
+    expect(modelPatch.status).toBe(409);
+    expect(await modelPatch.json()).toEqual({
+      error: "Model cannot be changed after the session has started",
+    });
+
+    // runtime switches stay allowed after the first message
+    const runtimeSwitch = await app.request(`/api/chat-sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ runtime: "codex-cli" }),
+    });
+    expect(runtimeSwitch.status).toBe(200);
+
+    const effortPatch = await app.request(`/api/chat-sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reasoningEffort: "high" }),
+    });
+    expect(effortPatch.status).toBe(200);
+    expect(
+      ((await effortPatch.json()) as { session: { reasoningEffort: string } }).session
+        .reasoningEffort,
+    ).toBe("high");
+
+    const titlePatch = await app.request(`/api/chat-sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Still editable" }),
+    });
+    expect(titlePatch.status).toBe(200);
+
+    await teardown(db);
+  });
+
   test("applies the shared catalog default when selecting a built-in runtime configuration", async () => {
     const { db, app } = await setup();
     const session = await createSession(app, "repo_chat_1");
