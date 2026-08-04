@@ -20,16 +20,8 @@ export interface SettingMeta {
  */
 export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
   {
-    label: "Agent configuration",
-    keys: ["max_concurrent_tasks", "agent_timeout_secs"],
-  },
-  {
     label: "Chat",
     keys: ["chat_global_instructions"],
-  },
-  {
-    label: "Polling",
-    keys: ["watcher_poll_interval_secs", "queue_poll_interval_secs"],
   },
   {
     label: "Remote server",
@@ -38,29 +30,6 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
 ];
 
 export const SETTING_META: Record<string, SettingMeta> = {
-  max_concurrent_tasks: {
-    label: "Max Concurrent Tasks",
-    description: "Maximum local tasks AOP may run at the same time.",
-    type: "number",
-  },
-  watcher_poll_interval_secs: {
-    label: "Watcher Poll Interval",
-    description: "Seconds between file watcher polls",
-    type: "number",
-    suffix: "s",
-  },
-  queue_poll_interval_secs: {
-    label: "Queue Poll Interval",
-    description: "Seconds between queue processing polls",
-    type: "number",
-    suffix: "s",
-  },
-  agent_timeout_secs: {
-    label: "Agent Timeout",
-    description: "Time AOP waits before treating a worker run as stale.",
-    type: "number",
-    suffix: "s",
-  },
   chat_global_instructions: {
     label: "Global instructions",
     description:

@@ -5,10 +5,9 @@ import {
 } from "./runtime-timeout-policy.ts";
 
 describe("resolveChatRuntimeTimeoutPolicy", () => {
-  test("allows Grok a slow start while keeping the shared inactivity deadline", () => {
+  test("allows Grok a slow start", () => {
     expect(resolveChatRuntimeTimeoutPolicy("grok-build")).toEqual({
       startupTimeoutMs: 120_000,
-      inactivityTimeoutMs: 300_000,
       policyName: "grok_slow_start_v1",
     });
     expect(resolveChatRuntimeTimeoutPolicy("grok")).toEqual(
@@ -19,7 +18,6 @@ describe("resolveChatRuntimeTimeoutPolicy", () => {
   test("uses the default policy for other providers", () => {
     expect(resolveChatRuntimeTimeoutPolicy("codex-cli")).toEqual({
       startupTimeoutMs: 30_000,
-      inactivityTimeoutMs: 300_000,
       policyName: "default_v1",
     });
   });

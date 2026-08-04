@@ -14,8 +14,7 @@ const { cleanup, fireEvent, render, screen, waitFor } = await import("@testing-l
 const { SettingsGeneral } = await import("./settings-general");
 
 const saved = {
-  max_concurrent_tasks: "5",
-  watcher_poll_interval_secs: "30",
+  server_url: "http://localhost:8787",
 };
 
 afterEach(() => {
@@ -39,7 +38,7 @@ describe("SettingsGeneral", () => {
 
   test("auto-saves an edited value after the debounce, not on the keystroke", async () => {
     const onSaved = mock(() => undefined);
-    const edited = { ...saved, max_concurrent_tasks: "8" };
+    const edited = { ...saved, server_url: "http://localhost:9999" };
 
     render(
       <SettingsGeneral
@@ -53,8 +52,10 @@ describe("SettingsGeneral", () => {
     expect(mockUpdateSettings).not.toHaveBeenCalled();
 
     await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
-    expect(mockUpdateSettings).toHaveBeenCalledWith([{ key: "max_concurrent_tasks", value: "8" }]);
-    expect(onSaved).toHaveBeenCalledWith([{ key: "max_concurrent_tasks", value: "8" }]);
+    expect(mockUpdateSettings).toHaveBeenCalledWith([
+      { key: "server_url", value: "http://localhost:9999" },
+    ]);
+    expect(onSaved).toHaveBeenCalledWith([{ key: "server_url", value: "http://localhost:9999" }]);
   });
 
   test("does not write when nothing differs from the saved values", async () => {
@@ -82,8 +83,10 @@ describe("SettingsGeneral", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Max Concurrent Tasks"), { target: { value: "9" } });
+    fireEvent.change(screen.getByLabelText("Server URL"), {
+      target: { value: "http://localhost:9000" },
+    });
 
-    expect(onChange).toHaveBeenCalledWith("max_concurrent_tasks", "9");
+    expect(onChange).toHaveBeenCalledWith("server_url", "http://localhost:9000");
   });
 });

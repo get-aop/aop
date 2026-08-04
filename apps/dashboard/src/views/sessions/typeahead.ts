@@ -251,6 +251,4 @@ const isExactCompletedToken = (
 export const DEFAULT_SESSION_SUGGESTIONS = [
   "Create a task from this bug report",
   "Build a workflow",
-  "What are my workers doing?",
-  "/status",
 ];

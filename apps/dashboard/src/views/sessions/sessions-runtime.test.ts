@@ -13,37 +13,25 @@ import {
 
 describe("sessions-runtime", () => {
   test("lists every supported AOP and CLI slash command", () => {
-    expect(CHAT_COMMANDS).toHaveLength(15);
+    expect(CHAT_COMMANDS).toHaveLength(9);
     expect(CHAT_COMMANDS.map((c) => c.cmd)).toEqual([
       "/implement",
       "/review",
       "/audit",
       "/test",
       "/security",
-      "/task create",
-      "/task batch",
-      "/task start",
-      "/assign",
-      "/worker",
       "/workflow",
       "/skill",
-      "/status",
       "/clear",
       "/goal",
     ]);
   });
 
-  test("offers /task batch while typing and renders it as a command chip", () => {
-    expect(filterSlashCommands("/task b").map((c) => c.cmd)).toEqual(["/task batch"]);
-    expect(filterSlashCommands("/task ").map((c) => c.cmd)).toEqual([
-      "/task create",
-      "/task batch",
-      "/task start",
-    ]);
-    expect(parseMessageSegments("/task batch Add dark mode. Add CSV export.")).toEqual([
-      { kind: "command", text: "/task batch" },
-      { kind: "text", text: " Add dark mode. Add CSV export." },
-    ]);
+  test("does not offer legacy task/worker commands", () => {
+    expect(filterSlashCommands("/task")).toEqual([]);
+    expect(filterSlashCommands("/assign")).toEqual([]);
+    expect(filterSlashCommands("/worker")).toEqual([]);
+    expect(filterSlashCommands("/status")).toEqual([]);
   });
 
   test("filters the five Quick Action commands", () => {
@@ -53,38 +41,34 @@ describe("sessions-runtime", () => {
   });
 
   test("filters slash commands only on bare /prefix", () => {
-    expect(filterSlashCommands("/ta").map((c) => c.cmd)).toEqual([
-      "/task create",
-      "/task batch",
-      "/task start",
-    ]);
-    expect(filterSlashCommands("/task c").map((c) => c.cmd)).toEqual(["/task create"]);
+    expect(filterSlashCommands("/ta")).toEqual([]);
+    expect(filterSlashCommands("/task c")).toEqual([]);
     expect(filterSlashCommands("/task Fix")).toEqual([]);
     expect(filterSlashCommands("/g").map((c) => c.cmd)).toEqual(["/goal"]);
     expect(filterSlashCommands("task")).toEqual([]);
-    expect(filterSlashCommands("please /st", 10).map((c) => c.cmd)).toEqual(["/status"]);
+    expect(filterSlashCommands("please /sk", 10).map((c) => c.cmd)).toEqual(["/skill"]);
     expect(filterSlashCommands("path /tmp/foo", 13)).toEqual([]);
-    expect(filterSlashCommands("word/status", 11)).toEqual([]);
+    expect(filterSlashCommands("word/skill", 11)).toEqual([]);
   });
 
   test("matches and replaces only the caret-local slash token", () => {
-    const token = matchSlashToken("please /st more", 10);
-    expect(token).toEqual({ start: 7, end: 10, query: "/st" });
+    const token = matchSlashToken("please /sk more", 10);
+    expect(token).toEqual({ start: 7, end: 10, query: "/sk" });
     expect(token).not.toBeNull();
     if (!token) throw new Error("expected slash token");
-    expect(applySlashCommandInsert("please /st more", token, "/status ")).toEqual({
-      draft: "please /status  more",
-      caret: 15,
+    expect(applySlashCommandInsert("please /sk more", token, "/skill ")).toEqual({
+      draft: "please /skill  more",
+      caret: 14,
     });
     expect(matchSlashToken("/tmp/foo", 8)).toBeNull();
-    expect(matchSlashToken("word/status", 11)).toBeNull();
+    expect(matchSlashToken("word/skill", 11)).toBeNull();
   });
 
   test("parses command and mention segments", () => {
-    const segs = parseMessageSegments("/task create Fix teardown %K6 please", ["K6", "K1"]);
+    const segs = parseMessageSegments("/skill tdd Fix teardown %K6 please", ["K6", "K1"]);
     expect(segs).toEqual([
-      { kind: "command", text: "/task create" },
-      { kind: "text", text: " Fix teardown " },
+      { kind: "command", text: "/skill" },
+      { kind: "text", text: " tdd Fix teardown " },
       { kind: "mention", text: "%K6" },
       { kind: "text", text: " please" },
     ]);
@@ -138,17 +122,17 @@ describe("sessions-runtime", () => {
   });
 
   test("slash insert form is command plus trailing space", () => {
-    const match = filterSlashCommands("/ass")[0];
-    expect(match?.cmd).toBe("/assign");
-    expect(`${match?.cmd} `).toBe("/assign ");
+    const match = filterSlashCommands("/sk")[0];
+    expect(match?.cmd).toBe("/skill");
+    expect(`${match?.cmd} `).toBe("/skill ");
   });
 
   test("detects exact leading deterministic commands for immediate execution", () => {
-    expect(isExactLeadingSlashCommand("/status")).toBe(true);
-    expect(isExactLeadingSlashCommand("/status", 7)).toBe(true);
+    expect(isExactLeadingSlashCommand("/clear")).toBe(true);
+    expect(isExactLeadingSlashCommand("/clear", 6)).toBe(true);
     expect(isExactLeadingSlashCommand("/goal")).toBe(true);
-    expect(isExactLeadingSlashCommand("/st")).toBe(false);
-    expect(isExactLeadingSlashCommand("please /status", 14)).toBe(false);
-    expect(isExactLeadingSlashCommand("/status now")).toBe(false);
+    expect(isExactLeadingSlashCommand("/cl")).toBe(false);
+    expect(isExactLeadingSlashCommand("please /clear", 14)).toBe(false);
+    expect(isExactLeadingSlashCommand("/clear now")).toBe(false);
   });
 });
