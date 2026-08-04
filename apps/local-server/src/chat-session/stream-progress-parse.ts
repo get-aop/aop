@@ -374,8 +374,11 @@ const extractPiMessage = (event: Record<string, unknown>): ProgressChunk | null 
   // - toolResult: raw command output dumps (often multi-KB)
   // Only assistant-role messages belong in the live answer stream; otherwise the
   // UI flashes those blobs under Thinking until the final reply replaces them.
+  // Thinking blocks are excluded too: message_update thinking_end already streams
+  // them, and message_end/turn_end/agent_end re-carry the full message, so emitting
+  // them again would duplicate the Thinking panel content.
   if (isRecord(event.message) && event.message.role === "assistant") {
-    const fromMessage = extractContentBlocks(event.message.content);
+    const fromMessage = extractFirstTextBlock(event.message.content);
     if (fromMessage) return fromMessage;
   }
   return extractFromPiMessagesArray(event.messages);
@@ -386,7 +389,7 @@ const extractFromPiMessagesArray = (messages: unknown): ProgressChunk | null => 
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (!isRecord(msg) || msg.role !== "assistant") continue;
-    const fromMessage = extractContentBlocks(msg.content);
+    const fromMessage = extractFirstTextBlock(msg.content);
     if (fromMessage) return fromMessage;
   }
   return null;
@@ -402,9 +405,17 @@ const extractResultText = (event: Record<string, unknown>): ProgressChunk | null
   return null;
 };
 
-/** Claude / Pi content blocks in provider order. */
-const extractContentBlocks = (content: unknown): ProgressChunk | null =>
-  extractContentChunks(content)[0] ?? null;
+/** First text block in provider order; skips thinking blocks streamed via thinking_end. */
+const extractFirstTextBlock = (content: unknown): ProgressChunk | null => {
+  if (!Array.isArray(content)) return null;
+  for (const block of content) {
+    if (!isRecord(block) || block.type !== "text") continue;
+    if (typeof block.text === "string" && block.text.trim()) {
+      return { kind: "text", data: block.text };
+    }
+  }
+  return null;
+};
 
 const extractContentChunks = (content: unknown): ProgressChunk[] =>
   Array.isArray(content) ? content.flatMap(classifyProgressContentBlock) : [];

@@ -78,6 +78,9 @@ export const createStreamProgressAccumulator = () => {
   function mutate(chunk: ProgressChunk): void {
     switch (chunk.kind) {
       case "thought":
+        // Providers (e.g. Pi) re-carry the full reasoning block on later message
+        // lifecycle events; a trailing duplicate is a replay, not new reasoning.
+        if (thinking.endsWith(chunk.data)) return;
         thinking = thinking ? thinking + chunk.data : chunk.data;
         startNewTextRun = true;
         return;
