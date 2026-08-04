@@ -748,7 +748,9 @@ describe("runSessionPrompt", () => {
     await Bun.sleep(5);
 
     interruptSessionRun("isess_graceful_grok");
-    await Bun.sleep(10);
+    // Descendant discovery is async now (non-blocking ps), so allow the scan
+    // to complete before asserting the root was signaled.
+    await Bun.sleep(250);
     expect(kill).toHaveBeenCalledWith(-77_777, "SIGINT");
 
     finishProvider?.({ exitCode: 130 });

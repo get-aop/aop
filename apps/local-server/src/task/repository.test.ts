@@ -8,6 +8,7 @@ import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.t
 import type { TaskEvent, TaskEventEmitter } from "../events/task-events.ts";
 import { createExternalIssueStore } from "../integrations/external-issues/store.ts";
 import { createLinearStore, type LinearStore } from "../integrations/linear/store.ts";
+import { resolveTaskFilePath } from "../task-docs/paths.ts";
 import { updateTaskDocStatus } from "../task-docs/task.ts";
 import { createTaskRepository, type TaskRepository } from "./repository.ts";
 
@@ -208,6 +209,46 @@ describe("task/repository", () => {
       expect(result?.id).toBe("task-1");
       expect(result?.status).toBe("REMOVED");
       expect(events).toHaveLength(0);
+    });
+  });
+
+  describe("snapshot cache", () => {
+    test("read paths serve the cached snapshot inside the TTL window until invalidated", async () => {
+      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "READY");
+      await repo.refresh(); // primes the snapshot
+
+      // External edit bypassing the repository, as a file change would be.
+      const taskDocPath = resolveTaskFilePath("repo-1", repoPath, "changes/feat-1");
+      await updateTaskDocStatus(taskDocPath, "DRAFT");
+
+      expect((await repo.get("task-1"))?.status).toBe("READY");
+
+      repo.invalidateSnapshot();
+      expect((await repo.get("task-1"))?.status).toBe("DRAFT");
+    });
+
+    test("status events fire after a task.md status change once invalidated", async () => {
+      const { events, repoWithEvents } = captureTaskEvents();
+      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "READY");
+      await repoWithEvents.refresh();
+      events.length = 0;
+
+      const taskDocPath = resolveTaskFilePath("repo-1", repoPath, "changes/feat-1");
+      await updateTaskDocStatus(taskDocPath, "WORKING");
+
+      // Inside the TTL window the read path serves the cached snapshot.
+      await repoWithEvents.list({ repo_id: "repo-1" });
+      expect(events).toHaveLength(0);
+
+      repoWithEvents.invalidateSnapshot();
+      await repoWithEvents.list({ repo_id: "repo-1" });
+
+      const event = events.find((entry) => entry.type === "task-status-changed");
+      expect(event?.type).toBe("task-status-changed");
+      if (event?.type === "task-status-changed") {
+        expect(event.previousStatus).toBe("READY");
+        expect(event.task.status).toBe("WORKING");
+      }
     });
   });
 

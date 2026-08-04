@@ -40,6 +40,24 @@ export interface DelegationSessionEvent {
 }
 
 const DISMISSED_STORAGE_KEY = "aop:delegation-cards-dismissed";
+
+// Progress streams can emit dozens of frames per second; coalescing the store
+// notification keeps the page at a human-perceptible refresh rate instead of
+// re-rendering every subscribed pane per chunk.
+const PROGRESS_EMIT_THROTTLE_MS = 150;
+let progressFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let progressDirty = false;
+
+const scheduleProgressEmit = (): void => {
+  progressDirty = true;
+  if (progressFlushTimer) return;
+  progressFlushTimer = setTimeout(() => {
+    progressFlushTimer = null;
+    if (!progressDirty) return;
+    progressDirty = false;
+    emit();
+  }, PROGRESS_EMIT_THROTTLE_MS);
+};
 const DISMISSED_STORAGE_LIMIT = 200;
 
 const cards = new Map<string, DelegationCardState>();
@@ -52,9 +70,13 @@ let openDelegationId: string | null = null;
 let focusedSessionId: string | null = null;
 let initPromise: Promise<void> | null = null;
 
-const emit = (): void => {
+const refreshSnapshots = (): void => {
   allSnapshot = [...cards.values()];
   visibleSnapshot = computeVisible();
+};
+
+const emit = (): void => {
+  refreshSnapshots();
   for (const listener of listeners) listener();
 };
 
@@ -148,6 +170,8 @@ const applyProgress = (event: DelegationSessionEvent): void => {
       commandGroups: event.commandGroups ?? [],
     },
   });
+  // Readers see fresh data immediately; only the re-render notification is throttled.
+  refreshSnapshots();
 };
 
 /** Keep one stream per session with active delegations; close the rest. */
@@ -191,7 +215,7 @@ export const ingestDelegationSessionEvent = (event: DelegationSessionEvent): voi
   }
   if (event.type === "delegation-progress") {
     applyProgress(event);
-    emit();
+    scheduleProgressEmit();
     return;
   }
   if (event.type === "assistant-final") {
@@ -339,6 +363,9 @@ const subscribe = (listener: () => void): (() => void) => {
   return () => listeners.delete(listener);
 };
 
+/** Store-change notifications (used by the React hooks and by tests). */
+export const subscribeDelegationCenter = subscribe;
+
 /** Visible delegation cards, active first then newest. */
 export const useDelegationCards = (): DelegationCardState[] =>
   useSyncExternalStore(subscribe, getDelegationCards, () => []);
@@ -352,6 +379,11 @@ export const useOpenDelegationId = (): string | null =>
 
 /** Test helper: drop all state and close streams. */
 export const resetDelegationCenter = (): void => {
+  if (progressFlushTimer) {
+    clearTimeout(progressFlushTimer);
+    progressFlushTimer = null;
+  }
+  progressDirty = false;
   for (const source of streams.values()) source.close();
   streams.clear();
   cards.clear();

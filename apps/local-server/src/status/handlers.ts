@@ -9,7 +9,6 @@ import {
 import { type AgentRoleLane, normalizeAgentRoleLane } from "../agent/roles.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { Execution, StatusColumn, Task } from "../db/schema.ts";
-import { projectRuntimeEventsForStep } from "../runtime-events/projector.ts";
 import { hasTaskSpec, readTaskProgress } from "../task/progress.ts";
 import type { TaskDependencyState } from "../task/repository.ts";
 import { resolveTaskDocsPath } from "../task-docs/paths.ts";
@@ -17,6 +16,18 @@ import { readTaskSwimlaneMetadata } from "./swimlane-metadata.ts";
 
 export type RepoStatus = SSERepoWithTasks;
 export type ServerStatus = SSEServerStatus;
+
+const STATUS_TTL_MS = 1_000;
+
+interface StatusCacheEntry {
+  status: ServerStatus;
+  builtAt: number;
+  inflight: Promise<ServerStatus> | null;
+}
+
+// Per-context so concurrent tabs share one build while tests (fresh ctx per
+// case) never read a stale status from another test.
+const statusCacheByCtx = new WeakMap<LocalServerContext, StatusCacheEntry>();
 
 export interface TaskAssignmentProjection {
   agentId: string;
@@ -117,26 +128,14 @@ const readPlanReviewStatus = (
   return undefined;
 };
 
-const readRuntimeActivity = async (ctx: LocalServerContext, taskId: string) => {
-  await backfillRuntimeEvents(ctx, taskId);
-  return ctx.runtimeEventRepository.getActivitySummary(taskId);
-};
-
-const backfillRuntimeEvents = async (ctx: LocalServerContext, taskId: string): Promise<void> => {
-  const executions = await ctx.executionRepository.getExecutionsByTaskId(taskId);
-  await Promise.all(
-    executions.map(async (execution) => {
-      const steps = await ctx.executionRepository.getStepExecutionsByExecutionId(execution.id);
-      await Promise.all(steps.map((step) => projectRuntimeEventsForStep(ctx, step.id)));
-    }),
-  );
-};
+const readRuntimeActivity = async (ctx: LocalServerContext, taskId: string) =>
+  ctx.statusReaders.runtimeEventRepository.getActivitySummary(taskId);
 
 const readTaskSourceProjection = async (
   ctx: LocalServerContext,
   taskId: string,
 ): Promise<TaskSourceProjection | null> => {
-  const source = await ctx.db
+  const source = await ctx.statusReaders.db
     .selectFrom("task_sources")
     .select([
       "provider",
@@ -154,15 +153,15 @@ const readTaskAssignmentProjection = async (
   ctx: LocalServerContext,
   taskId: string,
 ): Promise<TaskAssignmentProjection | null> => {
-  const assignment = await ctx.taskAssignmentRepository.getCurrentByTaskId(taskId);
+  const assignment = await ctx.statusReaders.taskAssignmentRepository.getCurrentByTaskId(taskId);
   if (!assignment) {
     return null;
   }
-  const agent = await ctx.agentRepository.getById(assignment.agent_id);
+  const agent = await ctx.statusReaders.agentRepository.getById(assignment.agent_id);
   const workflow =
     agent && agent.status === "active"
-      ? ((await ctx.workflowRepository.findById(agent.workflow_id)) ??
-        (await ctx.workflowRepository.findByName(agent.workflow_id)))
+      ? ((await ctx.statusReaders.workflowRepository.findById(agent.workflow_id)) ??
+        (await ctx.statusReaders.workflowRepository.findByName(agent.workflow_id)))
       : null;
   return {
     agentId: assignment.agent_id,
@@ -175,21 +174,52 @@ const readTaskAssignmentProjection = async (
 };
 
 export const getServerStatus = async (ctx: LocalServerContext): Promise<ServerStatus> => {
-  const repos = await ctx.repoRepository.getAll();
+  const cached = statusCacheByCtx.get(ctx);
+  if (cached?.inflight) return cached.inflight;
+  if (cached && Date.now() - cached.builtAt < STATUS_TTL_MS) return cached.status;
+
+  const inflight = buildServerStatus(ctx)
+    .then((status) => {
+      statusCacheByCtx.set(ctx, { status, builtAt: Date.now(), inflight: null });
+      return status;
+    })
+    .finally(() => {
+      const entry = statusCacheByCtx.get(ctx);
+      if (entry?.inflight) statusCacheByCtx.set(ctx, { ...entry, inflight: null });
+    });
+  statusCacheByCtx.set(ctx, {
+    status: cached?.status ?? EMPTY_STATUS,
+    builtAt: cached?.builtAt ?? 0,
+    inflight,
+  });
+  return inflight;
+};
+
+const EMPTY_STATUS: ServerStatus = {
+  swimlanes: DEFAULT_DASHBOARD_SWIMLANES,
+  repos: [],
+};
+
+const buildServerStatus = async (ctx: LocalServerContext): Promise<ServerStatus> => {
+  const repos = await ctx.statusReaders.repoRepository.getAll();
 
   const repoStatuses = await Promise.all(
     repos.map(async (repo) => {
-      const repoTasks = await ctx.taskRepository.list({
+      const repoTasks = await ctx.statusReaders.taskRepository.list({
         repo_id: repo.id,
         excludeRemoved: true,
       });
-      const working = await ctx.taskRepository.countWorking(repo.id);
+      const working = await ctx.statusReaders.taskRepository.countWorking(repo.id);
 
       const sseTasks = await Promise.all(
         repoTasks.map(async (task) => {
-          const executions = await ctx.executionRepository.getExecutionsByTaskId(task.id);
+          const executions = await ctx.statusReaders.executionRepository.getExecutionsByTaskId(
+            task.id,
+          );
           const execution = executions.find((e) => e.status === "running") ?? executions[0];
-          const dependencyState = await ctx.taskRepository.getDependencyState(task.id);
+          const dependencyState = await ctx.statusReaders.taskRepository.getDependencyState(
+            task.id,
+          );
           const swimlane = await readTaskSwimlaneMetadata(repo.path, task);
           const assignment = await readTaskAssignmentProjection(ctx, task.id);
           const source = await readTaskSourceProjection(ctx, task.id);

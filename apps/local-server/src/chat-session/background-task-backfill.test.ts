@@ -2,17 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  type ChatDelegationRun,
-  parseChatDelegationRuns,
-  serializeChatDelegationRuns,
-} from "@aop/common";
+import type { ChatDelegationRun } from "@aop/common";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import {
   backfillBackgroundTasksFromLogs,
   mergeBackgroundTasksFromProgress,
 } from "./background-task-backfill.ts";
+import { listDelegationRuns, replaceDelegationRuns } from "./delegation-run-store.ts";
 import { listChatDelegations } from "./delegation-runs.ts";
 import type { StreamProgressSnapshot } from "./stream-progress.ts";
 
@@ -158,11 +155,7 @@ describe("backfillBackgroundTasksFromLogs", () => {
   test("replaces an older persisted task with a newer task from the log", async () => {
     const { ctx, sessionId, runId } = await setupWithLog(backgroundTaskEvents(1));
     const oldTasks = Array.from({ length: 5 }, (_, index) => persistedBackgroundTask(index + 1));
-    await ctx.db
-      .updateTable("chat_runs")
-      .set({ delegation_runs: serializeChatDelegationRuns(oldTasks) })
-      .where("id", "=", runId)
-      .execute();
+    await replaceDelegationRuns(ctx.db, runId, oldTasks);
 
     expect(await backfillBackgroundTasksFromLogs(ctx, { sessionId })).toBe(1);
     const stored = await delegationRunsOf(ctx, runId);
@@ -322,7 +315,6 @@ const setupWithLog = async (events: unknown[]) => {
       retry_of_run_id: null,
       runtime_session_state: null,
       error_message: null,
-      delegation_runs: null,
       created_at: now,
       updated_at: now,
     })
@@ -331,11 +323,5 @@ const setupWithLog = async (events: unknown[]) => {
   return { ctx, sessionId, runId, logFilePath };
 };
 
-const delegationRunsOf = async (ctx: LocalServerContext, runId: string) => {
-  const row = await ctx.db
-    .selectFrom("chat_runs")
-    .select("delegation_runs")
-    .where("id", "=", runId)
-    .executeTakeFirstOrThrow();
-  return parseChatDelegationRuns(row.delegation_runs);
-};
+const delegationRunsOf = async (ctx: LocalServerContext, runId: string) =>
+  listDelegationRuns(ctx.db, runId);

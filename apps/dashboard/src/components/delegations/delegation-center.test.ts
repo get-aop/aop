@@ -80,6 +80,7 @@ const {
   reconcileSessionDelegationsAfterHostFinal,
   selectActiveSessionDelegations,
   setDelegationSessionFocus,
+  subscribeDelegationCenter,
 } = await import("./delegation-center");
 
 beforeEach(() => {
@@ -142,6 +143,36 @@ describe("delegation-center", () => {
     expect(MockEventSource.instances.map((source) => source.url)).toEqual([
       "/api/chat-sessions/isess_1/stream",
     ]);
+  });
+
+  test("delegation-progress notifications are throttled while data stays fresh", async () => {
+    seedDelegations = [delegation()];
+    await initDelegationCenter();
+    setDelegationSessionFocus("isess_1");
+    // Let the async historical-card load settle before counting notifications.
+    await Bun.sleep(50);
+
+    let notifications = 0;
+    const unsubscribe = subscribeDelegationCenter(() => {
+      notifications++;
+    });
+    for (let i = 0; i < 5; i++) {
+      ingestDelegationSessionEvent({
+        type: "delegation-progress",
+        sessionId: "isess_1",
+        delegationId: "del_1",
+        thinking: "pondering",
+        content: `chunk ${i}`,
+        commandGroups: [],
+      });
+    }
+
+    expect(notifications).toBe(0);
+    expect(getDelegationCards()[0]?.live?.content).toBe("chunk 4");
+
+    await Bun.sleep(250);
+    expect(notifications).toBe(1);
+    unsubscribe();
   });
 
   test("delegation-progress feeds the live output buffer of a known delegation", async () => {

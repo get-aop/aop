@@ -9,9 +9,8 @@ import {
   updateChatSession,
 } from "../../api/client";
 import type { SessionToastLink } from "./SessionModals";
-import { setSessionStreamProgress } from "./session-stream-progress";
+import { type StreamProgressUpdate, setSessionStreamProgress } from "./session-stream-progress";
 import type { MenuState } from "./sessions-menu";
-import type { AssistantStreamProgress } from "./sessions-page-helpers";
 import { confirmAndResetRuntimeSession, navigateFromAction } from "./sessions-page-helpers";
 import {
   abortActiveConversation,
@@ -44,7 +43,7 @@ export interface SessionsPageActionsInput {
   refreshList: () => Promise<ChatSessionSummary[]>;
   clearSessionTyping: (sessionId: string) => void;
   setTyping: (value: boolean) => void;
-  setStreamProgress: (value: AssistantStreamProgress | null) => void;
+  setStreamProgress: (value: StreamProgressUpdate) => void;
   setDetail: Dispatch<SetStateAction<ChatSessionDetail | null>>;
   setActiveId: Dispatch<SetStateAction<string | null>>;
   setDetailLoading: Dispatch<SetStateAction<boolean>>;

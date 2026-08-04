@@ -56,7 +56,10 @@ export interface TaskDependencyState {
 }
 
 export interface TaskRepository {
-  refresh: () => Promise<void>;
+  /** Rebuild the in-memory snapshot; `force` bypasses the TTL (mutations use it). */
+  refresh: (force?: boolean) => Promise<void>;
+  /** Marks the snapshot stale so the next refresh rebuilds even inside the TTL window. */
+  invalidateSnapshot: () => void;
   create: (task: NewTask) => Promise<Task>;
   createIdempotent: (task: NewTask) => Promise<Task | null>;
   createIdempotentRecordOnly: (task: NewTask) => Promise<Task | null>;
@@ -78,6 +81,8 @@ export interface TaskRepository {
 
 export interface TaskRepositoryOptions {
   eventEmitter?: TaskEventEmitter;
+  /** Read-only mirror (second connection): skip disk-drift writes while mapping. */
+  readOnly?: boolean;
 }
 
 interface DependencyRow {
@@ -374,15 +379,26 @@ export const createTaskRepository = (
   db: Kysely<Database>,
   options: TaskRepositoryOptions = {},
 ): TaskRepository => {
-  const { eventEmitter } = options;
+  const { eventEmitter, readOnly = false } = options;
   const repoRepository = createRepoRepository(db);
   const taskAssignmentRepository = createTaskAssignmentRepository(db);
   const cache = new Map<string, Task>();
+
+  const SNAPSHOT_TTL_MS = 1_000;
+  let snapshotInflight: Promise<void> | null = null;
+  let lastSnapshotAt = 0;
+  let snapshotDirty = false;
 
   const getPersistedTask = async (id: string): Promise<Task | null> =>
     normalizeNullableTask(
       (await db.selectFrom("tasks").selectAll().where("id", "=", id).executeTakeFirst()) ?? null,
     );
+
+  const getPersistedTasksByIds = async (ids: string[]): Promise<Map<string, Task>> => {
+    if (ids.length === 0) return new Map();
+    const rows = await db.selectFrom("tasks").selectAll().where("id", "in", ids).execute();
+    return new Map(rows.map((row) => [row.id, normalizeTaskRecord(row)]));
+  };
 
   const upsertTask = async (task: Task): Promise<void> => {
     await db
@@ -468,9 +484,34 @@ export const createTaskRepository = (
   };
 
   const scanRepoTasks = async (repoId: string, repoPath: string): Promise<Task[]> => {
+    const entries: Array<{
+      normalizedChangePath: string;
+      doc: TaskDoc;
+    }> = [];
+    for (const taskIdOrChangePath of listTaskIdsOnDisk(repoId, repoPath)) {
+      const taskFilePath = resolveTaskFilePath(repoId, repoPath, taskIdOrChangePath);
+      entries.push({
+        normalizedChangePath: toLegacyTaskChangePath(taskIdOrChangePath),
+        doc: await parseTaskDoc(taskFilePath),
+      });
+    }
+
+    // One batched read instead of one SELECT per scanned task folder.
+    const persistedById = await getPersistedTasksByIds(
+      entries.map(
+        ({ doc, normalizedChangePath }) => doc.id ?? taskIdFor(repoId, normalizedChangePath),
+      ),
+    );
+
     const tasks: Task[] = [];
-    for (const taskId of listTaskIdsOnDisk(repoId, repoPath)) {
-      tasks.push(await mapTaskFromDisk(repoId, repoPath, taskId));
+    for (const { doc, normalizedChangePath } of entries) {
+      const persisted =
+        persistedById.get(doc.id ?? taskIdFor(repoId, normalizedChangePath)) ?? null;
+      const nextTask = buildMappedTask(repoId, normalizedChangePath, doc, persisted);
+      if (!readOnly && hasTaskChanged(persisted, nextTask)) {
+        await upsertTask(nextTask);
+      }
+      tasks.push(nextTask);
     }
     return tasks;
   };
@@ -566,10 +607,32 @@ export const createTaskRepository = (
     }
   };
 
-  const refreshCache = async (): Promise<void> => {
-    const next = await buildTaskSnapshot();
-    await emitSnapshotChanges(next);
-    replaceCache(next);
+  const refreshCache = async (force = false): Promise<void> => {
+    if (snapshotInflight) {
+      // Readers coalesce onto the in-flight build; a forced refresh from a
+      // mutation always rebuilds afterwards so its own write is visible.
+      await snapshotInflight;
+      if (!force && !snapshotDirty && Date.now() - lastSnapshotAt < SNAPSHOT_TTL_MS) return;
+    } else if (!force && !snapshotDirty && Date.now() - lastSnapshotAt < SNAPSHOT_TTL_MS) {
+      return;
+    }
+
+    snapshotInflight = (async () => {
+      snapshotDirty = false;
+      const next = await buildTaskSnapshot();
+      await emitSnapshotChanges(next);
+      replaceCache(next);
+      lastSnapshotAt = Date.now();
+    })();
+    try {
+      await snapshotInflight;
+    } finally {
+      snapshotInflight = null;
+    }
+  };
+
+  const invalidateSnapshot = (): void => {
+    snapshotDirty = true;
   };
 
   const findTaskFolder = async (repoId: string, taskId: string): Promise<string | null> => {
@@ -770,7 +833,8 @@ export const createTaskRepository = (
     repoPath: string,
     changePath: string,
   ): Promise<Task> => {
-    await refreshCache();
+    // Creation must leave the new task visible to subsequent TTL'd reads.
+    await refreshCache(true);
     return cache.get(taskId) ?? (await mapTaskFromDisk(repoId, repoPath, changePath));
   };
 
@@ -798,7 +862,7 @@ export const createTaskRepository = (
     const persistedTask = buildPersistedTask(task, normalizeTaskPath(task.change_path));
 
     await upsertTask(persistedTask);
-    await refreshCache();
+    await refreshCache(true);
     return cache.get(task.id) ?? persistedTask;
   };
 
@@ -815,7 +879,8 @@ export const createTaskRepository = (
   };
 
   const updateTaskRecord = async (id: string, updates: TaskUpdate): Promise<Task | null> => {
-    await refreshCache();
+    // Mutations must read the freshest state before computing the merge.
+    await refreshCache(true);
     const existing = cache.get(id);
     if (!existing) return null;
 
@@ -861,7 +926,7 @@ export const createTaskRepository = (
     await upsertTask(updated);
     await syncTaskStatusToDisk(existing, updates.status);
 
-    await refreshCache();
+    await refreshCache(true);
     return cache.get(id) ?? null;
   };
 
@@ -878,7 +943,11 @@ export const createTaskRepository = (
   };
 
   return {
-    refresh: refreshCache,
+    // Explicit refreshes always rebuild; only implicit reads are TTL'd.
+    refresh: async (force?: boolean): Promise<void> => {
+      await refreshCache(force ?? true);
+    },
+    invalidateSnapshot,
 
     create: createTaskRecord,
 

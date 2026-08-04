@@ -330,6 +330,30 @@ export interface ChatMessagesTable {
   created_at: Generated<string>;
 }
 
+export interface ChatDelegationRunsTable {
+  id: string;
+  chat_run_id: string;
+  kind: string;
+  label: string;
+  runtime: string;
+  runtime_alias: string | null;
+  runtime_configuration_id: string | null;
+  model: string;
+  reasoning: string;
+  fast_mode: number;
+  status: string;
+  activity: string | null;
+  runtime_session_id: string | null;
+  log_file_path: string;
+  error: string | null;
+  tool_use_id: string | null;
+  started_at: string;
+  updated_at: string;
+}
+
+export type ChatDelegationRunRecord = Selectable<ChatDelegationRunsTable>;
+export type NewChatDelegationRunRecord = Insertable<ChatDelegationRunsTable>;
+
 export interface ChatRunsTable {
   id: string;
   session_id: string;
@@ -401,6 +425,7 @@ export interface Database extends ChatHistoryDatabase {
   chat_sessions: ChatSessionsTable;
   chat_messages: ChatMessagesTable;
   chat_runs: ChatRunsTable;
+  chat_delegation_runs: ChatDelegationRunsTable;
   workflow_runs: WorkflowRunsTable;
   task_assignments: TaskAssignmentsTable;
   task_sources: TaskSourcesTable;

@@ -31,10 +31,34 @@ export type RunCommand = (
   options?: RunCommandOptions,
 ) => Promise<CommandResult>;
 
+// Cap concurrent git/gh subprocesses so parallel health/status checks cannot
+// spawn an unbounded number of processes at once.
+const MAX_CONCURRENT_SUBPROCESSES = 8;
+let activeSubprocesses = 0;
+const subprocessWaiters: Array<() => void> = [];
+
+const acquireSubprocessSlot = async (): Promise<void> => {
+  if (activeSubprocesses < MAX_CONCURRENT_SUBPROCESSES) {
+    activeSubprocesses++;
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    subprocessWaiters.push(resolve);
+  });
+  activeSubprocesses++;
+};
+
+const releaseSubprocessSlot = (): void => {
+  activeSubprocesses--;
+  const next = subprocessWaiters.shift();
+  if (next) next();
+};
+
 export const createDefaultRunner =
   (binary: string): RunCommand =>
   async (args, cwd, options = {}) => {
     const abort = createCommandAbort(options);
+    await acquireSubprocessSlot();
     try {
       const process = Bun.spawn([binary, ...args], {
         cwd,
@@ -51,6 +75,7 @@ export const createDefaultRunner =
       abort.throwIfAborted();
       return { exitCode, stdout, stderr };
     } finally {
+      releaseSubprocessSlot();
       abort.dispose();
     }
   };

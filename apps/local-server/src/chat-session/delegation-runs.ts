@@ -1,14 +1,13 @@
 import { readFile } from "node:fs/promises";
-import {
-  type ChatDelegationKind,
-  type ChatDelegationRun,
-  type ChatDelegationRunDto,
-  parseChatDelegationRuns,
-  serializeChatDelegationRuns,
-} from "@aop/common";
+import type { ChatDelegationKind, ChatDelegationRun, ChatDelegationRunDto } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatRun } from "../db/schema.ts";
 import { pruneOldBackgroundTasks } from "./background-task-retention.ts";
+import {
+  listDelegationRuns,
+  listDelegationRunsByChatRunIds,
+  replaceDelegationRuns,
+} from "./delegation-run-store.ts";
 import { publishChatSessionEvent } from "./session-events.ts";
 import {
   createStreamProgressAccumulator,
@@ -283,7 +282,7 @@ export const listChatDelegations = async (
   // active endpoint still uses the recency window.
   const rows = await queryDelegationRows(ctx, sessionId, sessionId ? null : cutoff);
   return rows.flatMap((row) =>
-    parseChatDelegationRuns(row.delegationRuns).map((entry) =>
+    row.entries.map((entry) =>
       toDelegationDto(entry, {
         hostRunId: row.hostRunId,
         hostRunStatus: row.hostRunStatus,
@@ -302,9 +301,7 @@ export const getChatDelegation = async (
 ): Promise<ChatDelegationRunDto | null> => {
   const rows = await queryDelegationRows(ctx, sessionId, null);
   for (const row of rows) {
-    const entry = parseChatDelegationRuns(row.delegationRuns).find(
-      (item) => item.id === delegationId,
-    );
+    const entry = row.entries.find((item) => item.id === delegationId);
     if (entry) {
       return toDelegationDto(entry, {
         hostRunId: row.hostRunId,
@@ -329,11 +326,19 @@ export const readDelegationOutput = async (
   return accumulator.get();
 };
 
+interface DelegationRow {
+  hostRunId: string;
+  sessionId: string;
+  hostRunStatus: string;
+  sessionTitle: string | null;
+  entries: ChatDelegationRun[];
+}
+
 const queryDelegationRows = async (
   ctx: LocalServerContext,
   sessionId: string | undefined,
   terminalCutoff: string | null,
-) => {
+): Promise<DelegationRow[]> => {
   let query = ctx.db
     .selectFrom("chat_runs")
     .innerJoin("chat_sessions", "chat_sessions.id", "chat_runs.session_id")
@@ -341,10 +346,16 @@ const queryDelegationRows = async (
       "chat_runs.id as hostRunId",
       "chat_runs.session_id as sessionId",
       "chat_runs.status as hostRunStatus",
-      "chat_runs.delegation_runs as delegationRuns",
       "chat_sessions.title as sessionTitle",
     ])
-    .where("chat_runs.delegation_runs", "is not", null);
+    .where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("chat_delegation_runs")
+          .select("chat_delegation_runs.id")
+          .whereRef("chat_delegation_runs.chat_run_id", "=", "chat_runs.id"),
+      ),
+    );
   if (terminalCutoff) {
     query = query.where((eb) =>
       eb.or([
@@ -354,7 +365,18 @@ const queryDelegationRows = async (
     );
   }
   if (sessionId) query = query.where("chat_runs.session_id", "=", sessionId);
-  return query.execute();
+  const rows = await query.execute();
+  const entriesByRun = await listDelegationRunsByChatRunIds(
+    ctx.db,
+    rows.map((row) => row.hostRunId),
+  );
+  return rows.map((row) => ({
+    hostRunId: row.hostRunId,
+    sessionId: row.sessionId,
+    hostRunStatus: row.hostRunStatus,
+    sessionTitle: row.sessionTitle,
+    entries: entriesByRun.get(row.hostRunId) ?? [],
+  }));
 };
 
 /** Short human activity line derived from real streamed runtime events. */
@@ -406,15 +428,8 @@ const loadDelegationEntry = async (
   hostRunId: string,
   delegationId: string,
 ): Promise<ChatDelegationRun | null> => {
-  const row = await ctx.db
-    .selectFrom("chat_runs")
-    .select("delegation_runs")
-    .where("id", "=", hostRunId)
-    .executeTakeFirst();
-  if (!row) return null;
-  return (
-    parseChatDelegationRuns(row.delegation_runs).find((entry) => entry.id === delegationId) ?? null
-  );
+  const entries = await listDelegationRuns(ctx.db, hostRunId);
+  return entries.find((entry) => entry.id === delegationId) ?? null;
 };
 
 const updateDelegationEntries = async (
@@ -427,11 +442,11 @@ const updateDelegationEntries = async (
     ctx.db.transaction().execute(async (trx) => {
       const row = await trx
         .selectFrom("chat_runs")
-        .select(["delegation_runs", "session_id", "status"])
+        .select(["session_id", "status"])
         .where("id", "=", hostRun.id)
         .executeTakeFirst();
       if (!row) return null;
-      let next = mutate(parseChatDelegationRuns(row.delegation_runs));
+      let next = mutate(await listDelegationRuns(trx, hostRun.id));
       // Host already terminal: never leave (or resurrect) active specialist rows.
       if (row.status !== "running") {
         const now = new Date().toISOString();
@@ -439,11 +454,7 @@ const updateDelegationEntries = async (
           entry.status === "active" ? { ...entry, status: "cancelled", updatedAt: now } : entry,
         );
       }
-      await trx
-        .updateTable("chat_runs")
-        .set({ delegation_runs: serializeChatDelegationRuns(next) })
-        .where("id", "=", hostRun.id)
-        .execute();
+      await replaceDelegationRuns(trx, hostRun.id, next);
       return { host: { id: hostRun.id, sessionId: row.session_id }, entries: next };
     }),
   );

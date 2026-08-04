@@ -26,6 +26,7 @@ import {
   type ChatWorkLogRepository,
   createChatWorkLogRepository,
 } from "./chat-session/work-log-repository.ts";
+import { createReadOnlyDatabase } from "./db/connection.ts";
 import type { Database } from "./db/schema.ts";
 import {
   getLogBuffer,
@@ -33,6 +34,7 @@ import {
   type LogBuffer,
   type TaskEventEmitter,
 } from "./events/index.ts";
+import { enrichTaskEvent } from "./events/task-enrichment.ts";
 import {
   createExecutionRepository,
   type ExecutionRepository,
@@ -81,6 +83,19 @@ import {
   type TaskAssignmentRepository,
 } from "./task-assignment/repository.ts";
 import { createWorkflowRepository, type WorkflowRepository } from "./workflow/repository.ts";
+
+/** Read-only repositories over the second WAL connection, for the status build. */
+export interface StatusReaders {
+  db: Kysely<Database>;
+  repoRepository: RepoRepository;
+  taskRepository: TaskRepository;
+  executionRepository: ExecutionRepository;
+  runtimeEventRepository: RuntimeEventRepository;
+  taskAssignmentRepository: TaskAssignmentRepository;
+  agentRepository: AgentRepository;
+  workflowRepository: WorkflowRepository;
+}
+
 import { createLocalWorkflowService, type LocalWorkflowService } from "./workflow/service.ts";
 import {
   createWorkflowSkillBlockRepository,
@@ -89,6 +104,10 @@ import {
 
 export interface LocalServerContext {
   db: Kysely<Database>;
+  /** Read-only connection (WAL) serving dashboard polls so they never queue behind writes. */
+  readDb: Kysely<Database>;
+  /** Read-only repository mirror over `readDb` for the status build. */
+  statusReaders: StatusReaders;
   taskRepository: TaskRepository;
   taskAssignmentRepository: TaskAssignmentRepository;
   repoRepository: RepoRepository;
@@ -126,6 +145,8 @@ export interface CreateCommandContextOptions {
   taskEventEmitter?: TaskEventEmitter;
   logBuffer?: LogBuffer;
   logFlusher?: LogFlusher;
+  /** Second, read-only connection for dashboard read paths (defaults to one). */
+  readDb?: Kysely<Database>;
 }
 
 export const createCommandContext = (
@@ -133,6 +154,30 @@ export const createCommandContext = (
   options: CreateCommandContextOptions = {},
 ): LocalServerContext => {
   const taskEventEmitter = options.taskEventEmitter ?? getTaskEventEmitter();
+  const readDb = options.readDb ?? createReadOnlyDatabase(db);
+  // Enrich each event exactly once (executions, dependency state, swimlane)
+  // and fan the enriched payload out to every SSE subscriber; per-client
+  // enrichment would repeat the same reads once per open tab.
+  let enrichmentQueue: Promise<void> = Promise.resolve();
+  const enrichedTaskEventEmitter: TaskEventEmitter = {
+    emit: (event) => {
+      if (!("task" in event)) {
+        taskEventEmitter.emit(event);
+        return;
+      }
+      enrichmentQueue = enrichmentQueue
+        .then(() => enrichTaskEvent(context, event))
+        .then((enriched) => {
+          taskEventEmitter.emit(enriched);
+        })
+        .catch(() => {
+          // Fall back to the raw payload rather than dropping the event.
+          taskEventEmitter.emit(event);
+        });
+    },
+    subscribe: taskEventEmitter.subscribe,
+    listenerCount: taskEventEmitter.listenerCount,
+  };
   const logBuffer = options.logBuffer ?? getLogBuffer();
   const repoRepository = createRepoRepository(db);
   const agentRepository = createAgentRepository(db);
@@ -146,6 +191,17 @@ export const createCommandContext = (
   const sessionMutationLock = createSessionMutationLock();
   const settingsRepository = createSettingsRepository(db);
   const executionRepository = createExecutionRepository(db);
+  // Read-only mirror for the status build: same data, no writer-queue contention.
+  const statusReaders: StatusReaders = {
+    db: readDb,
+    repoRepository: createRepoRepository(readDb),
+    taskRepository: createTaskRepository(readDb, { readOnly: true }),
+    executionRepository: createExecutionRepository(readDb),
+    runtimeEventRepository: createRuntimeEventRepository(readDb),
+    taskAssignmentRepository: createTaskAssignmentRepository(readDb),
+    agentRepository: createAgentRepository(readDb),
+    workflowRepository: createWorkflowRepository(readDb),
+  };
   const runtimeEventRepository = createRuntimeEventRepository(db);
   let context: LocalServerContext;
   const logFlusher =
@@ -226,8 +282,10 @@ export const createCommandContext = (
 
   context = {
     db,
+    readDb,
+    statusReaders,
     taskRepository: createTaskRepository(db, {
-      eventEmitter: taskEventEmitter,
+      eventEmitter: enrichedTaskEventEmitter,
     }),
     taskAssignmentRepository,
     repoRepository,
@@ -248,7 +306,7 @@ export const createCommandContext = (
     schedulerService: undefined as unknown as SchedulerService,
     trackerReimporter: undefined as unknown as TrackerReimporter,
     agentService: undefined as unknown as AgentService,
-    taskEventEmitter,
+    taskEventEmitter: enrichedTaskEventEmitter,
     logBuffer,
     logFlusher,
     linearHandlers,

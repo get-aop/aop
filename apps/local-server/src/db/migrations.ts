@@ -1,3 +1,4 @@
+import { parseChatDelegationRuns } from "@aop/common";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
@@ -51,6 +52,7 @@ export const runMigrations = async (db: Kysely<Database>): Promise<void> => {
   await ensureChatRunDelegationColumn(db);
   await runChatHistoryMigrations(db);
   await createWorkflowRunsTable(db);
+  await createChatDelegationRunsTable(db);
   await createTaskAssignmentsTable(db);
   await createTaskSourcesTable(db);
   await createTaskDependenciesTable(db);
@@ -64,6 +66,7 @@ export const runMigrations = async (db: Kysely<Database>): Promise<void> => {
   await dropRetiredLicenseSettings(db);
   await createSchedulerTriggersTable(db);
   await createSignalsTable(db);
+  await ensurePerformanceIndexes(db);
 };
 
 const repairTaskStatusNoteTurnIndexes = async (db: Kysely<Database>): Promise<void> => {
@@ -975,6 +978,105 @@ const createWorkflowRunsTable = async (db: Kysely<Database>): Promise<void> => {
   `.execute(db);
 };
 
+const createChatDelegationRunsTable = async (db: Kysely<Database>): Promise<void> => {
+  await db.schema
+    .createTable("chat_delegation_runs")
+    .ifNotExists()
+    .addColumn("id", "text", (col) => col.primaryKey())
+    .addColumn("chat_run_id", "text", (col) => col.notNull())
+    .addColumn("kind", "text", (col) => col.notNull())
+    .addColumn("label", "text", (col) => col.notNull())
+    .addColumn("runtime", "text", (col) => col.notNull())
+    .addColumn("runtime_alias", "text")
+    .addColumn("runtime_configuration_id", "text")
+    .addColumn("model", "text", (col) => col.notNull())
+    .addColumn("reasoning", "text", (col) => col.notNull())
+    .addColumn("fast_mode", "integer", (col) => col.notNull().defaultTo(0))
+    .addColumn("status", "text", (col) => col.notNull())
+    .addColumn("activity", "text")
+    .addColumn("runtime_session_id", "text")
+    .addColumn("log_file_path", "text", (col) => col.notNull())
+    .addColumn("error", "text")
+    .addColumn("tool_use_id", "text")
+    .addColumn("started_at", "text", (col) => col.notNull())
+    .addColumn("updated_at", "text", (col) => col.notNull())
+    .execute();
+
+  await db.schema
+    .createIndex("idx_chat_delegation_runs_chat_run")
+    .ifNotExists()
+    .on("chat_delegation_runs")
+    .column("chat_run_id")
+    .execute();
+
+  await backfillChatDelegationRuns(db);
+};
+
+/** One-time move of legacy chat_runs.delegation_runs blobs into rows. */
+const backfillChatDelegationRuns = async (db: Kysely<Database>): Promise<void> => {
+  const rows = await db
+    .selectFrom("chat_runs")
+    .select(["id", "delegation_runs"])
+    .where("delegation_runs", "is not", null)
+    .execute();
+
+  for (const row of rows) {
+    if (!row.delegation_runs) continue;
+    const entries = parseChatDelegationRuns(row.delegation_runs);
+    if (entries.length === 0) continue;
+
+    await db
+      .insertInto("chat_delegation_runs")
+      .values(toChatDelegationRunRows(row.id, entries))
+      .onConflict((oc) => oc.column("id").doNothing())
+      .execute();
+  }
+};
+
+const toChatDelegationRunRows = (
+  chatRunId: string,
+  entries: import("@aop/common").ChatDelegationRun[],
+): Array<{
+  id: string;
+  chat_run_id: string;
+  kind: string;
+  label: string;
+  runtime: string;
+  runtime_alias: string | null;
+  runtime_configuration_id: string | null;
+  model: string;
+  reasoning: string;
+  fast_mode: number;
+  status: string;
+  activity: string | null;
+  runtime_session_id: string | null;
+  log_file_path: string;
+  error: string | null;
+  tool_use_id: string | null;
+  started_at: string;
+  updated_at: string;
+}> =>
+  entries.map((entry) => ({
+    id: entry.id,
+    chat_run_id: chatRunId,
+    kind: entry.kind,
+    label: entry.label,
+    runtime: entry.runtime,
+    runtime_alias: entry.runtimeAlias,
+    runtime_configuration_id: entry.runtimeConfigurationId,
+    model: entry.model,
+    reasoning: entry.reasoning,
+    fast_mode: entry.fastMode ? 1 : 0,
+    status: entry.status,
+    activity: entry.activity,
+    runtime_session_id: entry.runtimeSessionId,
+    log_file_path: entry.logFilePath,
+    error: entry.error,
+    tool_use_id: entry.toolUseId ?? null,
+    started_at: entry.startedAt,
+    updated_at: entry.updatedAt,
+  }));
+
 /** Upgrade path for DBs that already have chat_runs without failure classification. */
 const ensureChatRunFailureColumns = async (db: Kysely<Database>): Promise<void> => {
   const columns = await sql<{ name: string }>`PRAGMA table_info(chat_runs)`.execute(db);
@@ -1217,6 +1319,29 @@ const createStepExecutionsTable = async (db: Kysely<Database>): Promise<void> =>
     .ifNotExists()
     .on("step_executions")
     .column("execution_id")
+    .execute();
+};
+
+// Hot paths filter executions/steps by status and chat messages by session+role recency;
+// without these, the lookups scan tables that grow with every run.
+const ensurePerformanceIndexes = async (db: Kysely<Database>): Promise<void> => {
+  await db.schema
+    .createIndex("idx_executions_status")
+    .ifNotExists()
+    .on("executions")
+    .column("status")
+    .execute();
+  await db.schema
+    .createIndex("idx_step_executions_status")
+    .ifNotExists()
+    .on("step_executions")
+    .column("status")
+    .execute();
+  await db.schema
+    .createIndex("idx_chat_messages_session_role_created")
+    .ifNotExists()
+    .on("chat_messages")
+    .columns(["session_id", "role", "created_at"])
     .execute();
 };
 

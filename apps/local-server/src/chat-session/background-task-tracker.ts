@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
-import { parseChatDelegationRuns } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatRun, ChatSession } from "../db/schema.ts";
+import { listDelegationRuns } from "./delegation-run-store.ts";
 import {
   deriveDelegationActivity,
   finishDelegationRun,
@@ -121,13 +121,8 @@ const seedKnownFromHost = async (
   host: BackgroundTaskHost,
   known: Map<string, TrackedBackgroundTask>,
 ): Promise<void> => {
-  const row = await host.ctx.db
-    .selectFrom("chat_runs")
-    .select("delegation_runs")
-    .where("id", "=", host.hostRun.id)
-    .executeTakeFirst();
-  if (!row) return;
-  for (const entry of parseChatDelegationRuns(row.delegation_runs)) {
+  const entries = await listDelegationRuns(host.ctx.db, host.hostRun.id);
+  for (const entry of entries) {
     if (entry.kind !== "background-task" || !entry.toolUseId) continue;
     known.set(entry.toolUseId, {
       delegationId: entry.id,

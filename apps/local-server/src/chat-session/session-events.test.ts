@@ -3,7 +3,12 @@ import { getTaskEventEmitter, resetTaskEventEmitter } from "../events/task-event
 import {
   type ChatSessionEvent,
   createChatSessionEventQueue,
+  getLatestChatSessionProgress,
+  publishAssistantProgress,
   publishChatSessionEvent,
+  resetAssistantProgress,
+  subscribeChatSession,
+  suffixDelta,
 } from "./session-events";
 
 const progress = (n: number): ChatSessionEvent => ({
@@ -50,7 +55,7 @@ describe("createChatSessionEventQueue", () => {
     expect(sent).toEqual(["p1", "p2"]);
   });
 
-  test("coalesces consecutive unsent progress to the newest only", async () => {
+  test("coalesces consecutive unsent progress by concatenating deltas", async () => {
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -68,7 +73,9 @@ describe("createChatSessionEventQueue", () => {
     release?.();
     await Bun.sleep(10);
 
-    expect(sent).toEqual(["p1", "p3"]);
+    // Deltas concatenate exactly, so coalescing stays lossless (the first
+    // frame was already dequeued by the drain before the later merges).
+    expect(sent).toEqual(["p1", "p2p3"]);
   });
 
   test("non-progress events act as coalescing barriers", async () => {
@@ -135,5 +142,58 @@ describe("chat session global events", () => {
       snippet: "All checks pass",
       kind: "assistant-final",
     });
+  });
+});
+
+describe("publishAssistantProgress", () => {
+  beforeEach(() => {
+    resetAssistantProgress("s1");
+  });
+
+  test("emits suffix deltas relative to the previous frame", () => {
+    const received: ChatSessionEvent[] = [];
+    const unsubscribe = subscribeChatSession("s1", (event) => received.push(event));
+
+    publishAssistantProgress("s1", { thinking: "pond", content: "Hello world", commandGroups: [] });
+    publishAssistantProgress("s1", {
+      thinking: "ponder",
+      content: "Hello world again",
+      commandGroups: [],
+    });
+
+    expect(
+      received.map((event) => [
+        event.type,
+        event.type === "assistant-progress" ? event.content : "",
+      ]),
+    ).toEqual([
+      ["assistant-progress", "Hello world"],
+      ["assistant-progress", " again"],
+    ]);
+    unsubscribe();
+  });
+
+  test("suffixDelta returns the appended suffix only", () => {
+    expect(suffixDelta("Hello", "Hello world")).toBe(" world");
+    expect(suffixDelta("Hello", "Completely different")).toBe("Completely different");
+    expect(suffixDelta("", "Fresh start")).toBe("Fresh start");
+  });
+
+  test("replay frame carries the full cumulative text with replace flag", () => {
+    publishAssistantProgress("s1", { thinking: "a", content: "one", commandGroups: [] });
+    publishAssistantProgress("s1", { thinking: "ab", content: "one two", commandGroups: [] });
+
+    const latest = getLatestChatSessionProgress("s1");
+    expect(latest?.replace).toBe(true);
+    expect(latest?.content).toBe("one two");
+    expect(latest?.thinking).toBe("ab");
+  });
+
+  test("resetAssistantProgress starts a fresh delta chain", () => {
+    publishAssistantProgress("s1", { thinking: "a", content: "one", commandGroups: [] });
+    resetAssistantProgress("s1");
+    publishAssistantProgress("s1", { thinking: "b", content: "two", commandGroups: [] });
+
+    expect(getLatestChatSessionProgress("s1")?.content).toBe("two");
   });
 });

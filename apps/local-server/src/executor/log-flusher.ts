@@ -1,5 +1,10 @@
 import { getLogger } from "@aop/infra";
-import { readLogLineCount, readLogLines } from "../events/log-file-tailer.ts";
+import {
+  createLogReadState,
+  getFileSize,
+  type LogReadState,
+  readLogLines,
+} from "../events/log-file-tailer.ts";
 import type { ExecutionRepository } from "./execution-repository.ts";
 
 const logger = getLogger("executor", "log-flusher");
@@ -20,7 +25,7 @@ export interface LogFlusherConfig {
 
 interface TrackedStep {
   logFile: string;
-  flushedLineCount: number;
+  readState: LogReadState;
   needsProjection: boolean;
 }
 
@@ -32,10 +37,19 @@ export const createLogFlusher = (
   const tracked = new Map<string, TrackedStep>();
   let timer: Timer | undefined;
 
-  const flushStep = async (stepExecutionId: string, entry: TrackedStep): Promise<void> => {
-    resetOffsetAfterRotation(stepExecutionId, entry);
+  const flushStep = async (
+    stepExecutionId: string,
+    entry: TrackedStep,
+    includePartial = false,
+  ): Promise<void> => {
+    resetOffsetAfterRotation(entry);
 
-    const flushed = await flushNewLines(executionRepository, stepExecutionId, entry);
+    const flushed = await flushNewLines(
+      executionRepository,
+      stepExecutionId,
+      entry,
+      includePartial,
+    );
     if (!flushed) {
       return;
     }
@@ -62,7 +76,11 @@ export const createLogFlusher = (
 
   return {
     track: (stepExecutionId, logFile) => {
-      tracked.set(stepExecutionId, { logFile, flushedLineCount: 0, needsProjection: false });
+      tracked.set(stepExecutionId, {
+        logFile,
+        readState: createLogReadState(),
+        needsProjection: false,
+      });
       logger.debug("Tracking step {stepId} for periodic log flushing", {
         stepId: stepExecutionId,
       });
@@ -72,7 +90,8 @@ export const createLogFlusher = (
       const entry = tracked.get(stepExecutionId);
       if (!entry) return;
 
-      await flushStep(stepExecutionId, entry);
+      // The run is over: consume a trailing partial line as the final row.
+      await flushStep(stepExecutionId, entry, true);
       tracked.delete(stepExecutionId);
     },
 
@@ -95,26 +114,25 @@ export const createLogFlusher = (
   };
 };
 
-const resetOffsetAfterRotation = (stepExecutionId: string, entry: TrackedStep): void => {
-  const lineCount = readLogLineCount(entry.logFile);
-  if (lineCount >= entry.flushedLineCount) {
+const resetOffsetAfterRotation = (entry: TrackedStep): void => {
+  // Rotation rewrites the file, so its size drops below the read position.
+  if (getFileSize(entry.logFile) >= entry.readState.byteOffset) {
     return;
   }
 
-  logger.debug("Resetting log flush offset for rotated step log {stepId}", {
-    stepId: stepExecutionId,
-    previousLineCount: entry.flushedLineCount,
-    nextLineCount: lineCount,
+  logger.debug("Resetting log flush offset for rotated step log", {
+    logFile: entry.logFile,
   });
-  entry.flushedLineCount = 0;
+  entry.readState = createLogReadState();
 };
 
 const flushNewLines = async (
   executionRepository: ExecutionRepository,
   stepExecutionId: string,
   entry: TrackedStep,
+  includePartial: boolean,
 ): Promise<boolean> => {
-  const { lines } = readLogLines(entry.logFile, entry.flushedLineCount);
+  const { lines } = await readLogLines(entry.logFile, entry.readState, includePartial);
   if (lines.length === 0) {
     return true;
   }
@@ -136,7 +154,7 @@ const flushNewLines = async (
     return false;
   }
 
-  entry.flushedLineCount += lines.length;
+  // readLogLines advanced entry.readState (byte offset and line count).
   entry.needsProjection = true;
   logger.debug("Flushed {count} log lines for step {stepId}", {
     count: lines.length,

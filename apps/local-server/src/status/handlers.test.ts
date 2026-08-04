@@ -7,6 +7,7 @@ import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { projectRuntimeEventsForStep } from "../runtime-events/projector.ts";
 import { serializeFrontmatter } from "../task-docs/frontmatter.ts";
 import { getServerStatus } from "./handlers.ts";
 
@@ -234,6 +235,8 @@ describe("status/handlers", () => {
         created_at: "2026-01-01T00:00:02.000Z",
       },
     ]);
+    // The write path projects events eagerly; status reads them, never backfills.
+    await projectRuntimeEventsForStep(ctx, "step-runtime");
 
     const status = await getServerStatus(ctx);
     const runtimeTask = status.repos[0]?.tasks.find((task) => task.id === "task-runtime");

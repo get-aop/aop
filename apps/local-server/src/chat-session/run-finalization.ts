@@ -1,5 +1,4 @@
 import type { ChatActionPayload, ChatDelegationRun } from "@aop/common";
-import { parseChatDelegationRuns, serializeChatDelegationRuns } from "@aop/common";
 import type { Transaction } from "kysely";
 import type {
   ChatMessage,
@@ -8,6 +7,7 @@ import type {
   ChatRunInterruptionKind,
   Database,
 } from "../db/schema.ts";
+import { listDelegationRuns, replaceDelegationRuns } from "./delegation-run-store.ts";
 import {
   cascadeDelegationsForHostTerminal,
   publishDelegationUpdate,
@@ -74,17 +74,12 @@ export const persistFinalizedChatRun = async (
     .execute();
 
   // Re-read under this transaction so concurrent progress notes/starts are not lost
-  // by cascading a stale snapshot of delegation_runs.
-  const latestDelegationRuns = await trx
-    .selectFrom("chat_runs")
-    .select("delegation_runs")
-    .where("id", "=", current.id)
-    .executeTakeFirst();
-  const delegationCascade = buildDelegationCascade(
-    latestDelegationRuns?.delegation_runs ?? current.delegation_runs,
-    outcome,
-    createdAt,
-  );
+  // by cascading from a stale delegation snapshot.
+  const latestDelegations = await listDelegationRuns(trx, current.id);
+  const delegationCascade = buildDelegationCascade(latestDelegations, outcome, createdAt);
+  if (delegationCascade.changed) {
+    await replaceDelegationRuns(trx, current.id, delegationCascade.entries);
+  }
   const claimed = await trx
     .updateTable("chat_runs")
     .set({
@@ -94,7 +89,6 @@ export const persistFinalizedChatRun = async (
       failure_kind: outcome.failureKind ?? null,
       interruption_kind: outcome.interruptionKind ?? null,
       error_message: decision.errorMessage,
-      ...delegationCascade.set,
       updated_at: createdAt,
     })
     .where("id", "=", current.id)
@@ -120,22 +114,12 @@ export const persistFinalizedChatRun = async (
 };
 
 const buildDelegationCascade = (
-  delegationRuns: string | null,
+  entries: ChatDelegationRun[],
   outcome: FinalizeChatRunOutcome,
   createdAt: string,
-): { set: { delegation_runs?: string | null }; entries: ChatDelegationRun[] } => {
-  const cascade = cascadeDelegationsForHostTerminal(
-    parseChatDelegationRuns(delegationRuns),
-    outcome.status,
-    createdAt,
-  );
-  return {
-    set:
-      cascade.changed.length === 0
-        ? {}
-        : { delegation_runs: serializeChatDelegationRuns(cascade.entries) },
-    entries: cascade.entries,
-  };
+): { changed: boolean; entries: ChatDelegationRun[] } => {
+  const cascade = cascadeDelegationsForHostTerminal(entries, outcome.status, createdAt);
+  return { changed: cascade.changed.length > 0, entries: cascade.entries };
 };
 
 const publishDelegationCascade = async (

@@ -21,12 +21,14 @@ export type ChatSessionEvent =
   | {
       type: "assistant-progress";
       sessionId: string;
-      /** Cumulative model reasoning / thought stream (e.g. Grok `thought` tokens). */
+      /** Suffix delta of the model reasoning stream (or full text when `replace`). */
       thinking: string;
-      /** Cumulative assistant status + answer text (intermediate runs stacked). */
+      /** Suffix delta of the assistant status + answer text (or full when `replace`). */
       content: string;
       /** Codex-style command batches for collapsible "Ran N commands". */
       commandGroups: ChatStreamCommandGroup[];
+      /** True for replay frames: replace the accumulated client text instead of appending. */
+      replace?: boolean;
     }
   | {
       type: "assistant-final";
@@ -93,6 +95,47 @@ type AssistantProgressEvent = Extract<ChatSessionEvent, { type: "assistant-progr
 const emitter = new EventEmitter();
 emitter.setMaxListeners(100);
 const latestProgressBySession = new Map<string, AssistantProgressEvent>();
+const fullProgressBySession = new Map<string, AssistantProgressEvent>();
+
+/**
+ * Progress frames carry only the text appended since the previous frame so the
+ * wire stays small no matter how long a run streams. Clients append deltas and
+ * replace their accumulated text on `replace` frames (replay).
+ */
+export const publishAssistantProgress = (
+  sessionId: string,
+  progress: { thinking: string; content: string; commandGroups: ChatStreamCommandGroup[] },
+): void => {
+  const previous = latestProgressBySession.get(sessionId);
+  const event: AssistantProgressEvent = {
+    type: "assistant-progress",
+    sessionId,
+    thinking: suffixDelta(previous?.thinking ?? "", progress.thinking),
+    content: suffixDelta(previous?.content ?? "", progress.content),
+    commandGroups: progress.commandGroups,
+  };
+  latestProgressBySession.set(sessionId, {
+    ...event,
+    thinking: progress.thinking,
+    content: progress.content,
+  });
+  fullProgressBySession.set(sessionId, {
+    ...event,
+    thinking: progress.thinking,
+    content: progress.content,
+    replace: true,
+  });
+  publishChatSessionEvent(event);
+};
+
+/** Starts a fresh delta chain (new run / new user turn). */
+export const resetAssistantProgress = (sessionId: string): void => {
+  latestProgressBySession.delete(sessionId);
+  fullProgressBySession.delete(sessionId);
+};
+
+export const suffixDelta = (previous: string, next: string): string =>
+  previous.length > 0 && next.startsWith(previous) ? next.slice(previous.length) : next;
 
 export const publishChatSessionEvent = (event: ChatSessionEvent): void => {
   updateLatestProgress(event);
@@ -113,8 +156,9 @@ export const publishChatSessionEvent = (event: ChatSessionEvent): void => {
   }
 };
 
+/** Replay frame: the full cumulative text, flagged so clients replace state. */
 export const getLatestChatSessionProgress = (sessionId: string): AssistantProgressEvent | null =>
-  latestProgressBySession.get(sessionId) ?? null;
+  fullProgressBySession.get(sessionId) ?? null;
 
 export const subscribeChatSession = (sessionId: string, listener: Listener): (() => void) => {
   emitter.on(sessionId, listener);
@@ -148,7 +192,17 @@ export const createChatSessionEventQueue = (
       if (cleared) return;
       const last = queued[queued.length - 1];
       if (event.type === "assistant-progress" && last?.type === "assistant-progress") {
-        queued[queued.length - 1] = event;
+        if (event.replace) {
+          queued[queued.length - 1] = event;
+        } else {
+          // Deltas concatenate exactly, so coalescing stays lossless.
+          queued[queued.length - 1] = {
+            ...last,
+            thinking: last.thinking + event.thinking,
+            content: last.content + event.content,
+            commandGroups: event.commandGroups,
+          };
+        }
       } else {
         queued.push(event);
       }

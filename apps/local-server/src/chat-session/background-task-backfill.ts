@@ -3,8 +3,6 @@ import {
   BACKGROUND_TASK_LIMIT,
   type ChatDelegationRun,
   type ChatDelegationStatus,
-  parseChatDelegationRuns,
-  serializeChatDelegationRuns,
 } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import { pruneOldBackgroundTasks } from "./background-task-retention.ts";
@@ -12,6 +10,11 @@ import {
   buildBackgroundTaskContent,
   extractBackgroundTaskRows,
 } from "./background-task-tracker.ts";
+import {
+  listDelegationRuns,
+  listDelegationRunsByChatRunIds,
+  replaceDelegationRuns,
+} from "./delegation-run-store.ts";
 import { createSessionRunLogPath } from "./runtime-engine.ts";
 import {
   createStreamProgressAccumulator,
@@ -37,7 +40,6 @@ interface HostRunBackfillRow {
   sessionId: string;
   hostRunStatus: string;
   logFilePath: string | null;
-  delegationRuns: string | null;
   runCreatedAt: string;
   runUpdatedAt: string;
   sessionTitle: string | null;
@@ -143,7 +145,7 @@ const backfillOneHostRun = async (
   const progress = await readHostLogProgress(row.logFilePath);
   if (extractBackgroundTaskRows(progress).length === 0) return 0;
 
-  const existing = parseChatDelegationRuns(row.delegationRuns);
+  const existing = await listDelegationRuns(ctx.db, row.hostRunId);
   const merged = mergeBackgroundTasksFromProgress(existing, progress, {
     hostRunStatus: row.hostRunStatus,
     runtime: row.runtime,
@@ -167,11 +169,7 @@ const backfillOneHostRun = async (
   }
 
   const nextEntries = [...existing, ...withLogs];
-  await ctx.db
-    .updateTable("chat_runs")
-    .set({ delegation_runs: serializeChatDelegationRuns(nextEntries) })
-    .where("id", "=", row.hostRunId)
-    .execute();
+  await replaceDelegationRuns(ctx.db, row.hostRunId, nextEntries);
   return withLogs.length;
 };
 
@@ -179,15 +177,16 @@ const loadRetainedBackgroundTasks = async (
   ctx: LocalServerContext,
   sessionId: string,
 ): Promise<ChatDelegationRun[]> => {
-  const rows = await ctx.db
+  const runs = await ctx.db
     .selectFrom("chat_runs")
-    .select("delegation_runs")
+    .select("id")
     .where("session_id", "=", sessionId)
-    .where("delegation_runs", "is not", null)
     .execute();
-  return rows
-    .flatMap((row) => parseChatDelegationRuns(row.delegation_runs))
-    .filter((entry) => entry.kind === "background-task");
+  const byRun = await listDelegationRunsByChatRunIds(
+    ctx.db,
+    runs.map((run) => run.id),
+  );
+  return [...byRun.values()].flat().filter((entry) => entry.kind === "background-task");
 };
 
 const selectBackfillCandidates = (
@@ -227,7 +226,6 @@ const queryBackfillHostRuns = async (
       "chat_runs.session_id as sessionId",
       "chat_runs.status as hostRunStatus",
       "chat_runs.log_file_path as logFilePath",
-      "chat_runs.delegation_runs as delegationRuns",
       "chat_runs.created_at as runCreatedAt",
       "chat_runs.updated_at as runUpdatedAt",
       "chat_sessions.title as sessionTitle",

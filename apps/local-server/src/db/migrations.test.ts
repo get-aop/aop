@@ -32,6 +32,23 @@ describe("db/migrations", () => {
     ]);
   });
 
+  test("creates performance indexes for hot status and message queries", async () => {
+    await runMigrations(db);
+
+    const indexes = await sql<{ name: string }>`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'index'
+        AND name IN ('idx_executions_status', 'idx_step_executions_status', 'idx_chat_messages_session_role_created')
+    `.execute(db);
+
+    expect(indexes.rows.map((row) => row.name).sort()).toEqual([
+      "idx_chat_messages_session_role_created",
+      "idx_executions_status",
+      "idx_step_executions_status",
+    ]);
+  });
+
   test("creates archived_at on fresh task tables", async () => {
     await runMigrations(db);
 
@@ -1282,6 +1299,19 @@ describe("db/migrations", () => {
         },
       ],
     );
+  });
+  test("creates the chat_delegation_runs table and its index", async () => {
+    await runMigrations(db);
+
+    const tables = await sql<{ name: string }>`
+      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chat_delegation_runs'
+    `.execute(db);
+    expect(tables.rows).toHaveLength(1);
+
+    const indexes = await sql<{ name: string }>`
+      SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_chat_delegation_runs_chat_run'
+    `.execute(db);
+    expect(indexes.rows).toHaveLength(1);
   });
 });
 

@@ -3,7 +3,8 @@ import { type Dispatch, type MutableRefObject, type SetStateAction, useEffect } 
 import type { ChatSessionDetail, ChatSessionSummary } from "../../api/client";
 import { getRuntimeProfiles, getWorkflowDetails } from "../../api/client";
 import { useSSE } from "../../hooks/useSSE";
-import type { AssistantStreamProgress } from "./sessions-page-helpers";
+import type { StreamProgressUpdate } from "./session-stream-progress";
+
 import { bootstrapSessions, handleSessionStreamEvent } from "./sessions-page-helpers";
 import type { WorkspaceBindingViewError } from "./sessions-page-internals";
 import { showBootstrapWorkspaceError } from "./sessions-page-internals";
@@ -108,7 +109,7 @@ interface StreamInput {
   assistantStateGenerationRef: MutableRefObject<number>;
   skipConnectedReloadRef: MutableRefObject<string | null>;
   setTyping: (value: boolean) => void;
-  setStreamProgress: (value: AssistantStreamProgress | null) => void;
+  setStreamProgress: (value: StreamProgressUpdate) => void;
   setDetail: Dispatch<SetStateAction<ChatSessionDetail | null>>;
   setMidRunHints: Dispatch<SetStateAction<Record<string, "queued" | "steered">>>;
   setTermLines: Dispatch<SetStateAction<TerminalLine[]>>;

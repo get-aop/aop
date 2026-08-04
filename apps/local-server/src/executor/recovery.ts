@@ -1,11 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExecutionInfo, StepCommand } from "@aop/common/protocol";
 import { generateTypeId, getLogger } from "@aop/infra";
 import { inferRunOutcomeFromRawJsonl } from "@aop/llm-provider";
 import type { LocalServerContext } from "../context.ts";
 import type { Task } from "../db/schema.ts";
-import { readLogLines } from "../events/log-file-tailer.ts";
+import { readAllLogLines } from "../events/log-file-tailer.ts";
 import { projectRuntimeEventsForStep } from "../runtime-events/projector.ts";
 import { ExecutionStatus, StepExecutionStatus } from "./execution-types.ts";
 import { cleanupLogFile, populateLogBuffer } from "./executor.ts";
@@ -120,12 +121,12 @@ const recoverFromLogFile = async (
   logFile: string,
   deps: RecoveryDeps,
 ): Promise<"success" | "failure"> => {
-  const outcome = determineOutcomeFromLog(logFile);
+  const outcome = await determineOutcomeFromLog(logFile);
 
   const flushedCount = await ctx.executionRepository.getStepLogCount(step.id);
   await persistStepLogsFromOffset(ctx, step.id, logFile, flushedCount);
 
-  populateLogBuffer(ctx, logFile, step.id);
+  await populateLogBuffer(ctx, logFile, step.id);
   ctx.logBuffer.markComplete(step.id, outcome === "success" ? "completed" : "failed");
   cleanupLogFile(logFile);
 
@@ -210,7 +211,8 @@ const persistStepLogsFromOffset = async (
   logFile: string,
   offset: number,
 ): Promise<void> => {
-  const { lines } = readLogLines(logFile, offset);
+  const allLines = await readAllLogLines(logFile);
+  const lines = offset > 0 ? allLines.slice(offset) : allLines;
   if (lines.length === 0) return;
 
   const now = new Date().toISOString();
@@ -237,8 +239,8 @@ const persistStepLogsFromOffset = async (
   }
 };
 
-const determineOutcomeFromLog = (logFile: string): "success" | "failure" => {
-  const content = readFileSync(logFile, "utf-8");
+const determineOutcomeFromLog = async (logFile: string): Promise<"success" | "failure"> => {
+  const content = await readFile(logFile, "utf-8");
   const inferred = inferRunOutcomeFromRawJsonl(content, { requireCompleteLine: true });
   return inferred.outcome === "success" ? "success" : "failure";
 };

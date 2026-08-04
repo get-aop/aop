@@ -125,7 +125,7 @@ export const handleAgentCompletion = async (
     provider,
   } = opts;
 
-  const result = processAgentCompletion(logFile, runResult, signals);
+  const result = await processAgentCompletion(logFile, runResult, signals);
   if (result.sessionId) {
     await ctx.executionRepository.updateStepExecution(stepId, {
       session_id: result.sessionId,
@@ -193,7 +193,7 @@ export const handleAgentCompletion = async (
 
   await ctx.logFlusher.finalFlush(stepId);
 
-  populateLogBuffer(ctx, logFile, stepId);
+  await populateLogBuffer(ctx, logFile, stepId);
 
   const completionStatus = completionResult.status === "success" ? "completed" : "failed";
   ctx.logBuffer.markComplete(stepId, completionStatus);

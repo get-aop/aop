@@ -6,6 +6,11 @@ type StreamSnapshot = {
   progress: AssistantStreamProgress | null;
 };
 
+export type StreamProgressUpdate =
+  | AssistantStreamProgress
+  | null
+  | ((current: AssistantStreamProgress | null) => AssistantStreamProgress | null);
+
 let snapshot: StreamSnapshot = { sessionId: null, progress: null };
 const listeners = new Set<() => void>();
 
@@ -23,20 +28,23 @@ export const subscribeSessionStreamProgress = (listener: () => void): (() => voi
 /** Writes live assistant stream progress without re-rendering SessionsPage. */
 export const setSessionStreamProgress = (
   sessionId: string | null,
-  progress: AssistantStreamProgress | null,
+  update: StreamProgressUpdate,
 ): void => {
-  if (!sessionId || progress === null) {
-    if (snapshot.progress === null && snapshot.sessionId === null) return;
-    // Clear only when the writer matches the active stream (or session is unknown).
-    if (sessionId && snapshot.sessionId && snapshot.sessionId !== sessionId) return;
-    snapshot = { sessionId: null, progress: null };
-    emit();
+  const next = typeof update === "function" ? update(snapshot.progress) : update;
+  if (!sessionId || next === null) {
+    clearProgress(sessionId);
     return;
   }
-  if (snapshot.sessionId === sessionId && snapshot.progress === progress) {
-    return;
-  }
-  snapshot = { sessionId, progress };
+  if (snapshot.sessionId === sessionId && snapshot.progress === next) return;
+  snapshot = { sessionId, progress: next };
+  emit();
+};
+
+const clearProgress = (sessionId: string | null): void => {
+  if (snapshot.progress === null && snapshot.sessionId === null) return;
+  // Clear only when the writer matches the active stream (or session is unknown).
+  if (sessionId && snapshot.sessionId && snapshot.sessionId !== sessionId) return;
+  snapshot = { sessionId: null, progress: null };
   emit();
 };
 

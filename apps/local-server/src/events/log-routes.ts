@@ -12,7 +12,13 @@ import { streamSSE } from "hono/streaming";
 import type { LocalServerContext } from "../context.ts";
 import type { StepLog } from "../db/schema.ts";
 import { isProcessAlive as defaultIsProcessAlive } from "../executor/process-utils.ts";
-import { getFileSize, readAllLogLines, readLogLines } from "./log-file-tailer.ts";
+import {
+  createLogReadState,
+  getFileSize,
+  type LogReadState,
+  readAllLogLines,
+  readLogLines,
+} from "./log-file-tailer.ts";
 import { createSSEStreamHelper, type SSEStreamHelper } from "./sse-stream.ts";
 
 interface StepScopedLogLine extends RenderedLogLine {
@@ -226,7 +232,7 @@ const getCompletedExecutionReplayLines = async (
   const bufferedLatestStepLines = ctx.logBuffer.getLines(latestStep.id);
   const pendingLatestStepLines = bufferedLatestStepLines.slice(persistedLatestStepCount);
   const persistedLatestStepLogs = stepLogs.filter((log) => log.step_execution_id === latestStep.id);
-  const pendingLatestStepFileLines = readPendingLatestStepFileLines(
+  const pendingLatestStepFileLines = await readPendingLatestStepFileLines(
     logsDir,
     latestStep.id,
     persistedLatestStepLogs.map((log) => log.content),
@@ -239,13 +245,13 @@ const getCompletedExecutionReplayLines = async (
   ];
 };
 
-const readPendingLatestStepFileLines = (
+const readPendingLatestStepFileLines = async (
   logsDir: string,
   stepExecutionId: string,
   persistedLines: string[],
-): string[] => {
+): Promise<string[]> => {
   const logFile = join(logsDir, `${stepExecutionId}.jsonl`);
-  const fileLines = readAllLogLines(logFile);
+  const fileLines = await readAllLogLines(logFile);
   if (fileLines.length === 0) return [];
 
   if (fileLines.length > persistedLines.length) {
@@ -337,7 +343,8 @@ const streamFromFile = async (opts: StreamFromFileOptions): Promise<void> => {
     opts;
 
   const fileStartOffset = Math.max(persistedLineCount, resumeOffset);
-  const snapshot = readLogLines(logFile, fileStartOffset);
+  const allLines = await readAllLogLines(logFile);
+  const snapshot = { lines: allLines.slice(fileStartOffset), lineCount: allLines.length };
   const renderer = createStreamingStepLogRenderer(stepExecutionId);
   opts.renderer = renderer;
   const agentDone = await isAgentDone(opts);
@@ -348,10 +355,13 @@ const streamFromFile = async (opts: StreamFromFileOptions): Promise<void> => {
 
   sse.setNextEventId(Math.max(snapshot.lineCount, resumeOffset));
 
-  const state = { lineCount: snapshot.lineCount, fileSize: getFileSize(logFile) };
+  const readState = createLogReadState();
+  readState.lineCount = snapshot.lineCount;
+  readState.byteOffset = getFileSize(logFile);
+  const state = { readState, fileSize: readState.byteOffset };
 
   if (agentDone) {
-    await finishFromFile(opts, state.lineCount);
+    await finishFromFile(opts, state.readState);
     return;
   }
 
@@ -359,7 +369,7 @@ const streamFromFile = async (opts: StreamFromFileOptions): Promise<void> => {
 };
 
 interface PollState {
-  lineCount: number;
+  readState: LogReadState;
   fileSize: number;
 }
 
@@ -379,7 +389,7 @@ const pollFileUntilDone = (opts: StreamFromFileOptions, state: PollState): Promi
 
       if (await isAgentDone(opts)) {
         clearInterval(interval);
-        await finishFromFile(opts, state.lineCount);
+        await finishFromFile(opts, state.readState);
         resolve();
       }
     }, pollIntervalMs);
@@ -395,11 +405,10 @@ const pollOnce = async (opts: StreamFromFileOptions, state: PollState): Promise<
   if (newSize <= state.fileSize) return;
 
   state.fileSize = newSize;
-  const fresh = readLogLines(logFile, state.lineCount);
+  const fresh = await readLogLines(logFile, state.readState);
   const rendered =
     opts.renderer?.push(fresh.lines) ?? renderRawLinesForStep(fresh.lines, stepExecutionId);
   await sendLogLines(sse, rendered);
-  state.lineCount = fresh.lineCount;
 };
 
 const findLatestStep = async (ctx: LocalServerContext, executionId: string) => {
@@ -409,11 +418,11 @@ const findLatestStep = async (ctx: LocalServerContext, executionId: string) => {
 
 const finishFromFile = async (
   opts: StreamFromFileOptions,
-  currentLineCount: number,
+  readState: LogReadState,
 ): Promise<void> => {
   const { sse, stream, logFile, executionId, ctx } = opts;
 
-  const remaining = readLogLines(logFile, currentLineCount);
+  const remaining = await readLogLines(logFile, readState, true);
   const rendered =
     opts.renderer?.finish(remaining.lines) ??
     renderRawLinesForStep(remaining.lines, opts.stepExecutionId);

@@ -333,9 +333,9 @@ describe("handleSessionStreamEvent", () => {
     expect(setStreamProgress).toHaveBeenLastCalledWith(null);
   });
 
-  test("assistant-progress updates thinking and content", () => {
+  test("assistant-progress appends deltas and replaces on replay frames", () => {
     const setTyping = mock(() => {});
-    const setStreamProgress = mock(() => {});
+    const setStreamProgress = mock((_value: unknown) => {});
     handleSessionStreamEvent(
       "assistant-progress",
       {
@@ -353,9 +353,40 @@ describe("handleSessionStreamEvent", () => {
       },
     );
     expect(setTyping).toHaveBeenCalledWith(true);
-    expect(setStreamProgress).toHaveBeenCalledWith({
-      thinking: "The user said hey",
-      content: "Hello",
+    // Frames carry suffix deltas; the client accumulates them onto prior text.
+    const updater = setStreamProgress.mock.calls[0]?.[0] as (current: unknown) => unknown;
+    const current = { thinking: "The user ", content: "Hel", commandGroups: [] };
+    expect(updater(current)).toEqual({
+      thinking: "The user The user said hey",
+      content: "HelHello",
+      commandGroups: [],
+    });
+  });
+
+  test("assistant-progress replace frames overwrite accumulated text", () => {
+    const setStreamProgress = mock((_value: unknown) => {});
+    handleSessionStreamEvent(
+      "assistant-progress",
+      {
+        sessionId: "s1",
+        replace: true,
+        thinking: "full thinking",
+        content: "full content",
+        commandGroups: [],
+      },
+      {
+        activeIdRef: { current: "s1" },
+        setTyping: mock(() => {}),
+        setStreamProgress,
+        setDetail: mock(() => {}),
+        setTermLines: mock(() => {}),
+        refreshList: mock(async () => {}),
+      },
+    );
+    const updater = setStreamProgress.mock.calls[0]?.[0] as (current: unknown) => unknown;
+    expect(updater({ thinking: "stale", content: "stale", commandGroups: [] })).toEqual({
+      thinking: "full thinking",
+      content: "full content",
       commandGroups: [],
     });
   });
