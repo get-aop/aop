@@ -22,9 +22,11 @@ mock.module("./version.ts", () => ({
 const service = (await import("./service.ts?real")) as typeof import("./service.ts");
 const {
   buildMacosDmgDownloadUrl,
+  buildUpgradeSpawnCommand,
   fetchLatestReleaseVersion,
   isDesktopManagedWsl,
   isMacosAppBundleInstall,
+  isRunningInsideSystemdUnit,
   startBinaryUpgrade,
   verifyMacosDmgDownload,
   verifyReleaseAsset,
@@ -288,6 +290,83 @@ describe("updates/service", () => {
     expect(script).not.toContain('open "$AOP_DMG_URL"');
   });
 
+  test("isRunningInsideSystemdUnit matches only systemd unit cgroups", () => {
+    expect(
+      isRunningInsideSystemdUnit(
+        "0::/user.slice/user-1000.slice/user@1000.service/app.slice/aop-local-server.service",
+      ),
+    ).toBe(true);
+    expect(
+      isRunningInsideSystemdUnit(
+        "0::/user.slice/user-1000.slice/user@1000.service/app.slice/session-1.scope",
+      ),
+    ).toBe(false);
+    expect(isRunningInsideSystemdUnit("0::/")).toBe(false);
+    expect(isRunningInsideSystemdUnit("0::/docker/abc123")).toBe(false);
+  });
+
+  test("buildUpgradeSpawnCommand runs the script in its own systemd unit when the server is a systemd service", async () => {
+    const command = await buildUpgradeSpawnCommand("/home/u/.aop/upgrade.sh", {
+      platform: "linux",
+      cgroup: "0::/user.slice/user-1000.slice/user@1000.service/app.slice/aop-local-server.service",
+      hasSystemdRun: () => "/usr/bin/systemd-run",
+      home: "/home/u",
+      path: "/usr/bin:/bin",
+    });
+
+    expect(command).toEqual([
+      "systemd-run",
+      "--user",
+      "--collect",
+      "--setenv",
+      "HOME=/home/u",
+      "--setenv",
+      "PATH=/usr/bin:/bin",
+      "--working-directory",
+      "/home/u",
+      "sh",
+      "/home/u/.aop/upgrade.sh",
+    ]);
+  });
+
+  test("buildUpgradeSpawnCommand falls back to a plain sh spawn outside a systemd unit", async () => {
+    expect(
+      await buildUpgradeSpawnCommand("/home/u/.aop/upgrade.sh", {
+        platform: "linux",
+        cgroup: "0::/",
+        hasSystemdRun: () => "/usr/bin/systemd-run",
+        home: "/home/u",
+        path: "/usr/bin:/bin",
+      }),
+    ).toEqual(["sh", "/home/u/.aop/upgrade.sh"]);
+  });
+
+  test("buildUpgradeSpawnCommand falls back to a plain sh spawn when systemd-run is unavailable", async () => {
+    expect(
+      await buildUpgradeSpawnCommand("/home/u/.aop/upgrade.sh", {
+        platform: "linux",
+        cgroup:
+          "0::/user.slice/user-1000.slice/user@1000.service/app.slice/aop-local-server.service",
+        hasSystemdRun: () => null,
+        home: "/home/u",
+        path: "/usr/bin:/bin",
+      }),
+    ).toEqual(["sh", "/home/u/.aop/upgrade.sh"]);
+  });
+
+  test("buildUpgradeSpawnCommand never uses systemd-run on non-Linux platforms", async () => {
+    expect(
+      await buildUpgradeSpawnCommand("/home/u/.aop/upgrade.sh", {
+        platform: "darwin",
+        cgroup:
+          "0::/user.slice/user-1000.slice/user@1000.service/app.slice/aop-local-server.service",
+        hasSystemdRun: () => "/usr/bin/systemd-run",
+        home: "/home/u",
+        path: "/usr/bin:/bin",
+      }),
+    ).toEqual(["sh", "/home/u/.aop/upgrade.sh"]);
+  });
+
   test("detects the explicit desktop-managed runtime marker", () => {
     expect(isDesktopManagedWsl({ AOP_DESKTOP_MANAGED_RUNTIME: "1" })).toBe(true);
     expect(isDesktopManagedWsl({ AOP_EXEC_HOST: "wsl:Ubuntu" })).toBe(true);
@@ -361,7 +440,7 @@ describe("updates/service", () => {
       const sideEffects = mockUpgradeSideEffects();
 
       try {
-        const result = await startBinaryUpgrade("9.9.9", "linux");
+        const result = await startBinaryUpgrade("9.9.9", "linux", { cgroup: "0::/" });
 
         expect(result.status).toBe("started");
         expect(result.targetVersion).toBe("9.9.9");
@@ -381,6 +460,41 @@ describe("updates/service", () => {
         );
         expect(sideEffects.spawnSpy).toHaveBeenCalledTimes(1);
         expect(sideEffects.spawnSpy.mock.calls[0]?.[0]).toEqual(["sh", scriptPath]);
+      } finally {
+        sideEffects.restore();
+      }
+    });
+
+    test("spawns the upgrade script via systemd-run when the server runs inside a systemd unit", async () => {
+      globalThis.fetch = mock(
+        async () => new Response(null, { status: 200 }),
+      ) as unknown as typeof fetch;
+      const sideEffects = mockUpgradeSideEffects();
+
+      try {
+        await startBinaryUpgrade("9.9.9", "linux", {
+          cgroup:
+            "0::/user.slice/user-1000.slice/user@1000.service/app.slice/aop-local-server.service",
+          hasSystemdRun: () => "/usr/bin/systemd-run",
+          home: "/home/u",
+          path: "/usr/bin:/bin",
+        });
+
+        const scriptPath = join(homedir(), ".aop", "upgrade.sh");
+        expect(sideEffects.spawnSpy).toHaveBeenCalledTimes(1);
+        expect(sideEffects.spawnSpy.mock.calls[0]?.[0]).toEqual([
+          "systemd-run",
+          "--user",
+          "--collect",
+          "--setenv",
+          "HOME=/home/u",
+          "--setenv",
+          "PATH=/usr/bin:/bin",
+          "--working-directory",
+          "/home/u",
+          "sh",
+          scriptPath,
+        ]);
       } finally {
         sideEffects.restore();
       }

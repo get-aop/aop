@@ -97,6 +97,73 @@ export const verifyReleaseAsset = async (
 export const verifyMacosDmgDownload = (dmgUrl: string, targetVersion: string): Promise<void> =>
   verifyReleaseAsset(dmgUrl, targetVersion, "macOS update asset");
 
+export type UpgradeSpawnResolution = {
+  platform?: NodeJS.Platform;
+  cgroup?: string;
+  hasSystemdRun?: () => string | null;
+  home?: string;
+  path?: string;
+};
+
+/** True when the caller lives in a systemd unit cgroup (KillMode=control-group teardown applies). */
+export const isRunningInsideSystemdUnit = (cgroup: string): boolean => {
+  // The user manager's own `user@<uid>.service` shows up in every user cgroup path, so
+  // only the leaf segment decides: units end in `.service`, scopes and sessions in `.scope`.
+  const path = (cgroup.trim().split(/\r?\n/).at(-1) ?? "").split(":").at(-1) ?? "";
+  return path.endsWith(".service");
+};
+
+const SYSTEMD_RUN = "systemd-run";
+
+/**
+ * A server installed as a systemd unit is torn down with its whole cgroup when the unit
+ * stops, which would kill the detached upgrade script spawned from it mid-install. Run the
+ * script in its own transient unit via systemd-run so it survives the server stop; fall
+ * back to the plain detached sh spawn everywhere else.
+ */
+export const buildUpgradeSpawnCommand = async (
+  scriptPath: string,
+  options: UpgradeSpawnResolution = {},
+): Promise<string[]> => {
+  const {
+    platform = process.platform,
+    cgroup = await readOwnCgroup(),
+    hasSystemdRun = () => Bun.which(SYSTEMD_RUN),
+    home = homedir(),
+    path = process.env.PATH ?? "",
+  } = options;
+
+  if (platform === "linux" && isRunningInsideSystemdUnit(cgroup) && hasSystemdRun() !== null) {
+    return [
+      SYSTEMD_RUN,
+      "--user",
+      "--collect",
+      "--setenv",
+      `HOME=${home}`,
+      "--setenv",
+      `PATH=${path}`,
+      "--working-directory",
+      home,
+      "sh",
+      scriptPath,
+    ];
+  }
+
+  return ["sh", scriptPath];
+};
+
+const readOwnCgroup = async (): Promise<string> => {
+  try {
+    const file = Bun.file("/proc/self/cgroup");
+    if (!(await file.exists())) {
+      return "";
+    }
+    return await file.text();
+  } catch {
+    return "";
+  }
+};
+
 export const fetchLatestReleaseVersion = async (
   releasesBaseUrl = resolveReleasesBaseUrl(),
 ): Promise<string> => {
@@ -205,6 +272,7 @@ const verifyRequiredReleaseAssets = async (
 export const startBinaryUpgrade = async (
   targetVersion: string,
   platform: NodeJS.Platform = process.platform,
+  spawnOptions: UpgradeSpawnResolution = {},
 ): Promise<AopUpdateInstallResult> => {
   const normalizedTarget = normalizeReleaseVersion(targetVersion);
   if (!normalizedTarget) {
@@ -256,7 +324,7 @@ export const startBinaryUpgrade = async (
 
   const spawnCommand = isWindows
     ? ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", upgradeScriptPath]
-    : ["sh", upgradeScriptPath];
+    : await buildUpgradeSpawnCommand(upgradeScriptPath, spawnOptions);
   Bun.spawn(spawnCommand, {
     cwd: homedir(),
     stdout: "ignore",
