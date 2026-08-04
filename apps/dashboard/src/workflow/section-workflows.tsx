@@ -1,4 +1,9 @@
-import { getWorkflowThinkingOptions, runtimeConfigurationSupportsFastMode } from "@aop/common";
+import {
+  getWorkflowThinkingOptions,
+  type RuntimeConfigurationProvider,
+  resolveConfiguredProviderDefaults,
+  runtimeConfigurationSupportsFastMode,
+} from "@aop/common";
 import {
   ChevronDownIcon,
   EllipsisIcon,
@@ -141,7 +146,7 @@ export const SectionWorkflows = ({ onChanged }: { onChanged?: () => void }) => {
   };
 
   return (
-    <div data-testid="section-workflows" className="flex flex-col gap-2 p-4">
+    <div data-testid="section-workflows" className="flex min-w-0 flex-col gap-2 p-4">
       <div className="flex items-center gap-2">
         <RouteIcon className="size-4 text-text-subtle" strokeWidth={1.7} />
         <h2 className="text-[13px] font-semibold text-text">Workflows</h2>
@@ -165,15 +170,7 @@ export const SectionWorkflows = ({ onChanged }: { onChanged?: () => void }) => {
         <WorkflowEditor
           editing={editing}
           setEditing={setEditing}
-          runnableProviders={runnableProviders.map((p) => ({
-            id: p.id,
-            name: p.name,
-            driver: p.driver,
-            models: p.models.map((m) => ({
-              model: m.model,
-              label: m.description.trim() || m.model,
-            })),
-          }))}
+          runnableProviders={runnableProviders}
           saving={saving}
           onSave={() => void saveEdit()}
           onCancel={() => setEditing(null)}
@@ -264,12 +261,7 @@ const WorkflowEditor = ({
 }: {
   editing: EditingWorkflow;
   setEditing: (next: EditingWorkflow) => void;
-  runnableProviders: Array<{
-    id: string;
-    name: string;
-    driver: string;
-    models: Array<{ model: string; label: string }>;
-  }>;
+  runnableProviders: RuntimeConfigurationProvider[];
   saving: boolean;
   onSave: () => void;
   onCancel: () => void;
@@ -286,12 +278,30 @@ const WorkflowEditor = ({
   };
 
   const providerFor = (step: SimpleWorkflowStep) =>
-    runnableProviders.find((p) => p.driver === step.agent.provider) ?? runnableProviders[0] ?? null;
+    runnableProviders.find(
+      (p) => p.driver === step.agent.provider && p.id === step.agent.runtimeConfigurationId,
+    ) ??
+    runnableProviders.find((p) => p.driver === step.agent.provider) ??
+    runnableProviders[0] ??
+    null;
+
+  const changeProvider = (index: number, providerId: string) => {
+    const next = runnableProviders.find((p) => p.id === providerId);
+    if (!next || next.driver === "custom") return;
+    const defaults = resolveConfiguredProviderDefaults(next.driver, runnableProviders, next.id);
+    patchAgent(index, {
+      provider: next.driver as SimpleWorkflowStep["agent"]["provider"],
+      runtimeConfigurationId: next.id,
+      model: defaults.model,
+      reasoning: defaults.reasoning,
+      fastMode: defaults.supportsFastMode ? (editing.steps[index]?.agent.fastMode ?? false) : false,
+    });
+  };
 
   return (
     <div
       data-testid="workflow-editor"
-      className="flex flex-col gap-2 rounded-card border border-border-strong bg-surface p-3"
+      className="flex min-w-0 flex-col gap-2 rounded-card border border-border-strong bg-surface p-3"
     >
       <InputGroup>
         <InputGroupAddon>
@@ -307,34 +317,36 @@ const WorkflowEditor = ({
       <div className="flex flex-col gap-1.5">
         {editing.steps.map((step, index) => {
           const provider = providerFor(step);
-          const modelOptions = provider?.models ?? [];
+          const modelOptions =
+            provider?.models.map((m) => ({
+              model: m.model,
+              label: m.description.trim() || m.model,
+            })) ?? [];
           const effortOptions = getWorkflowThinkingOptions(step.agent.provider, step.agent.model);
           return (
             <div
               key={`${index}-${step.kind}`}
               data-testid="workflow-editor-step"
-              className="flex items-center gap-2 rounded-row border border-border bg-raised px-2 py-1.5"
+              className="flex min-w-0 items-center gap-2 rounded-row border border-border bg-raised px-2 py-1.5"
             >
               <GripVerticalIcon className="size-3.5 shrink-0 text-text-subtle" />
-              <span className="flex w-28 shrink-0 items-center gap-1.5 text-[12.5px] text-text">
+              <span className="flex w-28 min-w-0 items-center gap-1.5 text-[12.5px] text-text">
                 {(() => {
                   const Icon = STEP_KIND_ICONS[step.kind];
                   return <Icon className="size-3.5 shrink-0" strokeWidth={1.7} />;
                 })()}
-                {STEP_KIND_LABELS[step.kind]}
+                <span className="truncate">{STEP_KIND_LABELS[step.kind]}</span>
               </span>
               <Select
-                value={step.agent.provider}
-                onValueChange={(value) =>
-                  patchAgent(index, { provider: value as SimpleWorkflowStep["agent"]["provider"] })
-                }
+                value={provider?.id ?? ""}
+                onValueChange={(value) => changeProvider(index, value)}
               >
-                <SelectTrigger size="sm" className="h-7 w-32">
+                <SelectTrigger size="sm" className="h-7 w-32 min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {runnableProviders.map((p) => (
-                    <SelectItem key={p.id} value={p.driver}>
+                    <SelectItem key={p.id} value={p.id}>
                       {p.name}
                     </SelectItem>
                   ))}
@@ -363,7 +375,7 @@ const WorkflowEditor = ({
                   })
                 }
               >
-                <SelectTrigger size="sm" className="h-7 w-24">
+                <SelectTrigger size="sm" className="h-7 w-24 min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -420,9 +432,13 @@ const WorkflowEditor = ({
                 disabled={editing.steps.length >= 8}
                 onSelect={() => {
                   const defaultProvider = runnableProviders[0];
-                  if (!defaultProvider) return;
-                  const firstModel = defaultProvider.models[0];
-                  if (!firstModel) return;
+                  if (!defaultProvider || defaultProvider.driver === "custom") return;
+                  const defaults = resolveConfiguredProviderDefaults(
+                    defaultProvider.driver,
+                    runnableProviders,
+                    defaultProvider.id,
+                  );
+                  if (!defaults.model) return;
                   setEditing({
                     ...editing,
                     steps: [
@@ -432,8 +448,10 @@ const WorkflowEditor = ({
                         agent: {
                           provider:
                             defaultProvider.driver as SimpleWorkflowStep["agent"]["provider"],
-                          model: firstModel.model,
-                          reasoning: "medium",
+                          runtimeConfigurationId: defaultProvider.id,
+                          model: defaults.model,
+                          reasoning: defaults.reasoning,
+                          fastMode: defaults.supportsFastMode ? false : undefined,
                         },
                       },
                     ],

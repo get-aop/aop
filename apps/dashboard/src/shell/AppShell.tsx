@@ -10,7 +10,6 @@ import {
   CommandList,
 } from "@/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
-import { ScrollArea } from "@/ui/scroll-area";
 import { SidebarInset, SidebarProvider } from "@/ui/sidebar";
 import { Toaster } from "@/ui/sonner";
 import { getSettings } from "../api/client";
@@ -160,12 +159,12 @@ const SettingsDialogHost = ({ onReposChanged }: { onReposChanged: () => void }) 
               {SECTION_LABELS[dialogs.settings.section]}
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="min-h-0 flex-1 overflow-x-hidden">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
             <SettingsSectionHost
               section={dialogs.settings.section}
               onReposChanged={onReposChanged}
             />
-          </ScrollArea>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
