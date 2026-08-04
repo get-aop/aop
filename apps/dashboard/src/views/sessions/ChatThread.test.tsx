@@ -141,6 +141,44 @@ describe("ChatThread T3Code timeline", () => {
     expect(screen.getByText("Read")).toBeTruthy();
   });
 
+  test("renders code inside thinking in a boxed code view", () => {
+    render(
+      <ChatThread
+        {...chatThreadProps({
+          messages: [
+            {
+              id: "user-1",
+              sessionId: "s1",
+              role: "user",
+              content: "Please fix the handler",
+              action: null,
+              createdAt: "2026-07-18T12:00:00.000Z",
+            },
+            {
+              id: "assistant-1",
+              sessionId: "s1",
+              role: "assistant",
+              content: "Updated the handler",
+              action: null,
+              createdAt: "2026-07-18T12:01:00.000Z",
+              runStatus: "completed",
+              activity: {
+                thinking: "I'll change the handler:\n\n```ts\nconst x = 1;\n```",
+                content: "",
+                commandGroups: [],
+              },
+            },
+          ],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Worked for 1m 0s" }));
+    const thinking = screen.getByTestId("assistant-thinking");
+    expect(thinking.querySelector(".chat-markdown-codeblock")).not.toBeNull();
+    expect(thinking.textContent).toContain("const x = 1;");
+  });
+
   test("attaches the session changed-files slot to the latest assistant turn", () => {
     render(
       <ChatThread

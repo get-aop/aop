@@ -96,15 +96,9 @@ const ReasoningBlock = ({ text, active }: { text: string; active: boolean }) => 
           style={{
             marginTop: 6,
             color: "var(--color-text-muted)",
-            fontFamily: "var(--font-sans)",
-            fontSize: 13,
-            fontWeight: 400,
-            lineHeight: 1.55,
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
           }}
         >
-          {text}
+          <ChatMarkdown content={text} />
         </div>
       ) : null}
     </div>
