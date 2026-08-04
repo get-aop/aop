@@ -355,9 +355,9 @@ describe("registerCommands", () => {
 });
 
 describe("createCli", () => {
-  test("uses the package version for the CLI version flag", async () => {
+  test("uses the root package version for the CLI version flag", async () => {
     const packageJson = (await Bun.file(
-      resolve(import.meta.dirname, "..", "package.json"),
+      resolve(import.meta.dirname, "..", "..", "..", "package.json"),
     ).json()) as {
       version: string;
     };
@@ -366,10 +366,10 @@ describe("createCli", () => {
     expect(cli.globalCommand.versionNumber).toBe(packageJson.version);
   });
 
-  test("prefers package version over ambient build version in source runs", async () => {
+  test("prefers the root package version over ambient build version in source runs", async () => {
     const originalVersion = process.env.AOP_BUILD_VERSION;
     const packageJson = (await Bun.file(
-      resolve(import.meta.dirname, "..", "package.json"),
+      resolve(import.meta.dirname, "..", "..", "..", "package.json"),
     ).json()) as {
       version: string;
     };

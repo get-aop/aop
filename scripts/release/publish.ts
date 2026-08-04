@@ -3,7 +3,7 @@
 
 import { join } from "node:path";
 import cac from "cac";
-import { bumpWorkspaceVersions, readRootVersion } from "./bump-version.ts";
+import { bumpRootVersion, readRootVersion } from "./bump-version.ts";
 import { resolveNextReleaseVersion, type SemverBump } from "./semver.ts";
 import { normalizeReleaseVersion } from "./versioning.ts";
 
@@ -42,20 +42,7 @@ const runReleaseChecks = async (): Promise<void> => {
 };
 
 const commitRelease = async (version: string): Promise<void> => {
-  for (const relativePath of [
-    "package.json",
-    "apps/cli/package.json",
-    "apps/dashboard/package.json",
-    "apps/desktop/package.json",
-    "apps/local-server/package.json",
-    "packages/common/package.json",
-    "packages/git-manager/package.json",
-    "packages/infra/package.json",
-    "packages/llm-provider/package.json",
-    "e2e-tests/package.json",
-  ]) {
-    await Bun.$`git add ${relativePath}`.cwd(WORKSPACE_ROOT).quiet().nothrow();
-  }
+  await Bun.$`git add package.json`.cwd(WORKSPACE_ROOT).quiet().nothrow();
 
   const message = `chore: release v${version}`;
   await Bun.$`git commit -m ${message}`.cwd(WORKSPACE_ROOT).quiet();
@@ -94,9 +81,9 @@ export const runRelease = async (
     await runReleaseChecks();
   }
 
-  const updatedPaths = await bumpWorkspaceVersions(nextVersion);
+  const updatedPaths = await bumpRootVersion(nextVersion);
   if (updatedPaths.length === 0) {
-    throw new Error(`Version is already ${nextVersion} in workspace package.json files`);
+    throw new Error(`Version is already ${nextVersion} in the root package.json`);
   }
 
   console.log(`Updated ${updatedPaths.length} package.json files`);

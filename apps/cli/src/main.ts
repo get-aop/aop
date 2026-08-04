@@ -348,8 +348,9 @@ if (import.meta.main) {
   process.exit(0);
 }
 
+// The root package.json is the single source of truth for the AOP version.
 export function readCliPackageVersion(
-  packageJsonPath = resolve(import.meta.dirname, "..", "package.json"),
+  packageJsonPath = resolve(import.meta.dirname, "..", "..", "..", "package.json"),
 ): string {
   const buildVersion = typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : undefined;
   if (buildVersion?.trim()) {

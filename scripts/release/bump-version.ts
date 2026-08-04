@@ -10,19 +10,7 @@ export const setWorkspaceRootForTests = (path: string | null): void => {
   workspaceRootOverride = path;
 };
 
-const PACKAGE_JSON_PATHS = [
-  "package.json",
-  "apps/cli/package.json",
-  "apps/dashboard/package.json",
-  "apps/desktop/package.json",
-  "apps/local-server/package.json",
-  "packages/common/package.json",
-  "packages/git-manager/package.json",
-  "packages/infra/package.json",
-  "packages/llm-provider/package.json",
-  "e2e-tests/package.json",
-] as const;
-
+// The root package.json is the single source of truth for the AOP version.
 export const readRootVersion = async (): Promise<string> => {
   const pkg = await Bun.file(join(getWorkspaceRoot(), "package.json")).json();
   if (typeof pkg.version !== "string" || pkg.version.trim().length === 0) {
@@ -32,26 +20,15 @@ export const readRootVersion = async (): Promise<string> => {
   return pkg.version.trim();
 };
 
-export const bumpWorkspaceVersions = async (nextVersion: string): Promise<string[]> => {
+export const bumpRootVersion = async (nextVersion: string): Promise<string[]> => {
   const normalized = normalizeReleaseVersion(nextVersion);
-  const updatedPaths: string[] = [];
-
-  for (const relativePath of PACKAGE_JSON_PATHS) {
-    const absolutePath = join(getWorkspaceRoot(), relativePath);
-    const file = Bun.file(absolutePath);
-    if (!(await file.exists())) {
-      continue;
-    }
-
-    const pkg = await file.json();
-    if (pkg.version === normalized) {
-      continue;
-    }
-
-    pkg.version = normalized;
-    await Bun.write(absolutePath, `${JSON.stringify(pkg, null, 2)}\n`);
-    updatedPaths.push(relativePath);
+  const rootPath = join(getWorkspaceRoot(), "package.json");
+  const pkg = await Bun.file(rootPath).json();
+  if (pkg.version === normalized) {
+    return [];
   }
 
-  return updatedPaths;
+  pkg.version = normalized;
+  await Bun.write(rootPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  return ["package.json"];
 };

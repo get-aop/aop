@@ -1,6 +1,5 @@
 {
   "name": "@aop/infra",
-  "version": "0.9.36",
   "type": "module",
   "license": "MIT",
   "exports": {
