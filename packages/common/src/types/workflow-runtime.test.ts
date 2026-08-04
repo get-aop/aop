@@ -137,6 +137,7 @@ describe("workflow-runtime", () => {
       "openai-codex/gpt-5.6-sol",
       "openai-codex/gpt-5.6-terra",
       "kimi-coding/k3",
+      "deepseek-v4-flash",
     ]);
     expect(isAllowedWorkflowRuntimeModel("pi", "openai-codex/gpt-5.5")).toBe(true);
     expect(isAllowedWorkflowRuntimeModel("pi", "openai-codex/gpt-5.6-luna")).toBe(true);
@@ -147,6 +148,8 @@ describe("workflow-runtime", () => {
     expect(formatWorkflowRuntimeModelLabel("openai-codex/gpt-5.6-sol")).toBe("GPT 5.6 Sol");
     expect(formatWorkflowRuntimeModelLabel("openai-codex/gpt-5.6-terra")).toBe("GPT 5.6 Terra");
     expect(formatWorkflowRuntimeModelLabel("kimi-coding/k3")).toBe("Kimi K3 Max");
+    expect(formatWorkflowRuntimeModelLabel("deepseek-v4-flash")).toBe("DeepSeek V4 Flash");
+    expect(isAllowedWorkflowRuntimeModel("pi", "deepseek-v4-flash")).toBe(true);
     expect(isAllowedWorkflowRuntimeModel("pi", "cursor/kimi-k2.6")).toBe(false);
     expect(isAllowedWorkflowRuntimeModel("pi", "default")).toBe(false);
   });
@@ -159,6 +162,14 @@ describe("workflow-runtime", () => {
       { value: "medium", label: "Medium" },
       { value: "high", label: "High" },
       { value: "extra-high", label: "Extra-High" },
+      { value: "max", label: "Ultra" },
+    ]);
+  });
+
+  test("exposes high and max thinking for PI DeepSeek V4 Flash", () => {
+    expect(supportsThinkingLevel("pi", "deepseek-v4-flash")).toBe(true);
+    expect(getWorkflowThinkingOptions("pi", "deepseek-v4-flash")).toEqual([
+      { value: "high", label: "High" },
       { value: "max", label: "Ultra" },
     ]);
   });
