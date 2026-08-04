@@ -104,11 +104,8 @@ const RunActivityBody = ({
     <div className="mt-3 space-y-2 px-1">
       {continuity ? <p className="text-xs text-muted-foreground">{continuity}</p> : null}
       {thinking ? (
-        <div
-          data-testid="assistant-thinking"
-          className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/82"
-        >
-          {thinking}
+        <div data-testid="assistant-thinking" className="text-foreground/82">
+          <ChatMarkdown content={thinking} />
         </div>
       ) : null}
       {content ? (
