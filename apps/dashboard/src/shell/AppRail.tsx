@@ -30,6 +30,7 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/ui/empty";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/ui/sidebar";
 import type { ChatSessionSummary } from "../api/client";
+import { AopLogoMark } from "../components/brand/AopLogoMark";
 import type { ConnectionState } from "../types";
 import { canSettleSession, isSessionLifecycleBusy } from "../views/sessions/session-settled";
 import { openSettingsDialog } from "./dialog-store";
@@ -195,8 +196,9 @@ const RailHeader = ({
           <button
             type="button"
             data-testid="rail-brand"
-            className="flex h-8 flex-1 items-center gap-1 rounded-row px-2 text-[14px] font-semibold text-text transition-colors duration-[120ms] hover:bg-hover"
+            className="flex h-8 flex-1 items-center gap-1.5 rounded-row px-2 text-[14px] font-semibold text-text transition-colors duration-[120ms] hover:bg-hover"
           >
+            <AopLogoMark size={20} />
             AOP
             <ChevronDownIcon className="size-3.5 text-text-subtle" />
           </button>
