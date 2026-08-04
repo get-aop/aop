@@ -1,6 +1,6 @@
 {
   "name": "@aop/common",
-  "version": "0.9.32",
+  "version": "0.9.33",
   "type": "module",
   "license": "MIT",
   "exports": {
