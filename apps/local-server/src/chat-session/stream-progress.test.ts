@@ -427,6 +427,71 @@ describe("parseStreamProgressLine", () => {
     ).toEqual({ kind: "text", data: "Here is the listing." });
   });
 
+  test("Pi message_end with thinking+text streams only text (thinking comes from thinking_end)", () => {
+    expect(
+      parseStreamProgressLine(
+        JSON.stringify({
+          type: "message_end",
+          message: {
+            role: "assistant",
+            content: [
+              {
+                type: "thinking",
+                thinking: "The user has 60 settled sessions from an old AOP version.",
+              },
+              { type: "text", text: "Here is the plan." },
+            ],
+          },
+        }),
+      ),
+    ).toEqual({ kind: "text", data: "Here is the plan." });
+  });
+
+  test("Pi turn_end does not re-stream the thinking block", () => {
+    expect(
+      parseStreamProgressLine(
+        JSON.stringify({
+          type: "turn_end",
+          message: {
+            role: "assistant",
+            content: [
+              {
+                type: "thinking",
+                thinking: "The user has 60 settled sessions from an old AOP version.",
+              },
+              { type: "text", text: "Let me check." },
+            ],
+          },
+          toolResults: [],
+        }),
+      ),
+    ).toEqual({ kind: "text", data: "Let me check." });
+  });
+
+  test("Pi agent_end messages array does not re-stream thinking blocks", () => {
+    expect(
+      parseStreamProgressLine(
+        JSON.stringify({
+          type: "agent_end",
+          willRetry: false,
+          messages: [
+            { role: "user", content: [{ type: "text", text: "hi" }] },
+            {
+              role: "assistant",
+              content: [
+                {
+                  type: "thinking",
+                  thinking: "The user has 60 settled sessions from an old AOP version.",
+                },
+                { type: "text", text: "Let me check." },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toEqual({ kind: "text", data: "Let me check." });
+  });
+
   test("ignores Pi non-assistant message_end blobs (runtime prompt + tool dumps)", () => {
     expect(
       parseStreamProgressLine(
@@ -599,6 +664,28 @@ describe("parseStreamProgressLine", () => {
 });
 
 describe("createStreamProgressAccumulator", () => {
+  test("skips full thinking blocks re-emitted by later Pi lifecycle events", () => {
+    const acc = createStreamProgressAccumulator();
+    const thinking = "The user has 60 settled sessions from an old AOP version locally.";
+
+    acc.apply({ kind: "thought", data: thinking });
+    const afterReplay = acc.apply({ kind: "thought", data: thinking });
+    expect(afterReplay.thinking).toBe(thinking);
+    const afterThirdReplay = acc.apply({ kind: "thought", data: thinking });
+    expect(afterThirdReplay.thinking).toBe(thinking);
+  });
+
+  test("still appends a distinct thinking block after a re-emitted one", () => {
+    const acc = createStreamProgressAccumulator();
+    const first = "Inspect the repo first.";
+    const second = "Then write the plan.";
+
+    acc.apply({ kind: "thought", data: first });
+    acc.apply({ kind: "thought", data: first });
+    const snap = acc.apply({ kind: "thought", data: second });
+    expect(snap.thinking).toBe(`${first}${second}`);
+  });
+
   test("concatenates Grok-style thought then text tokens", () => {
     const acc = createStreamProgressAccumulator();
     acc.apply({ kind: "thought", data: "Hello " });
