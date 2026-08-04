@@ -45,7 +45,7 @@ const commitRelease = async (version: string): Promise<void> => {
   await Bun.$`git add package.json`.cwd(WORKSPACE_ROOT).quiet().nothrow();
 
   const message = `chore: release v${version}`;
-  await Bun.$`git commit -m ${message}`.cwd(WORKSPACE_ROOT).quiet();
+  await Bun.$`git commit --allow-empty -m ${message}`.cwd(WORKSPACE_ROOT).quiet();
 };
 
 const createTag = async (version: string): Promise<void> => {
@@ -83,10 +83,11 @@ export const runRelease = async (
 
   const updatedPaths = await bumpRootVersion(nextVersion);
   if (updatedPaths.length === 0) {
-    throw new Error(`Version is already ${nextVersion} in the root package.json`);
+    // The version was already set in the root package.json; proceed with the tag.
+    console.log(`Version is already ${nextVersion} in the root package.json`);
+  } else {
+    console.log(`Updated ${updatedPaths.length} package.json file`);
   }
-
-  console.log(`Updated ${updatedPaths.length} package.json files`);
 
   await commitRelease(nextVersion);
   await createTag(nextVersion);
