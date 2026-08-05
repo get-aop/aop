@@ -17,16 +17,15 @@ import { readTaskSwimlaneMetadata } from "./swimlane-metadata.ts";
 export type RepoStatus = SSERepoWithTasks;
 export type ServerStatus = SSEServerStatus;
 
-const STATUS_TTL_MS = 1_000;
-
 interface StatusCacheEntry {
-  status: ServerStatus;
-  builtAt: number;
   inflight: Promise<ServerStatus> | null;
 }
 
 // Per-context so concurrent tabs share one build while tests (fresh ctx per
-// case) never read a stale status from another test.
+// case) never read a stale status from another test. Only in-flight builds are
+// cached: the dashboard must always see the freshest committed state, and
+// caching completed builds reintroduces the pre-mutation staleness that broke
+// task status/assignment visibility on reload.
 const statusCacheByCtx = new WeakMap<LocalServerContext, StatusCacheEntry>();
 
 export interface TaskAssignmentProjection {
@@ -176,28 +175,12 @@ const readTaskAssignmentProjection = async (
 export const getServerStatus = async (ctx: LocalServerContext): Promise<ServerStatus> => {
   const cached = statusCacheByCtx.get(ctx);
   if (cached?.inflight) return cached.inflight;
-  if (cached && Date.now() - cached.builtAt < STATUS_TTL_MS) return cached.status;
 
-  const inflight = buildServerStatus(ctx)
-    .then((status) => {
-      statusCacheByCtx.set(ctx, { status, builtAt: Date.now(), inflight: null });
-      return status;
-    })
-    .finally(() => {
-      const entry = statusCacheByCtx.get(ctx);
-      if (entry?.inflight) statusCacheByCtx.set(ctx, { ...entry, inflight: null });
-    });
-  statusCacheByCtx.set(ctx, {
-    status: cached?.status ?? EMPTY_STATUS,
-    builtAt: cached?.builtAt ?? 0,
-    inflight,
+  const inflight = buildServerStatus(ctx).finally(() => {
+    statusCacheByCtx.set(ctx, { inflight: null });
   });
+  statusCacheByCtx.set(ctx, { inflight });
   return inflight;
-};
-
-const EMPTY_STATUS: ServerStatus = {
-  swimlanes: DEFAULT_DASHBOARD_SWIMLANES,
-  repos: [],
 };
 
 const buildServerStatus = async (ctx: LocalServerContext): Promise<ServerStatus> => {

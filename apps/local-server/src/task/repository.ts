@@ -83,6 +83,11 @@ export interface TaskRepositoryOptions {
   eventEmitter?: TaskEventEmitter;
   /** Read-only mirror (second connection): skip disk-drift writes while mapping. */
   readOnly?: boolean;
+  /**
+   * Shared mutation epoch: the writer bumps it on every mutation so read-only
+   * mirrors rebuild their snapshot immediately instead of waiting out the TTL.
+   */
+  snapshotEpoch?: { version: number };
 }
 
 interface DependencyRow {
@@ -379,7 +384,7 @@ export const createTaskRepository = (
   db: Kysely<Database>,
   options: TaskRepositoryOptions = {},
 ): TaskRepository => {
-  const { eventEmitter, readOnly = false } = options;
+  const { eventEmitter, readOnly = false, snapshotEpoch } = options;
   const repoRepository = createRepoRepository(db);
   const taskAssignmentRepository = createTaskAssignmentRepository(db);
   const cache = new Map<string, Task>();
@@ -388,6 +393,7 @@ export const createTaskRepository = (
   let snapshotInflight: Promise<void> | null = null;
   let lastSnapshotAt = 0;
   let snapshotDirty = false;
+  let lastEpochVersion = 0;
 
   const getPersistedTask = async (id: string): Promise<Task | null> =>
     normalizeNullableTask(
@@ -608,17 +614,23 @@ export const createTaskRepository = (
   };
 
   const refreshCache = async (force = false): Promise<void> => {
+    // A bumped epoch (mutation on the writer) forces mirrors to rebuild even
+    // inside the TTL window, so dashboard reads never serve pre-mutation state.
+    const epochChanged = snapshotEpoch !== undefined && snapshotEpoch.version !== lastEpochVersion;
+    const isStale = (): boolean =>
+      force || epochChanged || snapshotDirty || Date.now() - lastSnapshotAt >= SNAPSHOT_TTL_MS;
     if (snapshotInflight) {
       // Readers coalesce onto the in-flight build; a forced refresh from a
       // mutation always rebuilds afterwards so its own write is visible.
       await snapshotInflight;
-      if (!force && !snapshotDirty && Date.now() - lastSnapshotAt < SNAPSHOT_TTL_MS) return;
-    } else if (!force && !snapshotDirty && Date.now() - lastSnapshotAt < SNAPSHOT_TTL_MS) {
+      if (!isStale()) return;
+    } else if (!isStale()) {
       return;
     }
 
     snapshotInflight = (async () => {
       snapshotDirty = false;
+      lastEpochVersion = snapshotEpoch?.version ?? 0;
       const next = await buildTaskSnapshot();
       await emitSnapshotChanges(next);
       replaceCache(next);
@@ -633,6 +645,7 @@ export const createTaskRepository = (
 
   const invalidateSnapshot = (): void => {
     snapshotDirty = true;
+    if (snapshotEpoch) snapshotEpoch.version += 1;
   };
 
   const findTaskFolder = async (repoId: string, taskId: string): Promise<string | null> => {
@@ -839,6 +852,7 @@ export const createTaskRepository = (
   };
 
   const createTaskRecord = async (task: NewTask): Promise<Task> => {
+    invalidateSnapshot();
     const repo = await repoRepository.getById(task.repo_id);
     if (!repo) {
       throw new Error(`Repo not found: ${task.repo_id}`);
@@ -859,6 +873,7 @@ export const createTaskRepository = (
   };
 
   const createTaskRecordOnly = async (task: NewTask): Promise<Task> => {
+    invalidateSnapshot();
     const persistedTask = buildPersistedTask(task, normalizeTaskPath(task.change_path));
 
     await upsertTask(persistedTask);
@@ -879,6 +894,7 @@ export const createTaskRepository = (
   };
 
   const updateTaskRecord = async (id: string, updates: TaskUpdate): Promise<Task | null> => {
+    invalidateSnapshot();
     // Mutations must read the freshest state before computing the merge.
     await refreshCache(true);
     const existing = cache.get(id);
@@ -945,6 +961,8 @@ export const createTaskRepository = (
   return {
     // Explicit refreshes always rebuild; only implicit reads are TTL'd.
     refresh: async (force?: boolean): Promise<void> => {
+      // Disk state (new/edited task docs) may have changed under the watcher.
+      invalidateSnapshot();
       await refreshCache(force ?? true);
     },
     invalidateSnapshot,
@@ -998,6 +1016,7 @@ export const createTaskRepository = (
     markRemoved,
 
     deleteByRepoId: async (repoId: string): Promise<void> => {
+      invalidateSnapshot();
       await db.deleteFrom("tasks").where("repo_id", "=", repoId).execute();
       await refreshCache();
     },

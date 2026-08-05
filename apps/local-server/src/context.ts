@@ -154,6 +154,7 @@ export const createCommandContext = (
   options: CreateCommandContextOptions = {},
 ): LocalServerContext => {
   const taskEventEmitter = options.taskEventEmitter ?? getTaskEventEmitter();
+  const taskSnapshotEpoch = { version: 0 };
   const readDb = options.readDb ?? createReadOnlyDatabase(db);
   // Enrich each event exactly once (executions, dependency state, swimlane)
   // and fan the enriched payload out to every SSE subscriber; per-client
@@ -195,7 +196,10 @@ export const createCommandContext = (
   const statusReaders: StatusReaders = {
     db: readDb,
     repoRepository: createRepoRepository(readDb),
-    taskRepository: createTaskRepository(readDb, { readOnly: true }),
+    taskRepository: createTaskRepository(readDb, {
+      readOnly: true,
+      snapshotEpoch: taskSnapshotEpoch,
+    }),
     executionRepository: createExecutionRepository(readDb),
     runtimeEventRepository: createRuntimeEventRepository(readDb),
     taskAssignmentRepository: createTaskAssignmentRepository(readDb),
@@ -286,6 +290,7 @@ export const createCommandContext = (
     statusReaders,
     taskRepository: createTaskRepository(db, {
       eventEmitter: enrichedTaskEventEmitter,
+      snapshotEpoch: taskSnapshotEpoch,
     }),
     taskAssignmentRepository,
     repoRepository,
