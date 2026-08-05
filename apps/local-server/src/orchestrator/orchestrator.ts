@@ -11,6 +11,7 @@ import type { LocalServerContext } from "../context.ts";
 import type { Task } from "../db/schema.ts";
 import { executeTask, reattachToRunningAgent } from "../executor/executor.ts";
 import { recoverStaleTasks } from "../executor/recovery.ts";
+import { createRetentionService } from "../retention/service.ts";
 import { SettingKey } from "../settings/types.ts";
 import { cleanupStaleWorktreeTaskDocSymlinks } from "../task-docs/worktree-symlink-cleanup.ts";
 import { finalizeLaunchFailure } from "./launch-failure.ts";
@@ -47,6 +48,7 @@ export const createOrchestrator = (ctx: LocalServerContext): Orchestrator => {
   let schedulerTimer: ReturnType<typeof setTimeout> | null = null;
   let schedulerRunning = false;
   let schedulerEnabled = false;
+  let retentionService: ReturnType<typeof createRetentionService> | null = null;
   let ready = false;
   const executingTasks = new Map<string, ExecutingTask>();
   let pendingRefresh: Promise<void> | null = null;
@@ -353,6 +355,8 @@ export const createOrchestrator = (ctx: LocalServerContext): Orchestrator => {
       startBackgroundTaskCleanup();
       await startQueueProcessor();
       await startScheduler();
+      retentionService = createRetentionService(ctx);
+      retentionService.start();
 
       ready = true;
       const durationMs = Math.round(performance.now() - startTime);
@@ -368,6 +372,7 @@ export const createOrchestrator = (ctx: LocalServerContext): Orchestrator => {
       backgroundTaskCleanupTicker?.stop();
       ticker?.stop();
       watcher?.stop();
+      retentionService?.stop();
 
       await waitForPendingRefresh();
 

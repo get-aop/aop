@@ -3738,10 +3738,8 @@ describe("chat-session routes", () => {
   test("SSE stream replays the latest assistant progress when reconnecting", async () => {
     const { db, app } = await setup();
     const session = await createSession(app, "repo_chat_1");
-    const { publishChatSessionEvent } = await import("./session-events.ts");
-    publishChatSessionEvent({
-      type: "assistant-progress",
-      sessionId: session.id,
+    const { publishAssistantProgress } = await import("./session-events.ts");
+    publishAssistantProgress(session.id, {
       thinking: "Inspecting the session",
       content: "I found the active run",
       commandGroups: [],

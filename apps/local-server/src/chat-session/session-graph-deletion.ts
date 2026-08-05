@@ -85,12 +85,13 @@ export const deleteChatSessionGraph = async (
   db: Kysely<Database>,
   sessionId: string,
   options: DeleteChatSessionGraphOptions = {},
-): Promise<DeleteChatSessionGraphResult> =>
-  db.transaction().execute(async (trx) => {
-    const plan = await planChatSessionCleanup(trx, sessionId, options.now ?? nowIso());
-    if (!plan) return { deleted: false, cleanupJobIds: [] };
-    requireFreshPlan(plan, options);
+): Promise<DeleteChatSessionGraphResult> => {
+  // Plan on the shared connection first so the transaction holds only deletes.
+  const plan = await planChatSessionCleanup(db, sessionId, options.now ?? nowIso());
+  if (!plan) return { deleted: false, cleanupJobIds: [] };
+  requireFreshPlan(plan, options);
 
+  return db.transaction().execute(async (trx) => {
     await insertChatCheckpointCleanupJobs(trx, plan.jobs);
 
     const runIds = await listRunIdsBySession(trx, sessionId);
@@ -101,6 +102,7 @@ export const deleteChatSessionGraph = async (
 
     return { deleted: true, cleanupJobIds: plan.jobs.map((job) => job.id) };
   });
+};
 
 const requireFreshPlan = (
   plan: ChatSessionCleanupPlan,

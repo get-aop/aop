@@ -105,7 +105,11 @@ import {
   sessionRunPhase,
 } from "./runtime-engine.ts";
 import { resolveChatRuntimeTimeoutPolicy } from "./runtime-timeout-policy.ts";
-import { publishChatSessionEvent } from "./session-events.ts";
+import {
+  publishAssistantProgress,
+  publishChatSessionEvent,
+  resetAssistantProgress,
+} from "./session-events.ts";
 import { discoverRuntimeSkills } from "./skill-discovery.ts";
 import {
   cancelQueuedSteers,
@@ -1532,13 +1536,7 @@ const recoverChatRun = async (
       signal,
       onProgress: (progress) => {
         activity = progress;
-        publishChatSessionEvent({
-          type: "assistant-progress",
-          sessionId: run.session_id,
-          thinking: progress.thinking,
-          content: progress.content,
-          commandGroups: progress.commandGroups,
-        });
+        publishAssistantProgress(run.session_id, progress);
       },
     });
   } catch (error) {
@@ -2605,6 +2603,7 @@ const produceAssistantReply = async (
   }
 
   publishChatSessionEvent({ type: "assistant-typing", sessionId: session.id, userMessageId });
+  resetAssistantProgress(session.id);
   let activity: AssistantActivity | null = null;
   const trackBackgroundTasks =
     chatRun != null
@@ -3473,13 +3472,7 @@ const controlProviderLabel = (provider: ControlCommand["provider"]): string =>
   provider === "claude-code" ? "Claude" : "Codex";
 
 const publishControlProgress = (sessionId: string, progress: StreamProgressSnapshot): void => {
-  publishChatSessionEvent({
-    type: "assistant-progress",
-    sessionId,
-    thinking: progress.thinking,
-    content: progress.content,
-    commandGroups: progress.commandGroups,
-  });
+  publishAssistantProgress(sessionId, progress);
 };
 
 const composeRuntimePrompt = (prompt: string, prefix?: string): string =>

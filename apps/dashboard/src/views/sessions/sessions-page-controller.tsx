@@ -13,9 +13,9 @@ import type { Agent, Task } from "../../types";
 import { useActiveDelegationCount } from "../../workspace/tasks-pane";
 import type { SessionToastContent, SessionToastLink } from "./SessionModals";
 import { setSessionSidePanelCovered } from "./session-side-panel-cover";
-import { setSessionStreamProgress } from "./session-stream-progress";
+import { type StreamProgressUpdate, setSessionStreamProgress } from "./session-stream-progress";
 import type { MenuState, SessionsRepo } from "./sessions-menu";
-import { type AssistantStreamProgress, storeActiveSessionId } from "./sessions-page-helpers";
+import { storeActiveSessionId } from "./sessions-page-helpers";
 import {
   fetchAndStoreSessionDetail,
   isDraftSession,
@@ -131,7 +131,7 @@ export const useSessionsPageController = ({
   const { typing, setTyping, clearSessionTyping } = useSessionScopedTyping(activeId, activeIdRef);
   // Live stream text lives in session-stream-progress store so 25Hz chunks
   // only re-render the activity row, not the whole page/composer.
-  const setStreamProgress = useCallback((value: AssistantStreamProgress | null) => {
+  const setStreamProgress = useCallback((value: StreamProgressUpdate) => {
     setSessionStreamProgress(activeIdRef.current, value);
   }, []);
 

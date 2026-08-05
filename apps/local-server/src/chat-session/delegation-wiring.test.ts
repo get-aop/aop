@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { formatRuntimeDelegationMarker, parseChatDelegationRuns } from "@aop/common";
+import { formatRuntimeDelegationMarker } from "@aop/common";
 import type { LLMProvider } from "@aop/llm-provider";
 import { Hono as HonoApp } from "hono";
 import { createCommandContext } from "../context.ts";
 import type { ChatRun } from "../db/schema.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
+import { listDelegationRunsByChatRunIds } from "./delegation-run-store.ts";
 import { relayDelegationProgress, startDelegationRun } from "./delegation-runs.ts";
 import { createChatSessionRoutes } from "./routes.ts";
 import { waitForPendingChatReplies } from "./service.ts";
@@ -427,10 +428,14 @@ const delegationEntries = async (
 ) => {
   const runs = await db
     .selectFrom("chat_runs")
-    .select("delegation_runs")
+    .select("id")
     .where("session_id", "=", sessionId)
     .execute();
-  return runs.flatMap((row) => parseChatDelegationRuns(row.delegation_runs));
+  const byRun = await listDelegationRunsByChatRunIds(
+    db,
+    runs.map((run) => run.id),
+  );
+  return [...byRun.values()].flat();
 };
 
 const delegationUpdates = (events: ChatSessionEvent[]) =>

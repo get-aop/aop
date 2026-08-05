@@ -270,7 +270,7 @@ const runOneWorkflowStep = async (
     agent,
   });
 
-  const result = processAgentCompletion(logFile, runResult, stepCommand.signals ?? []);
+  const result = await processAgentCompletion(logFile, runResult, stepCommand.signals ?? []);
   publishChatSessionEvent({
     type: "workflow-run-step",
     sessionId: run.session_id,

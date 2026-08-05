@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { generateTypeId, getLogger, type Logger } from "@aop/infra";
 import type { NewTask, Repo, Task } from "../../db/schema.ts";
 import {
@@ -20,6 +20,9 @@ import type { TaskDependencySourceMetadata } from "../../task-docs/types.ts";
 
 const logger = getLogger("reconcile");
 
+// Last-seen task.md mtimes so unchanged docs skip re-parsing and mirror writes.
+const mirrorMtimes = new Map<string, number>();
+
 export interface ReconcileResult {
   created: number;
   removed: number;
@@ -39,6 +42,8 @@ export const reconcileRepo = async (repo: Repo, deps: ReconcileDeps): Promise<Re
     (await deps.settingsRepository?.get(SettingKey.DISCOVER_LEGACY_REPO_TASKS)) === "true";
   const tasksOnDisk = listTaskIdsOnDisk(repo.id, repo.path, { includeLegacyRepoTasks });
 
+  // External file edits must surface even inside the snapshot TTL window.
+  deps.taskRepository.invalidateSnapshot();
   const allTasks = await deps.taskRepository.list({ repo_id: repo.id });
   const activeTasks = allTasks.filter((t) => t.status !== "REMOVED");
 
@@ -170,10 +175,16 @@ const rebuildExternalIssueMirror = async (
       continue;
     }
 
+    const mtimeMs = statSync(taskFilePath).mtimeMs;
+    if (mirrorMtimes.get(taskFilePath) === mtimeMs) {
+      continue;
+    }
+
     const doc = await parseTaskDoc(taskFilePath);
     if (!doc.source) {
       continue;
     }
+    mirrorMtimes.set(taskFilePath, mtimeMs);
 
     taskIdsBySource.set(getSourceKey(doc.source.provider, doc.source.id), task.id);
     docsWithSource.push({

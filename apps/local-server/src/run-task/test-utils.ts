@@ -4,6 +4,8 @@ import type { LocalServerContext } from "../context.ts";
 export const createMockContext = (): LocalServerContext => {
   return {
     db: {} as LocalServerContext["db"],
+    readDb: {} as LocalServerContext["readDb"],
+    statusReaders: {} as LocalServerContext["statusReaders"],
     taskAssignmentRepository: {
       getCurrentByTaskId: async () => null,
       getCurrentWithAgentNameByTaskIds: async () => new Map(),
@@ -211,6 +213,7 @@ export const createMockContext = (): LocalServerContext => {
     },
     taskRepository: {
       refresh: async () => {},
+      invalidateSnapshot: () => {},
       create: async () => {
         throw new Error("taskRepository.create not implemented in mock context");
       },

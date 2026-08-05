@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import type { ChatDelegationRun } from "@aop/common";
-import { parseChatDelegationRuns } from "@aop/common";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { ChatRun, ChatSession } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
@@ -11,6 +10,7 @@ import {
   extractBackgroundTaskRows,
   isBackgroundTaskToolName,
 } from "./background-task-tracker.ts";
+import { listDelegationRuns } from "./delegation-run-store.ts";
 import { readDelegationOutput } from "./delegation-runs.ts";
 import { type ChatSessionEvent, subscribeChatSession } from "./session-events.ts";
 import type { StreamProgressSnapshot } from "./stream-progress.ts";
@@ -455,11 +455,4 @@ const setup = async () => {
 const delegationRunsOf = async (
   ctx: LocalServerContext,
   runId: string,
-): Promise<ChatDelegationRun[]> => {
-  const row = await ctx.db
-    .selectFrom("chat_runs")
-    .select("delegation_runs")
-    .where("id", "=", runId)
-    .executeTakeFirstOrThrow();
-  return parseChatDelegationRuns(row.delegation_runs);
-};
+): Promise<ChatDelegationRun[]> => listDelegationRuns(ctx.db, runId);

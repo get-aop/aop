@@ -1,11 +1,11 @@
 import { rm } from "node:fs/promises";
-import {
-  BACKGROUND_TASK_LIMIT,
-  type ChatDelegationRun,
-  parseChatDelegationRuns,
-  serializeChatDelegationRuns,
-} from "@aop/common";
+import { BACKGROUND_TASK_LIMIT, type ChatDelegationRun } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
+import {
+  listDelegationRuns,
+  listDelegationRunsByChatRunIds,
+  replaceDelegationRuns,
+} from "./delegation-run-store.ts";
 
 export const BACKGROUND_TASK_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -38,23 +38,35 @@ export const pruneOldBackgroundTasks = async (
 const queryDelegationRows = async (ctx: LocalServerContext, sessionId?: string) => {
   let query = ctx.db
     .selectFrom("chat_runs")
-    .select([
-      "id as hostRunId",
-      "session_id as sessionId",
-      "delegation_runs as delegationRuns",
-      "created_at as runCreatedAt",
-    ])
-    .where("delegation_runs", "is not", null);
+    .select(["id as hostRunId", "session_id as sessionId", "created_at as runCreatedAt"])
+    .where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("chat_delegation_runs")
+          .select("chat_delegation_runs.id")
+          .whereRef("chat_delegation_runs.chat_run_id", "=", "chat_runs.id"),
+      ),
+    );
   if (sessionId) query = query.where("session_id", "=", sessionId);
-  return query.execute();
+  const rows = await query.execute();
+  const entriesByRun = await listDelegationRunsByChatRunIds(
+    ctx.db,
+    rows.map((row) => row.hostRunId),
+  );
+  return rows.map((row) => ({
+    hostRunId: row.hostRunId,
+    sessionId: row.sessionId,
+    runCreatedAt: row.runCreatedAt,
+    entries: entriesByRun.get(row.hostRunId) ?? [],
+  }));
 };
 
-const groupBackgroundTasks = (
-  rows: Awaited<ReturnType<typeof queryDelegationRows>>,
-): Map<string, BackgroundTaskRef[]> => {
+type DelegationRow = Awaited<ReturnType<typeof queryDelegationRows>>[number];
+
+const groupBackgroundTasks = (rows: DelegationRow[]): Map<string, BackgroundTaskRef[]> => {
   const grouped = new Map<string, BackgroundTaskRef[]>();
   for (const row of rows) {
-    const tasks = parseChatDelegationRuns(row.delegationRuns)
+    const tasks = row.entries
       .map((entry, entryIndex) => ({
         entry,
         entryIndex,
@@ -103,27 +115,15 @@ const removeFromHostRun = async (
   ctx: LocalServerContext,
   hostRunId: string,
   staleIds: Set<string>,
-): Promise<{ entries: ChatDelegationRun[] }> =>
-  ctx.db.transaction().execute(async (trx) => {
-    const row = await trx
-      .selectFrom("chat_runs")
-      .select("delegation_runs")
-      .where("id", "=", hostRunId)
-      .executeTakeFirst();
-    if (!row) return { entries: [] };
+): Promise<{ entries: ChatDelegationRun[] }> => {
+  const entries = await listDelegationRuns(ctx.db, hostRunId);
+  const deleted = entries.filter((entry) => staleIds.has(entry.id));
+  if (deleted.length === 0) return { entries: [] };
 
-    const entries = parseChatDelegationRuns(row.delegation_runs);
-    const deleted = entries.filter((entry) => staleIds.has(entry.id));
-    if (deleted.length === 0) return { entries: [] };
-
-    await trx
-      .updateTable("chat_runs")
-      .set({
-        delegation_runs: serializeChatDelegationRuns(
-          entries.filter((entry) => !staleIds.has(entry.id)),
-        ),
-      })
-      .where("id", "=", hostRunId)
-      .execute();
-    return { entries: deleted };
-  });
+  await replaceDelegationRuns(
+    ctx.db,
+    hostRunId,
+    entries.filter((entry) => !staleIds.has(entry.id)),
+  );
+  return { entries: deleted };
+};

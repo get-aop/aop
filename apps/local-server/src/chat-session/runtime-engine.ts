@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { type FSWatcher, readFileSync, watch } from "node:fs";
+import { type FSWatcher, watch } from "node:fs";
 import { mkdir, open, readFile, stat } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { AOP_PORTS, type ControlCommand } from "@aop/common";
@@ -191,7 +191,7 @@ export const runSessionPrompt = async (input: {
   }
 
   const { owner, handle } = execution;
-  const artifactTracker = startMarkdownArtifactTracker(repoPath);
+  const artifactTracker = await startMarkdownArtifactTracker(repoPath);
   try {
     if (owner.interrupted) return interruptedRunResult(handle, session.runtime_session_id);
     if (
@@ -245,9 +245,9 @@ interface MarkdownWorkspaceState {
   files: Map<string, string>;
 }
 
-const startMarkdownArtifactTracker = (repoPath: string): MarkdownArtifactTracker => {
+const startMarkdownArtifactTracker = async (repoPath: string): Promise<MarkdownArtifactTracker> => {
   const paths = new Set<string>();
-  const baseline = captureMarkdownWorkspaceState(repoPath);
+  const baseline = await captureMarkdownWorkspaceState(repoPath);
   let watcher: FSWatcher | null = null;
   try {
     watcher = watch(repoPath, { recursive: true }, (_eventType, filename) => {
@@ -266,7 +266,7 @@ const startMarkdownArtifactTracker = (repoPath: string): MarkdownArtifactTracker
   return {
     close,
     finish: async () => {
-      const current = captureMarkdownWorkspaceState(repoPath);
+      const current = await captureMarkdownWorkspaceState(repoPath);
       for (const path of await changedMarkdownPathsSince(repoPath, baseline, current)) {
         paths.add(path);
       }
@@ -287,9 +287,9 @@ const startMarkdownArtifactTracker = (repoPath: string): MarkdownArtifactTracker
   };
 };
 
-const captureMarkdownWorkspaceState = (repoPath: string): MarkdownWorkspaceState => {
-  const head = gitTextSync(repoPath, ["rev-parse", "HEAD"]);
-  const status = gitTextSync(repoPath, [
+const captureMarkdownWorkspaceState = async (repoPath: string): Promise<MarkdownWorkspaceState> => {
+  const head = await gitText(repoPath, ["rev-parse", "HEAD"]);
+  const status = await gitText(repoPath, [
     "status",
     "--porcelain=v1",
     "-z",
@@ -301,10 +301,14 @@ const captureMarkdownWorkspaceState = (repoPath: string): MarkdownWorkspaceState
     .split("\0")
     .filter((entry) => entry.length > 3 && entry[2] === " ")
     .map((entry) => entry.slice(3));
-  const fingerprints = paths.flatMap((path) => {
-    const fingerprint = fileFingerprint(resolve(repoPath, path));
-    return fingerprint ? ([[path, fingerprint]] as const) : [];
-  });
+  const fingerprints = (
+    await Promise.all(
+      paths.map(async (path) => {
+        const fingerprint = await fileFingerprint(resolve(repoPath, path));
+        return fingerprint ? ([[path, fingerprint]] as const) : [];
+      }),
+    )
+  ).flat();
   return {
     head: head?.trim() || null,
     files: new Map(fingerprints),
@@ -354,17 +358,11 @@ const gitText = async (repoPath: string, args: string[]): Promise<string | null>
   return exitCode === 0 ? stdout : null;
 };
 
-const gitTextSync = (repoPath: string, args: string[]): string | null => {
-  const result = Bun.spawnSync(["git", "-C", repoPath, ...args], {
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  return result.exitCode === 0 ? result.stdout.toString() : null;
-};
-
-const fileFingerprint = (path: string): string | null => {
+const fileFingerprint = async (path: string): Promise<string | null> => {
   try {
-    return createHash("sha256").update(readFileSync(path)).digest("hex");
+    return createHash("sha256")
+      .update(await readFile(path))
+      .digest("hex");
   } catch {
     return null;
   }
@@ -764,16 +762,16 @@ const stopProvider = async (
     pid = spawned.pid;
   }
 
-  const target = createProviderProcessTarget(pid);
-  signalProvider(target, handle.interruptSignal);
+  const target = await createProviderProcessTarget(pid);
+  await signalProvider(target, handle.interruptSignal);
   const exitedAfterInterrupt = await waitUntilProviderExited(target, providerSettled, 1_500);
   if (exitedAfterInterrupt) return;
   if (handle.interruptSignal !== "SIGTERM") {
-    signalProvider(target, "SIGTERM");
+    await signalProvider(target, "SIGTERM");
     const exitedAfterTerm = await waitUntilProviderExited(target, providerSettled, 1_000);
     if (exitedAfterTerm) return;
   }
-  signalProvider(target, "SIGKILL");
+  await signalProvider(target, "SIGKILL");
   await waitUntilProviderExited(target, providerSettled);
 };
 
@@ -782,8 +780,10 @@ interface ProviderProcessTarget {
   descendantPids: Set<number>;
 }
 
-const createProviderProcessTarget = (rootPid: number): ProviderProcessTarget => {
-  const descendantPids = new Set(descendantProcessIds(rootPid));
+const createProviderProcessTarget = async (rootPid: number): Promise<ProviderProcessTarget> => {
+  // Scan while the root is alive: detached children reparent to init as soon
+  // as the root exits and would be unreachable afterwards.
+  const descendantPids = new Set(await descendantProcessIds(rootPid));
   return { rootPid, descendantPids };
 };
 
@@ -797,19 +797,19 @@ const waitUntilProviderExited = async (
   void providerSettled?.then(() => {
     providerHasSettled = true;
   });
-  while (providerTargetIsAlive(target, providerHasSettled)) {
+  while (await providerTargetIsAlive(target, providerHasSettled)) {
     if (timeoutMs !== undefined && Date.now() - startedAt >= timeoutMs) return false;
-    await Bun.sleep(25);
+    await Bun.sleep(50);
   }
   return true;
 };
 
-const providerTargetIsAlive = (
+const providerTargetIsAlive = async (
   target: ProviderProcessTarget,
   providerHasSettled: boolean,
-): boolean => {
+): Promise<boolean> => {
   if (!providerHasSettled && isProviderProcessAlive(target.rootPid)) {
-    for (const pid of descendantProcessIds(target.rootPid)) target.descendantPids.add(pid);
+    for (const pid of await descendantProcessIds(target.rootPid)) target.descendantPids.add(pid);
   }
   for (const pid of target.descendantPids) {
     if (isPidAlive(pid)) return true;
@@ -831,17 +831,12 @@ const isProviderProcessAlive = (pid: number): boolean => {
   }
 };
 
-const signalProvider = (target: ProviderProcessTarget, signal: NodeJS.Signals): void => {
-  for (const descendant of descendantProcessIds(target.rootPid)) {
-    target.descendantPids.add(descendant);
-  }
-  for (const descendant of target.descendantPids) {
-    try {
-      process.kill(descendant, signal);
-    } catch {
-      // The child exited between process discovery and signaling.
-    }
-  }
+const signalProvider = async (
+  target: ProviderProcessTarget,
+  signal: NodeJS.Signals,
+): Promise<void> => {
+  // Signal the root first so the stop path is not delayed by the descendant
+  // scan; children are reaped right after.
   try {
     process.kill(-target.rootPid, signal);
   } catch {
@@ -849,6 +844,16 @@ const signalProvider = (target: ProviderProcessTarget, signal: NodeJS.Signals): 
       process.kill(target.rootPid, signal);
     } catch {
       // The process exited between observation and signaling.
+    }
+  }
+  for (const descendant of await descendantProcessIds(target.rootPid)) {
+    target.descendantPids.add(descendant);
+  }
+  for (const descendant of target.descendantPids) {
+    try {
+      process.kill(descendant, signal);
+    } catch {
+      // The child exited between process discovery and signaling.
     }
   }
 };
@@ -862,26 +867,46 @@ const isPidAlive = (pid: number): boolean => {
   }
 };
 
-const descendantProcessIds = (rootPid: number): number[] => {
-  if (process.platform === "win32") return [];
-  const snapshot = Bun.spawnSync(["ps", "-axo", "pid=,ppid="], {
+// Shared, short-lived process-table snapshot so concurrent trackers poll once
+// instead of spawning `ps` per check; async so it never blocks the event loop.
+const PROCESS_SNAPSHOT_TTL_MS = 100;
+let processSnapshot: { at: number; childrenByParent: Map<number, number[]> } | null = null;
+
+const getProcessTreeSnapshot = async (): Promise<Map<number, number[]>> => {
+  const now = Date.now();
+  if (processSnapshot && now - processSnapshot.at < PROCESS_SNAPSHOT_TTL_MS) {
+    return processSnapshot.childrenByParent;
+  }
+
+  const result = await Bun.spawn(["ps", "-axo", "pid=,ppid="] as const, {
     stdout: "pipe",
     stderr: "ignore",
   });
-  if (snapshot.exitCode !== 0) return [];
+  const [stdout, exitCode] = await Promise.all([new Response(result.stdout).text(), result.exited]);
+  const childrenByParent = exitCode === 0 ? parseProcessTable(stdout) : new Map<number, number[]>();
+  processSnapshot = { at: now, childrenByParent };
+  return childrenByParent;
+};
 
-  const children = new Map<number, number[]>();
-  for (const line of snapshot.stdout.toString().split("\n")) {
+const parseProcessTable = (stdout: string): Map<number, number[]> => {
+  const childrenByParent = new Map<number, number[]>();
+  for (const line of stdout.split("\n")) {
     const [pidText, parentText] = line.trim().split(/\s+/);
     const pid = Number.parseInt(pidText ?? "", 10);
     const parent = Number.parseInt(parentText ?? "", 10);
     if (!Number.isFinite(pid) || !Number.isFinite(parent)) continue;
-    children.set(parent, [...(children.get(parent) ?? []), pid]);
+    const siblings = childrenByParent.get(parent) ?? [];
+    siblings.push(pid);
+    childrenByParent.set(parent, siblings);
   }
+  return childrenByParent;
+};
 
+const descendantProcessIds = async (rootPid: number): Promise<number[]> => {
+  const childrenByParent = await getProcessTreeSnapshot();
   const descendants: number[] = [];
   const visit = (parent: number) => {
-    for (const child of children.get(parent) ?? []) {
+    for (const child of childrenByParent.get(parent) ?? []) {
       visit(child);
       descendants.push(child);
     }

@@ -6,6 +6,7 @@ import {
   markDelegationHostRunTerminal,
   reconcileSessionDelegationsAfterHostFinal,
 } from "../../components/delegations/delegation-center";
+import type { StreamProgressUpdate } from "./session-stream-progress";
 
 export type AssistantStreamProgress = {
   thinking: string;
@@ -29,7 +30,7 @@ export type SessionStreamHandlers = {
   assistantStateGenerationRef?: { current: number };
   skipConnectedReloadRef?: { current: string | null };
   setTyping: (value: boolean) => void;
-  setStreamProgress: (value: AssistantStreamProgress | null) => void;
+  setStreamProgress: (value: StreamProgressUpdate) => void;
   setDetail: Dispatch<SetStateAction<ChatSessionDetail | null>>;
   setMidRunHints?: Dispatch<SetStateAction<Record<string, "queued" | "steered">>>;
   setTermLines: Dispatch<SetStateAction<import("@aop/common").TerminalLine[]>>;
@@ -184,12 +185,22 @@ const applyAssistantProgress = (
 ): void => {
   advanceAssistantStateGeneration(handlers);
   handlers.setTyping(true);
-  handlers.setStreamProgress({
-    thinking: typeof payload.thinking === "string" ? payload.thinking : "",
-    content: typeof payload.content === "string" ? payload.content : "",
-    commandGroups: Array.isArray(payload.commandGroups)
-      ? (payload.commandGroups as AssistantStreamProgress["commandGroups"])
-      : [],
+  const thinking = typeof payload.thinking === "string" ? payload.thinking : "";
+  const content = typeof payload.content === "string" ? payload.content : "";
+  const commandGroups = Array.isArray(payload.commandGroups)
+    ? (payload.commandGroups as AssistantStreamProgress["commandGroups"])
+    : [];
+  const replace = payload.replace === true;
+  handlers.setStreamProgress((current) => {
+    if (replace) {
+      return { thinking, content, commandGroups };
+    }
+    // Progress frames carry suffix deltas; accumulate onto the running text.
+    return {
+      thinking: (current?.thinking ?? "") + thinking,
+      content: (current?.content ?? "") + content,
+      commandGroups,
+    };
   });
 };
 

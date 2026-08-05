@@ -6,6 +6,7 @@ import type { ChatDelegationRun } from "@aop/common";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { ChatRun } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
+import { listDelegationRuns } from "./delegation-run-store.ts";
 import {
   deriveDelegationActivity,
   finishDelegationRun,
@@ -457,15 +458,7 @@ const delegationSpec = (overrides: Record<string, unknown> = {}) => ({
 const delegationRunsOf = async (
   ctx: LocalServerContext,
   runId: string,
-): Promise<ChatDelegationRun[]> => {
-  const row = await ctx.db
-    .selectFrom("chat_runs")
-    .select("delegation_runs")
-    .where("id", "=", runId)
-    .executeTakeFirstOrThrow();
-  const { parseChatDelegationRuns } = await import("@aop/common");
-  return parseChatDelegationRuns(row.delegation_runs);
-};
+): Promise<ChatDelegationRun[]> => listDelegationRuns(ctx.db, runId);
 
 const snapshot = (overrides: Partial<StreamProgressSnapshot>): StreamProgressSnapshot => ({
   thinking: "",

@@ -31,19 +31,14 @@ import {
   useSessionReviewQueue,
 } from "./session-review-queue";
 import { serializeReviewMessage } from "./session-review-serializer";
+import type { StreamProgressUpdate } from "./session-stream-progress";
 import { sendChatWithOptimistic } from "./sessions-page-model";
 
 interface SessionComposerStateInput {
   active: ChatSessionDetail | null;
   typing: boolean;
   setTyping: (value: boolean) => void;
-  setStreamProgress: (
-    value: {
-      thinking: string;
-      content: string;
-      commandGroups: [];
-    } | null,
-  ) => void;
+  setStreamProgress: (value: StreamProgressUpdate) => void;
   setDetail: (updater: (current: ChatSessionDetail | null) => ChatSessionDetail | null) => void;
   setMidRunHints: (
     updater: (

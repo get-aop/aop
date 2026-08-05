@@ -45,7 +45,8 @@ describe("LogFlusher", () => {
 
   const writeLogFile = (stepId: string, lines: string[]): string => {
     const logFile = join(logsDir, `${stepId}.jsonl`);
-    writeFileSync(logFile, lines.join("\n"));
+    // Providers write newline-terminated JSONL records.
+    writeFileSync(logFile, `${lines.join("\n")}\n`);
     return logFile;
   };
 
@@ -141,14 +142,14 @@ describe("LogFlusher", () => {
     const logsAfterFirstTick = await repo.getStepLogs(stepId);
     expect(logsAfterFirstTick.length).toBe(1);
 
-    // Append more lines
+    // Append more lines (rewrite keeps the flushed prefix identical)
     writeFileSync(
       logFile,
       [
         JSON.stringify({ type: "assistant", message: "line 1" }),
         JSON.stringify({ type: "assistant", message: "line 2" }),
         JSON.stringify({ type: "result", subtype: "success" }),
-      ].join("\n"),
+      ].join("\n") + "\n",
     );
 
     // Wait for another tick
@@ -209,7 +210,7 @@ describe("LogFlusher", () => {
       [
         JSON.stringify({ type: "assistant", message: "line 1" }),
         JSON.stringify({ type: "assistant", message: "line 2" }),
-      ].join("\n"),
+      ].join("\n") + "\n",
     );
 
     flusher.track(stepId, logFile);
@@ -229,7 +230,7 @@ describe("LogFlusher", () => {
         JSON.stringify({ type: "assistant", message: "line 2" }),
         JSON.stringify({ type: "assistant", message: "line 3" }),
         JSON.stringify({ type: "result", subtype: "success" }),
-      ].join("\n"),
+      ].join("\n") + "\n",
     );
 
     // finalFlush picks up only the delta (lines 3-4)
@@ -255,7 +256,7 @@ describe("LogFlusher", () => {
       JSON.stringify({ type: "text", part: { text: "Which sidebar should change?" } }),
       JSON.stringify({ type: "step_finish", part: { reason: "stop" } }),
     ];
-    writeFileSync(logFile, firstSegment.join("\n"));
+    writeFileSync(logFile, `${firstSegment.join("\n")}\n`);
 
     flusher.track(stepId, logFile);
     flusher.start();
@@ -268,7 +269,7 @@ describe("LogFlusher", () => {
       JSON.stringify({ type: "text", part: { text: "# Plan\n\nContinue after the answer." } }),
       JSON.stringify({ type: "step_finish", part: { reason: "stop" } }),
     ];
-    writeFileSync(logFile, resumedSegment.join("\n"));
+    writeFileSync(logFile, `${resumedSegment.join("\n")}\n`);
 
     await flusher.finalFlush(stepId);
 

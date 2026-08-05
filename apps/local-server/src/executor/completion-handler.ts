@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import type { ExecutionInfo, SignalDefinition, StepCommand } from "@aop/common/protocol";
 import { getLogger } from "@aop/infra";
 import {
@@ -9,6 +10,7 @@ import {
 import type { LocalServerContext } from "../context.ts";
 import type { Task } from "../db/schema.ts";
 import { detectSignal } from "../orchestrator/sync/signal-detector.ts";
+import { projectRuntimeEventsForStep } from "../runtime-events/projector.ts";
 import { SettingKey } from "../settings/types.ts";
 import { handoffCompletedTask } from "../task/handoff.ts";
 import type { ExecuteResult } from "./types.ts";
@@ -21,12 +23,12 @@ interface AgentLogAnalysis {
   usage?: ExecuteResult["usage"];
 }
 
-export const processAgentCompletion = (
+export const processAgentCompletion = async (
   logFile: string,
   runResult: RunResult,
   signals: SignalDefinition[],
-): ExecuteResult => {
-  const log = readAgentLogAnalysis(logFile, runResult);
+): Promise<ExecuteResult> => {
+  const log = await readAgentLogAnalysis(logFile, runResult);
   const status = runResult.timedOut ? "timeout" : runResult.exitCode === 0 ? "success" : "failure";
   const signal =
     status === "success" && log.signalTextComplete
@@ -46,12 +48,15 @@ export const processAgentCompletion = (
   };
 };
 
-const readAgentLogAnalysis = (logFile: string, runResult: RunResult): AgentLogAnalysis => {
+const readAgentLogAnalysis = async (
+  logFile: string,
+  runResult: RunResult,
+): Promise<AgentLogAnalysis> => {
   if (!existsSync(logFile)) {
     return { assistantText: "", signalTextComplete: true };
   }
 
-  const content = readFileSync(logFile, "utf-8");
+  const content = await readFile(logFile, "utf-8");
   const extracted = extractAssistantSignalTextFromRawJsonl(content, {
     requireCompleteLine: true,
   });
@@ -67,14 +72,14 @@ const readAgentLogAnalysis = (logFile: string, runResult: RunResult): AgentLogAn
   };
 };
 
-export const populateLogBuffer = (
+export const populateLogBuffer = async (
   ctx: LocalServerContext,
   logFile: string,
   stepExecutionId: string,
-): void => {
+): Promise<void> => {
   if (!existsSync(logFile)) return;
 
-  const content = readFileSync(logFile, "utf-8");
+  const content = await readFile(logFile, "utf-8");
   const lines = content.split("\n").filter((line) => line.length > 0);
   for (const rawLine of lines) {
     ctx.logBuffer.push(stepExecutionId, rawLine);
@@ -146,6 +151,17 @@ export const finalizeExecutionAndGetNextStep = async (
     pauseContext: result.pauseContext,
     assistantOutput: result.assistantOutput,
   });
+
+  // Project the step's runtime events now that its status is final; the status
+  // path stays a pure read (no backfill on every poll).
+  try {
+    await projectRuntimeEventsForStep(ctx, stepId);
+  } catch (error) {
+    logger.warn("Failed to project runtime events for step {stepId}: {error}", {
+      stepId,
+      error: String(error),
+    });
+  }
 
   if (completion.taskStatus === "DONE") {
     const requiresApproval = await resolveHandoffRequiresApproval(ctx, task);

@@ -110,20 +110,13 @@ export const createExecutionRepository = (db: Kysely<Database>): ExecutionReposi
         .executeTakeFirst()) ?? null,
 
     cancelRunningExecutions: async (): Promise<number> => {
-      const running = await db
-        .selectFrom("executions")
-        .select("id")
-        .where("status", "=", "running")
-        .execute();
       const now = new Date().toISOString();
-      for (const execution of running) {
-        await db
-          .updateTable("executions")
-          .set({ status: "cancelled", completed_at: now })
-          .where("id", "=", execution.id)
-          .execute();
-      }
-      return running.length;
+      const result = await db
+        .updateTable("executions")
+        .set({ status: "cancelled", completed_at: now })
+        .where("status", "=", "running")
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows);
     },
 
     createStepExecution: async (step: NewStepExecution): Promise<StepExecution> => {
@@ -175,20 +168,13 @@ export const createExecutionRepository = (db: Kysely<Database>): ExecutionReposi
     },
 
     cancelRunningStepExecutions: async (): Promise<number> => {
-      const running = await db
-        .selectFrom("step_executions")
-        .select("id")
-        .where("status", "=", "running")
-        .execute();
       const now = new Date().toISOString();
-      for (const step of running) {
-        await db
-          .updateTable("step_executions")
-          .set({ status: "cancelled", ended_at: now })
-          .where("id", "=", step.id)
-          .execute();
-      }
-      return running.length;
+      const result = await db
+        .updateTable("step_executions")
+        .set({ status: "cancelled", ended_at: now })
+        .where("status", "=", "running")
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows);
     },
 
     getRunningStepExecutions: async (): Promise<(StepExecution & { task_id: string })[]> => {

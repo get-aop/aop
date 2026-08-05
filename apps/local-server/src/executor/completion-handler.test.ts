@@ -51,7 +51,7 @@ describe("completion-handler", () => {
       })}\n`,
     );
 
-    const result = processAgentCompletion(logFile, { exitCode: 0, sessionId: "session-1" }, [
+    const result = await processAgentCompletion(logFile, { exitCode: 0, sessionId: "session-1" }, [
       { name: "REQUIRES_INPUT", description: "pause" },
     ]);
 
@@ -70,10 +70,10 @@ describe("completion-handler", () => {
     const logFile = join(tempDir, "partial.jsonl");
     await writeFile(logFile, '{"type":"text","part":{"text":"<aop>REQUIRES_INPUT</aop>"');
 
-    const partial = processAgentCompletion(logFile, { exitCode: 0 }, [
+    const partial = await processAgentCompletion(logFile, { exitCode: 0 }, [
       { name: "REQUIRES_INPUT", description: "pause" },
     ]);
-    const timedOut = processAgentCompletion(logFile, { exitCode: 0, timedOut: true }, [
+    const timedOut = await processAgentCompletion(logFile, { exitCode: 0, timedOut: true }, [
       { name: "REQUIRES_INPUT", description: "pause" },
     ]);
 
@@ -87,7 +87,7 @@ describe("completion-handler", () => {
     const logFile = join(tempDir, "usage.jsonl");
     await writeFile(logFile, `${JSON.stringify({ type: "text", part: { text: "done" } })}\n`);
 
-    const result = processAgentCompletion(
+    const result = await processAgentCompletion(
       logFile,
       {
         exitCode: 0,
@@ -114,12 +114,12 @@ describe("completion-handler", () => {
   });
 
   test("populateLogBuffer stores non-empty log lines and ignores missing files", async () => {
-    populateLogBuffer(ctx, join(tempDir, "missing.jsonl"), "step-missing");
+    await populateLogBuffer(ctx, join(tempDir, "missing.jsonl"), "step-missing");
 
     const logFile = join(tempDir, "buffer.jsonl");
     await writeFile(logFile, "first\n\nsecond\n");
 
-    populateLogBuffer(ctx, logFile, "step-1");
+    await populateLogBuffer(ctx, logFile, "step-1");
 
     expect(ctx.logBuffer.getLines("step-1")).toEqual(["first", "second"]);
     expect(ctx.logBuffer.getLines("step-missing")).toEqual([]);

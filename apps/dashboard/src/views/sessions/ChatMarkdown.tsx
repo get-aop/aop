@@ -1,7 +1,7 @@
 import { code } from "@streamdown/code";
 import { CheckIcon, ChevronsUpDownIcon, CopyIcon } from "lucide-react";
 import type { AnchorHTMLAttributes, HTMLAttributes, MouseEvent, ReactNode } from "react";
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { openExternalUrl } from "../../api/client";
 import { isTauriWebView } from "../../utils/desktop-runtime";
@@ -18,12 +18,14 @@ const ChatLinkContext = createContext({
   openLink: openExternalUrl,
 });
 
-export const ChatMarkdown = ({
+// Memoized so history rows and activity panels do not re-parse markdown on
+// unrelated re-renders (progress frames included).
+export const ChatMarkdown = memo(function ChatMarkdown({
   content,
   desktop = isTauriWebView(),
   openLink = openExternalUrl,
   lineBreaks = false,
-}: ChatMarkdownProps) => {
+}: ChatMarkdownProps) {
   if (!content.trim()) return null;
   return (
     <ChatLinkContext.Provider value={{ desktop, openLink }}>
@@ -37,7 +39,7 @@ export const ChatMarkdown = ({
       </div>
     </ChatLinkContext.Provider>
   );
-};
+});
 
 const plugins = { code };
 type ChildrenProps = { children?: ReactNode };

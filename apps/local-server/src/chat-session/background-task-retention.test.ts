@@ -2,17 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { access, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  type ChatDelegationRun,
-  parseChatDelegationRuns,
-  serializeChatDelegationRuns,
-} from "@aop/common";
+import type { ChatDelegationRun } from "@aop/common";
 import { createCommandContext } from "../context.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import {
   BACKGROUND_TASK_CLEANUP_INTERVAL_MS,
   pruneOldBackgroundTasks,
 } from "./background-task-retention.ts";
+import { listDelegationRunsByChatRunIds, replaceDelegationRuns } from "./delegation-run-store.ts";
 
 const databases: Array<Awaited<ReturnType<typeof createTestDb>>> = [];
 
@@ -151,11 +148,12 @@ const addRun = async (
       retry_of_run_id: null,
       runtime_session_state: null,
       error_message: null,
-      delegation_runs: serializeChatDelegationRuns(entries),
+      delegation_runs: null,
       created_at: now,
       updated_at: now,
     })
     .execute();
+  await replaceDelegationRuns(ctx.db, runId, entries);
 };
 
 const backgroundTask = (id: string, startedAt: string, logFilePath = ""): ChatDelegationRun => ({
@@ -188,12 +186,16 @@ const entriesForSession = async (
   ctx: ReturnType<typeof createCommandContext>,
   sessionId: string,
 ): Promise<ChatDelegationRun[]> => {
-  const rows = await ctx.db
+  const runs = await ctx.db
     .selectFrom("chat_runs")
-    .select("delegation_runs")
+    .select("id")
     .where("session_id", "=", sessionId)
     .execute();
-  return rows.flatMap((row) => parseChatDelegationRuns(row.delegation_runs));
+  const byRun = await listDelegationRunsByChatRunIds(
+    ctx.db,
+    runs.map((run) => run.id),
+  );
+  return [...byRun.values()].flat();
 };
 
 const backgroundTaskIds = async (

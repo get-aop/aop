@@ -8,10 +8,9 @@ import {
   retryChatRunFresh,
   updateChatSession,
 } from "../../api/client";
-import { setSessionStreamProgress } from "./session-stream-progress";
+import { type StreamProgressUpdate, setSessionStreamProgress } from "./session-stream-progress";
 import type { MenuState } from "./sessions-menu";
 import {
-  type AssistantStreamProgress,
   pickSessionAfterSettle,
   runTermCommand,
   storeActiveSessionId,
@@ -67,7 +66,7 @@ export const selectSession = async (input: {
   reloadDetailQuiet: (sessionId: string) => Promise<ChatSessionDetail | null>;
   setTermLines: Dispatch<SetStateAction<TerminalLine[]>>;
   setTyping: (value: boolean) => void;
-  setStreamProgress: (value: AssistantStreamProgress | null) => void;
+  setStreamProgress: (value: StreamProgressUpdate) => void;
   setMenu: Dispatch<SetStateAction<MenuState>>;
   setDetail: Dispatch<SetStateAction<ChatSessionDetail | null>>;
   loadDetail: (sessionId: string) => Promise<unknown>;

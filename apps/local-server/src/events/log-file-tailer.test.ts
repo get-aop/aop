@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getFileSize, readLogLines } from "./log-file-tailer.ts";
+import {
+  createLogReadState,
+  getFileSize,
+  readAllLogLines,
+  readLogLineCount,
+  readLogLines,
+} from "./log-file-tailer.ts";
 
 describe("log-file-tailer", () => {
   let testDir: string;
@@ -22,85 +28,108 @@ describe("log-file-tailer", () => {
     return path;
   };
 
-  describe("readLogLines", () => {
-    it("returns empty for non-existent file", () => {
-      const result = readLogLines("/nonexistent/file.jsonl");
-      expect(result.lines).toEqual([]);
-      expect(result.lineCount).toBe(0);
+  describe("readAllLogLines", () => {
+    it("returns empty for non-existent file", async () => {
+      expect(await readAllLogLines("/nonexistent/file.jsonl")).toEqual([]);
     });
 
-    it("returns raw JSON lines from file", () => {
+    it("returns raw JSON lines from file", async () => {
       const entry = {
         type: "assistant",
         message: { content: [{ type: "text", text: "Hello world" }] },
       };
       const logFile = writeJsonl("test.jsonl", [entry]);
 
-      const result = readLogLines(logFile);
-      expect(result.lines).toHaveLength(1);
-      expect(result.lines[0]).toBe(JSON.stringify(entry));
-      expect(result.lineCount).toBe(1);
+      const lines = await readAllLogLines(logFile);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toBe(JSON.stringify(entry));
     });
 
-    it("returns multiple raw lines", () => {
-      const entries = [
-        { type: "assistant", message: { content: [{ type: "text", text: "Starting" }] } },
-        { type: "tool_use", tool_name: "Bash", input: { command: "ls -la" } },
-        { type: "result", subtype: "success", result: "ok" },
-      ];
-      const logFile = writeJsonl("test.jsonl", entries);
-
-      const result = readLogLines(logFile);
-      expect(result.lines).toHaveLength(3);
-      expect(result.lines[0]).toBe(JSON.stringify(entries[0]));
-      expect(result.lines[1]).toBe(JSON.stringify(entries[1]));
-      expect(result.lines[2]).toBe(JSON.stringify(entries[2]));
-      expect(result.lineCount).toBe(3);
-    });
-
-    it("filters out empty lines", () => {
+    it("filters out empty lines", async () => {
       const path = join(testDir, "sparse.jsonl");
       writeFileSync(path, '{"type":"assistant"}\n\n{"type":"result"}\n');
 
-      const result = readLogLines(path);
-      expect(result.lines).toHaveLength(2);
-      expect(result.lines[0]).toBe('{"type":"assistant"}');
-      expect(result.lines[1]).toBe('{"type":"result"}');
+      const lines = await readAllLogLines(path);
+      expect(lines).toHaveLength(2);
+      expect(lines[0]).toBe('{"type":"assistant"}');
+      expect(lines[1]).toBe('{"type":"result"}');
     });
 
-    it("supports offset to skip lines", () => {
-      const entries = [
-        { type: "assistant", message: { content: [{ type: "text", text: "line 1" }] } },
-        { type: "assistant", message: { content: [{ type: "text", text: "line 2" }] } },
-        { type: "assistant", message: { content: [{ type: "text", text: "line 3" }] } },
-      ];
-      const logFile = writeJsonl("test.jsonl", entries);
-
-      const result = readLogLines(logFile, 1);
-      expect(result.lines).toHaveLength(2);
-      expect(result.lines[0]).toBe(JSON.stringify(entries[1]));
-      expect(result.lines[1]).toBe(JSON.stringify(entries[2]));
-      expect(result.lineCount).toBe(3);
+    it("counts complete lines", async () => {
+      const path = join(testDir, "counted.jsonl");
+      writeFileSync(path, '{"a":1}\n{"a":2}\n');
+      expect(await readLogLineCount(path)).toBe(2);
     });
+  });
 
-    it("returns empty lines when offset exceeds total", () => {
-      const logFile = writeJsonl("test.jsonl", [
-        { type: "assistant", message: { content: [{ type: "text", text: "line 1" }] } },
-      ]);
-
-      const result = readLogLines(logFile, 10);
+  describe("readLogLines (incremental)", () => {
+    it("returns empty for non-existent file", async () => {
+      const state = createLogReadState();
+      const result = await readLogLines("/nonexistent/file.jsonl", state);
       expect(result.lines).toEqual([]);
-      expect(result.lineCount).toBe(1);
+      expect(result.lineCount).toBe(0);
     });
 
-    it("preserves non-JSON lines as raw strings", () => {
-      const path = join(testDir, "mixed.jsonl");
-      writeFileSync(path, 'not json\n{"type":"assistant"}\n');
+    it("reads only newly appended bytes across calls", async () => {
+      const path = join(testDir, "append.jsonl");
+      writeFileSync(path, '{"type":"assistant"}\n');
 
-      const result = readLogLines(path);
+      const state = createLogReadState();
+      const first = await readLogLines(path, state);
+      expect(first.lines).toHaveLength(1);
+      expect(state.lineCount).toBe(1);
+
+      appendFileSync(path, '{"type":"result"}\n');
+      const second = await readLogLines(path, state);
+      expect(second.lines).toHaveLength(1);
+      expect(second.lines[0]).toBe('{"type":"result"}');
+      expect(state.lineCount).toBe(2);
+
+      // Nothing new to read.
+      const third = await readLogLines(path, state);
+      expect(third.lines).toHaveLength(0);
+      expect(state.lineCount).toBe(2);
+    });
+
+    it("holds back a trailing partial line until a newline arrives", async () => {
+      const path = join(testDir, "partial.jsonl");
+      writeFileSync(path, '{"type":"assistant"}\n{"type":"res');
+
+      const state = createLogReadState();
+      const first = await readLogLines(path, state);
+      expect(first.lines).toHaveLength(1);
+      expect(state.lineCount).toBe(1);
+
+      appendFileSync(path, 'ult"}\n');
+      const second = await readLogLines(path, state);
+      expect(second.lines).toHaveLength(1);
+      expect(second.lines[0]).toBe('{"type":"result"}');
+      expect(state.lineCount).toBe(2);
+    });
+
+    it("includePartial consumes the trailing partial line", async () => {
+      const path = join(testDir, "final.jsonl");
+      writeFileSync(path, '{"type":"assistant"}\n{"type":"res');
+
+      const state = createLogReadState();
+      const result = await readLogLines(path, state, true);
       expect(result.lines).toHaveLength(2);
-      expect(result.lines[0]).toBe("not json");
-      expect(result.lines[1]).toBe('{"type":"assistant"}');
+      expect(result.lines[1]).toBe('{"type":"res');
+      expect(state.lineCount).toBe(2);
+      expect(state.byteOffset).toBe(getFileSize(path));
+    });
+
+    it("does not re-read when the file has not grown", async () => {
+      const path = join(testDir, "static.jsonl");
+      writeFileSync(path, '{"type":"assistant"}\n');
+
+      const state = createLogReadState();
+      await readLogLines(path, state);
+      expect(state.byteOffset).toBe(getFileSize(path));
+
+      const again = await readLogLines(path, state);
+      expect(again.lines).toHaveLength(0);
+      expect(state.byteOffset).toBe(getFileSize(path));
     });
   });
 
