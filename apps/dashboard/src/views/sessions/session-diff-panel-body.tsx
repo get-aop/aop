@@ -31,7 +31,8 @@ export const DiffPanelHeader = ({
   onToggleExpand?: () => void;
   onCollapseAll?: () => void;
   onExpandAll?: () => void;
-  onClose: () => void;
+  /** Hidden when embedded: the workspace right panel owns the close control. */
+  onClose?: () => void;
 }) => (
   <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
     <DiffPanelTitle defaultBranch={defaultBranch} fileCount={fileCount} />
@@ -75,7 +76,7 @@ const DiffPanelHeaderActions = ({
   onToggleExpand?: () => void;
   onCollapseAll?: () => void;
   onExpandAll?: () => void;
-  onClose: () => void;
+  onClose?: () => void;
 }) => (
   <>
     {onCollapseAll ? (
@@ -117,15 +118,17 @@ const DiffPanelHeaderActions = ({
         )}
       </button>
     ) : null}
-    <button
-      type="button"
-      aria-label="Close diff panel"
-      title="Close"
-      onClick={onClose}
-      className="focus-ring rounded-control p-1 text-text-muted"
-    >
-      <XIcon className="size-3.5" strokeWidth={1.7} />
-    </button>
+    {onClose ? (
+      <button
+        type="button"
+        aria-label="Close diff panel"
+        title="Close"
+        onClick={onClose}
+        className="focus-ring rounded-control p-1 text-text-muted"
+      >
+        <XIcon className="size-3.5" strokeWidth={1.7} />
+      </button>
+    ) : null}
   </>
 );
 

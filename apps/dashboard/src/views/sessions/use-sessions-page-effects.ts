@@ -129,21 +129,26 @@ interface StreamInput {
 }
 
 /** Live session/terminal/delegation event stream for the active session. */
+export const SESSION_STREAM_EVENT_TYPES = [
+  "connected",
+  "assistant-typing",
+  "assistant-progress",
+  "assistant-final",
+  "session-updated",
+  "terminal-line",
+  "delegation-updated",
+  "delegation-progress",
+  "workflow-run-started",
+  "workflow-run-step",
+  "workflow-run-completed",
+  "ping",
+] as const;
+
 export const useSessionsPageStream = (input: StreamInput) => {
   const streamUrl = sessionStreamUrlFor(input.activeId);
   const { connected } = useSSE({
     url: streamUrl,
-    eventTypes: [
-      "connected",
-      "assistant-typing",
-      "assistant-progress",
-      "assistant-final",
-      "session-updated",
-      "terminal-line",
-      "delegation-updated",
-      "delegation-progress",
-      "ping",
-    ],
+    eventTypes: [...SESSION_STREAM_EVENT_TYPES],
     onMessage: (event, data) =>
       handleSessionStreamEvent(event, data, {
         activeIdRef: input.activeIdRef,

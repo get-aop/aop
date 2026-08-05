@@ -46,6 +46,7 @@ export const RightPanelTabContent = ({
       onClose={onCloseDiff}
       showToast={showToast}
       refreshKey={diffRefreshKey}
+      embedded
     />
   );
 };

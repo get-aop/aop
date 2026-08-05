@@ -21,6 +21,7 @@ import {
   RESET_RUNTIME_SUCCESS_TOAST,
   scopeMidRunHintsToMessages,
 } from "./sessions-page-helpers";
+import { SESSION_STREAM_EVENT_TYPES } from "./use-sessions-page-effects";
 import { clearSessionUnreadCount, incrementSessionUnreadCount } from "./use-session-unread-counts";
 
 setupDashboardDom();
@@ -160,6 +161,12 @@ describe("navigateFromAction", () => {
 });
 
 describe("handleSessionStreamEvent", () => {
+  test("session stream subscribes to workflow run events", () => {
+    expect(SESSION_STREAM_EVENT_TYPES).toContain("workflow-run-started");
+    expect(SESSION_STREAM_EVENT_TYPES).toContain("workflow-run-step");
+    expect(SESSION_STREAM_EVENT_TYPES).toContain("workflow-run-completed");
+  });
+
   test("assistant-typing clears the hint for the message whose run started", () => {
     let hints: Record<string, "queued" | "steered"> = {
       queued: "queued",

@@ -1,12 +1,11 @@
 import { type ChatDelegationRun, deriveDelegationViewStatus } from "@aop/common";
 import { CircleCheckIcon, ClockIcon } from "lucide-react";
 import { useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/ui/dialog";
 import { RuntimeProviderIcon } from "@/ui/provider-icon";
 import { Spinner } from "@/ui/spinner";
 import { DelegationDetailView } from "../components/delegations/DelegationDetailView";
 import {
-  dismissDelegationCard,
+  closeDelegationDetail,
   getDelegationCards,
   openDelegationDetail,
   useDelegationCards,
@@ -19,7 +18,9 @@ const FINISHED_LIMIT = 5;
 /**
  * Right-panel Tasks tab — the home of background tasks + delegations
  * (PLAN §7.2). Data is the existing delegation-center store; rows open the
- * existing DelegationDetailView in a dialog.
+ * existing non-modal DelegationDetailView overlay. A modal dialog here would
+ * dim the app with a scrim that sits above the panel's z-index, hiding the
+ * detail behind it (the "black screen" bug).
  */
 export const TasksPane = () => {
   const cards = useDelegationCards();
@@ -81,15 +82,9 @@ export const TasksPane = () => {
         </TasksSection>
       ) : null}
 
-      <Dialog
-        open={openId !== null}
-        onOpenChange={(open) => !open && openId !== null && dismissDelegationCard(openId)}
-      >
-        <DialogContent className="max-h-[70vh] w-[720px] max-w-[720px] overflow-y-auto">
-          <DialogTitle className="sr-only">Delegation detail</DialogTitle>
-          {openId ? <DelegationDetailView delegationId={openId} onClose={() => {}} /> : null}
-        </DialogContent>
-      </Dialog>
+      {openId ? (
+        <DelegationDetailView delegationId={openId} onClose={closeDelegationDetail} />
+      ) : null}
     </div>
   );
 };
