@@ -33,6 +33,8 @@ export interface DelegationSessionEvent {
   thinking?: string;
   content?: string;
   commandGroups?: DelegationLiveOutput["commandGroups"];
+  /** Replay frames carry the full cumulative text; replace instead of appending. */
+  replace?: boolean;
   message?: {
     runId?: string | null;
     runStatus?: string | null;
@@ -158,6 +160,13 @@ const upsert = (delegation: ChatDelegationRunDto): void => {
   });
 };
 
+/** Live frames carry suffix deltas; replay frames (`replace`) reset the text. */
+const nextLiveText = (
+  current: string | undefined,
+  delta: string | undefined,
+  replace: boolean | undefined,
+): string => (replace ? (delta ?? "") : (current ?? "") + (delta ?? ""));
+
 const applyProgress = (event: DelegationSessionEvent): void => {
   if (!event.delegationId || !cards.has(event.delegationId)) return;
   const card = cards.get(event.delegationId);
@@ -165,8 +174,8 @@ const applyProgress = (event: DelegationSessionEvent): void => {
   cards.set(event.delegationId, {
     ...card,
     live: {
-      thinking: event.thinking ?? "",
-      content: event.content ?? "",
+      thinking: nextLiveText(card.live?.thinking, event.thinking, event.replace),
+      content: nextLiveText(card.live?.content, event.content, event.replace),
       commandGroups: event.commandGroups ?? [],
     },
   });

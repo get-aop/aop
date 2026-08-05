@@ -24,6 +24,7 @@ import {
 import {
   createChatSessionEventQueue,
   getLatestChatSessionProgress,
+  getLatestDelegationProgressBySession,
   subscribeChatSession,
 } from "./session-events.ts";
 
@@ -95,6 +96,11 @@ export const createChatSessionRoutes = (
       if (!connected) return;
       const latestProgress = getLatestChatSessionProgress(sessionId);
       if (latestProgress) await helper.sendEvent(latestProgress.type, latestProgress);
+      // Delegations replay their full cumulative text so delta frames that
+      // follow (late subscriber) have a baseline to append onto.
+      for (const delegationProgress of getLatestDelegationProgressBySession(sessionId)) {
+        await helper.sendEvent(delegationProgress.type, delegationProgress);
+      }
       await service.ensureRecovery(sessionId);
 
       const pingInterval = setInterval(async () => {

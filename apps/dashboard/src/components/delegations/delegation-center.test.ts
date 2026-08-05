@@ -162,17 +162,58 @@ describe("delegation-center", () => {
         sessionId: "isess_1",
         delegationId: "del_1",
         thinking: "pondering",
-        content: `chunk ${i}`,
+        content: `chunk ${i} `,
         commandGroups: [],
       });
     }
 
     expect(notifications).toBe(0);
-    expect(getDelegationCards()[0]?.live?.content).toBe("chunk 4");
+    // Frames carry suffix deltas; the live buffer accumulates them.
+    expect(getDelegationCards()[0]?.live?.content).toBe("chunk 0 chunk 1 chunk 2 chunk 3 chunk 4 ");
 
     await Bun.sleep(250);
     expect(notifications).toBe(1);
     unsubscribe();
+  });
+
+  test("replay frames replace the accumulated live output", async () => {
+    seedDelegations = [delegation()];
+    await initDelegationCenter();
+    setDelegationSessionFocus("isess_1");
+
+    ingestDelegationSessionEvent({
+      type: "delegation-progress",
+      sessionId: "isess_1",
+      delegationId: "del_1",
+      thinking: "pond",
+      content: "half an answer",
+      commandGroups: [],
+    });
+    ingestDelegationSessionEvent({
+      type: "delegation-progress",
+      sessionId: "isess_1",
+      delegationId: "del_1",
+      thinking: "der",
+      content: " full",
+      commandGroups: [],
+    });
+    // Late-subscriber replay: full cumulative text flagged replace.
+    ingestDelegationSessionEvent({
+      type: "delegation-progress",
+      sessionId: "isess_1",
+      delegationId: "del_1",
+      thinking: "ponder",
+      content: "the whole answer",
+      commandGroups: [],
+      replace: true,
+    });
+
+    const card = getDelegationCards()[0];
+    expect(card?.live).toEqual({
+      thinking: "ponder",
+      content: "the whole answer",
+      commandGroups: [],
+    });
   });
 
   test("delegation-progress feeds the live output buffer of a known delegation", async () => {

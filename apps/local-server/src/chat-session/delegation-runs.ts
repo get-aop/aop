@@ -8,7 +8,11 @@ import {
   listDelegationRunsByChatRunIds,
   replaceDelegationRuns,
 } from "./delegation-run-store.ts";
-import { publishChatSessionEvent } from "./session-events.ts";
+import {
+  publishChatSessionEvent,
+  publishDelegationProgress,
+  resetDelegationProgress,
+} from "./session-events.ts";
 import {
   createStreamProgressAccumulator,
   parseStreamProgressLines,
@@ -80,14 +84,7 @@ export const relayDelegationProgress = (
     const at = now();
     if (at - lastPublishAt < publishIntervalMs) return;
     lastPublishAt = at;
-    publishChatSessionEvent({
-      type: "delegation-progress",
-      sessionId: hostRun.session_id,
-      delegationId,
-      thinking: progress.thinking,
-      content: progress.content,
-      commandGroups: progress.commandGroups,
-    });
+    publishDelegationProgress(hostRun.session_id, delegationId, progress);
     const activity = deriveDelegationActivity(progress);
     if (activity) {
       void noteDelegationActivity(ctx, hostRun.id, delegationId, activity).catch(() => {});
@@ -401,6 +398,10 @@ export const publishDelegationUpdate = (
   hostRunId: string,
   delegation: ChatDelegationRunDto,
 ): void => {
+  if (delegation.status !== "active") {
+    // The run ended: a fresh chain must start if the specialist is re-run.
+    resetDelegationProgress(delegation.id);
+  }
   publishChatSessionEvent({ type: "delegation-updated", sessionId, hostRunId, delegation });
 };
 

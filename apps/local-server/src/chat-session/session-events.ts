@@ -56,9 +56,13 @@ export type ChatSessionEvent =
       type: "delegation-progress";
       sessionId: string;
       delegationId: string;
+      /** Suffix delta of the specialist reasoning stream (or full text when `replace`). */
       thinking: string;
+      /** Suffix delta of the specialist output text (or full when `replace`). */
       content: string;
       commandGroups: ChatStreamCommandGroup[];
+      /** True for replay frames: replace the accumulated client text instead of appending. */
+      replace?: boolean;
     }
   | {
       /** A chat-native workflow run started; the composer locks until completion. */
@@ -91,11 +95,14 @@ export type ChatSessionEvent =
 
 type Listener = (event: ChatSessionEvent) => void;
 type AssistantProgressEvent = Extract<ChatSessionEvent, { type: "assistant-progress" }>;
+type DelegationProgressEvent = Extract<ChatSessionEvent, { type: "delegation-progress" }>;
 
 const emitter = new EventEmitter();
 emitter.setMaxListeners(100);
 const latestProgressBySession = new Map<string, AssistantProgressEvent>();
 const fullProgressBySession = new Map<string, AssistantProgressEvent>();
+const latestDelegationProgress = new Map<string, DelegationProgressEvent>();
+const fullDelegationProgress = new Map<string, DelegationProgressEvent>();
 
 /**
  * Progress frames carry only the text appended since the previous frame so the
@@ -137,6 +144,55 @@ export const resetAssistantProgress = (sessionId: string): void => {
 export const suffixDelta = (previous: string, next: string): string =>
   previous.length > 0 && next.startsWith(previous) ? next.slice(previous.length) : next;
 
+/**
+ * Delegation progress mirrors the assistant delta chain: frames carry only the
+ * text appended since the previous frame, keyed per delegation, so the wire
+ * stays small no matter how long a specialist streams. Clients append deltas
+ * and replace their accumulated text on `replace` frames (replay).
+ */
+export const publishDelegationProgress = (
+  sessionId: string,
+  delegationId: string,
+  progress: { thinking: string; content: string; commandGroups: ChatStreamCommandGroup[] },
+): void => {
+  const previous = latestDelegationProgress.get(delegationId);
+  const event: DelegationProgressEvent = {
+    type: "delegation-progress",
+    sessionId,
+    delegationId,
+    thinking: suffixDelta(previous?.thinking ?? "", progress.thinking),
+    content: suffixDelta(previous?.content ?? "", progress.content),
+    commandGroups: progress.commandGroups,
+    // A fresh chain has no baseline on the client (e.g. re-run after reset):
+    // the first frame is the full text and must replace, never append.
+    replace: previous === undefined,
+  };
+  latestDelegationProgress.set(delegationId, {
+    ...event,
+    thinking: progress.thinking,
+    content: progress.content,
+  });
+  fullDelegationProgress.set(delegationId, {
+    ...event,
+    thinking: progress.thinking,
+    content: progress.content,
+    replace: true,
+  });
+  publishChatSessionEvent(event);
+};
+
+/** Starts a fresh delta chain (new delegation run). */
+export const resetDelegationProgress = (delegationId: string): void => {
+  latestDelegationProgress.delete(delegationId);
+  fullDelegationProgress.delete(delegationId);
+};
+
+/** Replay frames: the full cumulative text per active delegation, flagged so clients replace state. */
+export const getLatestDelegationProgressBySession = (
+  sessionId: string,
+): DelegationProgressEvent[] =>
+  [...fullDelegationProgress.values()].filter((event) => event.sessionId === sessionId);
+
 export const publishChatSessionEvent = (event: ChatSessionEvent): void => {
   updateLatestProgress(event);
   emitter.emit(event.sessionId, event);
@@ -165,6 +221,30 @@ export const subscribeChatSession = (sessionId: string, listener: Listener): (()
   return () => emitter.off(sessionId, listener);
 };
 
+/**
+ * Same-stream consecutive progress frames coalesce losslessly: deltas
+ * concatenate exactly, and a `replace` frame supersedes whatever was queued.
+ */
+const coalesceConsecutiveProgress = (
+  last: ChatSessionEvent | undefined,
+  event: ChatSessionEvent,
+): ChatSessionEvent | null => {
+  if (last?.type !== "assistant-progress" && last?.type !== "delegation-progress") return null;
+  const sameStream =
+    (event.type === "assistant-progress" && last.type === "assistant-progress") ||
+    (event.type === "delegation-progress" &&
+      last.type === "delegation-progress" &&
+      last.delegationId === event.delegationId);
+  if (!sameStream) return null;
+  if (event.replace) return event;
+  return {
+    ...last,
+    thinking: last.thinking + event.thinking,
+    content: last.content + event.content,
+    commandGroups: event.commandGroups,
+  };
+};
+
 /** Serializes SSE writes while retaining only the newest unsent cumulative progress event. */
 export const createChatSessionEventQueue = (
   send: (event: ChatSessionEvent) => Promise<unknown>,
@@ -190,19 +270,9 @@ export const createChatSessionEventQueue = (
   return {
     push: (event) => {
       if (cleared) return;
-      const last = queued[queued.length - 1];
-      if (event.type === "assistant-progress" && last?.type === "assistant-progress") {
-        if (event.replace) {
-          queued[queued.length - 1] = event;
-        } else {
-          // Deltas concatenate exactly, so coalescing stays lossless.
-          queued[queued.length - 1] = {
-            ...last,
-            thinking: last.thinking + event.thinking,
-            content: last.content + event.content,
-            commandGroups: event.commandGroups,
-          };
-        }
+      const merged = coalesceConsecutiveProgress(queued[queued.length - 1], event);
+      if (merged) {
+        queued[queued.length - 1] = merged;
       } else {
         queued.push(event);
       }
