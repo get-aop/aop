@@ -34,6 +34,8 @@ interface SessionDiffPanelProps {
   expanded?: boolean;
   onToggleExpand?: () => void;
   refreshKey?: number;
+  /** Rendered inside the workspace right panel: skip the legacy tab chrome. */
+  embedded?: boolean;
 }
 
 export const initialCollapsedForDiff = (
@@ -100,6 +102,7 @@ export const SessionDiffPanel = ({
   expanded = false,
   onToggleExpand,
   refreshKey = 0,
+  embedded = false,
 }: SessionDiffPanelProps) => {
   const [diff, setDiff] = useState<SessionGitDiff | null>(null);
   const [loading, setLoading] = useState(true);
@@ -226,37 +229,44 @@ export const SessionDiffPanel = ({
     loadPendingOpenFiles(diff, collapsed, loadingPaths, loadFileDetails);
   }, [collapsed, diff, loadFileDetails, loadingPaths]);
 
+  const content = (
+    <div
+      data-testid="session-diff-panel"
+      className={
+        embedded
+          ? "flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface"
+          : "flex min-h-0 min-w-0 flex-1 flex-col bg-surface"
+      }
+    >
+      <DiffPanelHeader
+        defaultBranch={diff?.defaultBranch ?? "main"}
+        fileCount={diff?.files.length ?? 0}
+        expanded={expanded}
+        onToggleExpand={onToggleExpand}
+        onCollapseAll={
+          diff && diff.files.length >= LARGE_DIFF_AUTO_COLLAPSE_THRESHOLD ? collapseAll : undefined
+        }
+        onExpandAll={
+          diff && diff.files.length >= LARGE_DIFF_AUTO_COLLAPSE_THRESHOLD ? expandAll : undefined
+        }
+        onClose={embedded ? undefined : onClose}
+      />
+      <DiffReviewContext.Provider value={review}>
+        <DiffPanelBody
+          loading={loading}
+          diff={diff}
+          collapsed={collapsed}
+          loadingPaths={loadingPaths}
+          onToggleFile={onToggleFile}
+        />
+      </DiffReviewContext.Provider>
+    </div>
+  );
+
+  if (embedded) return content;
   return (
     <RightPanelTabs surface="diff" title="Diff" width={width} onClose={onClose}>
-      <div
-        data-testid="session-diff-panel"
-        className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface"
-      >
-        <DiffPanelHeader
-          defaultBranch={diff?.defaultBranch ?? "main"}
-          fileCount={diff?.files.length ?? 0}
-          expanded={expanded}
-          onToggleExpand={onToggleExpand}
-          onCollapseAll={
-            diff && diff.files.length >= LARGE_DIFF_AUTO_COLLAPSE_THRESHOLD
-              ? collapseAll
-              : undefined
-          }
-          onExpandAll={
-            diff && diff.files.length >= LARGE_DIFF_AUTO_COLLAPSE_THRESHOLD ? expandAll : undefined
-          }
-          onClose={onClose}
-        />
-        <DiffReviewContext.Provider value={review}>
-          <DiffPanelBody
-            loading={loading}
-            diff={diff}
-            collapsed={collapsed}
-            loadingPaths={loadingPaths}
-            onToggleFile={onToggleFile}
-          />
-        </DiffReviewContext.Provider>
-      </div>
+      {content}
     </RightPanelTabs>
   );
 };

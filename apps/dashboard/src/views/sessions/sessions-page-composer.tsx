@@ -12,6 +12,23 @@ import {
 } from "./sessions-page-internals";
 import type { SessionsPageViewModel } from "./sessions-page-view";
 
+/** The composer draft selection for a workflow option, or null when unknown. */
+const workflowSelectionFor = (
+  workflows: SessionsPageViewModel["workflowOptions"],
+  workflowId: string | null,
+): import("@aop/common").ChatWorkflowSelection | null => {
+  if (!workflowId) return null;
+  const option = workflows.find((workflow) => workflow.id === workflowId);
+  if (!option) return null;
+  return {
+    workflowId: option.id,
+    name: option.name,
+    stepCount: option.stepCount,
+    stepTypes: option.stepTypes,
+    steps: option.steps,
+  };
+};
+
 /** The composer with its full chrome — extracted to keep the view flat. */
 export const SessionsComposer = ({ view }: { view: SessionsPageViewModel }) => {
   const {
@@ -165,9 +182,21 @@ export const SessionsComposer = ({ view }: { view: SessionsPageViewModel }) => {
       }}
       onDefaultWorkflowChange={(workflowId) => {
         void patchSession(active.id, { defaultWorkflowId: workflowId });
+        // The fire button sends the composer draft selection, so the chip
+        // pick must also land there or the armed send is rejected.
+        composer.setWorkflowSelection(workflowSelectionFor(workflowOptions, workflowId));
       }}
       workflowArmed={composer.workflowArmed}
-      onWorkflowArmedChange={composer.setWorkflowArmed}
+      onWorkflowArmedChange={(armed) => {
+        composer.setWorkflowArmed(armed);
+        // Arming with a session default but no draft selection resolves it,
+        // so armed sends are not rejected as "no workflow selected".
+        if (armed && !composer.workflowSelection && active.defaultWorkflowId) {
+          composer.setWorkflowSelection(
+            workflowSelectionFor(workflowOptions, active.defaultWorkflowId),
+          );
+        }
+      }}
       workflowRun={view.workflowRun}
       termLines={termLines}
       termInput={termInput}

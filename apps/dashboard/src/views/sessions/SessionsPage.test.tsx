@@ -157,6 +157,7 @@ const updateChatSession = mock(
     const target = sessions.find((item) => item.id === id);
     if (!target) throw new Error("Session not found");
     if (patch.fastMode !== undefined) target.fastMode = patch.fastMode;
+    if (patch.defaultWorkflowId !== undefined) target.defaultWorkflowId = patch.defaultWorkflowId;
     return target as ChatSessionSummary;
   },
 );
@@ -167,13 +168,30 @@ const markChatSessionRead = mock(async (id: string) => {
   return target as ChatSessionSummary;
 });
 
+let workflowDetails: Array<{
+  id: string;
+  name: string;
+  version: number;
+  active: boolean;
+  source: "builtin" | "user";
+  stepCount: number;
+  steps: Array<{
+    id: string;
+    type: string;
+    promptTemplate: string;
+    maxAttempts: number;
+    transitions: [];
+  }>;
+}> = [];
+const getWorkflowDetails = mock(async () => workflowDetails);
+
 mock.module("../../api/client", () => ({
   ...actualClient,
   abortChatSession,
   getAgents: mock(async () => []),
   getChatSession,
   getRuntimeProfiles: mock(async () => []),
-  getWorkflowDetails: mock(async () => []),
+  getWorkflowDetails,
   getWorkflows: mock(async () => []),
   listChatSessions: mock(async () => sessions as ChatSessionSummary[]),
   getMarkdownFile,
@@ -204,6 +222,7 @@ const { act, cleanup, fireEvent, render, screen, waitFor, within } = await impor
 );
 const { abortActiveConversation, SessionsPage } = await import("./SessionsPage");
 const { getRailProps } = await import("../../shell/rail-store");
+const { clearSessionComposerDraft } = await import("./session-composer-drafts");
 
 /** The rail is shell chrome now: select a thread through the published rail props. */
 const selectRailSession = async (sessionId: string) => {
@@ -224,6 +243,8 @@ beforeEach(() => {
   getChatSessionLocation.mockClear();
   getSessionGitStatus.mockClear();
   getSessionGitDiff.mockClear();
+  getWorkflowDetails.mockClear();
+  workflowDetails = [];
   listSessionGitBranches.mockClear();
   switchSessionGitBranch.mockClear();
   updateChatSession.mockClear();
@@ -614,6 +635,10 @@ describe("SessionsPage composer drafts", () => {
     fireEvent.click(await screen.findByTestId("session-git-diffstat"));
     await screen.findByTestId("session-diff-panel");
     expect(screen.getByTestId("right-panel")).toBeTruthy();
+    // No legacy tab chrome inside the workspace right panel: the tabs and the
+    // close control belong to the panel, not to the diff pane.
+    expect(screen.queryByTestId("session-right-panel")).toBeNull();
+    expect(screen.queryByLabelText("Add panel surface")).toBeNull();
     expect(getSessionGitDiff).toHaveBeenCalled();
 
     // Markdown opens in its own side slot alongside the right panel.
@@ -624,6 +649,79 @@ describe("SessionsPage composer drafts", () => {
     // Closing the right panel unmounts the diff pane.
     fireEvent.click(screen.getByTestId("right-panel-close"));
     await waitFor(() => expect(screen.queryByTestId("session-diff-panel")).toBeNull());
+  });
+
+  test("armed default workflow sends the workflow id instead of rejecting the send", async () => {
+    workflowDetails = [
+      {
+        id: "wf-quick",
+        name: "Quick fix",
+        version: 1,
+        active: true,
+        source: "builtin",
+        stepCount: 1,
+        steps: [
+          { id: "s1", type: "implement", promptTemplate: "", maxAttempts: 1, transitions: [] },
+        ],
+      },
+    ];
+    firstSession().defaultWorkflowId = "wf-quick";
+    render(
+      <SessionsPage
+        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
+        onNavigate={() => {}}
+      />,
+    );
+
+    fireEvent.change(await screen.findByTestId("chat-composer-input"), {
+      target: { value: "Run the fix" },
+    });
+    // The chip rail with the fire button renders once workflows load.
+    fireEvent.click(await screen.findByTestId("composer-workflow-arm"));
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(1));
+    expect(sendChatMessage.mock.calls[0]?.[0]).toBe("one");
+    expect(sendChatMessage.mock.calls[0]?.[5]).toBe("wf-quick");
+    expect(sendChatMessage.mock.calls[0]?.[9]).toBe(true);
+    expect(screen.queryByText("Select a workflow before arming the fire button.")).toBeNull();
+    // The armed draft is module-level state; drop it so later tests start clean.
+    clearSessionComposerDraft("one");
+  });
+
+  test("chip-picked workflow stays selected when armed and sent", async () => {
+    workflowDetails = [
+      {
+        id: "wf-quick",
+        name: "Quick fix",
+        version: 1,
+        active: true,
+        source: "builtin",
+        stepCount: 1,
+        steps: [
+          { id: "s1", type: "implement", promptTemplate: "", maxAttempts: 1, transitions: [] },
+        ],
+      },
+    ];
+    render(
+      <SessionsPage
+        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
+        onNavigate={() => {}}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("composer-workflow-chip"));
+    fireEvent.click(await screen.findByText("Quick fix"));
+    fireEvent.click(await screen.findByTestId("composer-workflow-arm"));
+    fireEvent.change(screen.getByTestId("chat-composer-input"), {
+      target: { value: "Go" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(1));
+    expect(sendChatMessage.mock.calls[0]?.[5]).toBe("wf-quick");
+    expect(sendChatMessage.mock.calls[0]?.[9]).toBe(true);
+    expect(screen.queryByText("Select a workflow before arming the fire button.")).toBeNull();
   });
 
   test("forces exactly one git status refresh when a run completes", async () => {

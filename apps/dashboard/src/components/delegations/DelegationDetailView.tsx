@@ -240,8 +240,8 @@ const CancelSpecialistButton = ({ sessionId }: { sessionId: string }) => {
       style={{
         ...footerButtonStyle,
         color: "var(--color-blocked)",
-        border: "1px solid var(rgb(240 87 79 / 32%))",
-        background: confirming ? "var(rgb(240 87 79 / 12%))" : "transparent",
+        border: "1px solid rgb(240 87 79 / 32%)",
+        background: confirming ? "rgb(240 87 79 / 12%)" : "transparent",
       }}
     >
       {cancelling ? "Cancelling…" : confirming ? "Confirm cancel" : "Cancel delegated run"}
@@ -309,7 +309,7 @@ const panelStyle = {
   background: "var(--color-surface)",
   border: "1px solid var(--color-border)",
   borderRadius: "var(--radius-card)",
-  boxShadow: "var(--shadow-2)-2)-3)",
+  boxShadow: "var(--shadow-2)",
   overflow: "hidden",
 } as const;
 
@@ -374,8 +374,8 @@ const errorBoxStyle = {
   marginBottom: 12,
   padding: "8px 10px",
   borderRadius: "var(--radius-control)",
-  background: "var(rgb(240 87 79 / 12%))",
-  border: "1px solid var(rgb(240 87 79 / 32%))",
+  background: "rgb(240 87 79 / 12%)",
+  border: "1px solid rgb(240 87 79 / 32%)",
   color: "var(--color-blocked)",
   fontFamily: "var(--font-sans)",
   fontSize: 12.5,

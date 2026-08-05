@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -148,6 +149,50 @@ const assignTaskToWorker = async (
   }
 
   await triggerServerRefresh(localServerUrl);
+};
+
+const createChatSession = async (localServerUrl: string, repoId: string): Promise<string> => {
+  const response = await fetch(`${localServerUrl}/api/chat-sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repoId }),
+  });
+  expect(response.status).toBe(201);
+  const body = (await response.json()) as { session: { id: string } };
+  return body.session.id;
+};
+
+/**
+ * Seed a delegation run the way the chat pipeline persists one: a chat run
+ * row plus its delegation entries. Keeps the Tasks-pane regression test
+ * deterministic — no real runtime needed.
+ */
+const seedDelegationRun = (dbPath: string, sessionId: string, label: string): void => {
+  const db = new Database(dbPath);
+  try {
+    const now = new Date().toISOString();
+    const seedId = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const messageId = `smsg_e2e_seed_${seedId}`;
+    const runId = `crun_e2e_seed_${seedId}`;
+    const delegationId = `del_e2e_seed_${seedId}`;
+    db.run(
+      `INSERT INTO chat_messages (id, session_id, role, content, created_at)
+       VALUES (?, ?, 'user', 'seed delegation', ?)`,
+      [messageId, sessionId, now],
+    );
+    db.run(
+      `INSERT INTO chat_runs (id, session_id, user_message_id, assistant_message_id, runtime, log_file_path, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'claude-code', '/tmp/e2e-seed.jsonl', 'completed', ?, ?)`,
+      [runId, sessionId, messageId, messageId, now, now],
+    );
+    db.run(
+      `INSERT INTO chat_delegation_runs (id, chat_run_id, kind, label, runtime, model, reasoning, status, log_file_path, started_at, updated_at)
+       VALUES (?, ?, 'delegation', ?, 'codex-cli', 'gpt-5.5', 'medium', 'completed', '/tmp/e2e-seed-delegate.jsonl', ?, ?)`,
+      [delegationId, runId, label, now, now],
+    );
+  } finally {
+    db.close();
+  }
 };
 
 const ensureWorkflowsReady = async (localServerUrl: string): Promise<void> => {
@@ -517,6 +562,180 @@ e2eDescribe("dashboard E2E tests", () => {
           path: join(SCREENSHOT_DIR, "08-execution-logs.png"),
           fullPage: true,
         });
+      },
+      E2E_TIMEOUT,
+    );
+  });
+
+  describe("regression fixes: right panel tabs, workflow fire, task detail", () => {
+    let fixRepo: TempRepoResult;
+    let fixRepoId: string;
+    let fireSessionId: string;
+    let tasksSessionId: string;
+
+    beforeAll(async () => {
+      fixRepo = await createTempRepo("dashboard-fixes-e2e", ctx.reposDir);
+      await copyFixture("backlog-test", fixRepo.path);
+      await Bun.$`git add .`.cwd(fixRepo.path).quiet();
+      await Bun.$`git commit -m "Add fixture"`.cwd(fixRepo.path).quiet();
+      // The diffstat chip only renders off the default branch, so the
+      // regression test exercises it on a feature branch.
+      await Bun.$`git checkout -b e2e-feature`.cwd(fixRepo.path).quiet();
+
+      const { exitCode } = await runAopCommand(["repo:init", fixRepo.path], undefined, ctx.env);
+      expect(exitCode).toBe(0);
+      await triggerServerRefresh(ctx.localServerUrl);
+      await Bun.sleep(1000);
+
+      const status = await getFullStatus(ctx.env);
+      const registered = status?.repos.find((entry) => entry.path === fixRepo.path);
+      expect(registered).toBeTruthy();
+      fixRepoId = registered?.id ?? "";
+
+      fireSessionId = await createChatSession(ctx.localServerUrl, fixRepoId);
+      tasksSessionId = await createChatSession(ctx.localServerUrl, fixRepoId);
+    }, E2E_TIMEOUT);
+
+    afterAll(async () => {
+      if (fixRepo) await fixRepo.cleanup(ctx.env);
+    }, E2E_TIMEOUT);
+
+    const openActiveSession = async (sessionId: string): Promise<void> => {
+      await page.goto(dashboardUrl);
+      await page.evaluate((id) => sessionStorage.setItem("aop.sessions.activeId", id), sessionId);
+      await page.reload();
+      await page.getByTestId("chat-composer-input").waitFor({ state: "visible" });
+    };
+
+    test(
+      "diff tab: one tab row in the right panel, no legacy chrome",
+      async () => {
+        // Dirty the workspace so the diffstat chip appears in the composer.
+        await Bun.$`echo "e2e dirty line" >> ${fixRepo.path}/task.md`.quiet();
+        await triggerServerRefresh(ctx.localServerUrl);
+        await openActiveSession(fireSessionId);
+
+        const diffstat = page.getByTestId("session-git-diffstat");
+        await diffstat.waitFor({ state: "visible", timeout: 15_000 });
+        await diffstat.click();
+
+        await page.getByTestId("session-diff-panel").waitFor({ state: "visible", timeout: 15_000 });
+        expect(await page.getByTestId("right-panel").isVisible()).toBe(true);
+
+        // The workspace tab row is the only tab chrome.
+        for (const tabName of ["Diff", "Tasks", "Checks", "Log"]) {
+          expect(
+            await page.getByRole("tab", { name: new RegExp(tabName) }).count(),
+          ).toBeGreaterThan(0);
+        }
+        expect(await page.getByTestId("session-right-panel").count()).toBe(0);
+        expect(await page.getByLabel("Add panel surface").count()).toBe(0);
+
+        await page.screenshot({
+          path: join(SCREENSHOT_DIR, "fix-01-diff-single-tab-row.png"),
+          fullPage: true,
+        });
+
+        await Bun.$`git checkout -- .`.cwd(fixRepo.path).quiet();
+      },
+      E2E_TIMEOUT,
+    );
+
+    test(
+      "workflow fire: chip pick arms the run and the message sends without a selection error",
+      async () => {
+        // Seed a one-step workflow so the armed run stays short (runs for real
+        // on dev machines, fails fast on CI boxes without the CLI).
+        const seed = await fetch(`${ctx.localServerUrl}/api/workflows`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "e2e-fire-test",
+            steps: [
+              {
+                skillId: "implement",
+                agent: { provider: "codex-cli", model: "gpt-5.5", reasoning: "medium" },
+              },
+            ],
+          }),
+        });
+        expect(seed.status).toBe(201);
+
+        await openActiveSession(fireSessionId);
+
+        // Pick the workflow from the composer chip.
+        await page.getByTestId("composer-workflow-chip").click();
+        await page.getByText("e2e-fire-test", { exact: true }).click();
+
+        // The chip rail shows the fire button; the glyph rail must not duplicate it.
+        const arm = page.getByTestId("composer-workflow-arm");
+        await arm.waitFor({ state: "visible", timeout: 15_000 });
+        expect(await page.getByTestId("composer-workflow-selection").count()).toBe(0);
+
+        // Arm: the flame turns red and stays armed.
+        await arm.click();
+        expect(await arm.getAttribute("aria-pressed")).toBe("true");
+        expect(await page.locator(".aop-flame-armed").count()).toBeGreaterThan(0);
+
+        // Send the armed message.
+        await page.getByTestId("chat-composer-input").fill("Run the fire workflow");
+        await page.getByRole("button", { name: "Send message" }).click();
+
+        // The message posts and the run starts — no "select a workflow" rejection.
+        await page
+          .getByText("Run the fire workflow")
+          .waitFor({ state: "visible", timeout: 15_000 });
+        expect(
+          await page.getByText("Select a workflow before arming the fire button.").count(),
+        ).toBe(0);
+        await page
+          .getByTestId("composer-workflow-running")
+          .waitFor({ state: "visible", timeout: 15_000 });
+
+        await page.screenshot({
+          path: join(SCREENSHOT_DIR, "fix-02-fire-armed-run.png"),
+          fullPage: true,
+        });
+
+        // The run finishes and unlocks the composer.
+        await page
+          .getByTestId("composer-workflow-running")
+          .waitFor({ state: "detached", timeout: 180_000 });
+      },
+      E2E_TIMEOUT,
+    );
+
+    test(
+      "tasks tab: delegation detail opens as a non-modal panel and closing keeps the row",
+      async () => {
+        seedDelegationRun(ctx.dbPath, tasksSessionId, "E2E background review");
+        await openActiveSession(tasksSessionId);
+
+        // Open the right panel at the Tasks tab.
+        await page.getByTestId("composer-tasks-button").click();
+        await page.getByTestId("tasks-pane").waitFor({ state: "visible", timeout: 15_000 });
+
+        // The seeded delegation shows up as a finished row.
+        const row = page.getByTestId("tasks-row").first();
+        await row.waitFor({ state: "visible", timeout: 20_000 });
+        expect(await row.textContent()).toContain("E2E background review");
+
+        // Clicking opens the non-modal detail overlay, not a blocking dialog.
+        await row.click();
+        const dialog = page.getByRole("dialog");
+        await dialog.waitFor({ state: "visible", timeout: 10_000 });
+        expect(await dialog.getAttribute("aria-modal")).toBe("false");
+        expect(await dialog.textContent()).toContain("No output recorded.");
+
+        await page.screenshot({
+          path: join(SCREENSHOT_DIR, "fix-03-task-detail-non-modal.png"),
+          fullPage: true,
+        });
+
+        // The app stays interactive behind it; closing keeps the task in the list.
+        await page.getByRole("button", { name: "Back to conversation" }).click();
+        await dialog.waitFor({ state: "detached", timeout: 10_000 });
+        expect(await page.getByTestId("tasks-row").count()).toBe(1);
       },
       E2E_TIMEOUT,
     );

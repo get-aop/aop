@@ -124,7 +124,11 @@ const ComposerActionChipRow = ({
           onChange={props.onRuntimeActionsChange}
         />
       ) : null}
-      {props.workflowSelection && props.onWorkflowSelectionChange ? (
+      {props.workflowSelection &&
+      props.onWorkflowSelectionChange &&
+      // The chip rail already renders the session default workflow; only
+      // show this glyph rail for typeahead-picked (#workflow) selections.
+      props.workflowSelection.workflowId !== props.defaultWorkflowId ? (
         <ComposerWorkflowSelection
           selection={props.workflowSelection}
           onRemove={() => props.onWorkflowSelectionChange?.(null)}
