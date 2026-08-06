@@ -162,6 +162,25 @@ const createChatSession = async (localServerUrl: string, repoId: string): Promis
   return body.session.id;
 };
 
+/** Seed a user message so the chat renders a markdown file chip. */
+const seedMarkdownMessage = (dbPath: string, sessionId: string, fileName: string): void => {
+  const db = new Database(dbPath);
+  try {
+    db.run(
+      `INSERT INTO chat_messages (id, session_id, role, content, created_at)
+       VALUES (?, ?, 'user', ?, ?)`,
+      [
+        `smsg_e2e_md_${Date.now()}`,
+        sessionId,
+        `See \`${fileName}\` for the plan.`,
+        new Date().toISOString(),
+      ],
+    );
+  } finally {
+    db.close();
+  }
+};
+
 /**
  * Seed a delegation run the way the chat pipeline persists one: a chat run
  * row plus its delegation entries. Keeps the Tasks-pane regression test
@@ -594,6 +613,15 @@ e2eDescribe("dashboard E2E tests", () => {
 
       fireSessionId = await createChatSession(ctx.localServerUrl, fixRepoId);
       tasksSessionId = await createChatSession(ctx.localServerUrl, fixRepoId);
+
+      // Long markdown fixture for the md-panel layout regression test.
+      const mdLines: string[] = [];
+      for (let i = 0; i < 140; i++) {
+        mdLines.push(`## Section ${i}`, `Paragraph ${i} with some body text and \`inline code\`.`);
+      }
+      await Bun.write(`${fixRepo.path}/research.md`, mdLines.join("\n"));
+      await Bun.$`git add research.md`.cwd(fixRepo.path).quiet();
+      await Bun.$`git commit -m "Add research.md"`.cwd(fixRepo.path).quiet();
     }, E2E_TIMEOUT);
 
     afterAll(async () => {
@@ -736,6 +764,74 @@ e2eDescribe("dashboard E2E tests", () => {
         await page.getByRole("button", { name: "Back to conversation" }).click();
         await dialog.waitFor({ state: "detached", timeout: 10_000 });
         expect(await page.getByTestId("tasks-row").count()).toBe(1);
+      },
+      E2E_TIMEOUT,
+    );
+
+    test(
+      "markdown panel: view mode keeps the page viewport-height and the panel scrolls",
+      async () => {
+        seedMarkdownMessage(ctx.dbPath, fireSessionId, "research.md");
+        await openActiveSession(fireSessionId);
+
+        // Open the long research.md in the side panel.
+        const chip = page.getByTestId("markdown-file-chip-tile").first();
+        await chip.waitFor({ state: "visible", timeout: 15_000 });
+        await chip.click();
+        await page
+          .getByTestId("session-markdown-panel")
+          .waitFor({ state: "visible", timeout: 15_000 });
+
+        // Wait until the file content has rendered (the panel mounts loading).
+        await page.waitForFunction(
+          () => {
+            const rendered = document.querySelector(
+              '[data-testid="session-markdown-panel"] .chat-markdown',
+            );
+            return (rendered?.textContent?.length ?? 0) > 500;
+          },
+          undefined,
+          { timeout: 20_000 },
+        );
+
+        // Regression: the panel used to stretch the whole page to the markdown
+        // content height, pushing the composer off-screen and leaving the
+        // panel body with nothing to scroll.
+        const layout = await page.evaluate(() => {
+          const panel = document.querySelector('[data-testid="session-markdown-panel"]');
+          const scroller = panel?.querySelector(".overflow-auto");
+          return {
+            pageHeight: document.body.scrollHeight,
+            viewport: window.innerHeight,
+            panelHeight: panel?.getBoundingClientRect().height ?? 0,
+            scroller:
+              scroller instanceof HTMLElement
+                ? { client: scroller.clientHeight, scroll: scroller.scrollHeight }
+                : null,
+          };
+        });
+        expect(layout.pageHeight).toBeLessThanOrEqual(layout.viewport);
+        expect(layout.panelHeight).toBeLessThanOrEqual(layout.viewport);
+        expect(layout.scroller).not.toBeNull();
+        const scroller = layout.scroller;
+        if (scroller) {
+          expect(scroller.scroll).toBeGreaterThan(scroller.client);
+        }
+
+        // The panel body actually scrolls.
+        const scrolled = await page.evaluate(() => {
+          const scroller = document.querySelector(
+            '[data-testid="session-markdown-panel"] .overflow-auto',
+          );
+          if (!(scroller instanceof HTMLElement)) return 0;
+          scroller.scrollTop = 800;
+          return scroller.scrollTop;
+        });
+        expect(scrolled).toBeGreaterThan(0);
+
+        await page.screenshot({
+          path: join(SCREENSHOT_DIR, "fix-04-md-panel-view-height.png"),
+        });
       },
       E2E_TIMEOUT,
     );
