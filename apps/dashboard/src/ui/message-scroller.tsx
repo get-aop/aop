@@ -47,6 +47,9 @@ function MessageScroller({
   const scrollToEdge = useCallback(() => {
     const el = ref.current;
     if (!el) return;
+    // Skip when already pinned: a redundant scrollTop write fires a scroll
+    // event, re-runs edge detection, and can cause visible jitter on stream frames.
+    if (el.scrollHeight - el.scrollTop - el.clientHeight <= 1) return;
     el.scrollTop = el.scrollHeight;
   }, []);
 

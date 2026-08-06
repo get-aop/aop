@@ -25,6 +25,7 @@ import {
   formatWorkedLabel,
   hasRunActivity,
 } from "./chat-timeline-model";
+import { useStreamingReveal } from "./use-streaming-reveal";
 
 export const CompletedRunActivity = memo(function CompletedRunActivity({
   message,
@@ -100,22 +101,26 @@ const RunActivityBody = ({
   active: boolean;
 }) => {
   const commands = useMemo(() => commandGroups.flatMap((group) => group.commands), [commandGroups]);
+  // Live runs type the incoming text at a natural pace; completed history (or
+  // reduced motion) renders the full text immediately.
+  const visibleThinking = useStreamingReveal(thinking, active);
+  const visibleContent = useStreamingReveal(content, active);
   return (
     <div className="mt-3 space-y-2 px-1">
       {continuity ? <p className="text-xs text-muted-foreground">{continuity}</p> : null}
-      {thinking ? (
+      {visibleThinking ? (
         <div data-testid="assistant-thinking" className="text-foreground/82">
-          <ChatMarkdown content={thinking} />
+          <ChatMarkdown content={visibleThinking} />
         </div>
       ) : null}
-      {content ? (
+      {visibleContent ? (
         <div data-testid="assistant-stream-content" className="t3-chat-message">
           {active ? (
             <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-              {content}
+              {visibleContent}
             </div>
           ) : (
-            <ChatMarkdown content={content} />
+            <ChatMarkdown content={visibleContent} />
           )}
         </div>
       ) : null}
