@@ -17,7 +17,7 @@ mock.module("../../api/client", () => ({
   getChatDelegationOutput,
 }));
 
-const { cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
 const { DelegationDetailView } = await import("./DelegationDetailView");
 const { ingestDelegationSessionEvent, resetDelegationCenter } = await import("./delegation-center");
 
@@ -154,6 +154,25 @@ describe("DelegationDetailView", () => {
 
     await waitFor(() => expect(screen.getByText(/final specialist answer/)).toBeTruthy());
     expect(getChatDelegationOutput).toHaveBeenCalledWith("isess_1", "del_1");
+  });
+
+  test("terminal runs keep the empty state after loading an empty output snapshot", async () => {
+    getChatDelegationOutput.mockImplementationOnce(async () => ({
+      delegation: delegation({ status: "completed" }),
+      output: { thinking: "", content: "", commandGroups: [] },
+    }));
+    ingestDelegationSessionEvent({
+      type: "delegation-updated",
+      sessionId: "isess_1",
+      hostRunId: "crun_1",
+      delegation: delegation({ status: "completed" }),
+    });
+
+    render(<DelegationDetailView delegationId="del_1" onClose={() => {}} />);
+
+    await waitFor(() => expect(getChatDelegationOutput).toHaveBeenCalledWith("isess_1", "del_1"));
+    await act(async () => Promise.resolve());
+    expect(screen.getByText("No output recorded.")).toBeTruthy();
   });
 
   test("escape returns to the host conversation", async () => {

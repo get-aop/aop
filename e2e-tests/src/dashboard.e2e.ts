@@ -706,6 +706,7 @@ e2eDescribe("dashboard E2E tests", () => {
         expect(await page.locator(".aop-flame-armed").count()).toBeGreaterThan(0);
 
         // Send the armed message.
+        const assistantTurnsBeforeRun = await page.getByTestId("assistant-message-content").count();
         await page.getByTestId("chat-composer-input").fill("Run the fire workflow");
         await page.getByRole("button", { name: "Send message" }).click();
 
@@ -716,9 +717,17 @@ e2eDescribe("dashboard E2E tests", () => {
         expect(
           await page.getByText("Select a workflow before arming the fire button.").count(),
         ).toBe(0);
-        await page
-          .getByTestId("composer-workflow-running")
-          .waitFor({ state: "visible", timeout: 15_000 });
+
+        // The fixture run can finish before Chromium paints the transient
+        // running badge. Its durable completion signal is the assistant turn
+        // persisted and published by postWorkflowRunAnswer.
+        await page.waitForFunction(
+          (previousCount) =>
+            document.querySelectorAll('[data-testid="assistant-message-content"]').length >
+            previousCount,
+          assistantTurnsBeforeRun,
+          { timeout: 180_000 },
+        );
 
         await page.screenshot({
           path: join(SCREENSHOT_DIR, "fix-02-fire-armed-run.png"),
@@ -726,9 +735,8 @@ e2eDescribe("dashboard E2E tests", () => {
         });
 
         // The run finishes and unlocks the composer.
-        await page
-          .getByTestId("composer-workflow-running")
-          .waitFor({ state: "detached", timeout: 180_000 });
+        expect(await page.getByTestId("composer-workflow-running").count()).toBe(0);
+        expect(await page.getByTestId("chat-composer-input").isEnabled()).toBe(true);
       },
       E2E_TIMEOUT,
     );

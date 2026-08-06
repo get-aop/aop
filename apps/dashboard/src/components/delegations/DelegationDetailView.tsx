@@ -157,7 +157,7 @@ const DetailOutput = ({
         {delegation.error}
       </div>
     ) : null}
-    {output ? (
+    {hasDelegationOutput(output) ? (
       <ChatStreamActivity
         thinking={output.thinking}
         content={output.content}
@@ -165,16 +165,20 @@ const DetailOutput = ({
         typing={delegation.status === "active"}
       />
     ) : (
-      <div style={emptyOutputStyle}>
-        {delegation.status === "active"
-          ? delegation.kind === "background-task"
-            ? "Waiting for background task output…"
-            : "Waiting for specialist output…"
-          : "No output recorded."}
-      </div>
+      <div style={emptyOutputStyle}>{emptyOutputMessage(delegation)}</div>
     )}
   </div>
 );
+
+const hasDelegationOutput = (output: ChatDelegationOutput | null): output is ChatDelegationOutput =>
+  Boolean(output && (output.thinking || output.content || output.commandGroups.length > 0));
+
+const emptyOutputMessage = (delegation: ChatDelegationRunDto): string => {
+  if (delegation.status !== "active") return "No output recorded.";
+  return delegation.kind === "background-task"
+    ? "Waiting for background task output…"
+    : "Waiting for specialist output…";
+};
 
 const DetailFooter = ({
   delegation,
