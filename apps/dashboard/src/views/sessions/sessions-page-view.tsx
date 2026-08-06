@@ -183,8 +183,8 @@ export const SessionsPageView = ({ view }: { view: SessionsPageViewModel }) => {
   return (
     <div
       data-testid="sessions-page"
-      className="sessions-t3-shell h-full min-h-0"
-      style={{ flex: 1, minHeight: 0, display: "flex" }}
+      className="sessions-t3-shell h-svh min-h-0 overflow-hidden"
+      style={{ flex: "1 1 auto", minHeight: 0, display: "flex" }}
     >
       <ComposerFileInputs
         imageRef={composer.imageInputRef}
