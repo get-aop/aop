@@ -116,6 +116,108 @@ describe("createSessionPullRequest", () => {
     await teardownPrSession(db, repoPath);
   });
 
+  test("uses the generated draft title and body for the PR", async () => {
+    const { db, ctx, repoPath, sessionId } = await setupPrSession();
+    const git = createFakeGit();
+    const gh = createPrWorkflowGh({
+      "pr list": okResult("[]"),
+      "pr create": okResult("https://github.com/acme/widget/pull/77\n"),
+    });
+
+    const result = await createSessionPullRequest(
+      ctx,
+      sessionId,
+      { mode: "create" },
+      gh.run,
+      git.run,
+      {
+        generateDraft: async () => ({
+          title: "Fix the checkout race",
+          body: "- Fixed the race\n- Added tests",
+        }),
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(gh.calls).toContainEqual([
+      "pr",
+      "create",
+      "--title",
+      "Fix the checkout race",
+      "--body",
+      "- Fixed the race\n- Added tests",
+      "--base",
+      "main",
+      "--head",
+      "feature/x",
+    ]);
+
+    await teardownPrSession(db, repoPath);
+  });
+
+  test("falls back to the session title when draft generation returns null", async () => {
+    const { db, ctx, repoPath, sessionId } = await setupPrSession();
+    const git = createFakeGit();
+    const gh = createPrWorkflowGh({
+      "pr list": okResult("[]"),
+      "pr create": okResult("https://github.com/acme/widget/pull/78\n"),
+    });
+
+    const result = await createSessionPullRequest(
+      ctx,
+      sessionId,
+      { mode: "create" },
+      gh.run,
+      git.run,
+      { generateDraft: async () => null },
+    );
+
+    expect(result.success).toBe(true);
+    expect(gh.calls).toContainEqual([
+      "pr",
+      "create",
+      "--title",
+      "Session PR test",
+      "--body",
+      "Created from an AOP chat session.",
+      "--base",
+      "main",
+      "--head",
+      "feature/x",
+    ]);
+
+    await teardownPrSession(db, repoPath);
+  });
+
+  test("falls back to the session title when draft generation throws", async () => {
+    const { db, ctx, repoPath, sessionId } = await setupPrSession();
+    const git = createFakeGit();
+    const gh = createPrWorkflowGh({
+      "pr list": okResult("[]"),
+      "pr create": okResult("https://github.com/acme/widget/pull/79\n"),
+    });
+
+    const result = await createSessionPullRequest(
+      ctx,
+      sessionId,
+      { mode: "create" },
+      gh.run,
+      git.run,
+      {
+        generateDraft: async () => {
+          throw new Error("boom");
+        },
+      },
+    );
+
+    expect(result.success).toBe(true);
+    const createCall = gh.calls.find((args) => args[0] === "pr" && args[1] === "create");
+    expect(createCall).toContain("Session PR test");
+    expect(createCall).toContain("Created from an AOP chat session.");
+
+    await teardownPrSession(db, repoPath);
+  });
+
   test("refuses to create a PR from the default branch", async () => {
     const { db, ctx, repoPath, sessionId } = await setupPrSession();
     const git = createFakeGit({ branch: "main" });

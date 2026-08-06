@@ -7,12 +7,15 @@ setupDashboardDom();
 const { act, cleanup, renderHook } = await import("@testing-library/react");
 
 // happy-dom drives rAF with setImmediate, so frames would all fire at once.
-// Stub a manually-stepped frame queue to make reveal timing deterministic.
+// Stub a manually-stepped frame queue with a virtual 60Hz clock.
 const originalRaf = globalThis.requestAnimationFrame;
 const originalCaf = globalThis.cancelAnimationFrame;
+const originalPerformanceNow = performance.now;
+const FRAME_MS = 16.67;
 let queuedFrames: Array<{ id: number; fn: () => void }> = [];
 let cancelledFrames = new Set<number>();
 let nextFrameId = 1;
+let virtualNow = 0;
 
 const stepFrames = (count: number) => {
   let executed = 0;
@@ -30,9 +33,12 @@ describe("useStreamingReveal", () => {
     queuedFrames = [];
     cancelledFrames = new Set();
     nextFrameId = 1;
+    virtualNow = 0;
+    performance.now = (() => virtualNow) as typeof performance.now;
     globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       const id = nextFrameId++;
-      queuedFrames.push({ id, fn: () => callback(performance.now()) });
+      virtualNow += FRAME_MS;
+      queuedFrames.push({ id, fn: () => callback(virtualNow) });
       return id;
     }) as typeof requestAnimationFrame;
     globalThis.cancelAnimationFrame = ((id: number) => {
@@ -43,6 +49,7 @@ describe("useStreamingReveal", () => {
   afterEach(() => {
     globalThis.requestAnimationFrame = originalRaf;
     globalThis.cancelAnimationFrame = originalCaf;
+    performance.now = originalPerformanceNow;
     queuedFrames = [];
     cleanup();
   });
@@ -64,10 +71,15 @@ describe("useStreamingReveal", () => {
     await act(async () => stepFrames(1));
     // A bounded amount per frame — the full chunk must not appear instantly.
     expect(result.current.length).toBeGreaterThan(0);
+    expect(result.current.length).toBeLessThan(10);
+
+    // The reveal is still typing after a second — not a fast dump.
+    await act(async () => stepFrames(59));
+    expect(result.current.length).toBeGreaterThan(10);
     expect(result.current.length).toBeLessThan(500);
 
-    // Once frames pass, the reveal catches up to the full text.
-    await act(async () => stepFrames(30));
+    // Once enough frames pass, the reveal catches up to the full text.
+    await act(async () => stepFrames(1000));
     expect(result.current).toBe("a".repeat(500));
   });
 
@@ -77,11 +89,11 @@ describe("useStreamingReveal", () => {
         useStreamingReveal(target, active),
       { initialProps: { target: "x".repeat(300), active: true } },
     );
-    await act(async () => stepFrames(1));
+    await act(async () => stepFrames(2));
     expect(result.current.length).toBeLessThan(300);
 
-    // No new frames arrive; the base pace keeps typing until done.
-    await act(async () => stepFrames(30));
+    // No new frames arrive; the pace keeps typing until done.
+    await act(async () => stepFrames(600));
     expect(result.current).toBe("x".repeat(300));
   });
 
@@ -104,11 +116,30 @@ describe("useStreamingReveal", () => {
         useStreamingReveal(target, active),
       { initialProps: { target: "z".repeat(600), active: true } },
     );
-    await act(async () => stepFrames(2));
+    await act(async () => stepFrames(60));
+    expect(result.current.length).toBeGreaterThan(5);
 
     // A shorter replay frame clamps the reveal down instead of overflowing.
     rerender({ target: "short", active: true });
     await act(async () => stepFrames(1));
     expect(result.current).toBe("short");
+  });
+
+  test("incoming suffix deltas keep the reveal typing from where it stopped", async () => {
+    const { result, rerender } = renderHook(
+      ({ target, active }: { target: string; active: boolean }) =>
+        useStreamingReveal(target, active),
+      { initialProps: { target: "", active: true } },
+    );
+    rerender({ target: "abcde", active: true });
+    await act(async () => stepFrames(6));
+    expect(result.current.length).toBeGreaterThan(0);
+    expect(result.current).toBe("abcde".slice(0, result.current.length));
+
+    // The stream appends more text; the reveal keeps the prefix and grows.
+    rerender({ target: "abcdefghij", active: true });
+    await act(async () => stepFrames(6));
+    expect("abcdefghij".startsWith(result.current)).toBe(true);
+    expect(result.current.length).toBeGreaterThan(0);
   });
 });

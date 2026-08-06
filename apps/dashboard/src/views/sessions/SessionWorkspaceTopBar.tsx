@@ -21,7 +21,7 @@ import {
 import { Spinner } from "@/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
 import type { ChatSessionDetail, CreateSessionPrMode, SessionGitStatus } from "../../api/client";
-import { commitSessionGit } from "../../api/client";
+import { commitSessionGit, openExternalUrl } from "../../api/client";
 import type { SessionToastLink } from "./SessionModals";
 import type { SessionPullRequestController } from "./use-session-pull-request";
 
@@ -190,7 +190,7 @@ const SessionSourceControlActions = ({
     try {
       const result = await pr.create(mode);
       if ("compareUrl" in result) {
-        window.open(result.compareUrl, "_blank", "noopener,noreferrer");
+        void openExternalUrl(result.compareUrl);
         onToast("Branch pushed — opening GitHub to create the PR");
       } else {
         onToast(`PR #${result.number} ${mode === "draft" ? "draft " : ""}created`, {
@@ -207,7 +207,7 @@ const SessionSourceControlActions = ({
   };
 
   const viewPullRequest = () => {
-    if (state.prUrl) window.open(state.prUrl, "_blank", "noopener,noreferrer");
+    if (state.prUrl) void openExternalUrl(state.prUrl);
   };
 
   const copyBranch = async () => {

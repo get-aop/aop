@@ -5,7 +5,7 @@ import type { SessionPullRequestController } from "./use-session-pull-request";
 
 setupDashboardDom();
 
-const { cleanup, fireEvent, render, screen } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, screen, act } = await import("@testing-library/react");
 const { SessionWorkspaceTopBar } = await import("./SessionWorkspaceTopBar");
 
 afterEach(cleanup);
@@ -103,6 +103,42 @@ describe("SessionWorkspaceTopBar", () => {
     fireEvent.click(gitActionsTrigger);
     expect(await screen.findByRole("menuitem", { name: "Open on GitHub" })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /^Create PR$/ })).toBeNull();
+  });
+
+  test("opens the PR URL when View PR is clicked", async () => {
+    // No local server in tests: the opener falls back to a plain new tab.
+    globalThis.fetch = mock(async () => {
+      throw new Error("no local server");
+    }) as unknown as typeof fetch;
+    window.open = mock(() => null) as unknown as typeof window.open;
+    render(
+      <SessionWorkspaceTopBar
+        session={session}
+        gitStatus={{
+          ...gitStatus,
+          dirty: false,
+          aheadOfBase: 1,
+          pr: {
+            number: 42,
+            url: "https://github.com/aop/aop/pull/42",
+            state: "OPEN",
+            title: "Sessions clone",
+          },
+        }}
+        pr={pr}
+        onToast={mock(() => {})}
+        onGitChanged={mock(() => {})}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("session-source-control-primary"));
+    });
+    expect(window.open).toHaveBeenCalledWith(
+      "https://github.com/aop/aop/pull/42",
+      "_blank",
+      "noopener,noreferrer",
+    );
   });
 
   test("does not duplicate worktree creation in the top bar", () => {

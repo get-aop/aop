@@ -114,10 +114,15 @@ export const installUpdate = async (): Promise<AopUpdateInstallResult> => {
 };
 
 export const openExternalUrl = async (url: string): Promise<void> => {
-  await request<{ ok: true }>("/open-external", {
-    method: "POST",
-    body: JSON.stringify({ url }),
-  });
+  try {
+    await request<{ ok: true }>("/open-external", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+  } catch {
+    // Plain-web fallback when the loopback opener is unavailable (e.g. dev static preview).
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 };
 
 export const getProviderCapabilities = async (): Promise<ProviderCapabilityEntry[]> => {

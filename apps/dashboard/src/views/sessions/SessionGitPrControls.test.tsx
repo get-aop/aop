@@ -174,6 +174,10 @@ describe("SessionGitPrControls · create split button", () => {
         created: false,
       })),
     });
+    // No local server in tests: the opener falls back to a plain new tab.
+    globalThis.fetch = mock(async () => {
+      throw new Error("no local server");
+    }) as unknown as typeof fetch;
     render(<SessionGitPrControls gitStatus={gitStatusWith()} pr={pr} />);
     fireEvent.click(screen.getByTestId("session-create-pr-caret"));
     await act(async () => {

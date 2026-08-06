@@ -14,6 +14,7 @@ import { Button } from "@/ui/button";
 import { type MenuListItem, MenuPanel, readAnchorRect } from "@/ui/menu-panel";
 import { Spinner } from "@/ui/spinner";
 import type { MergeSessionPrMethod, SessionGitStatus } from "../../api/client";
+import { openExternalUrl } from "../../api/client";
 import { SessionChecksPopup } from "./SessionChecksPopup";
 import type { SessionPullRequestController } from "./use-session-pull-request";
 
@@ -89,7 +90,7 @@ const CreatePrControls = ({
     try {
       const result = await pr.create(mode);
       if ("compareUrl" in result) {
-        window.open(result.compareUrl, "_blank", "noopener,noreferrer");
+        void openExternalUrl(result.compareUrl);
         onToast?.("Branch pushed — opening GitHub to create the PR");
       } else {
         onToast?.(`PR #${result.number} ${mode === "draft" ? "draft " : ""}created`, {

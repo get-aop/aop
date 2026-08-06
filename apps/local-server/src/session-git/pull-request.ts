@@ -8,6 +8,7 @@ import {
   repoNameWithOwnerFromUrl,
   viewPullRequest,
 } from "../github-cli/index.ts";
+import { generatePullRequestDraft, type PullRequestDraft } from "./pr-draft.ts";
 import {
   checkGhAvailable,
   resolveSessionPrContext,
@@ -35,6 +36,17 @@ export type CreateSessionPullRequestResult =
         | { code: "PR_CREATE_FAILED"; message: string };
     };
 
+export interface CreateSessionPullRequestOptions {
+  /** Title/body generation seam; tests inject a stub so the real runtime is never spawned. */
+  generateDraft?: GenerateSessionPrDraft;
+}
+
+export type GenerateSessionPrDraft = (input: {
+  ctx: LocalServerContext;
+  sessionId: string;
+  context: ReadySessionPrContext;
+}) => Promise<PullRequestDraft | null>;
+
 /** Push the session branch and open (or link to) a GitHub pull request. */
 export const createSessionPullRequest = async (
   ctx: LocalServerContext,
@@ -42,6 +54,7 @@ export const createSessionPullRequest = async (
   input: { mode: CreateSessionPrMode },
   runGh: RunGh = defaultRunGh,
   runGit: RunGit = defaultRunGit,
+  options: CreateSessionPullRequestOptions = {},
 ): Promise<CreateSessionPullRequestResult> => {
   const resolved = await resolveSessionPrContext(ctx, sessionId, runGit);
   if (!resolved.ok) {
@@ -53,6 +66,7 @@ export const createSessionPullRequest = async (
     return { success: false, error: { code: "ON_DEFAULT_BRANCH" } };
   }
   const context: ReadySessionPrContext = { workspace, branch, defaultBranch, sessionTitle };
+  const generateDraft = options.generateDraft ?? defaultGenerateSessionPrDraft(runGit);
 
   const gh = await checkGhAvailable(runGh, workspace);
   if (!gh.ok) {
@@ -72,7 +86,7 @@ export const createSessionPullRequest = async (
     return { success: false, error: commitFailureError(committed) };
   }
 
-  return pushAndCreate(runGh, runGit, context, input.mode);
+  return pushAndCreate(runGh, runGit, ctx, sessionId, context, input.mode, generateDraft);
 };
 
 const commitFailureError = (
@@ -85,8 +99,11 @@ const commitFailureError = (
 const pushAndCreate = async (
   runGh: RunGh,
   runGit: RunGit,
+  ctx: LocalServerContext,
+  sessionId: string,
   context: ReadySessionPrContext,
   mode: CreateSessionPrMode,
+  generateDraft: GenerateSessionPrDraft,
 ): Promise<CreateSessionPullRequestResult> => {
   const push = await runGit(["push", "-u", "origin", context.branch], context.workspace);
   if (push.exitCode !== 0) {
@@ -100,7 +117,47 @@ const pushAndCreate = async (
     return buildManualCompareResult(runGit, context);
   }
 
-  return runPrCreate(runGh, context, mode);
+  let draft: PullRequestDraft | null = null;
+  try {
+    draft = await generateDraft({ ctx, sessionId, context });
+  } catch {
+    // Draft generation is best-effort; the session title is the fallback.
+  }
+
+  return runPrCreate(runGh, context, mode, draft);
+};
+
+/** Real draft seam: summarize the session conversation through its own runtime. */
+const defaultGenerateSessionPrDraft =
+  (runGit: RunGit): GenerateSessionPrDraft =>
+  async ({ ctx, sessionId, context }) => {
+    const session = await ctx.chatSessionRepository.getById(sessionId);
+    if (!session) return null;
+    const messages = await ctx.chatSessionRepository.listMessages(sessionId);
+    if (!messages.some((message) => message.role === "user")) return null;
+
+    return generatePullRequestDraft({
+      session,
+      workspace: context.workspace,
+      messages,
+      changedFiles: await listChangedFiles(runGit, context),
+      fallbackTitle: context.sessionTitle,
+    });
+  };
+
+const listChangedFiles = async (
+  runGit: RunGit,
+  context: ReadySessionPrContext,
+): Promise<string[]> => {
+  const result = await runGit(
+    ["diff", "--name-only", "--no-color", `${context.defaultBranch}...HEAD`],
+    context.workspace,
+  );
+  if (result.exitCode !== 0) return [];
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 };
 
 export type MergeSessionPullRequestResult =
@@ -308,15 +365,16 @@ const runPrCreate = async (
   runGh: RunGh,
   context: ReadySessionPrContext,
   mode: "create" | "draft",
+  draft: PullRequestDraft | null,
 ): Promise<CreateSessionPullRequestResult> => {
-  const title = context.sessionTitle.trim() || context.branch;
+  const title = draft?.title || context.sessionTitle.trim() || context.branch;
   const args = [
     "pr",
     "create",
     "--title",
     title,
     "--body",
-    "Created from an AOP chat session.",
+    draft?.body || "Created from an AOP chat session.",
     "--base",
     context.defaultBranch,
     "--head",
