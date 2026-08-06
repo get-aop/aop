@@ -24,6 +24,7 @@ const session = (overrides: Partial<ChatSession> = {}): ChatSession => ({
   runtime_session_id: null,
   workspace_path: null,
   fast_mode: false,
+  runtime_access_mode: "full-access",
   default_worker_id: null,
   default_workflow_id: null,
   pinned: false,
