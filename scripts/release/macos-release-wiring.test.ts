@@ -15,10 +15,10 @@ describe("release wiring", () => {
     expect(pkg.scripts["release:local"]).toBe("bun run ./scripts/release/local-publish.ts");
   });
 
-  test("uses the desktop package version for Tauri bundles", async () => {
+  test("uses the root package version for Tauri bundles", async () => {
     const tauriConfig = await Bun.file(join(ROOT, "apps/desktop/src-tauri/tauri.conf.json")).json();
 
-    expect(tauriConfig.version).toBe("../package.json");
+    expect(tauriConfig.version).toBe("../../../package.json");
   });
 
   test("runs one tag-triggered release workflow with mac, windows, and core jobs", async () => {

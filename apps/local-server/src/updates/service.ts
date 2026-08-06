@@ -323,7 +323,7 @@ export const startBinaryUpgrade = async (
 
   const spawnCommand = isWindows
     ? ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", upgradeScriptPath]
-    : await buildUpgradeSpawnCommand(upgradeScriptPath, spawnOptions);
+    : await buildUpgradeSpawnCommand(upgradeScriptPath, { ...spawnOptions, platform });
   Bun.spawn(spawnCommand, {
     cwd: homedir(),
     stdout: "ignore",

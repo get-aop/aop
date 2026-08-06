@@ -726,6 +726,10 @@ describe("runSessionPrompt", () => {
   });
 
   test("uses a provider's graceful interrupt signal before forced termination", async () => {
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
     let finishProvider: ((result: RunResult) => void) | undefined;
     const providerFinished = new Promise<RunResult>((resolve) => {
       finishProvider = resolve;
@@ -735,6 +739,7 @@ describe("runSessionPrompt", () => {
       interruptSignal: "SIGINT",
       run: async (options: RunOptions) => {
         await options.onSpawn?.(77_777);
+        markProviderStarted?.();
         return providerFinished;
       },
     } as LLMProvider;
@@ -745,7 +750,7 @@ describe("runSessionPrompt", () => {
       prompt: "hello",
       createProviderFn: () => provider,
     });
-    await Bun.sleep(5);
+    await providerStarted;
 
     interruptSessionRun("isess_graceful_grok");
     // Descendant discovery is async now (non-blocking ps), so allow the scan
@@ -1091,11 +1096,14 @@ describe("session run lifecycle registration", () => {
     const providerFinished = new Promise<RunResult>((resolve) => {
       finishProvider = resolve;
     });
-    let enteredRun = false;
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
     const provider: LLMProvider = {
       name: "fixture",
       run: async (options) => {
-        enteredRun = true;
+        markProviderStarted?.();
         await options.onSpawn?.(88_001);
         return providerFinished;
       },
@@ -1109,8 +1117,7 @@ describe("session run lifecycle registration", () => {
       createProviderFn: () => provider,
     });
 
-    await Bun.sleep(20);
-    expect(enteredRun).toBe(true);
+    await providerStarted;
     expect(sessionRunPhase("isess_cancel_while_spawn")).toBe("running");
     expect(interruptSessionRun("isess_cancel_while_spawn", "abort")).toBe(true);
     expect(sessionRunPhase("isess_cancel_while_spawn")).toBe("cancelling");
@@ -1196,6 +1203,10 @@ describe("session run lifecycle registration", () => {
 
   test("does not release registration until provider termination has settled", async () => {
     const registration = registerPendingSessionRun("isess_hold_until_exit", "claude-code");
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
     let finishProvider: ((result: RunResult) => void) | undefined;
     const providerFinished = new Promise<RunResult>((resolve) => {
       finishProvider = resolve;
@@ -1208,14 +1219,17 @@ describe("session run lifecycle registration", () => {
       registration: registration ?? undefined,
       createProviderFn: () => ({
         name: "fixture",
-        run: async () => providerFinished,
+        run: async () => {
+          markProviderStarted?.();
+          return providerFinished;
+        },
       }),
     }).then((result) => {
       settled = true;
       return result;
     });
 
-    await Bun.sleep(10);
+    await providerStarted;
     expect(interruptSessionRun("isess_hold_until_exit", "abort")).toBe(true);
     await Bun.sleep(40);
     expect(settled).toBe(false);
