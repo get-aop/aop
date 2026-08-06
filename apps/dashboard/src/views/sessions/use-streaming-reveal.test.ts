@@ -59,7 +59,7 @@ describe("useStreamingReveal", () => {
     expect(result.current).toBe("hello world");
   });
 
-  test("reveals an active stream gradually instead of at once", async () => {
+  test("reveals an active burst gradually, not in one frame", async () => {
     const { result, rerender } = renderHook(
       ({ target, active }: { target: string; active: boolean }) =>
         useStreamingReveal(target, active),
@@ -71,16 +71,32 @@ describe("useStreamingReveal", () => {
     await act(async () => stepFrames(1));
     // A bounded amount per frame — the full chunk must not appear instantly.
     expect(result.current.length).toBeGreaterThan(0);
-    expect(result.current.length).toBeLessThan(10);
+    expect(result.current.length).toBeLessThanOrEqual(12);
 
-    // The reveal is still typing after a second — not a fast dump.
-    await act(async () => stepFrames(59));
-    expect(result.current.length).toBeGreaterThan(10);
+    // A fast burst is still typed, not dumped: not complete after 30 frames.
+    await act(async () => stepFrames(29));
     expect(result.current.length).toBeLessThan(500);
 
     // Once enough frames pass, the reveal catches up to the full text.
-    await act(async () => stepFrames(1000));
+    await act(async () => stepFrames(200));
     expect(result.current).toBe("a".repeat(500));
+  });
+
+  test("a slow steady stream keeps the reveal close behind it", async () => {
+    const { result, rerender } = renderHook(
+      ({ target, active }: { target: string; active: boolean }) =>
+        useStreamingReveal(target, active),
+      { initialProps: { target: "", active: true } },
+    );
+    // Model trickles ~1 char per frame (~60 chars per second).
+    for (let frame = 1; frame <= 60; frame += 1) {
+      rerender({ target: "b".repeat(frame), active: true });
+      await act(async () => stepFrames(1));
+    }
+    expect(result.current.length).toBeGreaterThan(0);
+    // The reveal follows a steady stream closely (within ~2s of output).
+    expect(result.current.length).toBeGreaterThan(30);
+    expect(result.current.length).toBeLessThanOrEqual(60);
   });
 
   test("a paused stream finishes revealing the pending text", async () => {
