@@ -28,6 +28,7 @@ function MessageScroller({
   onEdgeChange,
   onScroll,
   className,
+  style,
   children,
   ...props
 }: MessageScrollerProps) {
@@ -44,13 +45,15 @@ function MessageScroller({
     [scrollerRef],
   );
 
-  const scrollToEdge = useCallback(() => {
+  const scrollToEdge = useCallback((behavior: ScrollBehavior = "auto") => {
     const el = ref.current;
     if (!el) return;
-    // Skip when already pinned: a redundant scrollTop write fires a scroll
-    // event, re-runs edge detection, and can cause visible jitter on stream frames.
-    if (el.scrollHeight - el.scrollTop - el.clientHeight <= 1) return;
-    el.scrollTop = el.scrollHeight;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distance <= 1) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: behavior === "smooth" && distance <= EDGE_THRESHOLD_PX ? "smooth" : "auto",
+    });
   }, []);
 
   const handleScroll = useCallback(
@@ -71,7 +74,7 @@ function MessageScroller({
   // Follow the live edge while streaming (only when the user hasn't scrolled up).
   useEffect(() => {
     if (streaming && stickToEdgeRef.current) {
-      requestAnimationFrame(scrollToEdge);
+      requestAnimationFrame(() => scrollToEdge("smooth"));
     }
   });
 
@@ -81,16 +84,18 @@ function MessageScroller({
     const content = el?.firstElementChild;
     if (!content || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
-      if (stickToEdgeRef.current) requestAnimationFrame(scrollToEdge);
+      if (stickToEdgeRef.current) {
+        requestAnimationFrame(() => scrollToEdge(streaming ? "smooth" : "auto"));
+      }
     });
     observer.observe(content);
     return () => observer.disconnect();
-  }, [scrollToEdge]);
+  }, [scrollToEdge, streaming]);
 
   // Anchor new turns: jump to the edge when a turn is added while at the edge.
   useEffect(() => {
     if (anchorKey === undefined) return;
-    if (stickToEdgeRef.current) requestAnimationFrame(scrollToEdge);
+    if (stickToEdgeRef.current) requestAnimationFrame(() => scrollToEdge());
   }, [anchorKey, scrollToEdge]);
 
   // Preserve position on history load: when content prepends (scrollHeight
@@ -112,6 +117,7 @@ function MessageScroller({
       data-slot="message-scroller"
       onScroll={handleScroll}
       className={cn("min-h-0 flex-1 overflow-y-auto", className)}
+      style={{ ...style, overflowAnchor: streaming ? "none" : style?.overflowAnchor }}
       {...props}
     >
       {children}
