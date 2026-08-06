@@ -46,6 +46,8 @@ export const createStreamProgressAccumulator = () => {
   let commandSeq = 0;
   /** After text, the next command starts a new collapsible group (Codex interleaving). */
   let sealCommandsAfterText = false;
+  /** A tool/text run happened since the last thought: the next thought is a new paragraph. */
+  let newThoughtSegment = false;
   /**
    * Status narration and later answer text are separate runs broken by thought/tool
    * events. Seal the previous paragraph into history so the UI stacks agent updates
@@ -81,18 +83,26 @@ export const createStreamProgressAccumulator = () => {
         // Providers (e.g. Pi) re-carry the full reasoning block on later message
         // lifecycle events; a trailing duplicate is a replay, not new reasoning.
         if (thinking.endsWith(chunk.data)) return;
-        thinking = thinking ? thinking + chunk.data : chunk.data;
+        // Reasoning segments separated by tool/text runs are paragraphs; direct
+        // concatenation produced run-on text ("…error.The model…"). Token-sized
+        // streams (Grok) have no interruption and keep concatenating directly.
+        thinking =
+          thinking && newThoughtSegment ? `${thinking}\n\n${chunk.data}` : thinking + chunk.data;
+        newThoughtSegment = false;
         startNewTextRun = true;
         return;
       case "text":
+        newThoughtSegment = true;
         applyText(chunk.data);
         return;
       case "command":
         startNewTextRun = true;
+        newThoughtSegment = true;
         applyCommand(chunk);
         return;
       case "tool":
         startNewTextRun = true;
+        newThoughtSegment = true;
         applyTool(chunk);
         return;
     }

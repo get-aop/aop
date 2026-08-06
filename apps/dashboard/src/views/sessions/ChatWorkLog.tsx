@@ -110,7 +110,13 @@ const RunActivityBody = ({
       {continuity ? <p className="text-xs text-muted-foreground">{continuity}</p> : null}
       {visibleThinking ? (
         <div data-testid="assistant-thinking" className="text-foreground/82">
-          <ChatMarkdown content={visibleThinking} />
+          {active ? (
+            <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+              {visibleThinking}
+            </div>
+          ) : (
+            <ChatMarkdown content={visibleThinking} />
+          )}
         </div>
       ) : null}
       {visibleContent ? (

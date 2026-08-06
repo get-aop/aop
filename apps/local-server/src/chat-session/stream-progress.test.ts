@@ -686,6 +686,18 @@ describe("createStreamProgressAccumulator", () => {
     expect(snap.thinking).toBe(`${first}${second}`);
   });
 
+  test("separates thinking blocks interrupted by tool runs as paragraphs", () => {
+    const acc = createStreamProgressAccumulator();
+    const first = "Let me look at the attached image to understand the error.";
+    const second = "The model doesn't support images directly.";
+
+    acc.apply({ kind: "thought", data: first });
+    acc.apply({ kind: "tool", phase: "start", name: "read" });
+    acc.apply({ kind: "tool", phase: "done", name: "read" });
+    const snap = acc.apply({ kind: "thought", data: second });
+    expect(snap.thinking).toBe(`${first}\n\n${second}`);
+  });
+
   test("concatenates Grok-style thought then text tokens", () => {
     const acc = createStreamProgressAccumulator();
     acc.apply({ kind: "thought", data: "Hello " });
