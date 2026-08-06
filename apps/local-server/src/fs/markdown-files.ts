@@ -2,6 +2,7 @@ import { realpath } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { MARKDOWN_FILE_LIMITS, type MarkdownFileContent } from "@aop/common";
+import { aopPaths } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 
 export type MarkdownFileError =
@@ -88,21 +89,29 @@ const validatePath = async (
   const repos = await ctx.repoRepository.getAll();
 
   for (const repo of repos) {
-    const configuredRoot = path.resolve(repo.path);
-    let root: string;
-    try {
-      root = await realpath(repo.path);
-    } catch {
-      continue;
+    if (await isContainedInRoot(repo.path, target)) return { success: true as const, data: target };
+    // Session worktrees live outside the repo checkout, under ~/.aop/worktrees/<repoId>.
+    if (repo.id && (await isContainedInRoot(aopPaths.worktrees(repo.id), target))) {
+      return { success: true as const, data: target };
     }
-    if (!isContained(configuredRoot, target) && !isContained(root, target)) continue;
-
-    const resolvedTarget = await nearestExistingPath(target);
-    if (isContained(root, resolvedTarget)) return { success: true as const, data: target };
   }
 
   return {
     success: false,
     error: { code: "FORBIDDEN", message: "Path is outside registered repositories" },
   };
+};
+
+const isContainedInRoot = async (rootPath: string, target: string): Promise<boolean> => {
+  const configuredRoot = path.resolve(rootPath);
+  let root: string;
+  try {
+    root = await realpath(configuredRoot);
+  } catch {
+    return false;
+  }
+  if (!isContained(configuredRoot, target) && !isContained(root, target)) return false;
+
+  const resolvedTarget = await nearestExistingPath(target);
+  return isContained(root, resolvedTarget);
 };

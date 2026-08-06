@@ -13,8 +13,8 @@ const createRoot = async (): Promise<string> => {
   return root;
 };
 
-const createContext = (roots: string[]) =>
-  ({ repoRepository: { getAll: async () => roots.map((root) => ({ path: root })) } }) as never;
+const createContext = (repos: Array<{ path: string; id?: string }>) =>
+  ({ repoRepository: { getAll: async () => repos } }) as never;
 
 afterEach(async () => {
   await Promise.all(
@@ -31,7 +31,7 @@ describe("readMarkdownFile", () => {
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, "# Plan\n");
 
-    const result = await readMarkdownFile(createContext([root]), filePath);
+    const result = await readMarkdownFile(createContext([{ path: root }]), filePath);
 
     expect(result).toEqual({
       success: true,
@@ -39,11 +39,58 @@ describe("readMarkdownFile", () => {
     });
   });
 
+  test("accepts a markdown file inside the registered repo's AOP worktree directory", async () => {
+    const previousAopHome = process.env.AOP_HOME;
+    const aopHome = await createRoot();
+    process.env.AOP_HOME = aopHome;
+    try {
+      const repoRoot = await createRoot();
+      const filePath = path.join(aopHome, "worktrees", "repo-1", "session-1", "plan.md");
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, "# Plan\n");
+
+      const result = await readMarkdownFile(
+        createContext([{ path: repoRoot, id: "repo-1" }]),
+        filePath,
+      );
+
+      expect(result).toEqual({
+        success: true,
+        data: { path: filePath, content: "# Plan\n", exists: true },
+      });
+    } finally {
+      if (previousAopHome === undefined) delete process.env.AOP_HOME;
+      else process.env.AOP_HOME = previousAopHome;
+    }
+  });
+
+  test("rejects a markdown file in a worktree directory of an unregistered repo id", async () => {
+    const previousAopHome = process.env.AOP_HOME;
+    const aopHome = await createRoot();
+    process.env.AOP_HOME = aopHome;
+    try {
+      const repoRoot = await createRoot();
+      const filePath = path.join(aopHome, "worktrees", "repo-999", "session-1", "plan.md");
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, "# Plan\n");
+
+      const result = await readMarkdownFile(createContext([{ path: repoRoot }]), filePath);
+
+      expect(result).toEqual({
+        success: false,
+        error: { code: "FORBIDDEN", message: "Path is outside registered repositories" },
+      });
+    } finally {
+      if (previousAopHome === undefined) delete process.env.AOP_HOME;
+      else process.env.AOP_HOME = previousAopHome;
+    }
+  });
+
   test("returns an empty missing-file result for a markdown path under a repository", async () => {
     const root = await createRoot();
     const filePath = path.join(root, ".aop", "plans", "missing.md");
 
-    const result = await readMarkdownFile(createContext([root]), filePath);
+    const result = await readMarkdownFile(createContext([{ path: root }]), filePath);
 
     expect(result).toEqual({
       success: true,
@@ -58,7 +105,7 @@ describe("readMarkdownFile", () => {
     await writeFile(filePath, "# Home\n");
     const homeRelativePath = `~/${path.relative(os.homedir(), filePath)}`;
 
-    const result = await readMarkdownFile(createContext([root]), homeRelativePath);
+    const result = await readMarkdownFile(createContext([{ path: root }]), homeRelativePath);
 
     expect(result).toEqual({
       success: true,
@@ -71,8 +118,13 @@ describe("readMarkdownFile", () => {
     const upperCasePath = path.join(root, "README.MD");
     await writeFile(upperCasePath, "# Readme\n");
 
-    expect((await readMarkdownFile(createContext([root]), upperCasePath)).success).toBe(true);
-    const rejected = await readMarkdownFile(createContext([root]), path.join(root, "notes.mdx"));
+    expect((await readMarkdownFile(createContext([{ path: root }]), upperCasePath)).success).toBe(
+      true,
+    );
+    const rejected = await readMarkdownFile(
+      createContext([{ path: root }]),
+      path.join(root, "notes.mdx"),
+    );
     expect(rejected).toEqual({
       success: false,
       error: { code: "INVALID_PATH", message: "Only Markdown files are supported" },
@@ -90,7 +142,7 @@ describe("readMarkdownFile", () => {
       path.join(root, "..", "outside.md"),
       path.join(sibling, "outside.md"),
     ]) {
-      const result = await readMarkdownFile(createContext([root]), filePath);
+      const result = await readMarkdownFile(createContext([{ path: root }]), filePath);
       const expectedCode = filePath === "relative.md" ? "INVALID_PATH" : "FORBIDDEN";
       expect(result).toMatchObject({ success: false, error: { code: expectedCode } });
     }
@@ -104,7 +156,7 @@ describe("readMarkdownFile", () => {
     const filePath = path.join(await realpath(registeredRoot), "README.md");
     await writeFile(filePath, "# Canonical\n");
 
-    const result = await readMarkdownFile(createContext([registeredRoot]), filePath);
+    const result = await readMarkdownFile(createContext([{ path: registeredRoot }]), filePath);
 
     expect(result).toEqual({
       success: true,
@@ -118,7 +170,10 @@ describe("readMarkdownFile", () => {
     const link = path.join(root, "linked");
     await symlink(outside, link);
 
-    const result = await readMarkdownFile(createContext([root]), path.join(link, "escape.md"));
+    const result = await readMarkdownFile(
+      createContext([{ path: root }]),
+      path.join(link, "escape.md"),
+    );
 
     expect(result).toEqual({
       success: false,
@@ -134,7 +189,10 @@ describe("readMarkdownFile", () => {
     await writeFile(filePath, "# Inside\n");
     await symlink(root, link);
 
-    const result = await readMarkdownFile(createContext([root]), path.join(link, "inside.md"));
+    const result = await readMarkdownFile(
+      createContext([{ path: root }]),
+      path.join(link, "inside.md"),
+    );
 
     expect(result).toEqual({
       success: false,
@@ -148,7 +206,11 @@ describe("writeMarkdownFile", () => {
     const root = await createRoot();
     const filePath = path.join(root, ".aop", "plans", "new-plan.md");
 
-    const result = await writeMarkdownFile(createContext([root]), filePath, "# New plan\n");
+    const result = await writeMarkdownFile(
+      createContext([{ path: root }]),
+      filePath,
+      "# New plan\n",
+    );
 
     expect(result).toEqual({
       success: true,
@@ -162,7 +224,7 @@ describe("writeMarkdownFile", () => {
     const content = "x".repeat(MARKDOWN_FILE_LIMITS.maxBytes + 1);
 
     const result = await writeMarkdownFile(
-      createContext([root]),
+      createContext([{ path: root }]),
       path.join(root, "large.md"),
       content,
     );
@@ -178,7 +240,7 @@ describe("writeMarkdownFile", () => {
     const content = "x".repeat(MARKDOWN_FILE_LIMITS.maxBytes + 1);
 
     const result = await writeMarkdownFile(
-      createContext([root]),
+      createContext([{ path: root }]),
       path.join(root, "not-a-text.txt"),
       content,
     );
