@@ -91,7 +91,7 @@ export function ComposerFooter(props: ComposerFooterProps) {
       data-chat-composer-footer-compact={compact ? "true" : "false"}
       className={cn(
         "flex min-w-0 flex-nowrap items-center justify-between overflow-visible px-2.5 pb-2.5 sm:px-3 sm:pb-3",
-        compact ? "gap-1.5" : "gap-2 sm:gap-0",
+        compact ? "gap-1.5" : "gap-2",
       )}
     >
       <div className="-m-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

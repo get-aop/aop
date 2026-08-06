@@ -228,6 +228,7 @@ describe("ChatComposer context chips and typeahead", () => {
 
     expect(screen.getByTestId("composer-fast-mode")).toBeTruthy();
     expect(screen.getByTestId("composer-runtime-config")).toBeTruthy();
+    expect(screen.getByTestId("composer-toolbar").className.split(/\s+/)).not.toContain("sm:gap-0");
   });
 
   test("does not surface AOP default worker or workflow pills in the T3Code composer", () => {
