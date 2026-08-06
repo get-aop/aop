@@ -114,13 +114,28 @@ export const publishAssistantProgress = (
   progress: { thinking: string; content: string; commandGroups: ChatStreamCommandGroup[] },
 ): void => {
   const previous = latestProgressBySession.get(sessionId);
-  const event: AssistantProgressEvent = {
-    type: "assistant-progress",
-    sessionId,
-    thinking: suffixDelta(previous?.thinking ?? "", progress.thinking),
-    content: suffixDelta(previous?.content ?? "", progress.content),
-    commandGroups: progress.commandGroups,
-  };
+  // A snapshot that is not a strict suffix extension of the previous one
+  // (sealed/replayed text reorganization) must REPLACE client state instead of
+  // appending — appending a full snapshot duplicates everything streamed so far.
+  const replace =
+    !isCleanDeltaExtension(previous?.thinking ?? "", progress.thinking) ||
+    !isCleanDeltaExtension(previous?.content ?? "", progress.content);
+  const event: AssistantProgressEvent = replace
+    ? {
+        type: "assistant-progress",
+        sessionId,
+        thinking: progress.thinking,
+        content: progress.content,
+        commandGroups: progress.commandGroups,
+        replace: true,
+      }
+    : {
+        type: "assistant-progress",
+        sessionId,
+        thinking: suffixDelta(previous?.thinking ?? "", progress.thinking),
+        content: suffixDelta(previous?.content ?? "", progress.content),
+        commandGroups: progress.commandGroups,
+      };
   latestProgressBySession.set(sessionId, {
     ...event,
     thinking: progress.thinking,
@@ -134,6 +149,9 @@ export const publishAssistantProgress = (
   });
   publishChatSessionEvent(event);
 };
+
+const isCleanDeltaExtension = (previous: string, next: string): boolean =>
+  previous.length === 0 || next.startsWith(previous);
 
 /** Starts a fresh delta chain (new run / new user turn). */
 export const resetAssistantProgress = (sessionId: string): void => {
@@ -156,16 +174,22 @@ export const publishDelegationProgress = (
   progress: { thinking: string; content: string; commandGroups: ChatStreamCommandGroup[] },
 ): void => {
   const previous = latestDelegationProgress.get(delegationId);
+  // A snapshot that is not a strict suffix extension must REPLACE client state
+  // (sealed/replayed text reorganization); appending would duplicate the stream.
+  const replace =
+    previous === undefined ||
+    !isCleanDeltaExtension(previous.thinking, progress.thinking) ||
+    !isCleanDeltaExtension(previous.content, progress.content);
   const event: DelegationProgressEvent = {
     type: "delegation-progress",
     sessionId,
     delegationId,
-    thinking: suffixDelta(previous?.thinking ?? "", progress.thinking),
-    content: suffixDelta(previous?.content ?? "", progress.content),
+    thinking: replace
+      ? progress.thinking
+      : suffixDelta(previous?.thinking ?? "", progress.thinking),
+    content: replace ? progress.content : suffixDelta(previous?.content ?? "", progress.content),
     commandGroups: progress.commandGroups,
-    // A fresh chain has no baseline on the client (e.g. re-run after reset):
-    // the first frame is the full text and must replace, never append.
-    replace: previous === undefined,
+    replace,
   };
   latestDelegationProgress.set(delegationId, {
     ...event,
@@ -286,10 +310,10 @@ export const createChatSessionEventQueue = (
 };
 
 const updateLatestProgress = (event: ChatSessionEvent): void => {
-  if (event.type === "assistant-progress") {
-    latestProgressBySession.set(event.sessionId, event);
-    return;
-  }
+  // publishAssistantProgress keeps latestProgressBySession at the cumulative
+  // text (the delta-chain baseline). Re-storing the delta event here made the
+  // next suffixDelta fall back to sending the full text as an append delta,
+  // which duplicated the whole thinking/answer on the client every other frame.
   if (event.type === "assistant-typing" || event.type === "assistant-final") {
     latestProgressBySession.delete(event.sessionId);
   }

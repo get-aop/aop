@@ -176,6 +176,42 @@ describe("publishAssistantProgress", () => {
     unsubscribe();
   });
 
+  test("later frames stay suffix deltas and never re-send the full text", () => {
+    // Regression: updateLatestProgress used to overwrite the delta-chain
+    // baseline with the delta event itself, so every other publish fell back
+    // to sending the FULL cumulative text as an append delta and the client
+    // duplicated the whole thinking block (observed ~50x in real Pi runs).
+    const received: ChatSessionEvent[] = [];
+    const unsubscribe = subscribeChatSession("s1", (event) => received.push(event));
+
+    publishAssistantProgress("s1", { thinking: "a", content: "one", commandGroups: [] });
+    publishAssistantProgress("s1", { thinking: "ab", content: "one two", commandGroups: [] });
+    publishAssistantProgress("s1", {
+      thinking: "abc",
+      content: "one two three",
+      commandGroups: [],
+    });
+    publishAssistantProgress("s1", {
+      thinking: "abcd",
+      content: "one two three four",
+      commandGroups: [],
+    });
+
+    expect(
+      received.map((event) =>
+        event.type === "assistant-progress"
+          ? { thinking: event.thinking, content: event.content }
+          : null,
+      ),
+    ).toEqual([
+      { thinking: "a", content: "one" },
+      { thinking: "b", content: " two" },
+      { thinking: "c", content: " three" },
+      { thinking: "d", content: " four" },
+    ]);
+    unsubscribe();
+  });
+
   test("suffixDelta returns the appended suffix only", () => {
     expect(suffixDelta("Hello", "Hello world")).toBe(" world");
     expect(suffixDelta("Hello", "Completely different")).toBe("Completely different");
@@ -198,6 +234,43 @@ describe("publishAssistantProgress", () => {
     publishAssistantProgress("s1", { thinking: "b", content: "two", commandGroups: [] });
 
     expect(getLatestChatSessionProgress("s1")?.content).toBe("two");
+  });
+
+  test("a reorganized snapshot is sent as a replace frame, never appended", () => {
+    // Sealed/replayed text can stop being a strict suffix extension (e.g. a
+    // paragraph gets trimmed when sealed). Appending the full snapshot would
+    // duplicate the whole stream on the client; a replace frame resets it.
+    const received: ChatSessionEvent[] = [];
+    const unsubscribe = subscribeChatSession("s1", (event) => received.push(event));
+
+    publishAssistantProgress("s1", { thinking: "a", content: "one two", commandGroups: [] });
+    publishAssistantProgress("s1", { thinking: "ab", content: "one two three", commandGroups: [] });
+    // Content reorganized: no longer starts with the previous snapshot.
+    publishAssistantProgress("s1", { thinking: "abc", content: "reorganized", commandGroups: [] });
+    // Clean extension resumes after the replace baseline.
+    publishAssistantProgress("s1", {
+      thinking: "abcd",
+      content: "reorganized!",
+      commandGroups: [],
+    });
+
+    expect(
+      received.map((event) =>
+        event.type === "assistant-progress"
+          ? {
+              replace: event.replace ?? false,
+              thinking: event.thinking,
+              content: event.content,
+            }
+          : null,
+      ),
+    ).toEqual([
+      { replace: false, thinking: "a", content: "one two" },
+      { replace: false, thinking: "b", content: " three" },
+      { replace: true, thinking: "abc", content: "reorganized" },
+      { replace: false, thinking: "d", content: "!" },
+    ]);
+    unsubscribe();
   });
 });
 

@@ -64,6 +64,7 @@ export const TerminalDock = ({
       >
         {termLines.map((line, index) => (
           <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: terminal log lines have no stable id; the index (with text) is the only identity for an append-only capped list.
             key={`${index}-${line.text}`}
             data-tone={line.tone}
             className="whitespace-pre-wrap break-words font-mono text-[11.5px] leading-5 text-text"

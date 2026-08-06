@@ -45,7 +45,7 @@ const asSummarySteps = (
   compiled: import("../api/client").WorkflowStepSaveInput[],
 ): WorkflowSummaryStep[] =>
   compiled.map((step) => ({
-    id: step.id!,
+    id: String(step.id),
     type: step.skillId,
     promptTemplate:
       {
@@ -92,18 +92,18 @@ describe("compileSimpleWorkflow", () => {
       workflow([step("implement"), step("code-review"), step("test"), step("browser")]),
     );
 
-    const parents = steps.filter((s) => !s.id!.includes("--"));
+    const parents = steps.filter((s) => !String(s.id).includes("--"));
     expect(parents.map((s) => s.id)).toEqual([
       "implement-1",
       "code-review-2",
       "test-3",
       "browser-4",
     ]);
-    expect(parents[0]!.transitions![0]).toEqual({
+    expect(parents[0]?.transitions?.[0]).toEqual({
       condition: "success",
       target: "code-review-2",
     });
-    expect(parents[3]!.transitions![0]).toEqual({
+    expect(parents[3]?.transitions?.[0]).toEqual({
       condition: "BROWSER_TASK_COMPLETE",
       target: "__done__",
     });
@@ -111,7 +111,7 @@ describe("compileSimpleWorkflow", () => {
 
   test("code-review failure routes to a fix-issues helper with REVIEW_FAILED", () => {
     const steps = compileSimpleWorkflow(workflow([step("code-review")]));
-    expect(steps[0]!.transitions![1]).toEqual({
+    expect(steps[0]?.transitions?.[1]).toEqual({
       condition: "REVIEW_FAILED",
       target: "code-review-1--fix",
       maxIterations: 2,
@@ -126,7 +126,7 @@ describe("compileSimpleWorkflow", () => {
 
   test("test failures allow up to five debug iterations", () => {
     const steps = compileSimpleWorkflow(workflow([step("test")]));
-    expect(steps[0]!.transitions![1]).toMatchObject({
+    expect(steps[0]?.transitions?.[1]).toMatchObject({
       condition: "TESTS_FAIL",
       target: "test-1--debug",
       maxIterations: 5,
@@ -136,7 +136,7 @@ describe("compileSimpleWorkflow", () => {
 
   test("browser steps force browserControl and require a compatible provider", () => {
     const steps = compileSimpleWorkflow(workflow([step("browser")]));
-    expect(steps[0]!.agent!.browserControl).toBe(true);
+    expect(steps[0]?.agent?.browserControl).toBe(true);
 
     expect(() =>
       compileSimpleWorkflow(workflow([step("browser", { provider: "grok-build" })])),
@@ -146,11 +146,11 @@ describe("compileSimpleWorkflow", () => {
 
   test("helper agents bump reasoning one tier and keep max at max", () => {
     const steps = compileSimpleWorkflow(workflow([step("implement", { reasoning: "medium" })]));
-    expect(steps[1]!.agent!.reasoning).toBe("high");
-    expect(steps[1]!.agent!.model).toBe("opus");
+    expect(steps[1]?.agent?.reasoning).toBe("high");
+    expect(steps[1]?.agent?.model).toBe("opus");
 
     const maxSteps = compileSimpleWorkflow(workflow([step("test", { reasoning: "max" })]));
-    expect(maxSteps[1]!.agent!.reasoning).toBe("max");
+    expect(maxSteps[1]?.agent?.reasoning).toBe("max");
   });
 
   test("validates name and step count", () => {
@@ -185,16 +185,17 @@ describe("decompileSimpleWorkflow", () => {
     const back = decompileSimpleWorkflow(summary(asSummarySteps(steps), source.name));
 
     expect(back).not.toBeNull();
-    expect(back!.name).toBe("Ship it");
-    expect(back!.steps).toHaveLength(4);
-    expect(back!.steps.map((s) => s.kind)).toEqual(["implement", "code-review", "test", "browser"]);
-    expect(back!.steps[0]!.agent).toMatchObject({
+    if (!back) throw new Error("Expected a decompiled workflow");
+    expect(back.name).toBe("Ship it");
+    expect(back.steps).toHaveLength(4);
+    expect(back.steps.map((s) => s.kind)).toEqual(["implement", "code-review", "test", "browser"]);
+    expect(back.steps[0]?.agent).toMatchObject({
       provider: "codex-cli",
       model: "gpt-5.6",
       reasoning: "high",
       fastMode: true,
     });
-    expect(back!.steps[3]!.agent.browserControl).toBe(true);
+    expect(back.steps[3]?.agent.browserControl).toBe(true);
   });
 
   test("reports legacy for unrecognized prompt templates", () => {

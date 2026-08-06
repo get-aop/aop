@@ -85,7 +85,7 @@ const asSummarySteps = (
   compiled: import("../api/client").WorkflowStepSaveInput[],
 ): WorkflowSummary["steps"] =>
   compiled.map((step) => ({
-    id: step.id!,
+    id: String(step.id),
     type: step.skillId,
     promptTemplate:
       {
@@ -142,10 +142,17 @@ const openEditor = async () => {
 };
 
 const openProviderDropdown = async (editor: HTMLElement) => {
-  const trigger = within(editor).getAllByRole("combobox")[0]!;
+  const trigger = within(editor).getAllByRole("combobox")[0];
+  if (!trigger) throw new Error("Expected a provider combobox");
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
   fireEvent.click(trigger);
   return screen.findAllByRole("option");
+};
+
+const findOption = (options: Awaited<ReturnType<typeof openProviderDropdown>>, text: string) => {
+  const option = options.find((candidate) => candidate.textContent?.includes(text));
+  if (!option) throw new Error(`Expected option containing "${text}"`);
+  return option;
 };
 
 describe("SectionWorkflows editor provider select", () => {
@@ -166,12 +173,9 @@ describe("SectionWorkflows editor provider select", () => {
     await renderSection([implementSummary()]);
     const editor = await openEditor();
 
-    fireEvent.click(
-      (await openProviderDropdown(editor)).find((option) =>
-        option.textContent?.includes("CC Persona"),
-      )!,
-    );
-    const modelTrigger = within(editor).getAllByRole("combobox")[1]!;
+    fireEvent.click(findOption(await openProviderDropdown(editor), "CC Persona"));
+    const modelTrigger = within(editor).getAllByRole("combobox")[1];
+    if (!modelTrigger) throw new Error("Expected a model combobox");
     expect(modelTrigger.textContent).toContain("Persona Sonnet");
 
     fireEvent.click(within(editor).getByRole("button", { name: "Save" }));
@@ -189,16 +193,8 @@ describe("SectionWorkflows editor provider select", () => {
     await renderSection([implementSummary()]);
     const editor = await openEditor();
 
-    fireEvent.click(
-      (await openProviderDropdown(editor)).find((option) =>
-        option.textContent?.includes("CC Persona"),
-      )!,
-    );
-    fireEvent.click(
-      (await openProviderDropdown(editor)).find((option) =>
-        option.textContent?.includes("Claude code"),
-      )!,
-    );
+    fireEvent.click(findOption(await openProviderDropdown(editor), "CC Persona"));
+    fireEvent.click(findOption(await openProviderDropdown(editor), "Claude code"));
 
     fireEvent.click(within(editor).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(mockSaveWorkflow).toHaveBeenCalled());

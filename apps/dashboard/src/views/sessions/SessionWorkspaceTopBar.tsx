@@ -226,6 +226,7 @@ const SessionSourceControlActions = ({
   };
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: toolbar of git actions; role="group" with an aria-label is the deliberate accessible pattern here.
     <div
       role="group"
       aria-label="Git actions"

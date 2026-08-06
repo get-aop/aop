@@ -10,6 +10,7 @@ import { Textarea } from "@/ui/textarea";
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
+    // biome-ignore lint/a11y/useSemanticElements: shadcn input-group wrapper; role="group" is the deliberate upstream pattern.
     <div
       data-slot="input-group"
       role="group"
@@ -62,6 +63,7 @@ function InputGroupAddon({
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: shadcn InputGroup addon — click focuses the inner input; keyboard users interact with the input directly.
+    // biome-ignore lint/a11y/useSemanticElements: shadcn addon wrapper; role="group" is the deliberate upstream pattern.
     <div
       role="group"
       data-slot="input-group-addon"

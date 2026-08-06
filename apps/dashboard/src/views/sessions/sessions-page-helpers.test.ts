@@ -21,8 +21,8 @@ import {
   RESET_RUNTIME_SUCCESS_TOAST,
   scopeMidRunHintsToMessages,
 } from "./sessions-page-helpers";
-import { SESSION_STREAM_EVENT_TYPES } from "./use-sessions-page-effects";
 import { clearSessionUnreadCount, incrementSessionUnreadCount } from "./use-session-unread-counts";
+import { SESSION_STREAM_EVENT_TYPES } from "./use-sessions-page-effects";
 
 setupDashboardDom();
 

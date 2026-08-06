@@ -89,7 +89,6 @@ export const useSessionsPagePrefill = (input: PrefillInput) => {
         ),
       )
       .catch(() => input.setWorkflowOptions([]));
-    // biome-ignore lint/correctness/useExhaustiveDependencies: one-shot prefill; do not re-run on tasks[] SSE identity
   }, [
     refreshList,
     loadDetail,
