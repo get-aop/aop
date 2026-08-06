@@ -317,4 +317,7 @@ const updateLatestProgress = (event: ChatSessionEvent): void => {
   if (event.type === "assistant-typing" || event.type === "assistant-final") {
     latestProgressBySession.delete(event.sessionId);
   }
+  if (event.type === "assistant-final") {
+    fullProgressBySession.delete(event.sessionId);
+  }
 };

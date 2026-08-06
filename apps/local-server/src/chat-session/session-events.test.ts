@@ -236,6 +236,32 @@ describe("publishAssistantProgress", () => {
     expect(getLatestChatSessionProgress("s1")?.content).toBe("two");
   });
 
+  test("assistant completion clears reconnect progress", () => {
+    publishAssistantProgress("s1", {
+      thinking: "Finished thinking",
+      content: "Finished answer",
+      commandGroups: [],
+    });
+
+    publishChatSessionEvent({
+      type: "assistant-final",
+      sessionId: "s1",
+      notifyUnread: false,
+      message: {
+        id: "m1",
+        sessionId: "s1",
+        role: "assistant",
+        content: "Finished answer",
+        action: null,
+        createdAt: "2026-08-06T00:00:00.000Z",
+        images: [],
+        documents: [],
+      },
+    });
+
+    expect(getLatestChatSessionProgress("s1")).toBeNull();
+  });
+
   test("a reorganized snapshot is sent as a replace frame, never appended", () => {
     // Sealed/replayed text can stop being a strict suffix extension (e.g. a
     // paragraph gets trimmed when sealed). Appending the full snapshot would
