@@ -1,28 +1,26 @@
 #!/usr/bin/env bun
 // biome-ignore-all lint/suspicious/noConsole: release packaging CLI reports progress to the operator
 
-import { cp, readdir, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { cp, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import cac from "cac";
 import {
-  buildTauriSidecarResourcePlan,
-  prepareTauriSidecarResources,
-} from "../desktop/prepare-tauri-sidecar.ts";
+  buildElectronResourcePlan,
+  prepareElectronResources,
+} from "../desktop/prepare-electron-resources";
 
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
 const DEFAULT_RELEASE_DIR = "dist/release";
-const TARGET_TRIPLE = "x86_64-pc-windows-msvc";
 const INSTALLER_NAME = "aop-windows-x64-setup.exe";
 
 export interface WindowsInstallerPlan {
   appName: string;
+  builderInstallerPath: string;
+  builderOutputDir: string;
   installerPath: string;
   releaseDir: string;
   resourcesDir: string;
   runtimeAssetsArchive: string;
-  targetTriple: string;
-  tauriBundleDir: string;
   version: string;
   workspaceRoot: string;
 }
@@ -49,7 +47,6 @@ interface CliOptions {
   version?: string;
 }
 
-/** The NSIS installer (distinct from the bare CLI binary aop-windows-x64.exe). */
 export const resolveWindowsInstallerArtifacts = (): string[] => [INSTALLER_NAME];
 
 export const buildWindowsInstallerPlan = ({
@@ -59,20 +56,15 @@ export const buildWindowsInstallerPlan = ({
 }: BuildWindowsInstallerPlanOptions): WindowsInstallerPlan => {
   const root = resolve(workspaceRoot);
   const resolvedReleaseDir = isAbsolute(releaseDir) ? releaseDir : join(root, releaseDir);
-
+  const builderOutputDir = join(root, "dist/electron-builder");
   return {
     appName: "AOP",
+    builderInstallerPath: join(builderOutputDir, INSTALLER_NAME),
+    builderOutputDir,
     installerPath: join(resolvedReleaseDir, INSTALLER_NAME),
     releaseDir: resolvedReleaseDir,
-    resourcesDir: join(root, "apps/desktop/src-tauri/resources"),
+    resourcesDir: join(root, "apps/desktop/resources"),
     runtimeAssetsArchive: join(resolvedReleaseDir, "runtime-assets.tar.gz"),
-    targetTriple: TARGET_TRIPLE,
-    tauriBundleDir: join(
-      root,
-      "apps/desktop/src-tauri/target",
-      TARGET_TRIPLE,
-      "release/bundle/nsis",
-    ),
     version,
     workspaceRoot: root,
   };
@@ -82,34 +74,21 @@ export const parseWindowsSigningConfig = (
   env: Partial<Record<string, string | undefined>> = process.env,
 ): WindowsSigningConfig => {
   const pfxBase64 = env.AOP_WINDOWS_PFX_BASE64?.trim();
-  if (!pfxBase64) {
-    return { mode: "unsigned" };
-  }
-
+  if (!pfxBase64) return { mode: "unsigned" };
   const password = env.AOP_WINDOWS_PFX_PASSWORD?.trim();
-  if (!password) {
-    throw new Error("AOP_WINDOWS_PFX_BASE64 requires AOP_WINDOWS_PFX_PASSWORD");
-  }
-
+  if (!password) throw new Error("AOP_WINDOWS_PFX_BASE64 requires AOP_WINDOWS_PFX_PASSWORD");
   return { mode: "signed", pfxBase64, password };
 };
 
-/** signtool arguments to sign a file with a PFX certificate (SHA-256, RFC-3161 timestamp). */
-export const buildSigntoolCommand = (path: string, pfxFile: string, password: string): string[] => [
-  "signtool",
-  "sign",
-  "/fd",
-  "sha256",
-  "/f",
-  pfxFile,
-  "/p",
-  password,
-  "/tr",
-  "http://timestamp.digicert.com",
-  "/td",
-  "sha256",
-  path,
-];
+export const electronBuilderWindowsSigningEnv = (
+  signingConfig: WindowsSigningConfig,
+): Record<string, string> =>
+  signingConfig.mode === "unsigned"
+    ? { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
+    : {
+        WIN_CSC_LINK: signingConfig.pfxBase64,
+        WIN_CSC_KEY_PASSWORD: signingConfig.password,
+      };
 
 export const buildWindowsInstallerArtifacts = async ({
   releaseDir = DEFAULT_RELEASE_DIR,
@@ -118,62 +97,41 @@ export const buildWindowsInstallerArtifacts = async ({
   workspaceRoot = WORKSPACE_ROOT,
 }: BuildWindowsInstallerArtifactsOptions = {}): Promise<string[]> => {
   ensureWindowsHost();
-
   const buildVersion = version ?? (await readPackageVersion(workspaceRoot));
   const plan = buildWindowsInstallerPlan({ releaseDir, version: buildVersion, workspaceRoot });
-
-  await prepareTauriSidecarResources(
-    buildTauriSidecarResourcePlan({
+  await prepareElectronResources(
+    buildElectronResourcePlan({
       arch: "x64",
       platform: "windows",
       releaseDir: plan.releaseDir,
       workspaceRoot: plan.workspaceRoot,
     }),
   );
-  await runCommand(["rustup", "target", "add", plan.targetTriple], plan.workspaceRoot);
+  await runCommand(["bun", "run", "--filter", "@aop/desktop", "build"], plan.workspaceRoot);
   await runCommand(
     [
-      "bun",
-      "run",
-      "--filter",
-      "@aop/desktop",
-      "tauri",
-      "build",
-      "--ci",
-      "--bundles",
+      "bunx",
+      "electron-builder",
+      "--config",
+      join(plan.workspaceRoot, "scripts/desktop/electron-builder-config.ts"),
+      "--projectDir",
+      plan.workspaceRoot,
+      "--win",
       "nsis",
-      "--target",
-      plan.targetTriple,
+      "--x64",
+      "--publish",
+      "never",
     ],
     plan.workspaceRoot,
-    { CI: "true" },
+    electronBuilderWindowsSigningEnv(signingConfig),
   );
-
-  const generatedInstaller = await findGeneratedNsisInstaller(plan.tauriBundleDir);
-  await cp(generatedInstaller, plan.installerPath);
-  await signInstaller(plan.installerPath, signingConfig, plan.workspaceRoot);
+  await assertFile(
+    plan.builderInstallerPath,
+    "Electron Builder did not produce the expected Windows installer.",
+  );
+  await cp(plan.builderInstallerPath, plan.installerPath);
   console.log(`Built ${plan.installerPath}`);
-
-  // Note: global checksums.sha256 is generated by the central release job (WIN-19/WIN-20),
-  // not here, so the Windows installer is covered alongside every other artifact.
   return [plan.installerPath];
-};
-
-const signInstaller = async (
-  installerPath: string,
-  signingConfig: WindowsSigningConfig,
-  workspaceRoot: string,
-): Promise<void> => {
-  if (signingConfig.mode === "unsigned") {
-    return;
-  }
-
-  const pfxFile = join(tmpdir(), "aop-windows-signing.pfx");
-  await writeFile(pfxFile, Buffer.from(signingConfig.pfxBase64, "base64"));
-  await runCommand(
-    buildSigntoolCommand(installerPath, pfxFile, signingConfig.password),
-    workspaceRoot,
-  );
 };
 
 const readPackageVersion = async (workspaceRoot: string): Promise<string> => {
@@ -183,7 +141,15 @@ const readPackageVersion = async (workspaceRoot: string): Promise<string> => {
 
 const ensureWindowsHost = (): void => {
   if (process.platform !== "win32") {
-    throw new Error("Windows installer packaging requires a Windows host with Tauri + NSIS");
+    throw new Error("Windows installer packaging requires a Windows host with NSIS");
+  }
+};
+
+const assertFile = async (path: string, message: string): Promise<void> => {
+  try {
+    await stat(path);
+  } catch {
+    throw new Error(message);
   }
 };
 
@@ -198,42 +164,22 @@ const runCommand = async (
     stderr: "inherit",
     stdout: "inherit",
   });
-
   const exitCode = await proc.exited;
-  if (exitCode !== 0) {
-    throw new Error(`Command failed (${exitCode}): ${command.join(" ")}`);
-  }
-};
-
-const findGeneratedNsisInstaller = async (bundleDir: string): Promise<string> => {
-  const entries = await readdir(bundleDir);
-  const candidates = await Promise.all(
-    entries
-      .filter((entry) => entry.endsWith(".exe"))
-      .map(async (entry) => {
-        const path = join(bundleDir, entry);
-        return { path, modifiedMs: (await stat(path)).mtimeMs };
-      }),
-  );
-
-  const latest = candidates.toSorted((a, b) => b.modifiedMs - a.modifiedMs)[0];
-  if (!latest) {
-    throw new Error(`Tauri did not produce an NSIS installer in ${bundleDir}`);
-  }
-
-  return latest.path;
+  if (exitCode !== 0) throw new Error(`Command failed (${exitCode}): ${command.join(" ")}`);
 };
 
 const main = async (): Promise<void> => {
   const cli = cac("windows-installer");
   cli
-    .option("--release-dir <path>", "Release artifact directory", { default: DEFAULT_RELEASE_DIR })
+    .option("--release-dir <path>", "Release artifact directory", {
+      default: DEFAULT_RELEASE_DIR,
+    })
     .option("--version <version>", "Version label for the installer");
-
   const { options } = cli.parse();
+  const values = options as CliOptions;
   await buildWindowsInstallerArtifacts({
-    releaseDir: (options as CliOptions)["release-dir"],
-    version: (options as CliOptions).version,
+    releaseDir: values["release-dir"],
+    version: values.version,
   });
 };
 

@@ -8,11 +8,11 @@ export const useAppZoom = (): void => {
   const [zoomLevel, setZoomLevel] = useState(1);
 
   useEffect(() => {
-    void setNativeWebviewZoom(zoomLevel);
+    void setDesktopZoom(zoomLevel, desktopBridge());
   }, [zoomLevel]);
 
   useEffect(() => {
-    if (!tauriInvoke()) return;
+    if (!desktopBridge()) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       setZoomLevel((current) => {
@@ -29,21 +29,20 @@ export const useAppZoom = (): void => {
   }, []);
 };
 
-type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+interface DesktopZoomBridge {
+  setZoom: (zoomFactor: number) => Promise<void>;
+}
 
-const tauriInvoke = (): TauriInvoke | null => {
-  const internals = (window as Window & { __TAURI_INTERNALS__?: { invoke?: TauriInvoke } })
-    .__TAURI_INTERNALS__;
-  return typeof internals?.invoke === "function" ? internals.invoke.bind(internals) : null;
+const desktopBridge = (): DesktopZoomBridge | null => {
+  const bridge = (window as Window & { aopDesktop?: Partial<DesktopZoomBridge> }).aopDesktop;
+  return typeof bridge?.setZoom === "function" ? (bridge as DesktopZoomBridge) : null;
 };
 
-const setNativeWebviewZoom = async (zoomLevel: number): Promise<void> => {
-  const invoke = tauriInvoke();
-  if (!invoke) return;
-  await invoke("plugin:webview|set_webview_zoom", {
-    label: "main",
-    value: zoomLevel,
-  }).catch(() => undefined);
+export const setDesktopZoom = async (
+  zoomLevel: number,
+  bridge: DesktopZoomBridge | null,
+): Promise<void> => {
+  await bridge?.setZoom(zoomLevel).catch(() => undefined);
 };
 
 export const applyZoomShortcut = (current: number, event: KeyboardEvent): number | null => {

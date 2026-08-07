@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { tauriBackend } from "./backend/tauri-backend";
+import { electronBackend } from "./backend/electron-backend";
 import "@fontsource-variable/jura";
 import "@fontsource-variable/instrument-sans";
 import "@fontsource/geist-mono/400.css";
@@ -13,4 +13,4 @@ if (!root) {
   throw new Error("AOP desktop root element is missing.");
 }
 
-createRoot(root).render(<App backend={tauriBackend} />);
+createRoot(root).render(<App backend={electronBackend()} />);

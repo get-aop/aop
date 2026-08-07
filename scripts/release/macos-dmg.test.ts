@@ -4,9 +4,9 @@ import {
   buildCodesignCommand,
   buildDmgNotarizationCommands,
   buildMacDmgPlan,
+  electronBuilderSigningEnv,
   parseMacSigningConfig,
   resolveMacDmgArtifacts,
-  targetTripleForArch,
 } from "./macos-dmg.ts";
 
 describe("macos-dmg release planning", () => {
@@ -26,24 +26,16 @@ describe("macos-dmg release planning", () => {
       appName: "AOP.app",
       arch: "arm64",
       binaryPath: join("/repo", "dist/release/aop-darwin-arm64"),
+      builderDmgPath: join("/repo", "dist/electron-builder/aop-macos-arm64.dmg"),
+      builderOutputDir: join("/repo", "dist/electron-builder"),
       dmgPath: join("/repo", "dist/release/aop-macos-arm64.dmg"),
       releaseDir: join("/repo", "dist/release"),
-      resourcesDir: join("/repo", "apps/desktop/src-tauri/resources"),
+      resourcesDir: join("/repo", "apps/desktop/resources"),
       runtimeAssetsArchive: join("/repo", "dist/release/runtime-assets.tar.gz"),
-      targetTriple: "aarch64-apple-darwin",
-      tauriBundleDir: join(
-        "/repo",
-        "apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg",
-      ),
       version: "0.2.7",
       volumeName: "AOP 0.2.7 arm64",
       workspaceRoot: "/repo",
     });
-  });
-
-  test("maps macOS release arches to Rust target triples", () => {
-    expect(targetTripleForArch("arm64")).toBe("aarch64-apple-darwin");
-    expect(targetTripleForArch("x64")).toBe("x86_64-apple-darwin");
   });
 });
 
@@ -99,6 +91,18 @@ describe("macos-dmg signing config", () => {
     expect(buildCodesignCommand("/repo/dist/release/aop-darwin-arm64", { mode: "unsigned" })).toBe(
       undefined,
     );
+  });
+
+  test("removes the certificate class prefix for Electron Builder", () => {
+    expect(
+      electronBuilderSigningEnv({
+        mode: "signed",
+        identity: "Developer ID Application: Example Inc (TEAM12345)",
+        notarization: { enabled: false },
+      }),
+    ).toMatchObject({
+      CSC_NAME: "Example Inc (TEAM12345)",
+    });
   });
 
   test("notarizes and staples the finished DMG when notarization is enabled", () => {

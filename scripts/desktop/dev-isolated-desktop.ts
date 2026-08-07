@@ -106,7 +106,7 @@ const main = async (): Promise<void> => {
   console.log(`AOP_HOME: ${plan.aopHome}`);
   console.log(`API: http://127.0.0.1:${plan.localServerPort}`);
   console.log(`Dashboard sidecar port: ${plan.dashboardPort}`);
-  console.log("This will open a Tauri dev window. Press Ctrl+C here to stop it.");
+  console.log("This will open an Electron dev window. Press Ctrl+C here to stop it.");
 
   const bunPath = Bun.which("bun") ?? "bun";
   const child = Bun.spawn([bunPath, "run", "dev:desktop"], {

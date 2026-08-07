@@ -8,14 +8,12 @@ updates:
       fontsource:
         patterns:
           - "@fontsource*"
-      tauri:
+      electron:
         patterns:
-          - "@tauri-apps/*"
+          - "electron"
+          - "electron-builder"
+          - "@electron/*"
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
-  - package-ecosystem: "cargo"
-    directory: "/apps/desktop/src-tauri"
     schedule:
       interval: "weekly"

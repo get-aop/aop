@@ -4,7 +4,7 @@ import type { AnchorHTMLAttributes, HTMLAttributes, MouseEvent, ReactNode } from
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { openExternalUrl } from "../../api/client";
-import { isTauriWebView } from "../../utils/desktop-runtime";
+import { isDesktopApp } from "../../utils/desktop-runtime";
 
 interface ChatMarkdownProps {
   content: string;
@@ -22,7 +22,7 @@ const ChatLinkContext = createContext({
 // unrelated re-renders (progress frames included).
 export const ChatMarkdown = memo(function ChatMarkdown({
   content,
-  desktop = isTauriWebView(),
+  desktop = isDesktopApp(),
   openLink = openExternalUrl,
   lineBreaks = false,
 }: ChatMarkdownProps) {

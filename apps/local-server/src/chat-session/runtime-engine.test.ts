@@ -346,58 +346,59 @@ describe("runSessionPrompt", () => {
   test.each([
     { capability: "computer" as const, label: "computer" },
     { capability: "browser" as const, label: "browser" },
-  ])("terminates leftover $label-control helpers after a successful Codex turn", async ({
-    capability,
-  }) => {
-    // Control turns spawn native helpers (computer_use mouse agent / Playwright MCP)
-    // that can outlive `codex exec`. Interrupt already reaps the tree; normal
-    // completion must do the same so the desktop/browser session does not stick.
-    const dir = await mkdtemp(join(tmpdir(), `aop-${capability}-control-cleanup-`));
-    const pidFile = join(dir, "child.pid");
-    let childPid = 0;
-    const provider: LLMProvider = {
-      name: "codex-cli",
-      run: async (options) => {
-        expect(options.browserControl).toBe(capability === "browser");
-        expect(options.computerControl).toBe(capability === "computer");
-        const script = [
-          `const child = Bun.spawn(["sleep", "30"], { detached: true, stdout: "ignore", stderr: "ignore", stdin: "ignore" });`,
-          `await Bun.write(${JSON.stringify(pidFile)}, String(child.pid));`,
-          // Control turns run for seconds; keep the root briefly so the chat
-          // runtime can snapshot the helper pid before reparenting.
-          "await Bun.sleep(200);",
-          "process.exit(0);",
-        ].join("\n");
-        const root = Bun.spawn([process.execPath, "-e", script], {
-          detached: true,
-          stdout: "ignore",
-          stderr: "ignore",
-          stdin: "ignore",
-        });
-        await options.onSpawn?.(root.pid);
-        while (!(await Bun.file(pidFile).exists())) await Bun.sleep(10);
-        // Let the control-process tracker sample the detached helper.
-        await Bun.sleep(80);
-        return { exitCode: await root.exited, pid: root.pid };
-      },
-    };
+  ])(
+    "terminates leftover $label-control helpers after a successful Codex turn",
+    async ({ capability }) => {
+      // Control turns spawn native helpers (computer_use mouse agent / Playwright MCP)
+      // that can outlive `codex exec`. Interrupt already reaps the tree; normal
+      // completion must do the same so the desktop/browser session does not stick.
+      const dir = await mkdtemp(join(tmpdir(), `aop-${capability}-control-cleanup-`));
+      const pidFile = join(dir, "child.pid");
+      let childPid = 0;
+      const provider: LLMProvider = {
+        name: "codex-cli",
+        run: async (options) => {
+          expect(options.browserControl).toBe(capability === "browser");
+          expect(options.computerControl).toBe(capability === "computer");
+          const script = [
+            `const child = Bun.spawn(["sleep", "30"], { detached: true, stdout: "ignore", stderr: "ignore", stdin: "ignore" });`,
+            `await Bun.write(${JSON.stringify(pidFile)}, String(child.pid));`,
+            // Control turns run for seconds; keep the root briefly so the chat
+            // runtime can snapshot the helper pid before reparenting.
+            "await Bun.sleep(200);",
+            "process.exit(0);",
+          ].join("\n");
+          const root = Bun.spawn([process.execPath, "-e", script], {
+            detached: true,
+            stdout: "ignore",
+            stderr: "ignore",
+            stdin: "ignore",
+          });
+          await options.onSpawn?.(root.pid);
+          while (!(await Bun.file(pidFile).exists())) await Bun.sleep(10);
+          // Let the control-process tracker sample the detached helper.
+          await Bun.sleep(80);
+          return { exitCode: await root.exited, pid: root.pid };
+        },
+      };
 
-    try {
-      await runSessionPrompt({
-        session: session({ id: `isess_${capability}_cleanup`, runtime: "codex-cli" }),
-        repoPath: dir,
-        prompt: capability === "browser" ? "Inspect the page" : "Open System Settings",
-        control: { provider: "codex-cli", capability },
-        createProviderFn: () => provider,
-      });
-      childPid = Number.parseInt(await readFile(pidFile, "utf8"), 10);
-      await Bun.sleep(50);
-      expect(isProcessAlive(childPid)).toBe(false);
-    } finally {
-      if (childPid && isProcessAlive(childPid)) process.kill(childPid, "SIGKILL");
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
+      try {
+        await runSessionPrompt({
+          session: session({ id: `isess_${capability}_cleanup`, runtime: "codex-cli" }),
+          repoPath: dir,
+          prompt: capability === "browser" ? "Inspect the page" : "Open System Settings",
+          control: { provider: "codex-cli", capability },
+          createProviderFn: () => provider,
+        });
+        childPid = Number.parseInt(await readFile(pidFile, "utf8"), 10);
+        await Bun.sleep(50);
+        expect(isProcessAlive(childPid)).toBe(false);
+      } finally {
+        if (childPid && isProcessAlive(childPid)) process.kill(childPid, "SIGKILL");
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("recovers a Claude session id from the durable log", async () => {
     const logFilePath = join(tmpdir(), `aop-claude-session-${Date.now()}.jsonl`);

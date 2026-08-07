@@ -141,7 +141,7 @@
     @apply bg-canvas text-text font-sans antialiased;
   }
 
-  /* Root coverage: fill the webview (Tauri zoom) without uncovered bars. */
+  /* Root coverage: fill the desktop webview during native zoom without uncovered bars. */
   html,
   body,
   #root {

@@ -13,7 +13,7 @@ import {
   type SessionPullRequestCheck,
   type SessionPullRequestStatus,
 } from "../../api/client";
-import { isTauriWebView } from "../../utils/desktop-runtime";
+import { isDesktopApp } from "../../utils/desktop-runtime";
 
 interface SessionChecksPopupProps {
   open: boolean;
@@ -31,7 +31,7 @@ export const SessionChecksPopup = ({
   open,
   status,
   onClose,
-  desktop = isTauriWebView(),
+  desktop = isDesktopApp(),
   openLink = openExternalUrl,
 }: SessionChecksPopupProps) => {
   if (!open) return null;

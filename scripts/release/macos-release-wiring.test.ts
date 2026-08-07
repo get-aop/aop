@@ -15,10 +15,15 @@ describe("release wiring", () => {
     expect(pkg.scripts["release:local"]).toBe("bun run ./scripts/release/local-publish.ts");
   });
 
-  test("uses the root package version for Tauri bundles", async () => {
-    const tauriConfig = await Bun.file(join(ROOT, "apps/desktop/src-tauri/tauri.conf.json")).json();
+  test("uses the Electron entry point and root package version", async () => {
+    const desktopPackage = await Bun.file(join(ROOT, "apps/desktop/package.json")).json();
+    const builderConfig = await readFile(
+      join(ROOT, "scripts/desktop/electron-builder-config.ts"),
+      "utf8",
+    );
 
-    expect(tauriConfig.version).toBe("../../../package.json");
+    expect(desktopPackage.main).toBe("dist-electron/main.cjs");
+    expect(builderConfig).toContain('import packageInfo from "../../package.json"');
   });
 
   test("runs one tag-triggered release workflow with mac, windows, and core jobs", async () => {
@@ -46,6 +51,7 @@ describe("release wiring", () => {
     expect(releaseWorkflow).toContain("bun run package:macos-dmg");
     expect(releaseWorkflow).toContain("aop-macos-x64.dmg");
     expect(releaseWorkflow).toContain("aop-macos-arm64.dmg");
+    expect(releaseWorkflow).not.toContain("rust-toolchain");
   });
 
   test("packages the Windows NSIS installer on windows-latest", async () => {

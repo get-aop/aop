@@ -23,7 +23,7 @@ export const setupDesktopDom = (): void => {
     previousGlobals = Object.fromEntries(
       GLOBAL_KEYS.map((key) => [key, globalThis[key as keyof typeof globalThis]]),
     ) as Partial<Record<GlobalKey, unknown>>;
-    window = new Window({ url: "http://tauri.localhost" });
+    window = new Window({ url: "app://aop" });
     installGlobal("window", window);
     installGlobal("document", window.document);
     installGlobal("HTMLElement", window.HTMLElement);

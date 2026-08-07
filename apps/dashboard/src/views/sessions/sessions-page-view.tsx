@@ -307,7 +307,7 @@ const persistedGroupProps = (storageKey: string) => {
       try {
         localStorage.setItem(storageKey, JSON.stringify(layout));
       } catch {
-        // storage may be unavailable (Tauri/webview sandbox)
+        // storage may be unavailable in a restricted browser context
       }
     },
   };

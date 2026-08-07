@@ -2,7 +2,7 @@
 
 ## Overview
 
-AOP ships as compiled CLI/local-server binaries, macOS Tauri desktop DMGs, and a Windows
+AOP ships as compiled CLI/local-server binaries, macOS Electron desktop DMGs, and a Windows
 NSIS installer.
 CLI users install via `curl -fsSL https://getaop.com/install.sh | sh` (macOS/Linux) or
 `install.ps1` (native Windows). macOS users can download `AOP.app` as a DMG; Windows users
@@ -105,12 +105,9 @@ sudo chown -R $USER:$USER /var/www/getaop.com
 
 ## Releasing a New Version
 
-Desktop releases use a local macOS primary publish and the self-hosted
-`release-windows.yml` workflow. The macOS host builds the core binaries and DMGs,
-creates the GitHub Release, and deploys the primary R2 assets. The Windows workflow
-then builds the installer from the same release commit, waits for that GitHub Release,
-attaches `aop-windows-x64-setup.exe`, regenerates the combined checksum manifest, and
-updates R2, including the durable `latest/aop-windows-x64-setup.exe` pointer.
+Desktop releases use the tag-triggered `Release` workflow. Its Linux, macOS, and Windows
+jobs build the core binaries, signed DMGs, and NSIS installer. A final job creates the
+GitHub Release and publishes the complete artifact set to R2 and the legacy host.
 
 ### 1. Bump, commit, tag, push (any host, once)
 
@@ -124,25 +121,14 @@ the root `package.json` (the single source of truth for the AOP version),
 commits `chore: release vX.Y.Z`, tags, and pushes
 (skip the push with `--no-push`).
 
-### 2. Publish the primary release on macOS
+### 2. Optional local release
 
 ```bash
 bun run release:local --version X.Y.Z
 ```
 
 This builds the signed macOS DMGs and core binaries, creates or updates the GitHub
-Release, and deploys the primary assets to R2.
-
-### 3. Publish the Windows installer
-
-After the primary GitHub Release exists, dispatch the self-hosted Windows workflow:
-
-```bash
-gh workflow run release-windows.yml --ref main
-```
-
-The workflow waits for the matching release tag, downloads its primary assets,
-attaches the installer, regenerates checksums, and redeploys the combined assets.
+Release, and deploys the available assets to R2.
 
 ### Local Windows fallback
 
@@ -157,11 +143,6 @@ so whichever host runs second attaches its installer to the existing release
 instead of failing. Run the R2/`latest` deploy from the macOS host; the Windows
 host passes `--skip-r2` (its run cannot also produce the macOS DMGs that the R2
 deploy expects). Preview any host's plan with `--dry-run`.
-
-> Note: the durable `latest/aop-windows-x64-setup.exe` R2 pointer is only written
-> by a run that has the installer on disk. Until R2 is wired to publish from the
-> Windows host, attach the installer to the GitHub Release (step 2) and download
-> it from there.
 
 ### Manual fallback
 
@@ -198,7 +179,7 @@ dist/release/
   runtime-assets.tar.gz
 ```
 
-The DMGs are packaged on macOS with Tauri. The app opens to setup, asks before installing missing tools, starts the bundled AOP sidecar, and renders the dashboard inside the desktop window.
+The DMGs are packaged on macOS with Electron Builder. The app opens to setup, asks before installing missing tools, starts the bundled AOP sidecar, and renders the dashboard inside the desktop window.
 
 ```bash
 bun run package:macos-dmg
@@ -259,7 +240,7 @@ bun run build:release -- --target linux-x64
 - **Binary size**: ~97MB per platform (Bun runtime is embedded)
 - **SQLite**: Bundled in the Bun runtime, no external dependency
 - **Dashboard**: Pre-built and embedded in the binary, served automatically
-- **Desktop app**: Tauri shell with setup-first prerequisite checks and bundled sidecar resources
+- **Desktop app**: Electron shell with setup-first prerequisite checks and bundled sidecar resources
 - **Data directory**: `~/.aop/` on macOS/Linux, `%USERPROFILE%\.aop\` on Windows (database, logs, PID file)
 - **Windows**: native NSIS installer (`aop-windows-x64-setup.exe`) plus the CLI binary
   (`aop-windows-x64.exe`). Unsigned in the alpha, so SmartScreen warns on first run (choose

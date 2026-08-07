@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 // biome-ignore-all lint/suspicious/noConsole: release packaging CLI reports progress to the operator
 
-import { cp, readdir, stat } from "node:fs/promises";
+import { cp, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import cac from "cac";
 import {
-  buildTauriSidecarResourcePlan,
-  prepareTauriSidecarResources,
-} from "../desktop/prepare-tauri-sidecar.ts";
+  buildElectronResourcePlan,
+  prepareElectronResources,
+} from "../desktop/prepare-electron-resources";
 
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
 const DEFAULT_RELEASE_DIR = "dist/release";
@@ -19,12 +19,12 @@ export interface MacDmgPlan {
   appName: string;
   arch: MacArch;
   binaryPath: string;
+  builderDmgPath: string;
+  builderOutputDir: string;
   dmgPath: string;
   releaseDir: string;
   resourcesDir: string;
   runtimeAssetsArchive: string;
-  targetTriple: string;
-  tauriBundleDir: string;
   version: string;
   volumeName: string;
   workspaceRoot: string;
@@ -77,27 +77,21 @@ export const buildMacDmgPlan = ({
 }: BuildMacDmgPlanOptions): MacDmgPlan => {
   const root = resolve(workspaceRoot);
   const resolvedReleaseDir = isAbsolute(releaseDir) ? releaseDir : join(root, releaseDir);
-  const targetTriple = targetTripleForArch(arch);
-
+  const builderOutputDir = join(root, "dist/electron-builder");
   return {
     appName: "AOP.app",
     arch,
     binaryPath: join(resolvedReleaseDir, `aop-darwin-${arch}`),
+    builderDmgPath: join(builderOutputDir, `aop-macos-${arch}.dmg`),
+    builderOutputDir,
     dmgPath: join(resolvedReleaseDir, `aop-macos-${arch}.dmg`),
     releaseDir: resolvedReleaseDir,
-    resourcesDir: join(root, "apps/desktop/src-tauri/resources"),
+    resourcesDir: join(root, "apps/desktop/resources"),
     runtimeAssetsArchive: join(resolvedReleaseDir, "runtime-assets.tar.gz"),
-    targetTriple,
-    tauriBundleDir: join(root, "apps/desktop/src-tauri/target", targetTriple, "release/bundle/dmg"),
     version,
     volumeName: `AOP ${version} ${arch}`,
     workspaceRoot: root,
   };
-};
-
-export const targetTripleForArch = (arch: MacArch): string => {
-  if (arch === "arm64") return "aarch64-apple-darwin";
-  return "x86_64-apple-darwin";
 };
 
 export const parseMacSigningConfig = (
@@ -105,37 +99,25 @@ export const parseMacSigningConfig = (
 ): MacSigningConfig => {
   const identity = env.AOP_MACOS_SIGN_IDENTITY?.trim();
   const shouldNotarize = isTruthy(env.AOP_MACOS_NOTARIZE);
-
   if (!identity) {
-    if (shouldNotarize) {
-      throw new Error("AOP_MACOS_NOTARIZE requires AOP_MACOS_SIGN_IDENTITY");
-    }
+    if (shouldNotarize) throw new Error("AOP_MACOS_NOTARIZE requires AOP_MACOS_SIGN_IDENTITY");
     return { mode: "unsigned" };
   }
-
   if (!shouldNotarize) {
     return { mode: "signed", identity, notarization: { enabled: false } };
   }
-
   const appleId = env.APPLE_ID?.trim();
   const teamId = env.APPLE_TEAM_ID?.trim();
   const appSpecificPassword = env.APPLE_APP_SPECIFIC_PASSWORD?.trim();
-
   if (!appleId || !teamId || !appSpecificPassword) {
     throw new Error(
       "AOP_MACOS_NOTARIZE requires APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_SPECIFIC_PASSWORD",
     );
   }
-
   return {
     mode: "signed",
     identity,
-    notarization: {
-      enabled: true,
-      appleId,
-      appSpecificPassword,
-      teamId,
-    },
+    notarization: { enabled: true, appleId, appSpecificPassword, teamId },
   };
 };
 
@@ -147,102 +129,43 @@ export const buildMacDmgArtifacts = async ({
   workspaceRoot = WORKSPACE_ROOT,
 }: BuildMacDmgArtifactsOptions = {}): Promise<string[]> => {
   ensureMacHost();
-
   const buildVersion = version ?? (await readPackageVersion(workspaceRoot));
-  const arches = arch ? [arch] : [...MAC_ARCHES];
   const outputs: string[] = [];
-
-  for (const currentArch of arches) {
+  for (const currentArch of arch ? [arch] : MAC_ARCHES) {
     const plan = buildMacDmgPlan({
       arch: currentArch,
       releaseDir,
       version: buildVersion,
       workspaceRoot,
     });
-
     await buildSingleDmg(plan, signingConfig);
     outputs.push(plan.dmgPath);
   }
-
-  // checksums.sha256 is generated once by the central release job over all artifacts
-  // (binaries + DMGs + Windows installer), so packaging jobs no longer write it.
   return outputs;
-};
-
-const buildSingleDmg = async (plan: MacDmgPlan, signingConfig: MacSigningConfig): Promise<void> => {
-  console.log(`Packaging ${plan.appName} with Tauri for macOS ${plan.arch}...`);
-
-  const codesignCommand = buildCodesignCommand(plan.binaryPath, signingConfig);
-  if (codesignCommand) {
-    await runCommand(codesignCommand, plan.workspaceRoot);
-  }
-
-  await prepareTauriSidecarResources(
-    buildTauriSidecarResourcePlan({
-      arch: plan.arch,
-      releaseDir: plan.releaseDir,
-      workspaceRoot: plan.workspaceRoot,
-    }),
-  );
-  await runCommand(["rustup", "target", "add", plan.targetTriple], plan.workspaceRoot);
-  await runCommand(
-    [
-      "bun",
-      "run",
-      "--filter",
-      "@aop/desktop",
-      "tauri",
-      "build",
-      "--ci",
-      "--bundles",
-      "dmg",
-      "--target",
-      plan.targetTriple,
-    ],
-    plan.workspaceRoot,
-    tauriSigningEnv(signingConfig),
-  );
-
-  const generatedDmg = await findGeneratedTauriDmg(plan.tauriBundleDir);
-  await cp(generatedDmg, plan.dmgPath);
-
-  for (const command of buildDmgNotarizationCommands(plan.dmgPath, signingConfig)) {
-    const errorLabel =
-      command[1] === "notarytool" ? "xcrun notarytool submit [redacted]" : undefined;
-    await runCommand(command, plan.workspaceRoot, {}, errorLabel);
-  }
-
-  console.log(`Built ${plan.dmgPath}`);
 };
 
 export const buildCodesignCommand = (
   path: string,
   signingConfig: MacSigningConfig,
-): string[] | undefined => {
-  if (signingConfig.mode === "unsigned") {
-    return undefined;
-  }
-
-  return [
-    "codesign",
-    "--force",
-    "--options",
-    "runtime",
-    "--timestamp",
-    "--sign",
-    signingConfig.identity,
-    path,
-  ];
-};
+): string[] | undefined =>
+  signingConfig.mode === "unsigned"
+    ? undefined
+    : [
+        "codesign",
+        "--force",
+        "--options",
+        "runtime",
+        "--timestamp",
+        "--sign",
+        signingConfig.identity,
+        path,
+      ];
 
 export const buildDmgNotarizationCommands = (
   dmgPath: string,
   signingConfig: MacSigningConfig,
 ): string[][] => {
-  if (signingConfig.mode !== "signed" || !signingConfig.notarization.enabled) {
-    return [];
-  }
-
+  if (signingConfig.mode !== "signed" || !signingConfig.notarization.enabled) return [];
   const { appleId, appSpecificPassword, teamId } = signingConfig.notarization;
   return [
     [
@@ -261,6 +184,67 @@ export const buildDmgNotarizationCommands = (
     ["xcrun", "stapler", "staple", dmgPath],
     ["xcrun", "stapler", "validate", dmgPath],
   ];
+};
+
+const buildSingleDmg = async (plan: MacDmgPlan, signingConfig: MacSigningConfig): Promise<void> => {
+  console.log(`Packaging ${plan.appName} with Electron for macOS ${plan.arch}...`);
+  const codesignCommand = buildCodesignCommand(plan.binaryPath, signingConfig);
+  if (codesignCommand) await runCommand(codesignCommand, plan.workspaceRoot);
+
+  await prepareElectronResources(
+    buildElectronResourcePlan({
+      arch: plan.arch,
+      releaseDir: plan.releaseDir,
+      workspaceRoot: plan.workspaceRoot,
+    }),
+  );
+  await runCommand(["bun", "run", "--filter", "@aop/desktop", "build"], plan.workspaceRoot);
+  await runCommand(
+    [
+      "bunx",
+      "electron-builder",
+      "--config",
+      join(plan.workspaceRoot, "scripts/desktop/electron-builder-config.ts"),
+      "--projectDir",
+      plan.workspaceRoot,
+      "--mac",
+      "dmg",
+      `--${plan.arch}`,
+      "--publish",
+      "never",
+    ],
+    plan.workspaceRoot,
+    electronBuilderSigningEnv(signingConfig),
+  );
+  await assertFile(plan.builderDmgPath, "Electron Builder did not produce the expected DMG.");
+  await cp(plan.builderDmgPath, plan.dmgPath);
+
+  for (const command of buildDmgNotarizationCommands(plan.dmgPath, signingConfig)) {
+    await runCommand(
+      command,
+      plan.workspaceRoot,
+      {},
+      command[1] === "notarytool" ? "xcrun notarytool submit [redacted]" : undefined,
+    );
+  }
+  console.log(`Built ${plan.dmgPath}`);
+};
+
+export const electronBuilderSigningEnv = (
+  signingConfig: MacSigningConfig,
+): Record<string, string> => {
+  if (signingConfig.mode === "unsigned") return { CSC_IDENTITY_AUTO_DISCOVERY: "false" };
+  const env: Record<string, string> = {
+    CSC_IDENTITY_AUTO_DISCOVERY: "true",
+    CSC_NAME: signingConfig.identity.replace(/^Developer ID Application:\s*/u, ""),
+  };
+  if (signingConfig.notarization.enabled) {
+    env.AOP_MACOS_NOTARIZE = "1";
+    env.APPLE_ID = signingConfig.notarization.appleId;
+    env.APPLE_APP_SPECIFIC_PASSWORD = signingConfig.notarization.appSpecificPassword;
+    env.APPLE_TEAM_ID = signingConfig.notarization.teamId;
+  }
+  return env;
 };
 
 const readPackageVersion = async (workspaceRoot: string): Promise<string> => {
@@ -283,22 +267,12 @@ const parseArch = (value: string | undefined): MacArch | undefined => {
 const isTruthy = (value: string | undefined): boolean =>
   value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes";
 
-const tauriSigningEnv = (signingConfig: MacSigningConfig): Record<string, string> => {
-  const env: Record<string, string> = { CI: "true" };
-
-  if (signingConfig.mode === "unsigned") {
-    return env;
+const assertFile = async (path: string, message: string): Promise<void> => {
+  try {
+    await stat(path);
+  } catch {
+    throw new Error(message);
   }
-
-  env.APPLE_SIGNING_IDENTITY = signingConfig.identity;
-
-  if (signingConfig.notarization.enabled) {
-    env.APPLE_ID = signingConfig.notarization.appleId;
-    env.APPLE_PASSWORD = signingConfig.notarization.appSpecificPassword;
-    env.APPLE_TEAM_ID = signingConfig.notarization.teamId;
-  }
-
-  return env;
 };
 
 const runCommand = async (
@@ -309,51 +283,30 @@ const runCommand = async (
 ): Promise<void> => {
   const proc = Bun.spawn(command, {
     cwd,
-    env: {
-      ...process.env,
-      ...env,
-    },
+    env: { ...process.env, ...env },
     stderr: "inherit",
     stdout: "inherit",
   });
-
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
     throw new Error(`Command failed (${exitCode}): ${errorLabel ?? command.join(" ")}`);
   }
 };
 
-const findGeneratedTauriDmg = async (bundleDir: string): Promise<string> => {
-  const entries = await readdir(bundleDir);
-  const candidates = await Promise.all(
-    entries
-      .filter((entry) => entry.endsWith(".dmg"))
-      .map(async (entry) => {
-        const path = join(bundleDir, entry);
-        return { path, modifiedMs: (await stat(path)).mtimeMs };
-      }),
-  );
-
-  const latest = candidates.toSorted((a, b) => b.modifiedMs - a.modifiedMs)[0];
-  if (!latest) {
-    throw new Error(`Tauri did not produce a DMG in ${bundleDir}`);
-  }
-
-  return latest.path;
-};
-
 const main = async (): Promise<void> => {
   const cli = cac("macos-dmg");
   cli
     .option("--arch <arch>", "Build one architecture only (x64 or arm64)")
-    .option("--release-dir <path>", "Release artifact directory", { default: DEFAULT_RELEASE_DIR })
+    .option("--release-dir <path>", "Release artifact directory", {
+      default: DEFAULT_RELEASE_DIR,
+    })
     .option("--version <version>", "Version label for the DMG volume");
-
   const { options } = cli.parse();
+  const values = options as CliOptions;
   await buildMacDmgArtifacts({
-    arch: parseArch((options as CliOptions).arch),
-    releaseDir: (options as CliOptions)["release-dir"],
-    version: (options as CliOptions).version,
+    arch: parseArch(values.arch),
+    releaseDir: values["release-dir"],
+    version: values.version,
   });
 };
 

@@ -59,7 +59,7 @@ Task detail lives at `/tasks/:id` (deep links from chat cards). Legacy routes (`
 
 ## Desktop and Windows
 
-`AOP.app` is a Tauri shell around the local product. Setup checks Git, GitHub CLI, and supported agent runtimes, then opens official installation guides for anything missing instead of installing host tools itself.
+`AOP.app` is an Electron shell around the local product. Setup checks Git, GitHub CLI, and supported agent runtimes, then opens official installation guides for anything missing instead of installing host tools itself. The app launches the bundled AOP sidecar and renders the local dashboard through a sandboxed window and narrow preload bridge.
 
 Windows execution runs through a managed WSL distro; the design is recorded in the Windows-WSL execution ADR inside the repository.
 

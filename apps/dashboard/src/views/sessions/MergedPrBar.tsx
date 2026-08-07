@@ -2,7 +2,7 @@ import { GitMergeIcon, XIcon } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { Badge } from "@/ui/badge";
 import { openExternalUrl, type SessionMergedPullRequest } from "../../api/client";
-import { isTauriWebView } from "../../utils/desktop-runtime";
+import { isDesktopApp } from "../../utils/desktop-runtime";
 import { formatRelativeTime } from "./sessions-runtime";
 
 interface MergedPrBarProps {
@@ -19,7 +19,7 @@ export const MergedPrBar = ({
   merged,
   branch,
   onDismiss,
-  desktop = isTauriWebView(),
+  desktop = isDesktopApp(),
   openLink = openExternalUrl,
 }: MergedPrBarProps) => (
   <div

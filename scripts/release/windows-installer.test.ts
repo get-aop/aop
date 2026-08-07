@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import {
-  buildSigntoolCommand,
   buildWindowsInstallerPlan,
+  electronBuilderWindowsSigningEnv,
   parseWindowsSigningConfig,
   resolveWindowsInstallerArtifacts,
 } from "./windows-installer.ts";
@@ -21,15 +21,12 @@ describe("windows-installer release planning", () => {
 
     expect(plan).toEqual({
       appName: "AOP",
+      builderInstallerPath: join("/repo", "dist/electron-builder/aop-windows-x64-setup.exe"),
+      builderOutputDir: join("/repo", "dist/electron-builder"),
       installerPath: join("/repo", "dist/release/aop-windows-x64-setup.exe"),
       releaseDir: join("/repo", "dist/release"),
-      resourcesDir: join("/repo", "apps/desktop/src-tauri/resources"),
+      resourcesDir: join("/repo", "apps/desktop/resources"),
       runtimeAssetsArchive: join("/repo", "dist/release/runtime-assets.tar.gz"),
-      targetTriple: "x86_64-pc-windows-msvc",
-      tauriBundleDir: join(
-        "/repo",
-        "apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis",
-      ),
       version: "0.2.11",
       workspaceRoot: "/repo",
     });
@@ -56,23 +53,12 @@ describe("windows-installer signing config", () => {
     );
   });
 
-  test("builds a SHA-256, timestamped signtool command", () => {
+  test("passes the certificate to Electron Builder for app and installer signing", () => {
     expect(
-      buildSigntoolCommand("C:/out/aop-windows-x64-setup.exe", "C:/tmp/cert.pfx", "pw"),
-    ).toEqual([
-      "signtool",
-      "sign",
-      "/fd",
-      "sha256",
-      "/f",
-      "C:/tmp/cert.pfx",
-      "/p",
-      "pw",
-      "/tr",
-      "http://timestamp.digicert.com",
-      "/td",
-      "sha256",
-      "C:/out/aop-windows-x64-setup.exe",
-    ]);
+      electronBuilderWindowsSigningEnv({ mode: "signed", pfxBase64: "base64-pfx", password: "pw" }),
+    ).toEqual({ WIN_CSC_LINK: "base64-pfx", WIN_CSC_KEY_PASSWORD: "pw" });
+    expect(electronBuilderWindowsSigningEnv({ mode: "unsigned" })).toEqual({
+      CSC_IDENTITY_AUTO_DISCOVERY: "false",
+    });
   });
 });

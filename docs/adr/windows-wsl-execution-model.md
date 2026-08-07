@@ -1,8 +1,7 @@
 # ADR: Windows + WSL execution model
 
 - Status: **Accepted** (2026-06-25)
-- Context: porting the macOS Tauri desktop app to Windows (see
-  `docs/superpowers/plans/2026-06-25-windows-tauri-port.md`).
+- Context: supporting the macOS Electron desktop app on Windows.
 
 ## Context
 

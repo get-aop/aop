@@ -54,10 +54,9 @@ playwright-report/
 link-claude.sh
 
 # desktop generated artifacts
-apps/desktop/src-tauri/resources/*
-!apps/desktop/src-tauri/resources/.gitkeep
-apps/desktop/src-tauri/target/
-apps/desktop/src-tauri/icons/icon.iconset/
+apps/desktop/dist-electron/
+apps/desktop/resources/*
+!apps/desktop/resources/.gitkeep
 
 # e2e test temp directories
 e2e-tests/tmp/

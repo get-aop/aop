@@ -2159,73 +2159,74 @@ describe("chat-session routes", () => {
   test.each([
     ["ignores a saved legacy steer mode", "steer", null],
     ["ignores an explicit legacy steer override", "queue", "steer"],
-  ] satisfies Array<
-    [string, "queue" | "steer", "steer" | null]
-  >)("%s", async (_name, savedMode, midRunMode) => {
-    let releaseFirst: (() => void) | undefined;
-    const firstGate = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-    let runCount = 0;
-    const gatedProvider: LLMProvider = {
-      name: "gated-queue-mode",
-      run: async (options) => {
-        runCount += 1;
-        if (runCount === 1) {
-          await options.onSpawn?.(99_001);
-          await firstGate;
-        }
-        await writeFixtureAssistantLog(options.logFilePath, `reply-${runCount}`);
-        return { exitCode: 0 };
-      },
-    };
+  ] satisfies Array<[string, "queue" | "steer", "steer" | null]>)(
+    "%s",
+    async (_name, savedMode, midRunMode) => {
+      let releaseFirst: (() => void) | undefined;
+      const firstGate = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let runCount = 0;
+      const gatedProvider: LLMProvider = {
+        name: "gated-queue-mode",
+        run: async (options) => {
+          runCount += 1;
+          if (runCount === 1) {
+            await options.onSpawn?.(99_001);
+            await firstGate;
+          }
+          await writeFixtureAssistantLog(options.logFilePath, `reply-${runCount}`);
+          return { exitCode: 0 };
+        },
+      };
 
-    const { db, app, ctx } = await setupWithCtx(() => gatedProvider);
-    await ctx.settingsRepository.set("chat_mid_run_mode", savedMode);
-    const session = await createSession(app, "repo_chat_1");
+      const { db, app, ctx } = await setupWithCtx(() => gatedProvider);
+      await ctx.settingsRepository.set("chat_mid_run_mode", savedMode);
+      const session = await createSession(app, "repo_chat_1");
 
-    const first = await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Start work" }),
-    });
-    expect(first.status).toBe(201);
+      const first = await app.request(`/api/chat-sessions/${session.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: "Start work" }),
+      });
+      expect(first.status).toBe(201);
 
-    for (let i = 0; i < 50 && runCount < 1; i++) await Bun.sleep(10);
-    expect(runCount).toBe(1);
+      for (let i = 0; i < 50 && runCount < 1; i++) await Bun.sleep(10);
+      expect(runCount).toBe(1);
 
-    const queued = await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: "Do this next",
-        ...(midRunMode ? { midRunMode } : {}),
-      }),
-    });
-    expect(queued.status).toBe(201);
-    expect(await queued.json()).toMatchObject({
-      midRun: "queued",
-      queued: true,
-      steered: false,
-    });
-    expect(runCount).toBe(1);
+      const queued = await app.request(`/api/chat-sessions/${session.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: "Do this next",
+          ...(midRunMode ? { midRunMode } : {}),
+        }),
+      });
+      expect(queued.status).toBe(201);
+      expect(await queued.json()).toMatchObject({
+        midRun: "queued",
+        queued: true,
+        steered: false,
+      });
+      expect(runCount).toBe(1);
 
-    releaseFirst?.();
-    await waitForPendingChatReplies();
-    expect(runCount).toBe(2);
+      releaseFirst?.();
+      await waitForPendingChatReplies();
+      expect(runCount).toBe(2);
 
-    const runs = await db
-      .selectFrom("chat_runs")
-      .select(["status", "interruption_kind"])
-      .where("session_id", "=", session.id)
-      .orderBy("created_at")
-      .execute();
-    expect(runs).toHaveLength(2);
-    expect(runs[0]).toMatchObject({ status: "completed", interruption_kind: null });
-    expect(runs[1]).toMatchObject({ status: "completed", interruption_kind: null });
+      const runs = await db
+        .selectFrom("chat_runs")
+        .select(["status", "interruption_kind"])
+        .where("session_id", "=", session.id)
+        .orderBy("created_at")
+        .execute();
+      expect(runs).toHaveLength(2);
+      expect(runs[0]).toMatchObject({ status: "completed", interruption_kind: null });
+      expect(runs[1]).toMatchObject({ status: "completed", interruption_kind: null });
 
-    await teardown(db);
-  });
+      await teardown(db);
+    },
+  );
 
   test.each([
     [

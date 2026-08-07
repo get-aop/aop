@@ -44,7 +44,7 @@ That bumps the version in the root `package.json` (the single source of truth fo
 
 ## macOS Desktop DMGs
 
-Release CI builds two Tauri desktop disk images:
+Release CI builds two Electron desktop disk images:
 
 | Artifact | Target |
 |----------|--------|
@@ -61,7 +61,7 @@ bun run package:macos-dmg
 hdiutil verify dist/release/aop-macos-arm64.dmg
 ```
 
-The packaging command uses Tauri and Rust. The local machine or CI runner needs the stable Rust toolchain available.
+The packaging command uses Electron Builder. The local machine or CI runner needs Bun and the Apple command-line signing tools; no Rust toolchain is required.
 
 macOS will show Gatekeeper warnings until the app is signed and notarized. Configure these GitHub secrets for public distribution:
 

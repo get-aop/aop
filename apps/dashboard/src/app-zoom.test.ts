@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { applyZoomShortcut } from "./app-zoom";
+import { applyZoomShortcut, setDesktopZoom } from "./app-zoom";
 
 describe("app zoom", () => {
   test("root coverage styles fill the webview without uncovered bars", () => {
@@ -35,6 +35,14 @@ describe("app zoom", () => {
   test("keeps zoom within readable bounds", () => {
     expect(applyZoomShortcut(1.5, keyboardEvent("+", { ctrlKey: true }))).toBe(1.5);
     expect(applyZoomShortcut(0.7, keyboardEvent("-", { ctrlKey: true }))).toBe(0.7);
+  });
+
+  test("uses the Electron preload bridge for native zoom", async () => {
+    const setZoom = mock(async (_factor: number) => undefined);
+
+    await setDesktopZoom(1.2, { setZoom });
+
+    expect(setZoom).toHaveBeenCalledWith(1.2);
   });
 
   test("walks the Issue 5 matrix ladder: zoom out, default, and three zoom-in steps", () => {

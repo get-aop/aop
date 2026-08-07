@@ -19,16 +19,14 @@ describe("task-docs/paths", () => {
     await rm(repoPath, { force: true, recursive: true });
   });
 
-  test.each([
-    "task.md",
-    "issues.md",
-    "prd.md",
-    "plan.md",
-  ])("treats %s as a task doc marker", async (filename) => {
-    const taskDir = aopPaths.repoTask("repo-1", "auth-flow");
-    await mkdir(taskDir, { recursive: true });
-    await writeFile(join(taskDir, filename), "# Task doc");
+  test.each(["task.md", "issues.md", "prd.md", "plan.md"])(
+    "treats %s as a task doc marker",
+    async (filename) => {
+      const taskDir = aopPaths.repoTask("repo-1", "auth-flow");
+      await mkdir(taskDir, { recursive: true });
+      await writeFile(join(taskDir, filename), "# Task doc");
 
-    expect(taskDocsExistOnDisk("repo-1", repoPath, "auth-flow")).toBe(true);
-  });
+      expect(taskDocsExistOnDisk("repo-1", repoPath, "auth-flow")).toBe(true);
+    },
+  );
 });
