@@ -40,6 +40,8 @@ export const ChatImageGallery = ({ images }: { images: ChatSessionMessageImage[]
             <img
               src={image.url}
               alt={`Attachment ${index + 1}`}
+              loading="lazy"
+              decoding="async"
               className="block h-auto max-h-[220px] w-full object-cover"
             />
           </button>
@@ -81,6 +83,7 @@ export const ChatImageGallery = ({ images }: { images: ChatSessionMessageImage[]
               <img
                 src={selected.url}
                 alt={`Attachment ${(selectedIndex ?? 0) + 1}`}
+                decoding="async"
                 className="max-h-[86vh] max-w-[88vw] rounded-xl object-contain shadow-2xl"
               />
               {images.length > 1 ? (

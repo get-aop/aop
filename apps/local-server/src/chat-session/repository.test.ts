@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { Kysely } from "kysely";
+import type { Kysely, KyselyPlugin } from "kysely";
 import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import { CleanupManifestError } from "./checkpoint-cleanup-manifest.ts";
@@ -16,6 +16,44 @@ import {
 
 const TARGET = "csess_delete";
 const KEEP = "csess_keep";
+
+describe("chat session repository list", () => {
+  let db: Kysely<Database>;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+  });
+
+  afterEach(async () => {
+    await db.destroy();
+  });
+
+  test("loads summaries with a fixed number of database queries", async () => {
+    await seedChatSessionGraph(db, { sessionId: "csess_one", turns: 2 });
+    await seedChatSessionGraph(db, { sessionId: "csess_two", turns: 1 });
+    let queryCount = 0;
+    const queryCounter: KyselyPlugin = {
+      transformQuery: ({ node }) => {
+        queryCount += 1;
+        return node;
+      },
+      transformResult: async ({ result }) => result,
+    };
+
+    const rows = await createChatSessionRepository(db.withPlugin(queryCounter)).list();
+
+    expect(queryCount).toBeLessThanOrEqual(3);
+    expect(rows.find((row) => row.id === "csess_one")).toMatchObject({
+      last_message_content: "amsg_csess_one_1",
+      last_message_at: "2026-07-24T09:01:01.000Z",
+      unread_count: 2,
+    });
+    expect(rows.find((row) => row.id === "csess_two")).toMatchObject({
+      last_message_content: "amsg_csess_two_0",
+      unread_count: 1,
+    });
+  });
+});
 
 describe("chat session repository deletion", () => {
   let db: Kysely<Database>;

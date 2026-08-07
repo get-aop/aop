@@ -139,18 +139,22 @@ export const pickSessionAfterSettle = (
   return list.find((session) => !isSessionSettled(session, { now }))?.id ?? null;
 };
 
+export const loadSessionBootstrapData = async (
+  loadAgents: () => Promise<Agent[]>,
+  refreshList: () => Promise<ChatSessionSummary[]>,
+): Promise<{ agents: Agent[]; list: ChatSessionSummary[] }> => {
+  const [agents, list] = await Promise.all([loadAgents().catch(() => []), refreshList()]);
+  return { agents, list };
+};
+
 export const bootstrapSessions = async (
   refreshList: () => Promise<ChatSessionSummary[]>,
   loadDetail: (id: string) => Promise<ChatSessionDetail | null>,
   setAgents: (agents: Agent[]) => void,
   preferredSessionId?: string | null,
 ): Promise<void> => {
-  try {
-    setAgents(await getAgents());
-  } catch {
-    setAgents([]);
-  }
-  const list = await refreshList();
+  const { agents, list } = await loadSessionBootstrapData(getAgents, refreshList);
+  setAgents(agents);
   const openId = pickSessionToOpen(list, preferredSessionId ?? readStoredActiveSessionId());
   if (openId) await loadDetail(openId);
 };

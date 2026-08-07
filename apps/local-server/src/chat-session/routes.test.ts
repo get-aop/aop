@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { appendFile, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -4443,6 +4443,21 @@ const createSession = async (app: HonoApp, repoId: string) => {
 };
 
 describe("chat-session unread counts", () => {
+  test("mark-read does not load the full message history", async () => {
+    const { db, app, ctx } = await setupWithCtx();
+    const session = await createSession(app, "repo_chat_1");
+    const listMessages = mock(ctx.chatSessionRepository.listMessages);
+    ctx.chatSessionRepository.listMessages = listMessages;
+
+    const response = await app.request(`/api/chat-sessions/${session.id}/mark-read`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(listMessages).not.toHaveBeenCalled();
+    await teardown(db);
+  });
+
   test("lists unreadCount for assistant messages and clears it after mark-read", async () => {
     const { db, app } = await setup();
     const session = await createSession(app, "repo_chat_1");

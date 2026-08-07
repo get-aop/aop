@@ -1,5 +1,6 @@
-import { code, type HighlightOptions, type HighlightResult } from "@streamdown/code";
+import type { HighlightOptions, HighlightResult } from "@streamdown/code";
 import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
+import { lazyCodeHighlighter } from "../../components/lazy-code-highlighter";
 
 const LANGUAGE_BY_EXTENSION: Record<string, HighlightOptions["language"]> = {
   c: "c",
@@ -45,7 +46,10 @@ export const DiffSyntax = ({ path, text }: { path: string; text: string }) => {
       highlightCache.set(cacheKey, next);
       if (active) setResult(next);
     };
-    const immediate = code.highlight({ code: text, language, themes: code.getThemes() }, accept);
+    const immediate = lazyCodeHighlighter.highlight(
+      { code: text, language, themes: lazyCodeHighlighter.getThemes() },
+      accept,
+    );
     if (immediate) accept(immediate);
     return () => {
       active = false;

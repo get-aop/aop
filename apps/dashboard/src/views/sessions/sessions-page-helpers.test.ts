@@ -14,6 +14,7 @@ import {
   countQueuedSessionMessages,
   handleSessionStreamEvent,
   IDLE_RESET_RUNTIME_MESSAGE,
+  loadSessionBootstrapData,
   navigateFromAction,
   pickSessionAfterSettle,
   pickSessionToOpen,
@@ -33,6 +34,18 @@ class NullEventSource {
 }
 
 globalThis.EventSource = NullEventSource as unknown as typeof EventSource;
+
+describe("loadSessionBootstrapData", () => {
+  test("loads the session list without waiting for agents", async () => {
+    const agents = Promise.withResolvers<[]>();
+    const refreshList = mock(async () => [summary("s1")]);
+    const loading = loadSessionBootstrapData(() => agents.promise, refreshList);
+
+    expect(refreshList).toHaveBeenCalledTimes(1);
+    agents.resolve([]);
+    await expect(loading).resolves.toMatchObject({ list: [{ id: "s1" }], agents: [] });
+  });
+});
 
 const summary = (id: string, settled = false): ChatSessionSummary =>
   ({

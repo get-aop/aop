@@ -1,4 +1,4 @@
-import type { Kysely } from "kysely";
+import { type Kysely, sql } from "kysely";
 import type {
   ChatMessage,
   ChatSession,
@@ -31,6 +31,9 @@ export interface ChatSessionRepository {
     id: string,
     options?: DeleteChatSessionGraphOptions,
   ) => Promise<DeleteChatSessionGraphResult>;
+  getLastMessage: (
+    sessionId: string,
+  ) => Promise<Pick<ChatMessage, "content" | "created_at"> | null>;
   listMessages: (sessionId: string) => Promise<ChatMessage[]>;
   countMessages: (sessionId: string) => Promise<number>;
   countUnreadAssistantMessages: (sessionId: string, lastReadAt: string | null) => Promise<number>;
@@ -85,34 +88,35 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
           "chat_sessions.updated_at",
           "repos.name as repo_name",
           "repos.path as repo_path",
+          sql<string | null>`(
+            SELECT last_message.content
+            FROM chat_messages AS last_message
+            WHERE last_message.session_id = chat_sessions.id
+            ORDER BY last_message.created_at DESC, last_message.id DESC
+            LIMIT 1
+          )`.as("last_message_content"),
+          sql<string | null>`(
+            SELECT last_message.created_at
+            FROM chat_messages AS last_message
+            WHERE last_message.session_id = chat_sessions.id
+            ORDER BY last_message.created_at DESC, last_message.id DESC
+            LIMIT 1
+          )`.as("last_message_at"),
+          sql<number>`(
+            SELECT COUNT(*)
+            FROM chat_messages AS unread_message
+            WHERE unread_message.session_id = chat_sessions.id
+              AND unread_message.role = 'assistant'
+              AND unread_message.created_at > COALESCE(chat_sessions.last_read_at, '')
+          )`.as("unread_count"),
         ])
         .orderBy("chat_sessions.pinned", "desc")
         .orderBy("chat_sessions.updated_at", "desc")
         .execute();
-
-      const rows: ChatSessionListRow[] = [];
-      for (const session of sessions) {
-        const last = await db
-          .selectFrom("chat_messages")
-          .select(["content", "created_at"])
-          .where("session_id", "=", session.id)
-          .orderBy("created_at", "desc")
-          .limit(1)
-          .executeTakeFirst();
-        const unreadCount = await countUnreadAssistantMessages(
-          db,
-          session.id,
-          session.last_read_at,
-        );
-
-        rows.push({
-          ...session,
-          last_message_content: last?.content ?? null,
-          last_message_at: last?.created_at ?? null,
-          unread_count: unreadCount,
-        });
-      }
-      return rows;
+      return sessions.map((session) => ({
+        ...session,
+        unread_count: Number(session.unread_count),
+      }));
     },
 
     update: async (id: string, patch: ChatSessionUpdate): Promise<ChatSession | null> => {
@@ -128,6 +132,18 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
     delete: async (id) => (await deleteChatSessionGraph(db, id)).deleted,
 
     deleteGraph: (id, options) => deleteChatSessionGraph(db, id, options),
+
+    getLastMessage: async (sessionId) => {
+      const message = await db
+        .selectFrom("chat_messages")
+        .select(["content", "created_at"])
+        .where("session_id", "=", sessionId)
+        .orderBy("created_at", "desc")
+        .orderBy("id", "desc")
+        .limit(1)
+        .executeTakeFirst();
+      return message ?? null;
+    },
 
     listMessages: async (sessionId: string): Promise<ChatMessage[]> => {
       return db

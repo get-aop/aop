@@ -39,10 +39,11 @@ describe("db/migrations", () => {
       SELECT name
       FROM sqlite_master
       WHERE type = 'index'
-        AND name IN ('idx_executions_status', 'idx_step_executions_status', 'idx_chat_messages_session_role_created')
+        AND name IN ('idx_executions_status', 'idx_step_executions_status', 'idx_chat_messages_session_created', 'idx_chat_messages_session_role_created')
     `.execute(db);
 
     expect(indexes.rows.map((row) => row.name).sort()).toEqual([
+      "idx_chat_messages_session_created",
       "idx_chat_messages_session_role_created",
       "idx_executions_status",
       "idx_step_executions_status",

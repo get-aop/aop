@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { outputFilename } from "./build";
+import { dashboardBuildOptions, outputFilename } from "./build";
+
+test("keeps deferred dashboard features out of the startup bundle", () => {
+  expect(dashboardBuildOptions.splitting).toBe(true);
+});
 
 describe("outputFilename", () => {
   test("extracts a filename from Windows build output", () => {

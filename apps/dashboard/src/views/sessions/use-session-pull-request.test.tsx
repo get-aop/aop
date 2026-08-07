@@ -58,10 +58,11 @@ const mergedStatus = (): SessionPullRequestStatus => {
 let nextStatus: SessionPullRequestStatus = emptyStatus();
 let nextSidebarStates = new Map<string, "open" | "closed" | "merged" | null>();
 let failingSidebarSessions = new Set<string>();
-const getSessionPullRequestState = mock(async (sessionId: string) => {
+let loadSidebarState = async (sessionId: string) => {
   if (failingSidebarSessions.has(sessionId)) throw new Error("temporary failure");
   return { state: nextSidebarStates.get(sessionId) ?? null };
-});
+};
+const getSessionPullRequestState = mock((sessionId: string) => loadSidebarState(sessionId));
 const getSessionPullRequestStatus = mock(async () => nextStatus);
 const createSessionPullRequest = mock(async () => ({
   number: 42,
@@ -131,6 +132,10 @@ beforeEach(() => {
   nextStatus = emptyStatus();
   nextSidebarStates = new Map();
   failingSidebarSessions = new Set();
+  loadSidebarState = async (sessionId: string) => {
+    if (failingSidebarSessions.has(sessionId)) throw new Error("temporary failure");
+    return { state: nextSidebarStates.get(sessionId) ?? null };
+  };
   getSessionPullRequestState.mockClear();
   getSessionPullRequestStatus.mockClear();
   createSessionPullRequest.mockClear();
@@ -488,6 +493,61 @@ const SidebarProbe = ({
 };
 
 describe("useSidebarPullRequestStates", () => {
+  test("reuses an in-flight request when the sidebar targets change", async () => {
+    const pending = new Map<
+      string,
+      Array<(value: { state: "open" | "closed" | "merged" | null }) => void>
+    >();
+    loadSidebarState = (sessionId) =>
+      new Promise((resolve) => {
+        const resolvers = pending.get(sessionId) ?? [];
+        resolvers.push(resolve);
+        pending.set(sessionId, resolvers);
+      });
+    const sessions = [sidebarSummary("s1", "repo"), sidebarSummary("s2", "repo")];
+    const { rerender } = render(
+      <SidebarProbe sessions={sessions} activeSessionId="s1" activePrState={null} />,
+    );
+    await waitFor(() => expect(getSessionPullRequestState).toHaveBeenCalledWith("s2"));
+
+    rerender(
+      <SidebarProbe
+        sessions={[...sessions, sidebarSummary("s3", "repo")]}
+        activeSessionId="s3"
+        activePrState={null}
+      />,
+    );
+    await waitFor(() => expect(getSessionPullRequestState).toHaveBeenCalledWith("s1"));
+
+    expect(getSessionPullRequestState.mock.calls.filter(([id]) => id === "s2")).toHaveLength(1);
+    await act(async () => {
+      for (const resolvers of pending.values()) {
+        for (const resolve of resolvers) resolve({ state: null });
+      }
+      await Promise.resolve();
+    });
+  });
+
+  test("reuses a recent result when the sidebar targets change", async () => {
+    nextSidebarStates.set("s2", "open");
+    const sessions = [sidebarSummary("s1", "repo"), sidebarSummary("s2", "repo")];
+    const { rerender } = render(
+      <SidebarProbe sessions={sessions} activeSessionId="s1" activePrState={null} />,
+    );
+    await waitFor(() => expect(getSessionPullRequestState).toHaveBeenCalledWith("s2"));
+
+    rerender(
+      <SidebarProbe
+        sessions={[...sessions, sidebarSummary("s3", "repo")]}
+        activeSessionId="s3"
+        activePrState={null}
+      />,
+    );
+    await waitFor(() => expect(getSessionPullRequestState).toHaveBeenCalledWith("s1"));
+
+    expect(getSessionPullRequestState.mock.calls.filter(([id]) => id === "s2")).toHaveLength(1);
+  });
+
   test("polls repository sessions except the active one and merges its live state", async () => {
     nextSidebarStates.set("s2", "closed");
     const { getByTestId } = render(
