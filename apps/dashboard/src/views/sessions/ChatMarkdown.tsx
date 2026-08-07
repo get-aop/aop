@@ -1,9 +1,9 @@
-import { code } from "@streamdown/code";
 import { CheckIcon, ChevronsUpDownIcon, CopyIcon } from "lucide-react";
 import type { AnchorHTMLAttributes, HTMLAttributes, MouseEvent, ReactNode } from "react";
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { openExternalUrl } from "../../api/client";
+import { lazyCodeHighlighter } from "../../components/lazy-code-highlighter";
 import { isDesktopApp } from "../../utils/desktop-runtime";
 
 interface ChatMarkdownProps {
@@ -41,7 +41,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   );
 });
 
-const plugins = { code };
+const plugins = { code: lazyCodeHighlighter };
 type ChildrenProps = { children?: ReactNode };
 
 const components = {

@@ -215,13 +215,48 @@ export const useSidebarPullRequestStates = (
   const targetIds = useMemo(() => (targetKey ? targetKey.split(",") : []), [targetKey]);
   const [states, setStates] = useState<Record<string, SessionPullRequestState | null>>({});
   const generationRef = useRef(0);
+  const cacheRef = useRef(
+    new Map<string, { fetchedAt: number; result: SidebarPullRequestStateResult }>(),
+  );
+  const requestsRef = useRef(new Map<string, Promise<SidebarPullRequestStateResult>>());
 
-  const refresh = useCallback(async () => {
-    const generation = generationRef.current;
-    const results = await mapWithConcurrency(targetIds, 4, loadSidebarPullRequestState);
-    if (generationRef.current !== generation) return;
-    setStates((current) => mergeSidebarPullRequestStates(current, results));
-  }, [targetIds]);
+  const loadState = useCallback(
+    (sessionId: string, force: boolean): Promise<SidebarPullRequestStateResult> => {
+      const pending = requestsRef.current.get(sessionId);
+      if (pending) return pending;
+
+      const cached = cacheRef.current.get(sessionId);
+      if (!force && cached && Date.now() - cached.fetchedAt < pollIntervalMs) {
+        return Promise.resolve(cached.result);
+      }
+
+      const request = loadSidebarPullRequestState(sessionId)
+        .then((result) => {
+          if (result.success) cacheRef.current.set(sessionId, { fetchedAt: Date.now(), result });
+          return result;
+        })
+        .finally(() => {
+          if (requestsRef.current.get(sessionId) === request) {
+            requestsRef.current.delete(sessionId);
+          }
+        });
+      requestsRef.current.set(sessionId, request);
+      return request;
+    },
+    [pollIntervalMs],
+  );
+
+  const refresh = useCallback(
+    async (force = false) => {
+      const generation = generationRef.current;
+      const results = await mapWithConcurrency(targetIds, 2, (sessionId) =>
+        loadState(sessionId, force),
+      );
+      if (generationRef.current !== generation) return;
+      setStates((current) => mergeSidebarPullRequestStates(current, results));
+    },
+    [loadState, targetIds],
+  );
 
   useEffect(() => {
     generationRef.current += 1;
@@ -235,23 +270,24 @@ export const useSidebarPullRequestStates = (
       clearInterval(interval);
       interval = null;
     };
-    const start = () => {
+    const start = (force = false) => {
       if (document.visibilityState !== "visible" || interval !== null) return;
-      void refresh();
-      interval = setInterval(() => void refresh(), pollIntervalMs);
+      void refresh(force);
+      interval = setInterval(() => void refresh(true), pollIntervalMs);
     };
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") start();
+      if (document.visibilityState === "visible") start(true);
       else stop();
     };
+    const onFocus = () => void refresh(true);
     start();
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", refresh);
+    window.addEventListener("focus", onFocus);
     return () => {
       generationRef.current += 1;
       stop();
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", refresh);
+      window.removeEventListener("focus", onFocus);
     };
   }, [pollIntervalMs, refresh, targetIds.length]);
 

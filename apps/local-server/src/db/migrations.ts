@@ -1322,7 +1322,7 @@ const createStepExecutionsTable = async (db: Kysely<Database>): Promise<void> =>
     .execute();
 };
 
-// Hot paths filter executions/steps by status and chat messages by session+role recency;
+// Hot paths filter executions/steps by status and chat messages by session recency;
 // without these, the lookups scan tables that grow with every run.
 const ensurePerformanceIndexes = async (db: Kysely<Database>): Promise<void> => {
   await db.schema
@@ -1336,6 +1336,12 @@ const ensurePerformanceIndexes = async (db: Kysely<Database>): Promise<void> => 
     .ifNotExists()
     .on("step_executions")
     .column("status")
+    .execute();
+  await db.schema
+    .createIndex("idx_chat_messages_session_created")
+    .ifNotExists()
+    .on("chat_messages")
+    .columns(["session_id", "created_at"])
     .execute();
   await db.schema
     .createIndex("idx_chat_messages_session_role_created")

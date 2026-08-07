@@ -1,5 +1,5 @@
-import { code } from "@streamdown/code";
 import { Streamdown } from "streamdown";
+import { lazyCodeHighlighter } from "./lazy-code-highlighter";
 
 const components = {
   h1: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
@@ -114,7 +114,7 @@ const components = {
   ),
 };
 
-const plugins = { code };
+const plugins = { code: lazyCodeHighlighter };
 
 interface MarkdownViewerProps {
   content: string;

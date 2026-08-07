@@ -61,6 +61,7 @@ describe("getSessionPullRequestState", () => {
     const result = await getSessionPullRequestState(ctx, sessionId, gh.run, git.run);
 
     expect(result).toEqual({ success: true, status: { state: expected } });
+    expect(git.calls.filter((args) => args[0] === "rev-parse")).toHaveLength(1);
     expect(gh.calls.some((args) => args[0] === "pr" && args[1] === "checks")).toBe(false);
     expect(gh.calls.some((args) => args[0] === "pr" && args[1] === "view")).toBe(false);
 

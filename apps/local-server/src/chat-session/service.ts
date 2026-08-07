@@ -402,6 +402,10 @@ export const createChatSessionService = (
         ctx.chatSessionRepository.list(),
         listPendingApprovalSessionIds(ctx),
       ]);
+      const lifecycleBySession = await resolveAssistantLifecycles(
+        ctx,
+        rows.map((row) => row.id),
+      );
       const locations = new Map<string, Promise<{ worktreePath: string; branch: string | null }>>();
       const sessions = await Promise.all(
         rows.map(async (row) => {
@@ -409,10 +413,8 @@ export const createChatSessionService = (
           const location =
             locations.get(session.workspacePath) ?? readSessionGitLocation(session.workspacePath);
           locations.set(session.workspacePath, location);
-          const [lifecycle, gitLocation] = await Promise.all([
-            resolveAssistantLifecycle(ctx, row.id),
-            location,
-          ]);
+          const lifecycle = lifecycleBySession.get(row.id) ?? "idle";
+          const gitLocation = await location;
           return {
             ...session,
             branch: gitLocation.branch,
@@ -1612,15 +1614,47 @@ const resolveAssistantLifecycle = async (
   ctx: LocalServerContext,
   sessionId: string,
 ): Promise<ChatSessionLifecycle> => {
+  const live = liveAssistantLifecycle(sessionId);
+  if (live) return live;
+  const durableRunning = await hasRunningChatRun(ctx, sessionId);
+  return durableRunning ? "uncontrollable" : "idle";
+};
+
+export const resolveAssistantLifecycles = async (
+  ctx: LocalServerContext,
+  sessionIds: string[],
+): Promise<Map<string, ChatSessionLifecycle>> => {
+  if (sessionIds.length === 0) return new Map();
+  const durableRows = await ctx.db
+    .selectFrom("chat_runs")
+    .select("session_id")
+    .where("status", "=", "running")
+    .groupBy("session_id")
+    .execute();
+  const durableRunning = new Set(durableRows.map((row) => row.session_id));
+  return new Map(
+    sessionIds.map((sessionId) => [
+      sessionId,
+      assistantLifecycleFromState(sessionId, durableRunning.has(sessionId)),
+    ]),
+  );
+};
+
+const assistantLifecycleFromState = (
+  sessionId: string,
+  durableRunning: boolean,
+): ChatSessionLifecycle => {
+  const live = liveAssistantLifecycle(sessionId);
+  if (live) return live;
+  return durableRunning ? "uncontrollable" : "idle";
+};
+
+const liveAssistantLifecycle = (sessionId: string): ChatSessionLifecycle | null => {
   const phase = sessionRunPhase(sessionId);
   if (phase === "cancelling") return "cancelling";
   if (phase === "running" || phase === "spawning") return "running";
   if (phase === "pending" || pendingSessionReplies.has(sessionId)) return "pending";
-
-  const durableRunning = await hasRunningChatRun(ctx, sessionId);
-  if (!durableRunning) return "idle";
-  // Durable row without a live handle cannot be OS-stopped safely after restart.
-  return "uncontrollable";
+  return null;
 };
 
 const completeAssistantReplyInBackground = async (input: {
@@ -3484,19 +3518,20 @@ const sessionDtoFor = async (
   lastContent?: string | null,
   lastAt?: string | null,
 ): Promise<ChatSessionDto> => {
-  const [repo, lifecycle, unreadCount, messages] = await Promise.all([
+  const [repo, lifecycle, unreadCount, lastMessage] = await Promise.all([
     findSessionRepo(ctx, session),
     resolveAssistantLifecycle(ctx, session.id),
     ctx.chatSessionRepository.countUnreadAssistantMessages(session.id, session.last_read_at),
-    lastContent === undefined ? ctx.chatSessionRepository.listMessages(session.id) : null,
+    lastContent === undefined ? ctx.chatSessionRepository.getLastMessage(session.id) : null,
   ]);
-  const last = messages?.at(-1) ?? null;
   return {
     ...toSessionDto(session, {
       repo_name: repo?.name ?? null,
       repo_path: repo?.path ?? null,
-      last_message_content: lastContent === undefined ? (last?.content ?? null) : lastContent,
-      last_message_at: lastContent === undefined ? (last?.created_at ?? null) : (lastAt ?? null),
+      last_message_content:
+        lastContent === undefined ? (lastMessage?.content ?? null) : lastContent,
+      last_message_at:
+        lastContent === undefined ? (lastMessage?.created_at ?? null) : (lastAt ?? null),
       unread_count: unreadCount,
     }),
     assistantActive: lifecycle !== "idle",

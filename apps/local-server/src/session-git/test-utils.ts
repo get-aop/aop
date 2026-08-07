@@ -32,6 +32,8 @@ export const createFakeGit = (config: FakeGitConfig = {}) => {
   const responses: Record<string, () => CommandResult> = {
     "rev-parse --is-inside-work-tree": () => okResult("true\n"),
     "rev-parse --abbrev-ref HEAD": () => okResult(`${config.branch ?? "feature/x"}\n`),
+    "rev-parse --is-inside-work-tree --abbrev-ref HEAD": () =>
+      okResult(`true\n${config.branch ?? "feature/x"}\n`),
     "rev-parse --git-dir": () =>
       okResult(config.mainCheckout ? "/repo/.git\n" : "/repo/.git/worktrees/wt\n"),
     "rev-parse --git-common-dir": () => okResult("/repo/.git\n"),

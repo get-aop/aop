@@ -29,6 +29,14 @@ export type ResolveSessionPrContextResult =
   | { ok: true; context: SessionPrContext }
   | { ok: false; error: SessionPrPreconditionError };
 
+type GhAvailability = { ok: true } | { ok: false; message: string };
+
+const GH_AVAILABILITY_CACHE_TTL_MS = 60_000;
+const ghAvailabilityCache = new WeakMap<
+  RunGh,
+  { expiresAt: number; result: Promise<GhAvailability> }
+>();
+
 /** Session → workspace → git preconditions shared by all session PR operations. */
 export const resolveSessionPrContext = async (
   ctx: LocalServerContext,
@@ -58,8 +66,12 @@ export const resolveSessionPrContext = async (
     throw error;
   }
 
-  const inside = await runGit(["rev-parse", "--is-inside-work-tree"], workspace);
-  if (inside.exitCode !== 0 || inside.stdout.trim() !== "true") {
+  const repositoryState = await runGit(
+    ["rev-parse", "--is-inside-work-tree", "--abbrev-ref", "HEAD"],
+    workspace,
+  );
+  const [inside, branchRaw = ""] = repositoryState.stdout.trim().split(/\r?\n/);
+  if (repositoryState.exitCode !== 0 || inside !== "true") {
     return {
       ok: false,
       error: {
@@ -69,8 +81,6 @@ export const resolveSessionPrContext = async (
     };
   }
 
-  const branchResult = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], workspace);
-  const branchRaw = branchResult.exitCode === 0 ? branchResult.stdout.trim() : "";
   const branch = branchRaw && branchRaw !== "HEAD" ? branchRaw : null;
   const defaultBranch = await resolveDefaultBranch(runGit, workspace);
 
@@ -81,14 +91,25 @@ export const resolveSessionPrContext = async (
 };
 
 /** gh availability via the injectable seam so tests never touch the real CLI. */
-export const checkGhAvailable = async (
-  runGh: RunGh,
-  cwd: string,
-): Promise<{ ok: true } | { ok: false; message: string }> => {
-  const result = await runGh(["auth", "status"], cwd);
-  if (result.exitCode === 0) return { ok: true };
-  return {
-    ok: false,
-    message: result.stderr.trim() || result.stdout.trim() || "GitHub CLI is unavailable",
-  };
+export const checkGhAvailable = async (runGh: RunGh, cwd: string): Promise<GhAvailability> => {
+  const cached = ghAvailabilityCache.get(runGh);
+  if (cached && cached.expiresAt > Date.now()) return cached.result;
+
+  const result = runGh(["auth", "status"], cwd)
+    .then<GhAvailability>((command) => {
+      if (command.exitCode === 0) return { ok: true };
+      return {
+        ok: false,
+        message: command.stderr.trim() || command.stdout.trim() || "GitHub CLI is unavailable",
+      };
+    })
+    .catch((error) => {
+      ghAvailabilityCache.delete(runGh);
+      throw error;
+    });
+  ghAvailabilityCache.set(runGh, {
+    expiresAt: Date.now() + GH_AVAILABILITY_CACHE_TTL_MS,
+    result,
+  });
+  return result;
 };

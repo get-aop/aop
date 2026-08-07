@@ -13,6 +13,20 @@ const log = getLogger("build");
 const DIST_DIR = "./dist";
 const SRC_DIR = "./src";
 
+export const dashboardBuildOptions = {
+  entrypoints: [`${SRC_DIR}/main.tsx`],
+  outdir: DIST_DIR,
+  target: "browser",
+  format: "esm",
+  minify: true,
+  sourcemap: "external",
+  splitting: true,
+  naming: "[name]-[hash].[ext]",
+  define: {
+    "process.env.NODE_ENV": '"production"',
+  },
+} satisfies Parameters<typeof Bun.build>[0];
+
 export const outputFilename = (outputPath: string): string => {
   const filename = outputPath.split(/[/\\]/).at(-1);
   if (!filename) {
@@ -42,21 +56,7 @@ interface BuildJsResult {
 }
 
 async function buildJS(): Promise<BuildJsResult> {
-  const result = await Bun.build({
-    entrypoints: [`${SRC_DIR}/main.tsx`],
-    outdir: DIST_DIR,
-    target: "browser",
-    format: "esm",
-    minify: true,
-    sourcemap: "external",
-    // Disabled due to Bun 1.3.6 bundler bug (cross-chunk exports resolve to undefined)
-    // Re-enable after upgrading Bun and verifying mdast-util-phrasing/unist-util-is work
-    splitting: false,
-    naming: "[name]-[hash].[ext]",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
-  });
+  const result = await Bun.build(dashboardBuildOptions);
 
   if (!result.success) {
     log.error("Build failed");

@@ -71,6 +71,7 @@ export const createMockContext = (): LocalServerContext => {
       update: async () => null,
       delete: async () => false,
       deleteGraph: async () => ({ deleted: false, cleanupJobIds: [] }),
+      getLastMessage: async () => null,
       listMessages: async () => [],
       countMessages: async () => 0,
       countUnreadAssistantMessages: async () => 0,
