@@ -8,7 +8,7 @@ describe("external URL opener", () => {
     expect(isAllowedExternalUrl("http://localhost:25150/tasks/task-1")).toBe(true);
     expect(isAllowedExternalUrl("http://aop.localhost:25150/tasks/task-1")).toBe(true);
     expect(isAllowedExternalUrl("http://example.com")).toBe(false);
-    expect(isAllowedExternalUrl("file:///Users/marcelorm/.ssh/id_rsa")).toBe(false);
+    expect(isAllowedExternalUrl("file:///home/marcelorm/.ssh/id_rsa")).toBe(false);
     expect(isAllowedExternalUrl("not a url")).toBe(false);
   });
 
