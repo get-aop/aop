@@ -203,7 +203,7 @@ describe("app", () => {
       const res = await appWithOpener.request("/api/open-external", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: "file:///Users/marcelorm/.ssh/id_rsa" }),
+        body: JSON.stringify({ url: "file:///home/marcelorm/.ssh/id_rsa" }),
       });
       const body: AnyJson = await res.json();
 
