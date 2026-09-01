@@ -206,7 +206,7 @@ jobs:
         run: bun run ./scripts/release/checksums.ts dist/release
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3.0.1
+        uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ needs.build.outputs.tag }}
           name: AOP ${{ needs.build.outputs.tag }}
