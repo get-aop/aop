@@ -6,6 +6,8 @@ export interface ArgvSpec {
 }
 
 export interface ParsedArgv {
+  /** Every `--flag` in order, whether or not the spec knows it; values and positionals are not flags. */
+  flags: string[];
   values: Map<string, string>;
   /** What each variadic flag consumed, in order; a repeated flag accumulates. */
   variadicValues: Map<string, string[]>;
@@ -14,24 +16,41 @@ export interface ParsedArgv {
 
 /** Splits argv into flag values and positionals, the way the real CLIs' option parsers do. */
 export const parseArgv = (args: readonly string[], spec: ArgvSpec): ParsedArgv => {
-  const parsed: ParsedArgv = { values: new Map(), variadicValues: new Map(), positionals: [] };
+  const parsed: ParsedArgv = {
+    flags: [],
+    values: new Map(),
+    variadicValues: new Map(),
+    positionals: [],
+  };
   let index = 0;
   while (index < args.length) {
     const arg = args[index] as string;
-    index += 1;
-    if (spec.valueFlags.includes(arg)) {
-      parsed.values.set(arg, args[index] ?? "");
-      index += 1;
-    } else if (spec.variadicFlags?.includes(arg)) {
-      const end = variadicEnd(args, index);
-      const consumed = args.slice(index, end);
-      parsed.variadicValues.set(arg, [...(parsed.variadicValues.get(arg) ?? []), ...consumed]);
-      index = end;
-    } else if (!arg.startsWith("--")) {
-      parsed.positionals.push(arg);
-    }
+    if (arg.startsWith("--")) parsed.flags.push(arg);
+    index = consume(args, index + 1, arg, spec, parsed);
   }
   return parsed;
+};
+
+// Takes what follows `arg` (at `from`) as its values and returns where the next argument starts.
+const consume = (
+  args: readonly string[],
+  from: number,
+  arg: string,
+  spec: ArgvSpec,
+  parsed: ParsedArgv,
+): number => {
+  if (spec.valueFlags.includes(arg)) {
+    parsed.values.set(arg, args[from] ?? "");
+    return from + 1;
+  }
+  if (spec.variadicFlags?.includes(arg)) {
+    const end = variadicEnd(args, from);
+    const consumed = args.slice(from, end);
+    parsed.variadicValues.set(arg, [...(parsed.variadicValues.get(arg) ?? []), ...consumed]);
+    return end;
+  }
+  if (!arg.startsWith("--")) parsed.positionals.push(arg);
+  return from;
 };
 
 // A variadic flag swallows a trailing prompt exactly like the real parser would,

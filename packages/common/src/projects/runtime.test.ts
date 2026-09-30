@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-  CliProviderSchema,
-  ReasoningEffortSchema,
-  RuntimePreferenceSchema,
-  RuntimeSelectionSchema,
-} from "./runtime.ts";
-import { makeRuntimeSelection, parsed, rejectedPaths } from "./test-utils.ts";
+import { CliProviderSchema, ReasoningEffortSchema, RuntimePreferenceSchema } from "./runtime.ts";
+import { makeRuntimePreference, parsed, rejectedPaths } from "./test-utils.ts";
 
 describe("CliProviderSchema", () => {
   test("accepts claude-code, the only Phase 1 runtime", () => {
@@ -32,24 +27,39 @@ describe("ReasoningEffortSchema", () => {
   });
 });
 
-describe("RuntimeSelectionSchema", () => {
-  test("accepts a fully resolved selection", () => {
-    expect(parsed(RuntimeSelectionSchema, makeRuntimeSelection())).toEqual(makeRuntimeSelection());
+describe("RuntimePreferenceSchema", () => {
+  test("accepts a role that names its model and effort", () => {
+    expect(parsed(RuntimePreferenceSchema, makeRuntimePreference())).toEqual(
+      makeRuntimePreference(),
+    );
   });
 
-  test("requires a concrete model and effort", () => {
-    expect(rejectedPaths(RuntimeSelectionSchema, makeRuntimeSelection({ model: null }))).toEqual([
+  test("null model and effort mean use the provider default, each on its own", () => {
+    for (const overrides of [{ model: null, effort: null }, { model: null }, { effort: null }]) {
+      const preference = makeRuntimePreference(overrides);
+      expect(parsed(RuntimePreferenceSchema, preference)).toEqual(preference);
+    }
+  });
+
+  test("still requires a provider", () => {
+    expect(rejectedPaths(RuntimePreferenceSchema, { model: null, effort: null })).toEqual([
+      "provider",
+    ]);
+  });
+
+  test("validates a model and an effort when one is set", () => {
+    expect(rejectedPaths(RuntimePreferenceSchema, makeRuntimePreference({ model: "-x" }))).toEqual([
       "model",
     ]);
-    expect(rejectedPaths(RuntimeSelectionSchema, makeRuntimeSelection({ effort: null }))).toEqual([
-      "effort",
-    ]);
+    expect(
+      rejectedPaths(RuntimePreferenceSchema, makeRuntimePreference({ effort: "ultra" })),
+    ).toEqual(["effort"]);
   });
 
   test.each(["--dangerously-skip-permissions", "gpt 5.5", "", "model;rm -rf /"])(
     "rejects model %p, which could read as a flag or split into several arguments",
     (model) => {
-      expect(rejectedPaths(RuntimeSelectionSchema, makeRuntimeSelection({ model }))).toEqual([
+      expect(rejectedPaths(RuntimePreferenceSchema, makeRuntimePreference({ model }))).toEqual([
         "model",
       ]);
     },
@@ -57,27 +67,9 @@ describe("RuntimeSelectionSchema", () => {
 
   test("accepts provider model ids with dots, colons, slashes, and a bracket suffix", () => {
     for (const model of ["gpt-5.5", "anthropic/claude-opus-5", "claude-opus-5[1m]", "llama3:70b"]) {
-      expect(RuntimeSelectionSchema.safeParse(makeRuntimeSelection({ model })).success).toBe(true);
+      expect(RuntimePreferenceSchema.safeParse(makeRuntimePreference({ model })).success).toBe(
+        true,
+      );
     }
-  });
-});
-
-describe("RuntimePreferenceSchema", () => {
-  test("null model and effort mean use the provider default", () => {
-    const preference = { provider: "claude-code", model: null, effort: null };
-    expect(parsed(RuntimePreferenceSchema, preference)).toEqual(preference);
-  });
-
-  test("still requires a provider and validates a model when one is set", () => {
-    expect(rejectedPaths(RuntimePreferenceSchema, { model: null, effort: null })).toEqual([
-      "provider",
-    ]);
-    expect(
-      rejectedPaths(RuntimePreferenceSchema, {
-        provider: "claude-code",
-        model: "-x",
-        effort: null,
-      }),
-    ).toEqual(["model"]);
   });
 });

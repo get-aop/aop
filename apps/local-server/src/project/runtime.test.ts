@@ -16,10 +16,9 @@ describe("resolveSessionRuntime", () => {
     await db.destroy();
   });
 
-  test("a setting with no model and no effort resolves to the built-in runtime's own defaults", async () => {
+  test("a setting with no model and no effort stays on the CLI's default: nothing is chosen for it", async () => {
     const configurations = createRuntimeConfigurationRepository(db);
     const [builtIn] = await configurations.list();
-    const defaultModel = builtIn?.models.find((model) => model.isDefault) ?? builtIn?.models[0];
 
     const runtime = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
@@ -27,44 +26,68 @@ describe("resolveSessionRuntime", () => {
       effort: null,
     });
 
-    expect(runtime).toMatchObject({
+    expect(runtime).toEqual({
       runtime: "claude-code",
-      runtimeConfigurationId: builtIn?.id,
+      runtimeConfigurationId: builtIn?.id ?? null,
       runtimeAlias: "claude",
-      model: defaultModel?.model,
+      model: null,
+      reasoningEffort: null,
     });
-    expect(defaultModel?.thinkingLevels).toContain(runtime.reasoningEffort as never);
+  });
+
+  test("a model or an effort left on default does not depend on the other", async () => {
+    const configurations = createRuntimeConfigurationRepository(db);
+    const [builtIn] = await configurations.list();
+    const offered = builtIn?.models.find((model) => model.thinkingLevels.length > 1);
+    if (!offered)
+      throw new Error("the built-in runtime should offer a model with several effort levels");
+    const effort = offered.thinkingLevels[0] ?? null;
+
+    const effortOnly = await resolveSessionRuntime(configurations, {
+      provider: "claude-code",
+      model: null,
+      effort,
+    });
+    const modelOnly = await resolveSessionRuntime(configurations, {
+      provider: "claude-code",
+      model: offered.model,
+      effort: null,
+    });
+
+    expect(effortOnly).toMatchObject({ model: null, reasoningEffort: effort });
+    expect(modelOnly).toMatchObject({ model: offered.model, reasoningEffort: null });
   });
 
   test("keeps a model and an effort the runtime offers, and falls back for ones it does not", async () => {
     const configurations = createRuntimeConfigurationRepository(db);
     const [builtIn] = await configurations.list();
     const offered = builtIn?.models.find((model) => model.thinkingLevels.length > 1);
-    if (!offered)
+    const defaultModel = builtIn?.models.find((model) => model.isDefault) ?? builtIn?.models[0];
+    if (!offered || !defaultModel) {
       throw new Error("the built-in runtime should offer a model with several effort levels");
-    const modelDefault = await resolveSessionRuntime(configurations, {
-      provider: "claude-code",
-      model: offered.model,
-      effort: null,
-    });
-    const notTheDefault = offered.thinkingLevels.find(
-      (level) => level !== modelDefault.reasoningEffort,
-    );
-
+    }
     const kept = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
       model: offered.model,
-      effort: notTheDefault ?? null,
+      effort: offered.thinkingLevels[1] ?? null,
     });
     const unknownModel = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
       model: "not-a-model",
       effort: null,
     });
+    const unofferedEffort = await resolveSessionRuntime(configurations, {
+      provider: "claude-code",
+      model: offered.model,
+      effort: "ultra" as never,
+    });
 
-    expect(notTheDefault).toBeDefined();
-    expect(kept).toMatchObject({ model: offered.model, reasoningEffort: notTheDefault });
-    expect(unknownModel.model).not.toBe("not-a-model");
+    expect(kept).toMatchObject({
+      model: offered.model,
+      reasoningEffort: offered.thinkingLevels[1],
+    });
+    expect(unknownModel.model).toBe(defaultModel.model);
+    expect(offered.thinkingLevels).toContain(unofferedEffort.reasoningEffort as never);
   });
 
   test("uses the first runnable runtime configuration, so a fake or aliased CLI wins when ordered first", async () => {
@@ -84,18 +107,31 @@ describe("resolveSessionRuntime", () => {
       .filter((id) => id !== custom.id);
     await configurations.reorderProviders([custom.id, ...others]);
 
-    const runtime = await resolveSessionRuntime(configurations, {
+    const onDefault = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
       model: null,
+      effort: null,
+    });
+    const named = await resolveSessionRuntime(configurations, {
+      provider: "claude-code",
+      model: "custom-model",
       effort: "high",
     });
 
-    expect(runtime).toEqual({
+    expect(onDefault).toEqual({
+      runtime: "claude-code",
+      runtimeConfigurationId: custom.id,
+      runtimeAlias: "/opt/bin/my-claude",
+      model: null,
+      reasoningEffort: null,
+    });
+    expect(named).toEqual({
       runtime: "claude-code",
       runtimeConfigurationId: custom.id,
       runtimeAlias: "/opt/bin/my-claude",
       model: "custom-model",
-      reasoningEffort: "medium",
+      // The model lists no effort levels, so the effort asked for has nothing to apply to.
+      reasoningEffort: null,
     });
   });
 });

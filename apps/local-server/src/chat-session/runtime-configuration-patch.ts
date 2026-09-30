@@ -45,7 +45,8 @@ const mergeConfigurationSessionPatch = async (
       ...input,
       runtimeConfigurationId,
       model:
-        input.model ?? (input.runtimeConfigurationId === undefined ? existing.model : undefined),
+        input.model ??
+        (input.runtimeConfigurationId === undefined ? (existing.model ?? undefined) : undefined),
     },
     {
       // User-facing PATCH must reject invalid model/effort; re-apply may fall back.
@@ -148,19 +149,22 @@ export const resolveRuntimeConfigurationPatch = async (
   if (!model) {
     return { success: false as const, error: { code: "INVALID_MODEL" as const } };
   }
+  const follows = followsCliDefaults(existing, input);
   // Prefer configured default thinking when the bound runtime or model actually changes.
   const modelChanged =
-    model.model !== existing.model ||
+    (!follows.model && model.model !== existing.model) ||
     (input.runtimeConfigurationId !== undefined &&
       input.runtimeConfigurationId !== existing.runtime_configuration_id);
-  const effort = resolveRuntimeConfigurationEffort(
-    model.thinkingLevels,
-    existing.reasoning_effort,
-    input.reasoningEffort,
-    options.strictEffort === true,
-    model.defaultThinkingLevel,
-    modelChanged,
-  );
+  const effort = follows.effort
+    ? { success: true as const, effort: null }
+    : resolveRuntimeConfigurationEffort(
+        model.thinkingLevels,
+        existing.reasoning_effort,
+        input.reasoningEffort,
+        options.strictEffort === true,
+        model.defaultThinkingLevel,
+        modelChanged,
+      );
   if (!effort.success) return effort;
 
   return {
@@ -168,7 +172,7 @@ export const resolveRuntimeConfigurationPatch = async (
     patch: {
       runtime: configuration.driver,
       runtime_configuration_id: configuration.id,
-      model: model.model,
+      model: follows.model ? null : model.model,
       reasoning_effort: effort.effort,
       runtime_alias: configuration.command,
       runtime_session_id: null,
@@ -180,6 +184,17 @@ export const resolveRuntimeConfigurationPatch = async (
     },
   };
 };
+
+// A session with no model or effort runs on the CLI's own default and keeps doing so until one is
+// asked for. The configuration's default model still stands in for the efforts and Fast mode it
+// accepts, but the configuration then only supplies the command.
+const followsCliDefaults = (
+  existing: ChatSession,
+  input: UpdateChatSessionInput,
+): { model: boolean; effort: boolean } => ({
+  model: existing.model === null && input.model === undefined,
+  effort: existing.reasoning_effort === null && input.reasoningEffort === undefined,
+});
 
 const pickRuntimeConfigurationModel = <Model extends { model: string; isDefault: boolean }>(
   models: Model[],
@@ -204,7 +219,7 @@ const resolveConfigurationFastMode = (
 
 const resolveRuntimeConfigurationEffort = (
   levels: string[],
-  existingEffort: string,
+  existingEffort: string | null,
   requestedEffort: string | undefined,
   strict: boolean,
   defaultThinkingLevel: string | null = null,
@@ -213,7 +228,7 @@ const resolveRuntimeConfigurationEffort = (
   if (requestedEffort !== undefined) {
     if (levels.includes(requestedEffort)) return { success: true, effort: requestedEffort };
     if (strict) return { success: false, error: { code: "INVALID_EFFORT" } };
-  } else if (!preferDefault && levels.includes(existingEffort)) {
+  } else if (!preferDefault && existingEffort !== null && levels.includes(existingEffort)) {
     // Keep sticky effort for non-model edits (e.g. fast mode toggle).
     return { success: true, effort: existingEffort };
   }
@@ -225,10 +240,10 @@ const resolveRuntimeConfigurationEffort = (
 
 const pickConfiguredEffort = (
   levels: string[],
-  existingEffort: string,
+  existingEffort: string | null,
   defaultThinkingLevel: string | null,
 ): string => {
   if (defaultThinkingLevel && levels.includes(defaultThinkingLevel)) return defaultThinkingLevel;
-  if (levels.includes(existingEffort)) return existingEffort;
+  if (existingEffort !== null && levels.includes(existingEffort)) return existingEffort;
   return levels[0] ?? DEFAULT_EFFORT;
 };

@@ -26,7 +26,9 @@ describe("spawning a thread", () => {
       projectId: project.id,
       repoId: s.repos[0]?.id,
       target: { kind: "host" },
-      runtime: { provider: "claude-code", model: "fake-model" },
+      // Model on default: the thread names none. The fake model lists no effort levels, so the
+      // "high" the project asks for has nothing to apply to.
+      runtime: { provider: "claude-code", model: null, effort: null },
     });
     await s.settle();
     const session = await s.ctx.chatSessionRepository.getById(

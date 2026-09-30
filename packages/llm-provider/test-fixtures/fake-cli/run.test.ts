@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readLaunches } from "./session-store";
 import { CLAUDE_ARGS, play, removeHomes, types } from "./test-utils";
 import { readEchoedSystemPrompt } from "./turn";
 
@@ -89,6 +90,38 @@ describe("runFakeCli", () => {
       },
       modelUsage: { "fake-model": { inputTokens: 1200, cacheReadInputTokens: 61_000 } },
     });
+  });
+
+  test("a launch with no --model reports its usage under fake-claude, and its session records that it passed no flag", async () => {
+    const run = await play([...CLAUDE_ARGS, "x [fake: usage=10,5,0,0]"]);
+    const sessionId = String(run.events[0]?.session_id);
+
+    expect(run.events.at(-1)).toMatchObject({ modelUsage: { "fake-claude": { inputTokens: 10 } } });
+    expect(readLaunches(run.home, "claude", sessionId)).toEqual([
+      { turn: 1, flags: ["--output-format", "--verbose"], model: null, effort: null },
+    ]);
+  });
+
+  test("a resume records its own launch: the flags it passed this time, not the first turn's", async () => {
+    const first = await play([...CLAUDE_ARGS, "--model", "m1", "--effort", "high", "one"]);
+    const sessionId = String(first.events[0]?.session_id);
+
+    await play([...CLAUDE_ARGS, "--resume", sessionId, "two"], {}, first.home);
+
+    expect(readLaunches(first.home, "claude", sessionId)).toEqual([
+      {
+        turn: 1,
+        flags: ["--output-format", "--verbose", "--model", "--effort"],
+        model: "m1",
+        effort: "high",
+      },
+      {
+        turn: 2,
+        flags: ["--output-format", "--verbose", "--resume"],
+        model: null,
+        effort: null,
+      },
+    ]);
   });
 
   test("write= puts files in the working directory before the first event, and refuses to leave it", async () => {

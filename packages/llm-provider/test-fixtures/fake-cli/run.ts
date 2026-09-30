@@ -55,6 +55,9 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
   const session = beginTurn(resolveHome(runtime.env), dialect.name, invocation.resumeId, {
     appended: invocation.appendSystemPrompt,
     recording: invocation.recordSystemPrompt,
+    flags: invocation.flags,
+    model: invocation.model,
+    effort: invocation.effort,
   });
   if (!session) {
     const message = `No conversation found with session ID: ${invocation.resumeId}`;

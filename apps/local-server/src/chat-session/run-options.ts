@@ -21,8 +21,9 @@ export const buildRunOptions = (
   return {
     prompt,
     cwd: repoPath,
-    model: session.model,
-    reasoningEffort: session.reasoning_effort,
+    // A session with no model or effort runs on the CLI's own default: the adapter passes no flag.
+    model: session.model ?? undefined,
+    reasoningEffort: session.reasoning_effort ?? undefined,
     fastMode: Boolean(session.fast_mode),
     accessMode: profile.accessMode ?? session.runtime_access_mode ?? "full-access",
     runtimeAlias: session.runtime_alias ?? undefined,

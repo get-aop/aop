@@ -104,7 +104,7 @@ export const toSessionDto = (
   runtime: session.runtime as CliProvider,
   runtimeConfigurationId: session.runtime_configuration_id,
   model: session.model,
-  reasoningEffort: session.reasoning_effort as ReasoningEffort,
+  reasoningEffort: session.reasoning_effort as ReasoningEffort | null,
   runtimeAlias: session.runtime_alias,
   runtimeSessionId: session.runtime_session_id,
   workspacePath: session.workspace_path ?? extras.repo_path ?? aopPaths.generalChatWorkspace(),

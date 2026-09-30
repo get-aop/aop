@@ -21,17 +21,11 @@ export const ModelSchema = z.string().regex(SAFE_CUSTOM_RUNTIME_MODEL_PATTERN, {
   error: "Model must be a valid provider model identifier",
 });
 
-/** What a run actually uses. Recorded on a thread: the chip in its composer shows these values. */
-export const RuntimeSelectionSchema = z.object({
-  provider: CliProviderSchema,
-  model: ModelSchema,
-  effort: ReasoningEffortSchema,
-});
-export type RuntimeSelection = z.infer<typeof RuntimeSelectionSchema>;
-
 /**
- * What a project setting stores for one role (coordinator or thread). A null model or effort
- * means "use the provider's default", resolved when a run starts, so a changed default follows.
+ * What one role (the coordinator, or a thread) runs on: a provider plus an optional model and
+ * effort. A null model or effort is "use default": AOP passes no `--model` or `--effort` to the
+ * CLI and the CLI decides, so a changed default follows and a plan without a catalog model
+ * still runs. A project setting stores it, and a thread records the one it started with.
  */
 export const RuntimePreferenceSchema = z.object({
   provider: CliProviderSchema,

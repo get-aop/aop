@@ -6,7 +6,7 @@ type Overrides = Record<string, unknown>;
 export const AT = "2026-09-29T10:00:00.000Z";
 export const LATER = "2026-09-29T11:30:00.000Z";
 
-export const makeRuntimeSelection = (overrides: Overrides = {}) => ({
+export const makeRuntimePreference = (overrides: Overrides = {}) => ({
   provider: "claude-code",
   model: "claude-opus-5",
   effort: "high",
@@ -36,7 +36,7 @@ export const makeThread = (overrides: Overrides = {}) => ({
   projectId: "prj_1",
   title: "Fix 4s cold start regression",
   status: "working",
-  runtime: makeRuntimeSelection(),
+  runtime: makeRuntimePreference(),
   target: { kind: "host" },
   repoId: "repo_1",
   branch: "aop/cold-start-a1b2c3",

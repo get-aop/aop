@@ -81,7 +81,7 @@ export const GeneralSection = ({ project }: { project: Project }) => {
 
         <SettingsBlock
           title="Models"
-          description="Each role runs the model and effort you choose. “Use default” follows Claude Code's own default, so it changes when the default does."
+          description="Each role runs the model and effort you choose. “Use default” passes none, so Claude Code picks its own and the role follows it when it changes."
           testId="settings-models"
         >
           <ModelSettings draft={draft} />

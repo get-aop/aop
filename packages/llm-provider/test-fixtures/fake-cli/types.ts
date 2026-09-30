@@ -77,7 +77,12 @@ export interface TurnContext {
 export interface Invocation {
   prompt: string;
   resumeId?: string;
+  /** `--model`; undefined when the launch passed none, and Claude Code picks its own default. */
   model?: string;
+  /** `--effort`; undefined when the launch passed none. */
+  effort?: string;
+  /** Every flag the launch passed, in order. */
+  flags: string[];
   /** `--append-system-prompt`. */
   appendSystemPrompt?: string;
   /** False with `--system-prompt-snapshot off`. */

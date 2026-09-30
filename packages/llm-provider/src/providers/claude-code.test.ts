@@ -323,9 +323,9 @@ describe("buildCommand", () => {
       "--verbose",
       "--permission-mode",
       "plan",
+      "bounded plan",
       "--disallowedTools",
       "Task",
-      "bounded plan",
     ]);
   });
 
@@ -402,15 +402,17 @@ describe("buildCommand", () => {
     );
   });
 
-  test("emits the variadic flags after the prompt in add-dir, allowedTools, tools order", () => {
+  test("emits the variadic flags after the prompt in mcp-config, disallowedTools, add-dir, allowedTools, tools order", () => {
     const provider = new ClaudeCodeProvider();
+    const mcpServerUrl = "http://127.0.0.1:25350/api/mcp?sessionId=s&accessToken=t";
     const cmd = provider.buildCommand({
       prompt: "coordinate",
       model: "opus",
       reasoningEffort: "low",
       isolation: "hermetic",
       accessMode: "full-access",
-      mcpServerUrl: "http://127.0.0.1:25350/api/mcp?sessionId=s&accessToken=t",
+      mcpServerUrl,
+      disallowedTools: ["AskUserQuestion"],
       allowedDirectories: ["/notes"],
       allowedTools: ["mcp__aop__thread_spawn"],
       builtInTools: [],
@@ -418,6 +420,10 @@ describe("buildCommand", () => {
 
     expect(cmd.slice(cmd.indexOf("coordinate"))).toEqual([
       "coordinate",
+      "--mcp-config",
+      JSON.stringify({ mcpServers: { aop: { type: "http", url: mcpServerUrl } } }),
+      "--disallowedTools",
+      "AskUserQuestion",
       "--add-dir",
       "/notes",
       "--allowedTools",

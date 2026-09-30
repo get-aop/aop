@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ArtifactSchema } from "./artifact.ts";
 import { IdSchema, TimestampSchema } from "./primitives.ts";
-import { RuntimeSelectionSchema } from "./runtime.ts";
+import { RuntimePreferenceSchema } from "./runtime.ts";
 
 /**
  * Where a thread runs. Phase 1 runs threads on the host only; a paired device or remote runner
@@ -41,7 +41,7 @@ const ThreadBaseSchema = z.object({
   id: IdSchema,
   projectId: IdSchema,
   title: z.string().trim().min(1).max(200),
-  runtime: RuntimeSelectionSchema,
+  runtime: RuntimePreferenceSchema,
   target: ThreadTargetSchema,
   repoId: IdSchema.nullable(),
   branch: z.string().min(1).nullable(),

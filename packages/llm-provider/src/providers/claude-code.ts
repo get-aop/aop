@@ -167,15 +167,8 @@ export class ClaudeCodeProvider implements LLMProvider {
     if (settings) {
       cmd.push("--settings", JSON.stringify(settings));
     }
-    if (mcpConfig) {
-      cmd.push("--mcp-config", JSON.stringify(mcpConfig));
-    }
 
-    const disallowedTools = normalizeToolList(options.disallowedTools);
-    if (disallowedTools.length > 0) {
-      cmd.push("--disallowedTools", ...disallowedTools);
-    }
-
+    // Absent means "use Claude Code's own default": no flag, so the CLI decides.
     if (options.model) {
       cmd.push("--model", options.model);
     }
@@ -186,7 +179,7 @@ export class ClaudeCodeProvider implements LLMProvider {
 
     appendClaudeSystemPromptFlags(cmd, options);
     cmd.push(options.prompt);
-    appendClaudeVariadicFlags(cmd, options);
+    appendClaudeVariadicFlags(cmd, options, mcpConfig);
 
     return cmd;
   }
@@ -359,9 +352,22 @@ const appendClaudePermissionFlags = (cmd: string[], options: RunOptions): void =
   cmd.push("--dangerously-skip-permissions");
 };
 
-// Variadic flags swallow every following argument up to the next flag, so they go after the
-// positional prompt; `--tools` takes one comma-joined value, and "" means no built-in tools.
-const appendClaudeVariadicFlags = (cmd: string[], options: RunOptions): void => {
+// Variadic flags swallow every following argument up to the next flag, so they all go after the
+// positional prompt, whatever else the run sets: a run on Claude Code's default model and effort
+// has no flag of its own before the prompt to end one. `--tools` takes one comma-joined value,
+// and "" means no built-in tools.
+const appendClaudeVariadicFlags = (
+  cmd: string[],
+  options: RunOptions,
+  mcpConfig: Record<string, unknown> | null,
+): void => {
+  if (mcpConfig) {
+    cmd.push("--mcp-config", JSON.stringify(mcpConfig));
+  }
+  const disallowedTools = normalizeToolList(options.disallowedTools);
+  if (disallowedTools.length > 0) {
+    cmd.push("--disallowedTools", ...disallowedTools);
+  }
   const allowedDirectories = dedupeAllowedDirectories(options.allowedDirectories ?? []);
   if (allowedDirectories.length > 0) {
     cmd.push("--add-dir", ...allowedDirectories);
@@ -379,8 +385,7 @@ const appendClaudeVariadicFlags = (cmd: string[], options: RunOptions): void => 
 // text included, and sends that record on every later request and resume, ignoring different
 // text passed on a later launch (CLI reference: "System prompt flags in resumed conversations").
 // `--system-prompt-snapshot off` (Claude Code 2.1.257 or later) renders the prompt afresh each
-// request, so an edited instruction reaches a resumed turn. Both flags take one value, so they
-// also end any variadic flag before them and keep the positional prompt from being swallowed.
+// request, so an edited instruction reaches a resumed turn.
 const appendClaudeSystemPromptFlags = (cmd: string[], options: RunOptions): void => {
   const text = options.appendSystemPrompt?.trim();
   if (!text) return;

@@ -40,9 +40,7 @@ describe("appendSystemPrompt", () => {
     }
   });
 
-  test("keeps the positional prompt out of the variadic flags before it, even with no model or effort", () => {
-    // Without these flags a run that sets neither --model nor --effort ends on a variadic flag,
-    // which swallows the prompt (see the fake CLI README).
+  test("goes right before the prompt, and no variadic flag comes before either, with no model or effort", () => {
     const cmd = build({
       prompt: "the prompt",
       isolation: "hermetic",
@@ -55,7 +53,9 @@ describe("appendSystemPrompt", () => {
     const before = cmd.slice(0, cmd.indexOf("the prompt"));
     expect(before.at(-2)).toBe("--system-prompt-snapshot");
     expect(before.at(-1)).toBe("off");
-    expect(cmd.indexOf("--disallowedTools")).toBeLessThan(cmd.indexOf("--append-system-prompt"));
+    // A variadic flag would take the prompt as one of its values, so they follow it.
+    expect(cmd.indexOf("--disallowedTools")).toBeGreaterThan(cmd.indexOf("the prompt"));
+    expect(cmd.indexOf("--mcp-config")).toBeGreaterThan(cmd.indexOf("the prompt"));
   });
 
   test("passes a text that begins with dashes or quotes untouched, as one argument", () => {

@@ -103,6 +103,8 @@ describe("the fake CLI calling the AOP MCP endpoint through the real adapter", (
     expect(run.argv).toContain("--strict-mcp-config");
     expect(run.argv.slice(run.argv.indexOf(prompt))).toEqual([
       prompt,
+      "--mcp-config",
+      JSON.stringify({ mcpServers: { aop: { type: "http", url: run.aop.url } } }),
       "--allowedTools",
       "mcp__aop__thread_spawn",
       "--tools",

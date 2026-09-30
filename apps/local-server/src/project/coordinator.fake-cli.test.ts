@@ -301,8 +301,9 @@ describe("coordinator and threads against the fake CLI", () => {
       accessMode: "approval-required",
       builtInTools: [],
       cwd: coordinator?.workspace_path,
-      model: "fake-model",
     });
+    // The project's models are on default, so the run names neither (see default-runtime.fake-cli.test.ts).
+    expect(coordinatorRun?.model).toBeUndefined();
     expect(coordinatorRun?.allowedDirectories).toBeUndefined();
     // What the engine really handed the adapter: nothing on the command line skips permissions.
     if (!coordinatorRun) throw new Error("the coordinator did not run");

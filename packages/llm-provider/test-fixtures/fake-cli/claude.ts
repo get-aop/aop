@@ -44,7 +44,7 @@ export const claudeDialect: Dialect = {
 };
 
 function parseInvocation(args: string[]): Invocation {
-  const { values, variadicValues, positionals } = parseArgv(args, {
+  const { flags, values, variadicValues, positionals } = parseArgv(args, {
     valueFlags: [
       "--output-format",
       "--setting-sources",
@@ -63,6 +63,8 @@ function parseInvocation(args: string[]): Invocation {
     prompt: positionals[0] ?? "",
     resumeId: values.get("--resume"),
     model: values.get("--model"),
+    effort: values.get("--effort"),
+    flags,
     appendSystemPrompt: values.get("--append-system-prompt"),
     recordSystemPrompt: values.get("--system-prompt-snapshot") !== "off",
     mcpServers: readMcpServers(variadicValues.get("--mcp-config") ?? []),

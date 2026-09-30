@@ -2,6 +2,7 @@ import { type Kysely, sql } from "kysely";
 import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
 import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { COORDINATOR_V4_STATEMENTS } from "./coordinator-v4.ts";
+import { DEFAULT_RUNTIME_V9_STATEMENTS } from "./default-runtime-v9.ts";
 import { EXEC_HOSTS_V8_STATEMENTS } from "./exec-hosts-v8.ts";
 import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
@@ -30,6 +31,7 @@ const MIGRATIONS: readonly Migration[] = [
   { version: 6, name: "thread-pull-request", statements: THREAD_GIT_V6_STATEMENTS },
   { version: 7, name: "pull-request-watch", statements: PULL_REQUEST_WATCH_V7_STATEMENTS },
   { version: 8, name: "remove-exec-hosts", statements: EXEC_HOSTS_V8_STATEMENTS },
+  { version: 9, name: "default-runtime", statements: DEFAULT_RUNTIME_V9_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

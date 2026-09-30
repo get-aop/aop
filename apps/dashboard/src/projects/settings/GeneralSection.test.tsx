@@ -159,6 +159,39 @@ describe("models and effort", () => {
     });
   });
 
+  test("both roles on default save no model and no effort, so nothing is passed to Claude Code", async () => {
+    renderGeneral(
+      makeProject({
+        id: "p1",
+        name: "Checkout",
+        coordinator: { provider: "claude-code", model: "claude-opus-5", effort: "high" },
+        thread: { provider: "claude-code", model: "claude-sonnet-4-6", effort: "low" },
+      }),
+    );
+
+    for (const role of ["coordinator", "thread"]) {
+      await choose(`settings-${role}-model`, "Use default");
+      await choose(`settings-${role}-effort`, "Use default");
+    }
+    save();
+
+    await waitFor(() => expect(api.writes()).toHaveLength(1));
+    expect(api.writes()[0]?.body).toEqual({
+      coordinator: { provider: "claude-code", model: null, effort: null },
+      thread: { provider: "claude-code", model: null, effort: null },
+    });
+  });
+
+  test("the copy says what a role on default does, and that a thread keeps what it started with", () => {
+    renderGeneral();
+
+    const models = screen.getByTestId("settings-models").textContent ?? "";
+    expect(models).toContain("“Use default” passes none, so Claude Code picks its own");
+    expect(screen.getByTestId("settings-thread-runtime").textContent).toContain(
+      "A new thread starts on these and keeps them",
+    );
+  });
+
   test("a model that does not take the current effort resets it to the default", async () => {
     renderGeneral(
       makeProject({

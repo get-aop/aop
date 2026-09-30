@@ -93,18 +93,8 @@ export {
   MAX_CONCURRENT_RUNS_LIMIT,
   parseMaxConcurrentRuns,
 } from "./run-cap.ts";
-export type {
-  CliProvider,
-  ReasoningEffort,
-  RuntimePreference,
-  RuntimeSelection,
-} from "./runtime.ts";
-export {
-  CliProviderSchema,
-  ReasoningEffortSchema,
-  RuntimePreferenceSchema,
-  RuntimeSelectionSchema,
-} from "./runtime.ts";
+export type { CliProvider, ReasoningEffort, RuntimePreference } from "./runtime.ts";
+export { CliProviderSchema, ReasoningEffortSchema, RuntimePreferenceSchema } from "./runtime.ts";
 export type { MessageDelta, Resync, ResyncReason } from "./stream.ts";
 export {
   MessageDeltaSchema,

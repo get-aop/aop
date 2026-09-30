@@ -21,8 +21,10 @@ export interface ChatSessionSummary {
   named: boolean;
   runtime: CliProvider;
   runtimeConfigurationId: string | null;
-  model: string;
-  reasoningEffort: ReasoningEffort;
+  /** Null on a session that runs on the CLI's own default: AOP passes no model flag. */
+  model: string | null;
+  /** Null on a session that runs on the CLI's own default: AOP passes no effort flag. */
+  reasoningEffort: ReasoningEffort | null;
   runtimeAlias: string | null;
   runtimeSessionId: string | null;
   workspacePath: string;

@@ -29,7 +29,6 @@ test("the package index exports the projects contract", () => {
       "ReasoningEffortSchema",
       "RuntimePreferenceSchema",
       "ResyncSchema",
-      "RuntimeSelectionSchema",
       "THREAD_STATUSES",
       "ThreadSchema",
       "UsageTotalsSchema",

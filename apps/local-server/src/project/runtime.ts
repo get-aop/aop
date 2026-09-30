@@ -1,8 +1,6 @@
 import {
   type CliProvider,
   getDefaultRuntimeConfigurationModel,
-  getDefaultRuntimeModel,
-  getDefaultRuntimeReasoning,
   type ReasoningEffort,
   type RuntimeConfigurationModel,
   type RuntimePreference,
@@ -15,16 +13,19 @@ export interface SessionRuntime {
   runtime: CliProvider;
   runtimeConfigurationId: string | null;
   runtimeAlias: string | null;
-  model: string;
-  reasoningEffort: string;
+  /** Null is "use default": the run passes no `--model` and the CLI decides. */
+  model: string | null;
+  /** Null is "use default": the run passes no `--effort` and the CLI decides. */
+  reasoningEffort: string | null;
 }
 
 /**
  * Turns a project's runtime preference into concrete session columns. A null model or effort
- * means "the provider's default", resolved here so a session records what it will actually run.
- * The first runnable runtime configuration of the provider supplies the command and models;
- * the engine re-applies that configuration on every send, so a model the configuration does not
- * offer falls back to its default instead of failing a run.
+ * stays null: it means "use default", so the run passes no flag and Claude Code decides, and a
+ * plan without AOP's catalog model still runs. The first runnable runtime configuration of the
+ * provider supplies the command and, for a model or effort that is named, what it offers; the
+ * engine re-applies that configuration on every send, so a named model the configuration does
+ * not offer falls back to its default model instead of failing a run.
  */
 export const resolveSessionRuntime = async (
   configurations: RuntimeConfigurationRepository,
@@ -33,40 +34,40 @@ export const resolveSessionRuntime = async (
   const configuration = (await configurations.list()).find(
     (candidate) => candidate.driver === preference.provider && candidate.models.length > 0,
   );
-  if (!configuration) return catalogDefaults(preference);
+  const defaultModel = configuration && getDefaultRuntimeConfigurationModel(configuration.models);
+  if (!configuration || !defaultModel) {
+    return {
+      runtime: preference.provider,
+      runtimeConfigurationId: null,
+      runtimeAlias: null,
+      model: preference.model,
+      reasoningEffort: preference.effort,
+    };
+  }
 
-  const model =
-    configuration.models.find((candidate) => candidate.model === preference.model) ??
-    getDefaultRuntimeConfigurationModel(configuration.models);
+  const named =
+    preference.model === null
+      ? null
+      : (configuration.models.find((candidate) => candidate.model === preference.model) ??
+        defaultModel);
   return {
     runtime: preference.provider,
     runtimeConfigurationId: configuration.id,
     runtimeAlias: configuration.command,
-    model: model?.model ?? getDefaultRuntimeModel(preference.provider, ""),
-    reasoningEffort: model
-      ? resolveEffort(preference.effort, model)
-      : getDefaultRuntimeReasoning(preference.provider, "", "medium"),
+    model: named?.model ?? null,
+    // With no model named, the configuration's default model stands in for the one the CLI picks.
+    reasoningEffort: resolveEffort(preference.effort, named ?? defaultModel),
   };
 };
 
-// No runtime configuration to take from: the provider's built-in catalog defaults.
-const catalogDefaults = (preference: RuntimePreference): SessionRuntime => {
-  const model = preference.model ?? getDefaultRuntimeModel(preference.provider, "");
-  return {
-    runtime: preference.provider,
-    runtimeConfigurationId: null,
-    runtimeAlias: null,
-    model,
-    reasoningEffort:
-      preference.effort ?? getDefaultRuntimeReasoning(preference.provider, model, "medium"),
-  };
-};
-
-// The preferred effort when the model supports it, otherwise the model's own default.
+// The preferred effort when the model supports it, otherwise the model's own default. A model
+// that lists no effort levels takes no effort flag at all.
 const resolveEffort = (
   preferred: ReasoningEffort | null,
   model: Pick<RuntimeConfigurationModel, "thinkingLevels" | "defaultThinkingLevel">,
-): string =>
-  preferred && model.thinkingLevels.includes(preferred)
+): string | null => {
+  if (preferred === null || model.thinkingLevels.length === 0) return null;
+  return model.thinkingLevels.includes(preferred)
     ? preferred
     : resolveRuntimeConfigurationReasoning(model.thinkingLevels, null, model.defaultThinkingLevel);
+};

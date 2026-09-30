@@ -315,10 +315,10 @@ export const projectSettingsSetTool = defineTool({
           .string()
           .nullable()
           .optional()
-          .describe("null uses the provider's default model."),
+          .describe("null passes no model, so Claude Code uses its own default."),
         threadEffort: ReasoningEffortSchema.nullable()
           .optional()
-          .describe("null uses the provider's default effort."),
+          .describe("null passes no effort, so Claude Code uses its own default."),
         notificationLevel: NotificationLevelSchema.optional(),
       },
       {

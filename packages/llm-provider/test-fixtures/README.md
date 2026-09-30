@@ -64,7 +64,8 @@ Events are one JSON line each, written synchronously to stdout, so a log file ta
 
 Every turn reports the tokens from `usage=` the way Claude Code does:
 
-- The `result` event carries `usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), `modelUsage` keyed by the model the adapter passed with `--model` (`fake-claude` when none) and `total_cost_usd`. A failed turn reports them too.
+- The `result` event carries `usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), `modelUsage` keyed by the model the adapter passed with `--model` and `total_cost_usd`. A failed turn reports them too.
+- A launch with no `--model` (a project role on "Use default": the adapter passes no model flag and Claude Code picks its own) reports the stable label `fake-claude`, in the `system` init event's `model` and in `modelUsage`, so its usage is attributed to `fake-claude`. The label comes from the run's log, as with the real CLI, not from a flag.
 - The cost is computed from the counts at Claude Opus list prices: $15, $75, $18.75 and $1.50 per million input, output, cache-write and cache-read tokens. For example, `usage=1000,200,3000,50000` costs $0.16125.
 - Assistant events carry the same `message.usage` under one message id per turn, so a turn that dies before its `result` (`crash`, `exit`, a Stop) still has usage in its log.
 
@@ -91,7 +92,7 @@ The adapter hands a run the AOP server as `--mcp-config '{"mcpServers":{"aop":{"
 
 Each call happens when the fake reaches it, after the events before it are in the log and before its own result is written. The `tool_use` and `tool_result` lines are written together once the call returns.
 
-`--mcp-config`, `--allowedTools`, `--disallowedTools`, `--add-dir` and `--tools` are variadic in the real parser, so the fake's argv parser lets each swallow a prompt that follows it. The adapter puts `--allowedTools`, `--tools` and `--add-dir` after the prompt for that reason. It still emits `--mcp-config` and `--disallowedTools` before the prompt, so they only leave the prompt alone while `--model`, `--effort` or the single-valued `--append-system-prompt` and `--system-prompt-snapshot` follow them; a run that sets none of those would lose its prompt in the real CLI, and the fake reports it as `no prompt given`.
+`--mcp-config`, `--disallowedTools`, `--add-dir`, `--allowedTools` and `--tools` are variadic in the real parser, so the fake's argv parser lets each swallow a prompt that follows it. The adapter puts all five after the prompt, so a run that sets no `--model`, no `--effort` and no system prompt still keeps its prompt; a prompt that ends up after one of them is reported as `no prompt given`.
 
 ```bash
 # A coordinator turn that starts a thread, asks the user something, and waits:
@@ -121,6 +122,16 @@ Where this comes from: `claude --help` (2.1.285, no model call) and the [CLI ref
 ## Sessions and resume
 
 Each invocation records its session under `$FAKE_CLI_HOME/sessions/claude/<id>.json` (the turn count and the recorded system prompt). `FAKE_CLI_HOME` falls back to `$AOP_HOME/fake-cli`, then the OS temp dir. `--resume <id>` continues a known id (same `session_id`, turn counter +1) and fails with exit 1 and `No conversation found with session ID: <id>` for an unknown one. A turn is recorded before any output, so killed and crashed turns leave resumable sessions.
+
+The same file keeps `launches`, one entry per launch (a resume adds one), so what the adapter passed can be read back after the fact:
+
+```bash
+jq '.launches' "$FAKE_CLI_HOME/sessions/claude/<session id>.json"
+# [{"turn":1,"flags":["--output-format","--verbose","--mcp-config",...],"model":null,"effort":null},
+#  {"turn":2,"flags":["--output-format","--verbose","--resume",...],"model":"fake-model","effort":"high"}]
+```
+
+`flags` lists every flag the launch passed, in order, without values or the prompt. `model` and `effort` are the values of `--model` and `--effort`, and are `null` when the launch passed no such flag: the run was on Claude Code's own default. The session id is in every event of the run's log (`session_id`) and in the default reply. In a verify stack `FAKE_CLI_HOME` is `<AOP_HOME>/fake-cli`, and `readLaunches(home, "claude", id)` from `@aop/llm-provider/test-fixtures` reads the same record in a test.
 
 ## Tests
 

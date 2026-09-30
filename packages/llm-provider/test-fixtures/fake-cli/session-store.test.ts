@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beginTurn } from "./session-store";
+import { beginTurn, readLaunches } from "./session-store";
 
 const homes: string[] = [];
 const newHome = (): string => {
@@ -104,5 +104,44 @@ describe("beginTurn system prompt", () => {
     expect(
       beginTurn(home, "claude", first?.id, launch("late"))?.appendedSystemPrompt,
     ).toBeUndefined();
+  });
+});
+
+describe("readLaunches", () => {
+  const launch = (flags: string[], model?: string, effort?: string) => ({
+    appended: undefined,
+    recording: true,
+    flags,
+    model,
+    effort,
+  });
+
+  test("gives the flags of every launch in order, with a model and effort only when it named them", () => {
+    const home = newHome();
+    const first = beginTurn(home, "claude", undefined, launch(["--verbose"]));
+    const id = first?.id ?? "";
+    beginTurn(home, "claude", id, launch(["--resume", "--model", "--effort"], "m1", "high"));
+
+    expect(readLaunches(home, "claude", id)).toEqual([
+      { turn: 1, flags: ["--verbose"], model: null, effort: null },
+      { turn: 2, flags: ["--resume", "--model", "--effort"], model: "m1", effort: "high" },
+    ]);
+  });
+
+  test("has nothing for a session it never issued, or an id that leaves the store", () => {
+    const home = newHome();
+
+    expect(readLaunches(home, "claude", "never-issued")).toEqual([]);
+    expect(readLaunches(home, "claude", "../../etc/passwd")).toEqual([]);
+  });
+
+  test("reads a session file written before launches were kept", () => {
+    const home = newHome();
+    const first = beginTurn(home, "claude", undefined);
+    const file = join(home, "sessions", "claude", `${first?.id}.json`);
+    writeFileSync(file, JSON.stringify({ turns: 1 }));
+
+    expect(readLaunches(home, "claude", first?.id ?? "")).toEqual([]);
+    expect(beginTurn(home, "claude", first?.id)).toMatchObject({ turn: 2 });
   });
 });

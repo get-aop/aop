@@ -12,6 +12,15 @@ describe("parseArgv", () => {
     expect(parsed.positionals).toEqual(["the prompt"]);
   });
 
+  test("lists every flag in order, known or not, and never a value or the prompt", () => {
+    const parsed = parseArgv(
+      ["--verbose", "--model", "m1", "--add-dir", "/a", "the prompt", "--resume", "s1"],
+      spec,
+    );
+
+    expect(parsed.flags).toEqual(["--verbose", "--model", "--add-dir", "--resume"]);
+  });
+
   test("ignores flags it does not know without consuming the next argument", () => {
     const parsed = parseArgv(["--dangerously-skip-permissions", "the prompt"], spec);
 

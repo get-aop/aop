@@ -10,6 +10,12 @@ import {
 import { buildRunOptions, resolveAopMcpUrl } from "./run-options.ts";
 import { NO_PROJECT_COLUMNS } from "./test-utils.ts";
 
+/** The one value after a single-valued `flag`; undefined when the command has no such flag. */
+const valueAfter = (command: string[], flag: string): string | undefined => {
+  const at = command.indexOf(flag);
+  return at === -1 ? undefined : command[at + 1];
+};
+
 /** The arguments after `flag` up to the next flag: one value, or the whole list of a variadic one. */
 const flagValues = (command: string[], flag: string): string[] => {
   const start = command.indexOf(flag);
@@ -100,7 +106,9 @@ describe("buildRunOptions", () => {
     expect(options.resumeSessionId).toBe("native-1");
     const command = new ClaudeCodeProvider().buildCommand(options);
     // Each takes one value, then comes the prompt.
-    expect(command.slice(command.indexOf("--append-system-prompt"))).toEqual([
+    expect(
+      command.slice(command.indexOf("--append-system-prompt"), command.indexOf("do it") + 1),
+    ).toEqual([
       "--append-system-prompt",
       "# AOP project brief",
       "--system-prompt-snapshot",
@@ -231,6 +239,99 @@ describe("buildRunOptions for project sessions", () => {
     expect(options.disallowedTools).toEqual(["AskUserQuestion"]);
     expect(options.env).not.toHaveProperty("CLAUDE_CODE_DISABLE_CLAUDE_MDS");
   });
+});
+
+describe("buildRunOptions for a session on Claude Code's own default", () => {
+  const BRIEF = "# AOP project brief";
+  const roles = {
+    coordinator: { kind: "coordinator", runtime_access_mode: "approval-required" },
+    thread: { kind: "thread", state: "working", runtime_access_mode: "auto-accept-edits" },
+  } as const;
+  const build = (overrides: Partial<ChatSession>, appendSystemPrompt?: string) =>
+    buildRunOptions(
+      session({ project_id: "proj_1", ...overrides }),
+      "/work/dir",
+      "the prompt",
+      () => undefined,
+      "/logs/run.jsonl",
+      undefined,
+      undefined,
+      appendSystemPrompt,
+    );
+
+  test.each(["coordinator", "thread"] as const)(
+    "%s: no model and no effort on the row name none, so the command line passes no flag, fresh or resumed",
+    (role) => {
+      for (const runtime_session_id of [null, "native-1"]) {
+        const options = build({
+          ...roles[role],
+          model: null,
+          reasoning_effort: null,
+          runtime_session_id,
+        });
+        const command = new ClaudeCodeProvider().buildCommand(options);
+
+        expect(options.model).toBeUndefined();
+        expect(options.reasoningEffort).toBeUndefined();
+        expect(command).not.toContain("--model");
+        expect(command).not.toContain("--effort");
+        expect(command.includes("--resume")).toBe(runtime_session_id !== null);
+        expect(command).toContain("the prompt");
+      }
+    },
+  );
+
+  test.each(["coordinator", "thread"] as const)(
+    "%s: a model and effort on the row still reach the command line, fresh or resumed",
+    (role) => {
+      for (const runtime_session_id of [null, "native-1"]) {
+        const command = new ClaudeCodeProvider().buildCommand(
+          build({
+            ...roles[role],
+            model: "claude-opus-4-8",
+            reasoning_effort: "extra-high",
+            runtime_session_id,
+          }),
+        );
+
+        expect(valueAfter(command, "--model")).toBe("claude-opus-4-8");
+        expect(valueAfter(command, "--effort")).toBe("xhigh");
+        expect(valueAfter(command, "--resume")).toBe(runtime_session_id ?? undefined);
+      }
+    },
+  );
+
+  test("only the one the row names is passed", () => {
+    const modelOnly = new ClaudeCodeProvider().buildCommand(
+      build({ ...roles.thread, model: "claude-sonnet-4-6", reasoning_effort: null }),
+    );
+    const effortOnly = new ClaudeCodeProvider().buildCommand(
+      build({ ...roles.thread, model: null, reasoning_effort: "high" }),
+    );
+
+    expect(valueAfter(modelOnly, "--model")).toBe("claude-sonnet-4-6");
+    expect(modelOnly).not.toContain("--effort");
+    expect(valueAfter(effortOnly, "--effort")).toBe("high");
+    expect(effortOnly).not.toContain("--model");
+  });
+
+  test.each(["coordinator", "thread"] as const)(
+    "%s: its brief and its prompt both survive the missing model flags",
+    (role) => {
+      const command = new ClaudeCodeProvider().buildCommand(
+        build({ ...roles[role], model: null, reasoning_effort: null }, BRIEF),
+      );
+
+      expect(valueAfter(command, "--append-system-prompt")).toBe(BRIEF);
+      expect(command).toContain("the prompt");
+      // The prompt is a positional, so no variadic flag before it may have taken it as a value.
+      const beforePrompt = command.slice(0, command.indexOf("the prompt"));
+      const lastFlag = beforePrompt.filter((arg) => arg.startsWith("--")).at(-1);
+      expect(["--mcp-config", "--disallowedTools", "--allowedTools", "--tools"]).not.toContain(
+        lastFlag as string,
+      );
+    },
+  );
 });
 
 describe("resolveAopMcpUrl", () => {

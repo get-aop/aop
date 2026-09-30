@@ -35,9 +35,45 @@ describe("claudeDialect.parse", () => {
       prompt: "do the thing",
       resumeId: "sess-1",
       model: "opus",
+      effort: "high",
+      flags: [
+        "--output-format",
+        "--verbose",
+        "--permission-mode",
+        "--resume",
+        "--settings",
+        "--model",
+        "--effort",
+        "--mcp-config",
+        "--disallowedTools",
+        "--add-dir",
+        "--allowedTools",
+        "--tools",
+      ],
       recordSystemPrompt: true,
       mcpServers: { aop: { url: "http://127.0.0.1:1/mcp" } },
     });
+  });
+
+  test("a run on Claude Code's own default names no model and no effort, and still finds its prompt", () => {
+    const [, ...args] = new ClaudeCodeProvider().buildCommand({
+      prompt: "the prompt",
+      isolation: "hermetic",
+      accessMode: "approval-required",
+      mcpServerUrl: "http://127.0.0.1:1/mcp",
+      disallowedTools: ["AskUserQuestion"],
+      allowedTools: ["mcp__aop__thread_spawn"],
+      builtInTools: [],
+    });
+
+    const invocation = claudeDialect.parse(args);
+
+    expect(invocation.prompt).toBe("the prompt");
+    expect(invocation.model).toBeUndefined();
+    expect(invocation.effort).toBeUndefined();
+    expect(invocation.flags).not.toContain("--model");
+    expect(invocation.flags).not.toContain("--effort");
+    expect(invocation.mcpServers).toEqual({ aop: { url: "http://127.0.0.1:1/mcp" } });
   });
 
   test("recovers the appended system prompt and the snapshot switch the adapter sends", () => {
@@ -79,6 +115,14 @@ describe("claudeDialect.parse", () => {
       prompt: "first turn",
       resumeId: undefined,
       model: undefined,
+      effort: undefined,
+      flags: [
+        "--setting-sources",
+        "--strict-mcp-config",
+        "--output-format",
+        "--verbose",
+        "--dangerously-skip-permissions",
+      ],
       appendSystemPrompt: undefined,
       recordSystemPrompt: true,
       mcpServers: {},
@@ -244,6 +288,16 @@ describe("claudeDialect usage", () => {
         },
       },
     });
+  });
+
+  test("a launch that names no model reports its usage under the stable label fake-claude", () => {
+    const result = claudeDialect.end({ kind: "success", text: "done" }, ctx).at(-1);
+    const [start] = claudeDialect.start(ctx);
+
+    expect(Object.keys((result?.modelUsage as Record<string, unknown>) ?? {})).toEqual([
+      "fake-claude",
+    ]);
+    expect(start).toMatchObject({ model: "fake-claude" });
   });
 
   test("a failed turn still reports usage, as Claude does", () => {

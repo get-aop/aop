@@ -333,8 +333,8 @@ export const resolveCurrentSessionRuntimeConfiguration = async (
 
   const resolution = await resolveRuntimeConfigurationPatch(runtimeConfigurations, session, {
     runtimeConfigurationId: session.runtime_configuration_id,
-    model: session.model,
-    reasoningEffort: session.reasoning_effort,
+    model: session.model ?? undefined,
+    reasoningEffort: session.reasoning_effort ?? undefined,
   });
   if (!resolution.success) {
     return { success: false, error: { code: "RUNTIME_CONFIGURATION_NOT_FOUND" } };

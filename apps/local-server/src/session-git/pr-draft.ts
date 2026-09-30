@@ -55,8 +55,8 @@ export const generatePullRequestDraft: GeneratePullRequestDraft = async (input) 
       isolation: "hermetic",
       // Read-only native plan mode keeps the summary run from mutating the repo.
       mode: supportsNativePlanMode(provider.name) ? "plan" : "execute",
-      model: input.session.model,
-      reasoningEffort: input.session.reasoning_effort,
+      model: input.session.model ?? undefined,
+      reasoningEffort: input.session.reasoning_effort ?? undefined,
       fastMode: Boolean(input.session.fast_mode),
       runtimeAlias: input.session.runtime_alias ?? undefined,
       logFilePath,

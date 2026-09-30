@@ -335,6 +335,23 @@ describe("steering", () => {
     expect(screen.getByTestId("thread-effort").textContent).toBe("High");
   });
 
+  test("a thread started on default says so instead of naming a model it never asked for", async () => {
+    const runtime = { provider: "claude-code" as const, model: null, effort: null };
+    await setupPane(host, { thread: makeThread({ id: "thr_1", status: "idle", runtime }) });
+
+    expect(screen.getByTestId("thread-model").textContent).toBe("Default model");
+    expect(screen.getByTestId("thread-effort").textContent).toBe("Default effort");
+    expect(screen.getByTestId("thread-model").getAttribute("title")).toContain("Use default");
+  });
+
+  test("a thread that names only one of them shows the other as default", async () => {
+    const runtime = { provider: "claude-code" as const, model: "claude-sonnet-4-6", effort: null };
+    await setupPane(host, { thread: makeThread({ id: "thr_1", status: "idle", runtime }) });
+
+    expect(screen.getByTestId("thread-model").textContent).toBe("Sonnet 4.6");
+    expect(screen.getByTestId("thread-effort").textContent).toBe("Default effort");
+  });
+
   test("a thread waiting on you shows its question, and an option answers through reply", async () => {
     await setupPane(host, {
       thread: {

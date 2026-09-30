@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseRawJsonlContent } from "../src/logs";
 
+export { readLaunches } from "./fake-cli/session-store";
 export { readEchoedSystemPrompt } from "./fake-cli/turn";
 
 /** Absolute path to hand an adapter as `runtimeAlias`. */

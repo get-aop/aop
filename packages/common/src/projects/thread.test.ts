@@ -3,7 +3,7 @@ import {
   LATER,
   makeBlockedQuestion,
   makePrArtifact,
-  makeRuntimeSelection,
+  makeRuntimePreference,
   makeThread,
   rejectedPaths,
 } from "./test-utils.ts";
@@ -144,9 +144,14 @@ describe("ThreadSchema", () => {
 
   test("rejects a runtime outside the Claude Code catalog", () => {
     for (const provider of ["codex-cli", "pi", "opencode"]) {
-      const thread = makeThread({ runtime: makeRuntimeSelection({ provider }) });
+      const thread = makeThread({ runtime: makeRuntimePreference({ provider }) });
       expect(rejectedPaths(ThreadSchema, thread)).toEqual(["runtime.provider"]);
     }
+  });
+
+  test("a thread on the CLI's default records no model or effort", () => {
+    const runtime = { provider: "claude-code" as const, model: null, effort: null };
+    expect(ThreadSchema.parse(makeThread({ runtime })).runtime).toEqual(runtime);
   });
 
   test("rejects a target other than the host", () => {

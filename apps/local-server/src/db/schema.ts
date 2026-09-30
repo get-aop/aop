@@ -77,8 +77,10 @@ export interface ChatSessionsTable {
   named: Generated<boolean>;
   runtime: string;
   runtime_configuration_id: string | null;
-  model: string;
-  reasoning_effort: string;
+  /** Null runs on the CLI's own default: no `--model` is passed. Nullable since migration v9. */
+  model: string | null;
+  /** Null runs on the CLI's own default: no `--effort` is passed. Nullable since migration v9. */
+  reasoning_effort: string | null;
   runtime_alias: string | null;
   runtime_session_id: string | null;
   workspace_path: string | null;

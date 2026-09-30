@@ -45,7 +45,8 @@ describe("creating a project", () => {
       project_id: project.id,
       repo_id: null,
       state: null,
-      model: "fake-model",
+      // The project's coordinator model is on default, so the session names none.
+      model: null,
       runtime_access_mode: "approval-required",
       runtime_session_id: null,
     });

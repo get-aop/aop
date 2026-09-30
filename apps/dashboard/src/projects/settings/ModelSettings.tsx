@@ -9,7 +9,7 @@ import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import type { SettingsDraft } from "./use-settings-draft";
 
-// A Radix select item cannot have an empty value, and null ("use the provider's default") needs one.
+// A Radix select item cannot have an empty value, and null ("use default": no flag is passed) needs one.
 const USE_DEFAULT = "default";
 
 type Kind = "coordinator" | "thread";
@@ -26,7 +26,7 @@ export const ModelSettings = ({ draft }: { draft: SettingsDraft }) => (
     <KindPicker
       kind="thread"
       title="Threads"
-      hint="Do the work. Every new turn of every thread uses these; a running turn finishes with what it started with."
+      hint="Do the work. A new thread starts on these and keeps them for its whole life; a change here applies to the threads you start next."
       draft={draft}
     />
   </div>
