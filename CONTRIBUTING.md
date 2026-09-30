@@ -5,7 +5,7 @@ Thank you for helping improve AOP. The project is **MIT-licensed** and stays ope
 ## Before you open a PR
 
 1. Read the [developer guide](./aop/README.md) for workspace layout and architecture.
-2. Run focused tests for the area you changed (`bun test` runs unit/integration only; use `bun run test:e2e` when you need E2E), then `bun check` from the repo root.
+2. Run focused tests for the area you changed (`bun test` runs unit tests; `bun run test:integration` adds the opt-in CLI HTTP suite), then `bun check` from the repo root.
 3. Add or update colocated `*.test.ts` files for behavior changes.
 4. Keep entrypoints thin (routes/commands → services → repositories). See [`CLAUDE.md`](./CLAUDE.md).
 
@@ -28,4 +28,3 @@ Thank you for helping improve AOP. The project is **MIT-licensed** and stays ope
 - Dashboard UI map: [`apps/dashboard/README.md`](./apps/dashboard/README.md)
 - Runtimes: [`docs/RUNTIMES.md`](./docs/RUNTIMES.md)
 - Architecture index: [`docs/architecture/README.md`](./docs/architecture/README.md)
-- E2E tests: [`e2e-tests/README.md`](./e2e-tests/README.md)

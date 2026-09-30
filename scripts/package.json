@@ -10,7 +10,6 @@
     "@aop/cli": "workspace:*",
     "@aop/common": "workspace:*",
     "@aop/infra": "workspace:*",
-    "@aop/llm-provider": "workspace:*",
     "@aop/local-server": "workspace:*"
   }
 }

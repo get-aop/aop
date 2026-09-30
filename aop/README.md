@@ -95,13 +95,12 @@ bun dev --no-dashboard
 
 ```bash
 bun test
-bun test:e2e
-bun test:e2e:dashboard
+bun test:integration
 bun test:coverage
 bun check
 ```
 
-Examples: `bun test apps/dashboard`, `bun test apps/local-server/src/workflow-engine`.
+Examples: `bun test apps/dashboard`, `bun test apps/local-server/src/chat-session`.
 
 ## Expectations
 
@@ -119,5 +118,4 @@ Examples: `bun test apps/dashboard`, `bun test apps/local-server/src/workflow-en
 | [`apps/dashboard/README.md`](../apps/dashboard/README.md) | UI map |
 | [`apps/local-server/README.md`](../apps/local-server/README.md) | API index |
 | [`apps/cli/README.md`](../apps/cli/README.md) | Commands |
-| [`e2e-tests/README.md`](../e2e-tests/README.md) | E2E lanes |
 | [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) | Vendored methodology |

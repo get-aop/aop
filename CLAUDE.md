@@ -146,7 +146,7 @@ Use `Bun.serve()` with HTML imports for React/CSS/Tailwind. No vite. See `node_m
 # Install dependencies
 bun install
 
-# Run the full unit/integration suite (final gate; E2E is opt-in via test:e2e)
+# Run the full unit suite (final gate; the CLI HTTP integration suite below is opt-in)
 bun test
 
 # Run the full suite with coverage (final gate; same scope as bun test)
@@ -154,8 +154,6 @@ bun test:coverage
 
 # Opt-in suites (slow)
 bun run test:integration   # CLI HTTP integration
-bun run test:e2e           # Orchestration E2E (e2e-fixture provider)
-bun run test:e2e:dashboard # Playwright dashboard E2E
 
 # Run the full repository lint + typecheck + build gate
 bun check
@@ -177,7 +175,4 @@ bun run dev
 
 # Run this worktree's CLI against the dev stack
 bun run dev:aop -- <aop args>
-
-# E2E tests
-bun test:e2e
 ```

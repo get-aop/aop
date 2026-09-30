@@ -4,12 +4,11 @@ coverageDir = "coverage"
 coverageSkipTestFiles = true
 preload = ["./apps/dashboard/src/test/ensure-test-env.ts"]
 
-# Ignore migrations, test utilities, and e2e test helpers from coverage
+# Ignore migrations and test utilities from coverage
 coveragePathIgnorePatterns = [
   "**/migrations/**",
   "**/test-utils.ts",
   "**/test-setup.ts",
-  "**/e2e-tests/**",
   # We have code for Mac and Linux and its not possible to achieve coverage in CI
   # TODO: refactor into two files (linxu and macos), and ignore only macos
   "**/process-utils.ts",

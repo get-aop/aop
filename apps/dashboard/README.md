@@ -65,4 +65,4 @@ bun run typecheck
 ## Tests
 
 - Unit: `*.test.tsx` next to components
-- E2E: `e2e-tests/src/dashboard.e2e.ts` (Playwright, `bun run test:e2e:dashboard`) still drives the removed task and workflow pages, so most of it no longer passes
+- End to end: none in the repository. Drive the dashboard in Chrome against an isolated stack (`.claude/skills/verify`).

@@ -58,12 +58,6 @@ apps/desktop/dist-electron/
 apps/desktop/resources/*
 !apps/desktop/resources/.gitkeep
 
-# e2e test temp directories
-e2e-tests/tmp/
-
-# local video/probe scripts (owner's machine only, never committed)
-e2e-tests/*.mjs
-
 # local tooling and scratch files
 __pycache__
 .dex

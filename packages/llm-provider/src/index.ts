@@ -26,6 +26,7 @@ export {
   extractPlanMarkdownFromRawJsonl,
   extractRuntimeSessionIdFromRawJsonl,
   extractUsageFromRawJsonl,
+  formatToolInput,
   inferRunOutcomeFromEntries,
   inferRunOutcomeFromRawJsonl,
   normalizeRawEvent,
@@ -33,7 +34,6 @@ export {
   parseRawJsonlContent,
   renderCompactLogLines,
 } from "./logs";
-export { createOutputLogger, extractAssistantText, formatToolInput } from "./output-logger";
 export {
   assertNativePlanModeSupported,
   supportsNativePlanMode,
