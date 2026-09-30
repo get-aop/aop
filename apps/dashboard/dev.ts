@@ -5,14 +5,26 @@
  * Proxies /api/* requests to local-server.
  */
 
+import { extname, join } from "node:path";
 import { AOP_PORTS, AOP_URLS } from "@aop/common";
 import { configureLogging, getLogger } from "@aop/infra";
 import { createProxyRequestInit } from "./dev-proxy";
+import { findFontFile, fontSourceDirs } from "./font-files";
 
 const log = getLogger("dev");
 
-const PORT = AOP_PORTS.DASHBOARD;
-const API_URL = AOP_URLS.LOCAL_SERVER;
+/**
+ * Answers any request but the API: a source file, a font the stylesheet points at, the app for
+ * a client route, or a 404 for a missing file. The router owns only paths without an extension;
+ * answering a missing font with the app would hide the miss behind a fallback typeface.
+ */
+export const serveDashboardPath = async (requestPath: string): Promise<Response> => {
+  const pathname = resolvePathname(requestPath);
+  const file = (await serveStaticFile(pathname)) ?? serveFontFile(pathname);
+  if (file) return file;
+  if (extname(requestPath) !== "") return new Response("Not Found", { status: 404 });
+  return serveSpaFallback();
+};
 
 const streamSSEResponse = async (response: Response): Promise<Response> => {
   const { readable, writable } = new TransformStream();
@@ -58,8 +70,8 @@ const pipeSSEStream = (response: Response, writable: WritableStream<Uint8Array>)
   pump();
 };
 
-const proxyApiRequest = async (req: Request, url: URL): Promise<Response> => {
-  const apiUrl = `${API_URL}${url.pathname}${url.search}`;
+const proxyApiRequest = async (req: Request, url: URL, apiOrigin: string): Promise<Response> => {
+  const apiUrl = `${apiOrigin}${url.pathname}${url.search}`;
   const headers = new Headers(req.headers);
   headers.delete("host");
 
@@ -118,7 +130,7 @@ const serveTailwindCSS = async (filePath: string): Promise<Response | null> => {
 };
 
 const serveStaticFile = async (pathname: string): Promise<Response | null> => {
-  const filePath = `.${pathname}`;
+  const filePath = join(import.meta.dir, pathname);
   const file = Bun.file(filePath);
 
   if (!(await file.exists())) {
@@ -136,8 +148,15 @@ const serveStaticFile = async (pathname: string): Promise<Response | null> => {
   return new Response(file);
 };
 
+// The stylesheet is served from /src/, so its `url(./files/...)` fonts are asked for under /src/.
+const serveFontFile = (pathname: string): Response | null => {
+  if (!pathname.startsWith("/src/")) return null;
+  const fontFile = findFontFile(pathname.slice("/src/".length), fontSourceDirs());
+  return fontFile ? new Response(Bun.file(fontFile)) : null;
+};
+
 const serveSpaFallback = async (): Promise<Response> => {
-  const indexFile = Bun.file("./src/index.html");
+  const indexFile = Bun.file(join(import.meta.dir, "src/index.html"));
   if (await indexFile.exists()) {
     return new Response(indexFile, { headers: { "Content-Type": "text/html" } });
   }
@@ -146,9 +165,11 @@ const serveSpaFallback = async (): Promise<Response> => {
 
 const main = async () => {
   await configureLogging({ format: "pretty", serviceName: "dashboard" });
+  const port = AOP_PORTS.DASHBOARD;
+  const apiOrigin = AOP_URLS.LOCAL_SERVER;
 
   Bun.serve({
-    port: PORT,
+    port,
     // Loopback only. The proxy below reaches the API from 127.0.0.1 with no forwarding
     // headers, so the API takes its requests as the host owner's own; listening on every
     // interface would hand that trust to anyone on the network.
@@ -157,21 +178,17 @@ const main = async () => {
       const url = new URL(req.url);
 
       if (url.pathname.startsWith("/api/")) {
-        return proxyApiRequest(req, url);
+        return proxyApiRequest(req, url, apiOrigin);
       }
 
-      const pathname = resolvePathname(url.pathname);
-      const staticResponse = await serveStaticFile(pathname);
-      if (staticResponse) {
-        return staticResponse;
-      }
-
-      return serveSpaFallback();
+      return serveDashboardPath(url.pathname);
     },
   });
 
-  log.info("Dashboard dev server running at http://localhost:{port}", { port: PORT });
-  log.info("Proxying /api/* to {apiUrl}", { apiUrl: API_URL });
+  log.info("Dashboard dev server running at http://localhost:{port}", { port });
+  log.info("Proxying /api/* to {apiUrl}", { apiUrl: apiOrigin });
 };
 
-main();
+if (import.meta.main) {
+  main();
+}

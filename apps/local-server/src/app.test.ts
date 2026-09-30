@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { aopPaths, useTestAopHome } from "@aop/infra";
 import type { Kysely } from "kysely";
 import type { AppDependencies, createApp } from "./app.ts";
@@ -149,6 +152,44 @@ describe("app - static file serving", () => {
     }
 
     await db.destroy();
+  });
+
+  test("answers a missing asset with 404, while a client route still gets the app", async () => {
+    const db = await createTestDb();
+    const tempDir = await mkdtemp(join(tmpdir(), "aop-test-static-assets-"));
+    await mkdir(join(tempDir, "files"));
+    await writeFile(join(tempDir, "index.html"), '<div id="root"></div>');
+    await writeFile(join(tempDir, "files/inter-latin-wght-normal.woff2"), "wOF2 font");
+
+    try {
+      const app = createLoopbackApp({
+        ctx: createCommandContext(db),
+        startTimeMs: Date.now(),
+        dashboardStaticPath: tempDir,
+      });
+
+      const font = await app.request("/files/inter-latin-wght-normal.woff2");
+      expect(font.status).toBe(200);
+      expect(font.headers.get("Content-Type")).toBe("font/woff2");
+      expect(await font.text()).toBe("wOF2 font");
+
+      for (const path of ["/files/nope.woff2", "/main-nope.js", "/projects/proj_x/icon.svg"]) {
+        const missing = await app.request(path);
+        expect(missing.status).toBe(404);
+        expect(missing.headers.get("Content-Type")).not.toContain("text/html");
+        expect(await missing.text()).not.toContain('<div id="root">');
+      }
+
+      for (const path of ["/projects/proj_x", "/projects/proj_x/threads/isess_y"]) {
+        const route = await app.request(path);
+        expect(route.status).toBe(200);
+        expect(route.headers.get("Content-Type")).toBe("text/html");
+        expect(await route.text()).toBe('<div id="root"></div>');
+      }
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+      await db.destroy();
+    }
   });
 
   test("returns 404 for /api/* routes when dashboardStaticPath is set", async () => {

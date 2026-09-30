@@ -1,3 +1,4 @@
+import { extname } from "node:path";
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { Hono } from "hono";
@@ -138,7 +139,7 @@ export const createApp = (deps: AppDependencies) => {
       const staticResponse = await serveStaticFile(dashboardStaticPath, pathname);
       if (staticResponse) return staticResponse;
 
-      const spaResponse = await serveSpaFallback(dashboardStaticPath);
+      const spaResponse = await serveSpaFallback(dashboardStaticPath, pathname);
       if (spaResponse) return spaResponse;
 
       return c.notFound();
@@ -201,7 +202,10 @@ const serveStaticFile = async (basePath: string, pathname: string): Promise<Resp
   return null;
 };
 
-const serveSpaFallback = async (basePath: string): Promise<Response | null> => {
+// The dashboard's router owns only paths without an extension. A missing font or bundle gets a
+// 404: answered with index.html, it would fail in the browser without a trace.
+const serveSpaFallback = async (basePath: string, pathname: string): Promise<Response | null> => {
+  if (extname(pathname) !== "") return null;
   const indexFile = Bun.file(`${basePath}/index.html`);
   if (await indexFile.exists()) {
     return new Response(indexFile, {

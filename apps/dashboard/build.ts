@@ -7,6 +7,7 @@
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { configureLogging, getLogger } from "@aop/infra";
+import { emitFontFiles } from "./font-files";
 
 const log = getLogger("build");
 
@@ -47,7 +48,8 @@ async function buildCSS(): Promise<void> {
     log.error("Tailwind stdout: {stdout}", { stdout: result.stdout.toString() });
     throw new Error(`Tailwind build failed with exit code ${result.exitCode}`);
   }
-  log.info("CSS built successfully");
+  const fontFiles = emitFontFiles(readFileSync(`${DIST_DIR}/index.css`, "utf-8"), DIST_DIR);
+  log.info("CSS built successfully with {count} font files", { count: fontFiles.length });
 }
 
 interface BuildJsResult {
