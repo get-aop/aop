@@ -1,6 +1,6 @@
 # Contributing to AOP
 
-Thank you for helping improve AOP. The project is **MIT-licensed** and stays open source; optional paid license tiers fund development without closing the repository.
+Thank you for helping improve AOP. The project is **MIT-licensed** and stays open source.
 
 ## Before you open a PR
 
@@ -12,8 +12,8 @@ Thank you for helping improve AOP. The project is **MIT-licensed** and stays ope
 ## Pull request expectations
 
 - One logical change per PR when possible.
-- Update README or docs when user-visible behavior, ports, env vars, install flow, workflow automation, or worker concurrency changes.
-- Keep product language concrete: explain which manual agent step AOP automates, which workflow or worker owns it, and how the operator observes the result.
+- Update README or docs when user-visible behavior, ports, env vars, install flow, or supported runtimes change.
+- Keep product language concrete: explain which manual agent step AOP automates, which coordinator or thread owns it, and how the operator observes the result.
 - Do not commit secrets, `.env` files, or local IDE config (e.g. `.cursor/`).
 - Do not disable lint rules or lower coverage thresholds to make CI pass.
 
@@ -26,6 +26,6 @@ Thank you for helping improve AOP. The project is **MIT-licensed** and stays ope
 
 - Product usage: root [`README.md`](./README.md)
 - Dashboard UI map: [`apps/dashboard/README.md`](./apps/dashboard/README.md)
-- Workflows: [`docs/WORKFLOW.md`](./docs/WORKFLOW.md)
+- Runtimes: [`docs/RUNTIMES.md`](./docs/RUNTIMES.md)
 - Architecture index: [`docs/architecture/README.md`](./docs/architecture/README.md)
 - E2E tests: [`e2e-tests/README.md`](./e2e-tests/README.md)

@@ -91,8 +91,6 @@ Task *content* lives under `~/.aop/repos/<repo-id>/tasks/<slug>/`. Legacy repo-l
 - Prompts: `prompts/templates/*.md.hbs`, methodology under `prompts/methodology/`
 - Queue processor: claims Ready tasks, starts worker workflows, and advances transitions without requiring manual CLI skill chaining
 
-See [`docs/WORKFLOW.md`](../../docs/WORKFLOW.md) for the operator-facing reference.
-
 ### Engine internals
 
 - `workflow-engine/workflow-state-machine.ts` evaluates the next transition for a completed step: failure status first (a failed step's signal is treated as unreliable), then signal match, then `__none__`, then status match; no match resolves to blocked. Loop caps use `maxIterations` with `onMaxIterations` overflow targets.

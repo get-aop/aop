@@ -91,7 +91,5 @@ This stops the user service and unlinks the CLI. Data under `~/.aop/` remains un
 
 ## Related guides
 
-- [Chat](../../docs/CHAT.md)
-- [Commands](../../docs/COMMANDS.md)
-- [Tasks](../../docs/TASKS.md)
+- [Runtimes](../../docs/RUNTIMES.md)
 - [Architecture](../../docs/architecture/README.md)

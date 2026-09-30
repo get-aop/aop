@@ -3,6 +3,8 @@
 **Date:** 2026-08-04 · **Trigger:** AOP becomes very slow when more than one session runs concurrently.
 **Source:** Full-system audit (5 parallel code audits + live measurements on a real install). Key claims were verified against the code at the listed locations.
 
+> **Historical.** Written before the rewrite around Projects. The work packages for the task snapshot, status, and retention target code that the rewrite deletes, and the `docs/tasks/` packages they name are not in the repository. The measured evidence below is kept as a baseline for the new host.
+
 ## Measured evidence (2026-08-04, release install `~/.aop`)
 
 - Data dir 4.6 GB: logs 2.1 GB, worktrees 677 MB, chats 185 MB, SQLite 162 MB.

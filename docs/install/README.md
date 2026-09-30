@@ -2,7 +2,7 @@
 
 Static install UI (`index.html`) with **CURL** and **BUN** tabs, styled like a minimal product install block.
 
-The page should sell the install target, not only the command. The copy should make clear that AOP installs a local dashboard and server for workflow-based agent orchestration: register repos, create workers, mark tasks Ready, and let automated pipelines run concurrently instead of driving every agent skill by hand.
+The page should sell the install target, not only the command. The copy should make clear what AOP installs: a local server and dashboard that drive the agent CLIs you already have.
 
 ## Commands
 

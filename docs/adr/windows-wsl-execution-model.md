@@ -1,6 +1,6 @@
 # ADR: Windows + WSL execution model
 
-- Status: **Accepted** (2026-06-25)
+- Status: **Superseded** (2026-09-29) by the Projects host model: the host runs on macOS or Linux, and Windows is a client only, so no WSL sidecar is needed. Kept until the code that references it is removed.
 - Context: supporting the macOS Electron desktop app on Windows.
 
 ## Context

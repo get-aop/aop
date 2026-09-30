@@ -1,6 +1,6 @@
 # @aop/llm-provider
 
-Agent CLI adapters used by the local-server **executor** to run workflow steps (Codex CLI, Claude Code, Pi, and related providers). Workflow step `agent` blocks select provider, model, and reasoning; see `@aop/common` workflow runtime types and [`docs/WORKFLOW.md`](../../docs/WORKFLOW.md).
+Agent CLI adapters used by the local-server **executor** to run workflow steps (Codex CLI, Claude Code, Pi, and related providers). Workflow step `agent` blocks select provider, model, and reasoning; see the `@aop/common` workflow runtime types.
 
 The adapters keep provider-specific CLI behavior out of the workflow engine. AOP decides which step should run next; the provider package turns that step into a concrete agent process and streams output back to the task log.
 

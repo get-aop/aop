@@ -2,7 +2,7 @@
 
 Product overview: [`README.md`](../README.md). PR process: [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
-When changing product surfaces, keep the main story consistent: AOP is a local control plane that turns chat sessions into workflow runs. The dashboard, CLI, and local-server should all reinforce that sessions are the front door, workflows automate the sequence, and workers provide concurrent capacity.
+When changing product surfaces, keep the main story consistent: AOP is becoming Projects. A project is a coordinator conversation that spawns threads on Claude Code, Codex, and PI. The host runs on your own machine, is reached over Tailscale, and syncs to every computer you use. The dashboard, CLI, and local-server should all reinforce that story. The task, workflow, worker, and integration slices described below are being removed; do not build on them.
 
 ## Architecture
 
@@ -80,7 +80,7 @@ packages/
 scripts/
   dev.ts  source-install.ts  (./install)
 docs/
-  WORKFLOW.md  architecture/  demo/
+  architecture/  adr/  install/
 ```
 
 ## Development
@@ -107,14 +107,15 @@ Examples: `bun test apps/dashboard`, `bun test apps/local-server/src/workflow-en
 
 - Thin entrypoints → services → repositories ([`CLAUDE.md`](../CLAUDE.md)).
 - Colocated `*.test.ts`; real assertions.
-- User-visible changes: update root README, `apps/dashboard/README.md`, or `docs/WORKFLOW.md` as appropriate.
+- User-visible changes: update root README, `apps/dashboard/README.md`, or the guides under `docs/` as appropriate.
 
 ## Documentation map
 
 | Path | Contents |
 |------|----------|
-| [`docs/WORKFLOW.md`](../docs/WORKFLOW.md) | Engine, signals, Pi direction |
-| [`docs/architecture/`](../docs/architecture/) | Control-plane index + Pi factory contract |
+| [`docs/RUNTIMES.md`](../docs/RUNTIMES.md) | Supported agent CLIs and their process shape |
+| [`docs/MCP.md`](../docs/MCP.md) | MCP tools and loopback authentication |
+| [`docs/architecture/`](../docs/architecture/) | Legacy architecture overview |
 | [`apps/dashboard/README.md`](../apps/dashboard/README.md) | UI map |
 | [`apps/local-server/README.md`](../apps/local-server/README.md) | API index |
 | [`apps/cli/README.md`](../apps/cli/README.md) | Commands |

@@ -2,6 +2,8 @@
 
 AOP is a local-first control plane layered on top of external coding-agent CLIs. This guide covers the product/runtime boundary, local storage, detached execution, dashboard and desktop shells, Windows execution, updates, and factory limits.
 
+> **Legacy page.** It describes the previous Sessions, task, and workflow product, which the rewrite around Projects (see the [README](../../README.md)) is removing. It is rewritten as the replacement lands; do not read it as the Projects design.
+
 ## Local-first boundary
 
 The Bun and Hono server hosts the API, orchestration engine, and dashboard at `http://aop.localhost:25150`. SQLite state lives at `~/.aop/aop.sqlite`. There is no hosted orchestrator, AOP account, product telemetry, or data collection.
@@ -26,7 +28,7 @@ A worker is a named seat with role/focus metadata, runtime defaults, a default w
 
 A task is assigned to at most one current writable worker. Its workflow executes in a worktree for the primary repository; supporting repositories are provided as read-only context. Execution is refused when the worker lacks a required membership.
 
-Task lifecycle is `DRAFT`, `READY`, `RESUMING`, `WORKING`, `PAUSED`, `BLOCKED`, `DONE`, or `REMOVED`. See [Tasks](../TASKS.md) for lifecycle and task-detail actions.
+Task lifecycle is `DRAFT`, `READY`, `RESUMING`, `WORKING`, `PAUSED`, `BLOCKED`, `DONE`, or `REMOVED`.
 
 ## Detached executor and events
 
@@ -76,8 +78,5 @@ The local update service polls release metadata from getaop.com. When a newer ve
 
 ## Related guides
 
-- [Chat](../CHAT.md)
-- [Tasks](../TASKS.md)
-- [Workflows](../WORKFLOW.md)
 - [Runtimes](../RUNTIMES.md)
 - [MCP](../MCP.md)
