@@ -27,6 +27,7 @@ const BASELINE_TABLES = [
 const PROJECT_TABLES = ["devices", "event_log", "memory_files", "project_repos", "projects"];
 const USAGE_TABLES = ["run_usage"];
 const WATCH_TABLES = ["pull_request_watch"];
+const SUGGESTION_TABLES = ["suggestion_answers"];
 
 const listTables = async (db: Kysely<Database>): Promise<string[]> => {
   const { rows } = await sql<{ name: string }>`
@@ -50,7 +51,13 @@ describe("runMigrations", () => {
     await runMigrations(db);
 
     expect(await listTables(db)).toEqual(
-      [...BASELINE_TABLES, ...PROJECT_TABLES, ...USAGE_TABLES, ...WATCH_TABLES].sort(),
+      [
+        ...BASELINE_TABLES,
+        ...PROJECT_TABLES,
+        ...USAGE_TABLES,
+        ...WATCH_TABLES,
+        ...SUGGESTION_TABLES,
+      ].sort(),
     );
     const ledger = await db.selectFrom("schema_migrations").selectAll().execute();
     expect(ledger.map(({ version, name }) => ({ version, name }))).toEqual([
@@ -63,6 +70,7 @@ describe("runMigrations", () => {
       { version: 7, name: "pull-request-watch" },
       { version: 8, name: "remove-exec-hosts" },
       { version: 9, name: "default-runtime" },
+      { version: 10, name: "suggestion-answers" },
     ]);
   });
 
@@ -85,7 +93,7 @@ describe("runMigrations", () => {
       .executeTakeFirstOrThrow();
     expect(saved.value).toBe("be brief");
     const ledger = await db.selectFrom("schema_migrations").select("version").execute();
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   });
 
   test("refuses a database written by a newer build", async () => {

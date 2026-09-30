@@ -19,7 +19,9 @@ type ChatApi = import("./chat/chat-api").ChatApi;
 const silentHost: ChatApi = {
   listMessages: () => new Promise(() => {}),
   sendMessage: () => new Promise(() => {}),
-  startThread: () => new Promise(() => {}),
+  startSuggestion: () => new Promise(() => {}),
+  skipSuggestion: () => new Promise(() => {}),
+  unskipSuggestion: () => new Promise(() => {}),
 };
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
 

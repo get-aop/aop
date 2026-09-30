@@ -69,6 +69,16 @@ export interface PullRequestWatchTable {
   updated_at: Generated<string>;
 }
 
+export interface SuggestionAnswersTable {
+  /** The coordinator message whose `suggested-threads` block made the proposal. */
+  message_id: string;
+  /** The proposal's id in that block. */
+  suggestion_id: string;
+  state: "started" | "skipped";
+  /** The thread a start made; present exactly when `state` is `started`. */
+  thread_id: string | null;
+}
+
 export interface ProjectsDatabase {
   projects: ProjectsTable;
   project_repos: ProjectReposTable;
@@ -76,9 +86,11 @@ export interface ProjectsDatabase {
   devices: DevicesTable;
   event_log: EventLogTable;
   pull_request_watch: PullRequestWatchTable;
+  suggestion_answers: SuggestionAnswersTable;
 }
 
 export type ProjectRow = Selectable<ProjectsTable>;
 export type MemoryFileRow = Selectable<MemoryFilesTable>;
 export type DeviceRow = Selectable<DevicesTable>;
 export type EventLogRow = Selectable<EventLogTable>;
+export type SuggestionAnswerRow = Selectable<SuggestionAnswersTable>;

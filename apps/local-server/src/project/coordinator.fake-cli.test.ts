@@ -198,14 +198,26 @@ describe("coordinator and threads against the fake CLI", () => {
     ]);
     expect(new Set(suggestions.map((suggestion) => suggestion.id)).size).toBe(2);
 
-    const started = await s.api<{ thread: Thread }>("POST", `/api/projects/${project.id}/threads`, {
-      title: suggestions[1]?.title,
-      prompt: suggestions[1]?.prompt,
-      repoId: suggestions[1]?.repoId,
-    });
+    // Starting the second proposal answers it on the host: a second start is the same thread,
+    // and the list a client fetches says so.
+    const start = `/api/projects/${project.id}/messages/${reply?.id}/suggestions/${suggestions[1]?.id}/start`;
+    const started = await s.api<{ thread: Thread }>("POST", start);
     expect(started.status).toBe(201);
     await s.settle();
+    const again = await s.api<{ thread: Thread }>("POST", start);
+    expect(again.status).toBe(200);
+    expect(again.body.thread.id).toBe(started.body.thread.id);
     expect(await threadsOf(s, project.id)).toHaveLength(2);
+    const relisted = await messagesOf(s, `/api/projects/${project.id}/messages`);
+    const answered = relisted.find(({ id }) => id === reply?.id);
+    const answeredBlock =
+      answered?.role === "assistant"
+        ? answered.blocks.find((block) => block.type === "suggested-threads")
+        : undefined;
+    expect(
+      answeredBlock?.type === "suggested-threads" &&
+        answeredBlock.suggestions.map(({ answer }) => answer ?? null),
+    ).toEqual([null, { state: "started", threadId: started.body.thread.id }]);
   }, 60_000);
 
   test("the coordinator saves to project memory, and the next thread's system prompt holds it", async () => {

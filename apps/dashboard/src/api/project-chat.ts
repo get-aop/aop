@@ -1,4 +1,4 @@
-import type { Message, SuggestedThread, Thread, UserMessage } from "@aop/common";
+import type { Message, Thread, UserMessage } from "@aop/common";
 import { request } from "./request";
 
 /** The latest messages of a project's coordinator chat, oldest first. */
@@ -18,18 +18,41 @@ export const sendCoordinatorMessage = async (
     })
   ).message;
 
-/** Starts a thread the coordinator proposed: the host has no route of its own for accepting one. */
-export const startSuggestedThread = async (
+const suggestionPath = (projectId: string, messageId: string, suggestionId: string): string =>
+  `/projects/${encodeURIComponent(projectId)}/messages/${encodeURIComponent(messageId)}/suggestions/${encodeURIComponent(suggestionId)}`;
+
+/**
+ * Starts the thread a suggestion of the coordinator proposes. The host records the answer, so
+ * asking again, from this browser or another, answers with the same thread.
+ */
+export const startSuggestion = async (
   projectId: string,
-  suggestion: Pick<SuggestedThread, "title" | "prompt" | "repoId">,
+  messageId: string,
+  suggestionId: string,
 ): Promise<Thread> =>
   (
-    await request<{ thread: Thread }>(`/projects/${encodeURIComponent(projectId)}/threads`, {
-      method: "POST",
-      body: JSON.stringify({
-        title: suggestion.title,
-        prompt: suggestion.prompt,
-        repoId: suggestion.repoId,
-      }),
-    })
+    await request<{ thread: Thread }>(
+      `${suggestionPath(projectId, messageId, suggestionId)}/start`,
+      { method: "POST" },
+    )
   ).thread;
+
+/** Skips a suggestion. The host publishes the answer on the project's stream. */
+export const skipSuggestion = async (
+  projectId: string,
+  messageId: string,
+  suggestionId: string,
+): Promise<void> => {
+  await request(`${suggestionPath(projectId, messageId, suggestionId)}/skip`, { method: "POST" });
+};
+
+/** Takes a skip back, so the suggestion waits for an answer again. */
+export const unskipSuggestion = async (
+  projectId: string,
+  messageId: string,
+  suggestionId: string,
+): Promise<void> => {
+  await request(`${suggestionPath(projectId, messageId, suggestionId)}/skip`, {
+    method: "DELETE",
+  });
+};

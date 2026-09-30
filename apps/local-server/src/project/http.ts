@@ -30,6 +30,7 @@ export const errorResponse = (c: Context, error: ServiceError): Response => {
   switch (error.code) {
     case "PROJECT_NOT_FOUND":
     case "THREAD_NOT_FOUND":
+    case "SUGGESTION_NOT_FOUND":
     case "MEMORY_FILE_NOT_FOUND":
     case "REPO_NOT_FOUND":
     case "FILE_NOT_FOUND":

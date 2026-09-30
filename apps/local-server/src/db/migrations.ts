@@ -8,6 +8,7 @@ import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
 import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
 import type { Database } from "./schema.ts";
+import { SUGGESTION_ANSWERS_V10_STATEMENTS } from "./suggestion-answers-v10.ts";
 import { THREAD_GIT_V6_STATEMENTS } from "./thread-git-v6.ts";
 import { USAGE_V3_STATEMENTS } from "./usage-v3.ts";
 
@@ -32,6 +33,7 @@ const MIGRATIONS: readonly Migration[] = [
   { version: 7, name: "pull-request-watch", statements: PULL_REQUEST_WATCH_V7_STATEMENTS },
   { version: 8, name: "remove-exec-hosts", statements: EXEC_HOSTS_V8_STATEMENTS },
   { version: 9, name: "default-runtime", statements: DEFAULT_RUNTIME_V9_STATEMENTS },
+  { version: 10, name: "suggestion-answers", statements: SUGGESTION_ANSWERS_V10_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

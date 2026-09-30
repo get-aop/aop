@@ -35,7 +35,7 @@ const tree = (
     threadsLoaded={threadsLoaded}
     threadsError={threadsError}
   >
-    <MessageBlocks blocks={blocks} />
+    <MessageBlocks messageId="m1" blocks={blocks} />
   </ChatProvider>
 );
 

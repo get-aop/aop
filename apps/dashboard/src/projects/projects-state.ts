@@ -126,6 +126,7 @@ export const applyEntry = (state: ProjectsState, entry: EventLogEntry): Projects
     case "thread.removed":
       return removeThread(state, entry.projectId, entry.payload.threadId);
     case "message.created":
+    case "message.updated":
       return state;
   }
 };

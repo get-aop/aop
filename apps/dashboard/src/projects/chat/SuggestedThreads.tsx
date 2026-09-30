@@ -5,12 +5,6 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { useChatApi } from "./chat-api";
 import { useChatContext } from "./chat-context";
-import {
-  browserSuggestionStore,
-  type Resolutions,
-  type SuggestionStore,
-  useSuggestionResolutions,
-} from "./suggestion-store";
 import { ThreadChip } from "./ThreadChip";
 
 type Failures = Readonly<Record<string, string>>;
@@ -19,41 +13,44 @@ const NOT_ACTIVE = "Resume the project to start threads.";
 
 /**
  * Threads the coordinator proposes instead of starting: each can be started or skipped, and
- * "Start all" starts the ones still waiting. Nothing runs until one is started. Starting is an
- * ordinary new thread through the host's thread route, which has no separate accept step.
+ * "Start all" starts the ones still waiting. Nothing runs until one is started. The host records
+ * every answer and publishes the message again, so what a row shows is what the host holds, on
+ * every device alike; a click asks the host and the row changes when the answer arrives.
  */
 export const SuggestedThreads = ({
+  messageId,
   suggestions,
-  store = browserSuggestionStore(),
 }: {
+  /** The coordinator message the proposals are in; an answer is recorded against it. */
+  messageId: string;
   suggestions: readonly SuggestedThread[];
-  store?: SuggestionStore;
 }) => {
   const { projectId, projectActive } = useChatContext();
   const api = useChatApi();
-  const resolutions = useSuggestionResolutions(store);
   const [starting, setStarting] = useState<ReadonlySet<string>>(new Set());
   const [failures, setFailures] = useState<Failures>({});
 
-  const start = async (suggestion: SuggestedThread): Promise<void> => {
-    setStarting((current) => new Set(current).add(suggestion.id));
-    setFailures(({ [suggestion.id]: _cleared, ...rest }) => rest);
+  const attempt = async (suggestionId: string, run: () => Promise<unknown>): Promise<void> => {
+    setFailures(({ [suggestionId]: _cleared, ...rest }) => rest);
     try {
-      const thread = await api.startThread(projectId, suggestion);
-      store.set(suggestion.id, { state: "started", threadId: thread.id });
+      await run();
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "Could not start the thread";
-      setFailures((current) => ({ ...current, [suggestion.id]: reason }));
-    } finally {
-      setStarting((current) => {
-        const next = new Set(current);
-        next.delete(suggestion.id);
-        return next;
-      });
+      const reason = error instanceof Error ? error.message : "Could not reach the host";
+      setFailures((current) => ({ ...current, [suggestionId]: reason }));
     }
   };
 
-  const waiting = suggestions.filter(({ id }) => !resolutions[id]);
+  const start = async (suggestion: SuggestedThread): Promise<void> => {
+    setStarting((current) => new Set(current).add(suggestion.id));
+    await attempt(suggestion.id, () => api.startSuggestion(projectId, messageId, suggestion.id));
+    setStarting((current) => {
+      const next = new Set(current);
+      next.delete(suggestion.id);
+      return next;
+    });
+  };
+
+  const waiting = suggestions.filter(({ answer }) => !answer);
   // One after the other: each start is a thread on the host, and the order they were proposed in is the order they appear in.
   const startAll = async () => {
     for (const suggestion of waiting) await start(suggestion);
@@ -87,13 +84,20 @@ export const SuggestedThreads = ({
           <SuggestionRow
             key={suggestion.id}
             suggestion={suggestion}
-            resolution={resolutions[suggestion.id]}
             starting={starting.has(suggestion.id)}
             failure={failures[suggestion.id]}
             disabled={!projectActive}
             onStart={() => void start(suggestion)}
-            onSkip={() => store.set(suggestion.id, { state: "skipped" })}
-            onUndo={() => store.clear(suggestion.id)}
+            onSkip={() =>
+              void attempt(suggestion.id, () =>
+                api.skipSuggestion(projectId, messageId, suggestion.id),
+              )
+            }
+            onUndo={() =>
+              void attempt(suggestion.id, () =>
+                api.unskipSuggestion(projectId, messageId, suggestion.id),
+              )
+            }
           />
         ))}
       </ul>
@@ -103,12 +107,11 @@ export const SuggestedThreads = ({
 
 type RowState = "pending" | "starting" | "started" | "skipped";
 
-const rowState = (resolution: Resolutions[string] | undefined, starting: boolean): RowState =>
-  resolution?.state ?? (starting ? "starting" : "pending");
+const rowState = (answer: SuggestedThread["answer"], starting: boolean): RowState =>
+  answer?.state ?? (starting ? "starting" : "pending");
 
 const SuggestionRow = ({
   suggestion,
-  resolution,
   starting,
   failure,
   disabled,
@@ -117,7 +120,6 @@ const SuggestionRow = ({
   onUndo,
 }: {
   suggestion: SuggestedThread;
-  resolution: Resolutions[string] | undefined;
   starting: boolean;
   failure: string | undefined;
   disabled: boolean;
@@ -125,7 +127,8 @@ const SuggestionRow = ({
   onSkip: () => void;
   onUndo: () => void;
 }) => {
-  const state = rowState(resolution, starting);
+  const { answer } = suggestion;
+  const state = rowState(answer, starting);
   return (
     <li
       data-testid="suggestion"
@@ -153,14 +156,14 @@ const SuggestionRow = ({
           onUndo={onUndo}
         />
       </div>
-      {resolution?.state === "started" ? (
+      {answer?.state === "started" ? (
         <p
           className="flex items-center gap-1.5 text-[12px] text-ok"
           data-testid="suggestion-started"
         >
           <CheckIcon aria-hidden="true" className="size-3.5" />
           Started
-          <ThreadChip threadId={resolution.threadId} />
+          <ThreadChip threadId={answer.threadId} />
         </p>
       ) : null}
       {failure ? (

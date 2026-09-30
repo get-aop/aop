@@ -35,3 +35,8 @@ export const recordThreadRemoved = async (
 export const recordMessageCreated = async (tx: PublisherTransaction, message: Message) => {
   await tx.append({ type: "message.created", projectId: message.projectId, payload: { message } });
 };
+
+/** A message that changed after it was created: clients replace the copy they hold. */
+export const recordMessageUpdated = async (tx: PublisherTransaction, message: Message) => {
+  await tx.append({ type: "message.updated", projectId: message.projectId, payload: { message } });
+};

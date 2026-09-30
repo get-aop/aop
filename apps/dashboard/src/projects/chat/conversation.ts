@@ -3,6 +3,7 @@ import type { LiveProjects } from "../live-projects";
 import {
   applyDelta,
   applyMessage,
+  applyMessageUpdate,
   applySnapshot,
   type ChatState,
   createChatState,
@@ -45,7 +46,8 @@ const browserSchedule = (run: () => void, delayMs: number): (() => void) => {
  * One conversation of a project (the coordinator chat, or a thread's own), kept current from
  * three sources that overlap and may arrive in any order: a fetch of the latest messages, the
  * stream's entries and live text, and the message a send returns. Each is applied by message
- * id, so overlap changes nothing.
+ * id, so overlap changes nothing. A message the host publishes again (`message.updated`)
+ * replaces the copy held.
  *
  * A fetch that starts after a `resync` (and the first one, which starts after the stream is
  * being heard) can only be missing what the stream then delivers; messages that arrive while
@@ -62,7 +64,7 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
   let running = false;
   let generation = 0;
   let fetching = false;
-  let arrivedWhileFetching: Message[] = [];
+  let arrivedWhileFetching: ((current: ChatState) => ChatState)[] = [];
   let connection = connectionOf();
   let cancelRetry: (() => void) | null = null;
   let stopListening: (() => void)[] = [];
@@ -75,15 +77,22 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
     for (const listener of listeners) listener();
   };
 
-  const receive = (message: Message) => {
-    if (fetching) arrivedWhileFetching.push(message);
-    update((current) => applyMessage(current, message));
+  // A change to the messages is applied at once, and again on top of a fetch that is in flight.
+  const hear = (step: (current: ChatState) => ChatState) => {
+    if (fetching) arrivedWhileFetching.push(step);
+    update(step);
   };
+
+  const receive = (message: Message) => hear((current) => applyMessage(current, message));
 
   const onEvent: Parameters<typeof events.subscribeEvents>[1] = (event) => {
     if (event.kind === "resync") void load();
     else if (event.kind === "delta") update((current) => applyDelta(current, event.delta));
     else if (event.entry.type === "message.created") receive(event.entry.payload.message);
+    else if (event.entry.type === "message.updated") {
+      const { message } = event.entry.payload;
+      hear((current) => applyMessageUpdate(current, message));
+    }
   };
 
   // A dropped connection ends the baseline of every running reply; the reconnect sends new ones.
@@ -106,7 +115,9 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
       const late = arrivedWhileFetching;
       fetching = false;
       arrivedWhileFetching = [];
-      update((current) => late.reduce(applyMessage, applySnapshot(current, messages)));
+      update((current) =>
+        late.reduce((next, step) => step(next), applySnapshot(current, messages)),
+      );
       deps.onLoaded?.(state);
     } catch (error) {
       if (mine !== generation) return;

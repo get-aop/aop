@@ -1,11 +1,13 @@
+import type { SuggestionError } from "../suggestion/types.ts";
 import type { ThreadError } from "../thread/types.ts";
 import type { MemoryResult } from "./memory-service.ts";
 import type { ProjectError } from "./service.ts";
 
-/** Every way a project, thread or memory service can refuse. Routes and MCP tools both report them. */
+/** Every way a project, thread, suggestion or memory service can refuse. Routes and MCP tools both report them. */
 export type ServiceError =
   | ProjectError
   | ThreadError
+  | SuggestionError
   | Extract<MemoryResult<unknown>, { success: false }>["error"];
 
 export const describeServiceError = (error: ServiceError): string => {
@@ -14,6 +16,8 @@ export const describeServiceError = (error: ServiceError): string => {
       return "Project not found";
     case "THREAD_NOT_FOUND":
       return "Thread not found";
+    case "SUGGESTION_NOT_FOUND":
+      return "Suggestion not found";
     case "MEMORY_FILE_NOT_FOUND":
       return "Memory file not found";
     case "REPO_NOT_FOUND":

@@ -1,23 +1,33 @@
-import type { Message, SuggestedThread, Thread, UserMessage } from "@aop/common";
+import type { Message, Thread, UserMessage } from "@aop/common";
 import { createContext, useContext } from "react";
 import {
   listCoordinatorMessages,
   sendCoordinatorMessage,
-  startSuggestedThread,
+  skipSuggestion,
+  startSuggestion,
+  unskipSuggestion,
 } from "../../api/project-chat";
 
 /** What the chat asks of the host. A test brings its own through `ChatApiProvider`. */
 export interface ChatApi {
   listMessages: (projectId: string) => Promise<Message[]>;
   sendMessage: (projectId: string, text: string) => Promise<UserMessage>;
-  /** Starts the thread a suggestion proposes. */
-  startThread: (projectId: string, suggestion: SuggestedThread) => Promise<Thread>;
+  /**
+   * The answers to a proposal of the coordinator, given by the message and the suggestion. The
+   * host records them and publishes the message again, so the page shows an answer when the
+   * stream delivers it, on every device alike.
+   */
+  startSuggestion: (projectId: string, messageId: string, suggestionId: string) => Promise<Thread>;
+  skipSuggestion: (projectId: string, messageId: string, suggestionId: string) => Promise<void>;
+  unskipSuggestion: (projectId: string, messageId: string, suggestionId: string) => Promise<void>;
 }
 
 export const browserChatApi: ChatApi = {
   listMessages: listCoordinatorMessages,
   sendMessage: sendCoordinatorMessage,
-  startThread: startSuggestedThread,
+  startSuggestion,
+  skipSuggestion,
+  unskipSuggestion,
 };
 
 const ChatApiContext = createContext<ChatApi>(browserChatApi);

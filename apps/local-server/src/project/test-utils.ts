@@ -17,6 +17,7 @@ import { createMcpRoutes } from "../mcp/routes.ts";
 import { createPullRequestWatchRoutes } from "../pull-request-watch/routes.ts";
 import type { PullRequestWatcherDeps } from "../pull-request-watch/watcher.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import { createSuggestionRoutes } from "../suggestion/routes.ts";
 import type { ThreadGitDeps } from "../thread/git.ts";
 import { attachBareOrigin } from "../thread/git-test-utils.ts";
 import { createThreadRoutes } from "../thread/routes.ts";
@@ -223,6 +224,7 @@ export const createProjectStack = async (
   app.route("/api/mcp", createMcpRoutes(ctx, services));
   app.route("/api/projects", createProjectRoutes(services));
   app.route("/api", createThreadRoutes(services));
+  app.route("/api", createSuggestionRoutes(services));
   app.route("/api", createPullRequestWatchRoutes(services));
 
   const previousMcpUrl = process.env.AOP_MCP_URL;

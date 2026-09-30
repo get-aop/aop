@@ -58,6 +58,18 @@ export const applyMessage = (state: ChatState, message: Message): ChatState => {
 };
 
 /**
+ * A message the host changed after it was created, as when a suggested thread is answered. It
+ * replaces the copy the page holds. A message the page does not hold is not added: the page
+ * holds only the latest of the conversation, and an old message would land at the end.
+ */
+export const applyMessageUpdate = (state: ChatState, message: Message): ChatState => {
+  if (message.threadId !== state.scope) return state;
+  const known = state.messages.findIndex(({ id }) => id === message.id);
+  if (known === -1) return state;
+  return { ...state, messages: state.messages.map((held, at) => (at === known ? message : held)) };
+};
+
+/**
  * A slice of a reply being written. The live text of a message the page already holds is not
  * shown: deltas and entries travel apart, so a delta can arrive after its message.
  */

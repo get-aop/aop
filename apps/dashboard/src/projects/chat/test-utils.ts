@@ -77,10 +77,14 @@ export const delta = (
 /** The ids of the messages in order, for asserting an order without the noise of the rest. */
 export const ids = (messages: readonly Message[]): string[] => messages.map(({ id }) => id);
 
-export const messageEntry = (id: number, message: Message): EventLogEntry => ({
+export const messageEntry = (
+  id: number,
+  message: Message,
+  type: "message.created" | "message.updated" = "message.created",
+): EventLogEntry => ({
   id,
   projectId: "prj_1",
-  type: "message.created",
+  type,
   payload: { message },
 });
 

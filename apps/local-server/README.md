@@ -45,6 +45,7 @@ Registered in `src/app.ts`:
 | `/api/status` | Registered repos and summaries |
 | `/api/projects` | Projects: settings, pause/archive/restore, the coordinator chat, memory files |
 | `/api/projects/:id/threads`, `/api/threads` | A project's threads: start, steer, answer a question, stop, read; each thread's worktree, pull request (open, merge, sync) and resolve, see [Threads and git](../../docs/THREADS.md) |
+| `/api/projects/:id/messages/:messageId/suggestions/:suggestionId` | Answers to the threads the coordinator proposes: start (once), skip, undo a skip; see [The coordinator chat](../../docs/architecture/coordinator-chat.md#suggested-threads) |
 | `/api/chat-sessions` | Chat sessions that belong to no project: messages, runs, session git |
 | `/api/repos` | Register/remove repositories |
 | `/api/settings` | Key/value settings |

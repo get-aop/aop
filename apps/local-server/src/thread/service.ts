@@ -11,12 +11,15 @@ import { generateTypeId } from "@aop/infra";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { Repo } from "../db/schema.ts";
+import type { PublisherTransaction } from "../event-log/publisher.ts";
 import type { ChatEngine } from "../project/engine.ts";
 import { recordThreadRemoved, recordThreadUpserted } from "../project/events.ts";
 import { resolveSessionRuntime } from "../project/runtime.ts";
 import { stopProjectSession } from "../project/session-control.ts";
 import { listWireMessages } from "../project/wire-messages.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import { recordSuggestionsChanged } from "../suggestion/events.ts";
+import { createSuggestionRepository } from "../suggestion/repository.ts";
 import { readThreadActivity } from "./activity.ts";
 import { changeThread as applyPatch } from "./change.ts";
 import type { ThreadGit } from "./git.ts";
@@ -37,6 +40,11 @@ export interface SpawnThreadInput {
   repoId?: string | null;
   /** The person's own words, shown as a forwarded quote above the brief. */
   quote?: string | null;
+  /**
+   * Runs in the transaction that stores the thread, once its session exists. What it writes
+   * commits with the thread or not at all, and a throw keeps the thread from being made.
+   */
+  inTransaction?: (tx: PublisherTransaction, threadId: string) => Promise<void>;
 }
 
 export interface ThreadService {
@@ -145,13 +153,16 @@ export const createThreadService = (
   const deleteSession = async (
     thread: Pick<Thread, "id" | "projectId">,
   ): Promise<ThreadResult<Record<never, never>>> => {
+    // A proposal this thread was started from is open again once the thread is gone.
+    const reopened = await createSuggestionRepository(ctx.db).messagesStartedAs(thread.id);
     const deleted = await chat.delete(thread.id);
     if (!deleted.success && deleted.error.code === "RUN_IN_PROGRESS") {
       return { success: false, error: { code: "SESSION_BUSY", sessionId: thread.id } };
     }
-    await ctx.eventPublisher.transaction((tx) =>
-      recordThreadRemoved(tx, thread.projectId, thread.id),
-    );
+    await ctx.eventPublisher.transaction(async (tx) => {
+      await recordThreadRemoved(tx, thread.projectId, thread.id);
+      await recordSuggestionsChanged(tx, thread.projectId, reopened);
+    });
     return { success: true };
   };
 
@@ -241,6 +252,7 @@ export const createThreadService = (
         runtime,
       });
       await recordThreadUpserted(tx, thread.id);
+      await input.inTransaction?.(tx, thread.id);
     });
 
     const ready = await git.provision(thread);

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   applyDelta,
   applyMessage,
+  applyMessageUpdate,
   applySnapshot,
   createChatState,
   dropLiveText,
@@ -125,6 +126,51 @@ describe("applyMessage", () => {
     const state = ready(userMessage("u1", 1));
 
     expect(applyMessage(state, reply("t1", 2, undefined, { threadId: "thr_1" }))).toBe(state);
+  });
+});
+
+describe("applyMessageUpdate", () => {
+  const proposal = (answered: boolean) =>
+    reply("a1", 2, [
+      {
+        type: "suggested-threads",
+        suggestions: [
+          {
+            id: "s1",
+            title: "Add retry metrics",
+            prompt: "Add metrics",
+            repoId: null,
+            ...(answered && { answer: { state: "skipped" as const } }),
+          },
+        ],
+      },
+    ]);
+
+  test("replaces the copy that is held, in place", () => {
+    const before = ready(userMessage("u1", 1), proposal(false), userMessage("u2", 3));
+
+    const after = applyMessageUpdate(before, proposal(true));
+
+    expect(ids(after.messages)).toEqual(["u1", "a1", "u2"]);
+    expect(after.messages[1]).toEqual(proposal(true));
+  });
+
+  test("applying the same update twice leaves the same chat", () => {
+    const once = applyMessageUpdate(ready(proposal(false)), proposal(true));
+
+    expect(applyMessageUpdate(once, proposal(true)).messages).toEqual(once.messages);
+  });
+
+  test("does not add a message the page does not hold: it would land out of order", () => {
+    const before = ready(userMessage("u1", 1), reply("a2", 5));
+
+    expect(applyMessageUpdate(before, proposal(true))).toBe(before);
+  });
+
+  test("ignores an update to a message of a thread", () => {
+    const before = ready(proposal(false));
+
+    expect(applyMessageUpdate(before, { ...proposal(true), threadId: "thr_1" })).toBe(before);
   });
 });
 

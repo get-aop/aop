@@ -69,6 +69,16 @@ const QuoteForwardedBlockSchema = z.object({
 
 export const SUGGESTED_THREADS_MAX = 8;
 
+/**
+ * What the person did with a proposal, as the host recorded it: started as this thread, or
+ * skipped. A started proposal stays started; a skip can be taken back.
+ */
+export const SuggestionAnswerSchema = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("started"), threadId: IdSchema }),
+  z.object({ state: z.literal("skipped") }),
+]);
+export type SuggestionAnswer = z.infer<typeof SuggestionAnswerSchema>;
+
 /** One thread the coordinator proposes; the person starts it (or all of them) from the block. */
 export const SuggestedThreadSchema = z.object({
   /** Stable within the block, so a client can start or dismiss one suggestion. */
@@ -78,10 +88,15 @@ export const SuggestedThreadSchema = z.object({
   prompt: z.string().trim().min(1).max(8000),
   /** The repo the thread would work in; null for a thread that needs none. */
   repoId: IdSchema.nullable(),
+  /**
+   * Not stored with the block: the host adds it, from its record of answers, to every message it
+   * sends. Absent while nobody has answered.
+   */
+  answer: SuggestionAnswerSchema.optional(),
 });
 export type SuggestedThread = z.infer<typeof SuggestedThreadSchema>;
 
-/** "Suggested threads": proposals with Start and Start all buttons. Nothing runs until one is started. */
+/** "Suggested threads": proposals with Start, Skip and Start all buttons. Nothing runs until one is started. */
 const SuggestedThreadsBlockSchema = z.object({
   type: z.literal("suggested-threads"),
   suggestions: z

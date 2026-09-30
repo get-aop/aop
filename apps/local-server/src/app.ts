@@ -24,6 +24,7 @@ import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes
 import { createRuntimeProfileRoutes } from "./runtime-profile/routes.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
+import { createSuggestionRoutes } from "./suggestion/routes.ts";
 import { createThreadRoutes } from "./thread/routes.ts";
 import { createUsageRoutes } from "./usage/routes.ts";
 
@@ -118,6 +119,7 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/mcp", createMcpRoutes(ctx, projects));
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api", createThreadRoutes(projects));
+  app.route("/api", createSuggestionRoutes(projects));
   app.route("/api", createPullRequestWatchRoutes(projects));
   app.route("/api/repos", createRepoRoutes(ctx));
   app.route(

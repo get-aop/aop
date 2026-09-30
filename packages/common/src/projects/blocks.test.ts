@@ -50,6 +50,23 @@ describe("MessageBlockSchema", () => {
     ).toEqual(["suggestions.0.title", "suggestions.0.prompt"]);
   });
 
+  test("a suggestion carries the answer the host recorded: started as a thread, or skipped", () => {
+    const suggestion = { id: "s1", title: "Sketch the API", prompt: "Draft it.", repoId: null };
+    const answered = (answer: unknown) => ({
+      type: "suggested-threads",
+      suggestions: [{ ...suggestion, answer }],
+    });
+    for (const answer of [{ state: "started", threadId: "thr_1" }, { state: "skipped" }]) {
+      expect(parsed(MessageBlockSchema, answered(answer))).toEqual(answered(answer));
+    }
+    expect(rejectedPaths(MessageBlockSchema, answered({ state: "started" }))).toEqual([
+      "suggestions.0.answer.threadId",
+    ]);
+    expect(rejectedPaths(MessageBlockSchema, answered({ state: "done" }))).toEqual([
+      "suggestions.0.answer.state",
+    ]);
+  });
+
   test.each(["live", "needs-call", "done"])("accepts the %s thread card variant", (variant) => {
     const block = { type: "thread-card", threadId: "thr_1", variant };
     expect(parsed(MessageBlockSchema, block)).toEqual(block);

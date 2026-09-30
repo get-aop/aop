@@ -23,6 +23,7 @@ const validEntries: [string, unknown][] = [
   ["thread.removed", { threadId: "thr_1" }],
   ["message.created", { message: makeUserMessage() }],
   ["message.created", { message: makeAssistantMessage() }],
+  ["message.updated", { message: makeAssistantMessage() }],
 ];
 
 describe("EventLogEntrySchema", () => {
@@ -67,6 +68,13 @@ describe("EventLogEntrySchema", () => {
     test("rejects a message from another project", () => {
       const entry = makeEntry("message.created", {
         message: makeUserMessage({ projectId: "prj_2" }),
+      });
+      expect(EventLogEntrySchema.safeParse(entry).success).toBe(false);
+    });
+
+    test("rejects an updated message from another project", () => {
+      const entry = makeEntry("message.updated", {
+        message: makeAssistantMessage({ projectId: "prj_2" }),
       });
       expect(EventLogEntrySchema.safeParse(entry).success).toBe(false);
     });

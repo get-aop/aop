@@ -6,7 +6,7 @@ import { serializeMessageOrigin } from "../chat-session/message-origin.ts";
 import type { ChatSession, Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import { insertProjectRow, insertProjectSession } from "./test-utils.ts";
-import { listWireMessages } from "./wire-messages.ts";
+import { getWireMessage, listWireMessages } from "./wire-messages.ts";
 
 describe("listWireMessages", () => {
   let db: Kysely<Database>;
@@ -180,6 +180,103 @@ describe("listWireMessages", () => {
         { type: "text", text: "Started." },
         { type: "thread-card", threadId: "isess_thread", variant: "live" },
       ],
+    });
+  });
+
+  describe("the answers to suggested threads", () => {
+    const suggestions = ["s1", "s2", "s3"].map((id) => ({
+      id,
+      title: `Thread ${id}`,
+      prompt: "Do it.",
+      repoId: null,
+    }));
+
+    const propose = async (messageId: string) => {
+      await addMessage(coordinator.id, {
+        id: `u-${messageId}`,
+        role: "user",
+        content: "Go",
+        turn: 1,
+      });
+      await addMessage(coordinator.id, {
+        id: messageId,
+        role: "assistant",
+        content: "Options.",
+        turn: 1,
+      });
+      await db
+        .insertInto("chat_runs")
+        .values({
+          id: `crun-${messageId}`,
+          session_id: coordinator.id,
+          user_message_id: `u-${messageId}`,
+          assistant_message_id: messageId,
+          runtime: "claude-code",
+          log_file_path: "/tmp/x.jsonl",
+          status: "completed",
+          blocks_json: JSON.stringify([{ type: "suggested-threads", suggestions }]),
+        })
+        .execute();
+    };
+
+    const answered = (message: unknown) =>
+      (message as { blocks: { suggestions?: { id: string; answer?: unknown }[] }[] }).blocks
+        .flatMap((block) => block.suggestions ?? [])
+        .map(({ id, answer }) => [id, answer ?? null]);
+
+    test("are put on the suggestions of the message they were given for, and on no other", async () => {
+      await propose("a1");
+      await propose("a2");
+      await insertProjectSession(db, { id: "isess_started", projectId: "proj_1", kind: "thread" });
+      await db
+        .insertInto("suggestion_answers")
+        .values([
+          { message_id: "a1", suggestion_id: "s1", state: "started", thread_id: "isess_started" },
+          { message_id: "a1", suggestion_id: "s3", state: "skipped", thread_id: null },
+        ])
+        .execute();
+
+      const messages = await listWireMessages(db, coordinator);
+      const one = await getWireMessage(db, coordinator, "a1");
+      const two = await getWireMessage(db, coordinator, "a2");
+
+      const expectedOne = [
+        ["s1", { state: "started", threadId: "isess_started" }],
+        ["s2", null],
+        ["s3", { state: "skipped" }],
+      ];
+      expect(answered(messages.find(({ id }) => id === "a1"))).toEqual(expectedOne);
+      expect(answered(one)).toEqual(expectedOne);
+      expect(answered(messages.find(({ id }) => id === "a2"))).toEqual(
+        ["s1", "s2", "s3"].map((id) => [id, null]),
+      );
+      expect(answered(two)).toEqual(["s1", "s2", "s3"].map((id) => [id, null]));
+      for (const message of messages) expect(MessageSchema.safeParse(message).success).toBe(true);
+    });
+
+    test("are not part of what the run stored", async () => {
+      await propose("a1");
+      await db
+        .insertInto("suggestion_answers")
+        .values({ message_id: "a1", suggestion_id: "s2", state: "skipped", thread_id: null })
+        .execute();
+
+      await listWireMessages(db, coordinator);
+
+      const run = await db
+        .selectFrom("chat_runs")
+        .select("blocks_json")
+        .where("assistant_message_id", "=", "a1")
+        .executeTakeFirstOrThrow();
+      expect(run.blocks_json).not.toContain("skipped");
+    });
+
+    test("getWireMessage finds one message by id, and none in another session or that does not exist", async () => {
+      await propose("a1");
+
+      expect(await getWireMessage(db, coordinator, "a1")).toMatchObject({ id: "a1" });
+      expect(await getWireMessage(db, thread, "a1")).toBeNull();
+      expect(await getWireMessage(db, coordinator, "nope")).toBeNull();
     });
   });
 

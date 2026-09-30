@@ -56,7 +56,7 @@ export const AssistantRow = memo(function AssistantRow({
     >
       <div className="relative min-w-0 px-1 py-0.5">
         {workLog}
-        <MessageBlocks blocks={message.blocks} />
+        <MessageBlocks messageId={message.id} blocks={message.blocks} />
         <div className="mt-1.5">
           <MessageMeta timestamp={message.createdAt} copyText={textOf(message)} />
         </div>

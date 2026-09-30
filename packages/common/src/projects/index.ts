@@ -22,11 +22,17 @@ export type {
   PullRequestState,
 } from "./artifact.ts";
 export { ArtifactSchema, PullRequestChecksSchema, PullRequestRefSchema } from "./artifact.ts";
-export type { MessageBlock, SuggestedThread, ThreadCardVariant } from "./blocks.ts";
+export type {
+  MessageBlock,
+  SuggestedThread,
+  SuggestionAnswer,
+  ThreadCardVariant,
+} from "./blocks.ts";
 export {
   MessageBlockSchema,
   SUGGESTED_THREADS_MAX,
   SuggestedThreadSchema,
+  SuggestionAnswerSchema,
   threadCardVariant,
 } from "./blocks.ts";
 export type { Device } from "./device.ts";

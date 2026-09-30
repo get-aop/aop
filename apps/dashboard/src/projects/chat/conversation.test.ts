@@ -278,6 +278,79 @@ describe("following the stream", () => {
   });
 });
 
+describe("a message the host publishes again", () => {
+  const proposal = (skipped: boolean, threadId: string | null = null) =>
+    reply(
+      "a1",
+      2,
+      [
+        {
+          type: "suggested-threads",
+          suggestions: [
+            {
+              id: "s1",
+              title: "Add retry metrics",
+              prompt: "Add metrics",
+              repoId: null,
+              ...(skipped && { answer: { state: "skipped" as const } }),
+            },
+          ],
+        },
+      ],
+      { threadId },
+    );
+  const updated = (id: number, message: Message) => ({
+    kind: "entry" as const,
+    entry: messageEntry(id, message, "message.updated"),
+  });
+  const skippedIn = (conversation: Conversation) => {
+    const [message] = conversation.getState().messages;
+    const block = message?.role === "assistant" ? message.blocks[0] : undefined;
+    return block?.type === "suggested-threads" ? block.suggestions[0]?.answer?.state : undefined;
+  };
+
+  test("replaces the copy held, so an answer given on another device shows here", async () => {
+    const { conversation, fake } = setup({
+      scope: null,
+      fetches: [Promise.resolve([proposal(false)])],
+    });
+    conversation.start();
+    await flush();
+    expect(skippedIn(conversation)).toBeUndefined();
+
+    fake.send(updated(2, proposal(true)));
+
+    expect(skippedIn(conversation)).toBe("skipped");
+    expect(held(conversation)).toEqual(["a1"]);
+  });
+
+  test("is not rolled back by a fetch that was read before it", async () => {
+    const fetched = deferred<Message[]>();
+    const { conversation, fake } = setup({ scope: null, fetches: [fetched.promise] });
+    conversation.start();
+
+    fake.send(updated(2, proposal(true)));
+    fetched.resolve([proposal(false)]);
+    await flush();
+
+    expect(skippedIn(conversation)).toBe("skipped");
+  });
+
+  test("a message this page does not hold is left out, and a thread's conversation ignores the coordinator's", async () => {
+    const coordinator = setup({ scope: null, fetches: [Promise.resolve([userMessage("u1", 1)])] });
+    coordinator.conversation.start();
+    await flush();
+    coordinator.fake.send(updated(2, proposal(true)));
+    const inThreadScope = setup({ fetches: [Promise.resolve([inThread("brief", 1)])] });
+    inThreadScope.conversation.start();
+    await flush();
+    inThreadScope.fake.send(updated(2, proposal(true)));
+
+    expect(held(coordinator.conversation)).toEqual(["u1"]);
+    expect(held(inThreadScope.conversation)).toEqual(["brief"]);
+  });
+});
+
 describe("what this page just caused", () => {
   test("receive applies a message at once, and the stream repeating it adds nothing", async () => {
     const { conversation, fake } = setup({ fetches: [Promise.resolve([inThread("brief", 1)])] });

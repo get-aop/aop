@@ -33,6 +33,12 @@ const EventLogEntryUnionSchema = z.discriminatedUnion("type", [
     type: z.literal("message.created"),
     payload: z.object({ message: MessageSchema }),
   }),
+  // A message the host changed after it was created, as when a suggested thread is answered. It
+  // carries the whole message as `message.created` does, and a client replaces the one it holds.
+  EventLogBaseSchema.extend({
+    type: z.literal("message.updated"),
+    payload: z.object({ message: MessageSchema }),
+  }),
 ]);
 
 export type EventLogEntry = z.infer<typeof EventLogEntryUnionSchema>;
@@ -44,6 +50,7 @@ const payloadProjectId = (entry: EventLogEntry): string | null => {
     case "thread.upserted":
       return entry.payload.thread.projectId;
     case "message.created":
+    case "message.updated":
       return entry.payload.message.projectId;
     default:
       return null;

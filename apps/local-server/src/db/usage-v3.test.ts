@@ -35,7 +35,7 @@ describe("migration v3 on a database file", () => {
     await runMigrations(db);
 
     const ledger = await db.selectFrom("schema_migrations").select("version").execute();
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(await db.selectFrom("run_usage").selectAll().execute()).toEqual([]);
     expect(await db.selectFrom("chat_runs").select("id").execute()).toHaveLength(2);
     await db.destroy();

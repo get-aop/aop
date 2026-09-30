@@ -7,16 +7,16 @@ The Coordinator tab of a project is the conversation with its coordinator: what 
 The page learns about messages from three places that overlap and can arrive in any order:
 
 1. A fetch of `GET /api/projects/:id/messages`, which returns the latest 200 messages, oldest first.
-2. The project's stream: a `message.created` entry for every message (the person's, the coordinator's, and the reports threads send it), and `delta` frames with the text of a reply being written.
+2. The project's stream: a `message.created` entry for every message (the person's, the coordinator's, and the reports threads send it), a `message.updated` entry when the host changes a message after it was created (an answered proposal, see [Suggested threads](#suggested-threads)), and `delta` frames with the text of a reply being written.
 3. The message a send returns: `POST /api/projects/:id/messages` answers with the stored message, not with the coordinator's reply.
 
-Every message is applied by its id (`chat-state.ts`). Applying one the page already holds replaces it in place, so a fetch, a replayed entry and a send that return the same message leave one copy.
+Every message is applied by its id (`chat-state.ts`). Applying one the page already holds replaces it in place, so a fetch, a replayed entry and a send that return the same message leave one copy. A `message.updated` entry replaces the copy held too, but is never the way a message gets in: one the page does not hold is ignored, because the page holds only the latest 200 and an old message would be put at the end.
 
 ## Staying complete
 
 `useProjectChat` starts when a project opens and runs until it closes, whichever tab is showing. It listens to the stream first and fetches after, so a message stored between the two is either in the fetch or on the stream.
 
-- **A fetch in flight.** Messages that arrive while it runs are applied at once and again on top of its result, so a fetch that was read before them cannot roll them back. When a newer fetch starts, an older one that is still running is dropped.
+- **A fetch in flight.** Messages, and updates to them, that arrive while it runs are applied at once and again on top of its result, so a fetch that was read before them cannot roll them back. When a newer fetch starts, an older one that is still running is dropped.
 - **Resync.** A `resync` event means the log cannot catch this client up, so the chat fetches again, starting after the event. The result replaces what the page held: a message the host no longer has disappears, and the ones that arrived meanwhile are put back on top.
 - **A short break.** The browser, or the stream client, resumes from the last entry it saw, and the host replays what was missed. The replay is applied by id, so nothing is shown twice and nothing is missing.
 - **A reload.** A new page has no cursor, the stream answers with a `resync`, and the chat fetches. A message the person typed and did not send is kept in local storage.
@@ -52,7 +52,23 @@ A thread's report to the coordinator is a `thread-report` message. It is drawn a
 
 ## Suggested threads
 
-The host has no route for accepting a proposal: starting one is `POST /api/projects/:id/threads` with the suggestion's title, brief and repository, and nothing on the host records that a suggestion was started or skipped. The page keeps that answer per device in local storage, by the suggestion's id, so a reload shows the same state. A proposal answered on another computer shows as waiting again on this one, and starting it there would make a second thread. Recording the answer on the host would close that gap.
+The coordinator's `propose_threads` tool attaches a `suggested-threads` block to its reply: proposals with a title, a brief and a repository, each with an id of its own. Nothing runs until the person answers one, and the host records the answer, so every device sees the same one.
+
+**The record.** The `suggestion_answers` table (migration v10) has one row per answered suggestion, keyed by the id of the message that holds the block and the suggestion's id. `started` names the thread it made; `skipped` names none. A suggestion nobody answered has no row. The row goes with its message, and with its thread: deleting the thread, or a start that fails after the thread was stored, leaves the proposal open again.
+
+**The routes**, under `/api/projects/:projectId/messages/:messageId/suggestions/:suggestionId`:
+
+| Route | Does |
+| --- | --- |
+| `POST /start` | Starts the thread the suggestion proposes, from the title, brief and repository the host holds, not from what the client sends. `201` with the thread when this call made it, `200` with the same thread when the suggestion was already started. A paused project answers `409`, an unknown message or suggestion `404`. |
+| `POST /skip` | Skips it. `{ answer }` is what stands afterwards: a proposal that was started stays started. |
+| `DELETE /skip` | Takes a skip back, so the proposal waits again. |
+
+**Starting once.** The row is written in the transaction that stores the thread, so an answer exists exactly when its thread does, and the table's key allows one `started` row per suggestion. Answers to one suggestion also wait for each other in the host (one at a time, per suggestion), so a second click does not plan a thread before it finds the first. Two clients that click Start together get the same thread back, one with `201` and one with `200`, and the project has one new thread. A skipped proposal can still be started; the start replaces the skip.
+
+**How a client learns it.** The answer is part of the message: every message the host sends, whether from the list or the stream, carries it on its suggestion (`answer`, `started` with the thread id or `skipped`; absent while the suggestion waits). The run's stored blocks never hold it. When an answer changes, the host appends a `message.updated` entry with the whole message, in the same transaction, after the `thread.upserted` entry of the thread a start made. A page that loads later reads the answers from the list, so a reload, a second computer and a restarted host all show the same proposal state.
+
+**What the page does.** `SuggestedThreads` draws each row from its suggestion's `answer` and keeps nothing of its own: a click asks the host, and the row changes when the entry arrives, like the thread actions do. While a start is running the row says "Starting…". "Start all" starts the waiting proposals one after the other. Nothing is kept in local storage; a proposal answered by an earlier build's browser-local answer shows as waiting.
 
 ## What this device has seen
 

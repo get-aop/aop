@@ -10,7 +10,7 @@ The server code is in `apps/local-server/src/event-log/`. The wire types (`Event
 
 ## The log
 
-Every change a client must learn about is appended to the `event_log` table as an `EventLogEntry` and gets an id that only grows. Ids are never reused, even after old entries are trimmed. Entries carry whole entities (`project.upserted`, `thread.upserted`, `message.created`) or a removal (`thread.removed`, `project.removed`), and a client applies them by id, so replaying a range twice leaves the same state.
+Every change a client must learn about is appended to the `event_log` table as an `EventLogEntry` and gets an id that only grows. Ids are never reused, even after old entries are trimmed. Entries carry whole entities (`project.upserted`, `thread.upserted`, `message.created`, `message.updated`) or a removal (`thread.removed`, `project.removed`), and a client applies them by id, so replaying a range twice leaves the same state. `message.updated` carries a message the host changed after it was created, as when a suggested thread is answered; it has the payload of `message.created`, and a client replaces the message it holds.
 
 Domains do not write the table. They call the publisher on `LocalServerContext`:
 

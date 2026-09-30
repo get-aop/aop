@@ -6,6 +6,7 @@ import {
   type PullRequestWatcher,
   type PullRequestWatcherDeps,
 } from "../pull-request-watch/watcher.ts";
+import { createSuggestionService, type SuggestionService } from "../suggestion/service.ts";
 import { createThreadGit, type ThreadGit, type ThreadGitDeps } from "../thread/git.ts";
 import { createThreadService, type ThreadService } from "../thread/service.ts";
 import type { ChatEngine } from "./engine.ts";
@@ -17,6 +18,8 @@ export interface ProjectServices {
   chat: ChatEngine;
   projects: ProjectService;
   threads: ThreadService;
+  /** The answers to the threads the coordinator proposes. */
+  suggestions: SuggestionService;
   memory: MemoryService;
   /** The git side of threads, for housekeeping that runs without a request. */
   git: ThreadGit;
@@ -38,6 +41,7 @@ export const createProjectServices = (
     chat,
     projects: createProjectService(ctx, chat, git),
     threads,
+    suggestions: createSuggestionService(ctx, threads),
     memory: createMemoryService({ projects: ctx.projectRepository, memory: ctx.memoryRepository }),
     git,
     // The watcher reads GitHub through the same `gh` seam the threads' pull requests use.

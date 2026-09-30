@@ -21,8 +21,11 @@ import { ThreadChip } from "./ThreadChip";
  * quotes stand on their own. The thread behind a card or chip is looked up when it is drawn.
  */
 export const MessageBlocks = memo(function MessageBlocks({
+  messageId,
   blocks,
 }: {
+  /** The message the blocks belong to: what a proposal in them is answered against. */
+  messageId: string;
   blocks: readonly MessageBlock[];
 }) {
   const groups = useMemo(() => groupBlocks(blocks), [blocks]);
@@ -34,7 +37,12 @@ export const MessageBlocks = memo(function MessageBlocks({
   return (
     <div data-testid="message-blocks" className="flex min-w-0 flex-col">
       {groups.map((group, index) => (
-        <GroupView key={groupKey(group, index)} group={group} carded={carded} />
+        <GroupView
+          key={groupKey(group, index)}
+          group={group}
+          carded={carded}
+          messageId={messageId}
+        />
       ))}
     </div>
   );
@@ -44,7 +52,15 @@ export const MessageBlocks = memo(function MessageBlocks({
 const groupKey = (group: BlockGroup, index: number): string =>
   `${index}:${group.kind === "prose" ? "prose" : group.block.type}`;
 
-const GroupView = ({ group, carded }: { group: BlockGroup; carded: ReadonlySet<string> }) => {
+const GroupView = ({
+  group,
+  carded,
+  messageId,
+}: {
+  group: BlockGroup;
+  carded: ReadonlySet<string>;
+  messageId: string;
+}) => {
   if (group.kind === "prose") return <Prose run={group.run} />;
   const { block } = group;
   switch (block.type) {
@@ -53,7 +69,7 @@ const GroupView = ({ group, carded }: { group: BlockGroup; carded: ReadonlySet<s
     case "thread-card":
       return <ChatThreadCard threadId={block.threadId} variant={block.variant} />;
     case "suggested-threads":
-      return <SuggestedThreads suggestions={block.suggestions} />;
+      return <SuggestedThreads messageId={messageId} suggestions={block.suggestions} />;
     case "quote-forwarded":
       return <QuoteForwarded text={block.text} />;
   }

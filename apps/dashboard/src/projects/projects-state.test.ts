@@ -132,24 +132,27 @@ describe("applyEntry", () => {
     expect(removed.byId).toEqual({});
   });
 
-  test("message.created changes nothing: the chat owns messages", () => {
-    const message: EventLogEntry = {
-      id: 1,
-      projectId: "prj_1",
-      type: "message.created",
-      payload: {
-        message: {
-          id: "m1",
-          projectId: "prj_1",
-          threadId: null,
-          createdAt: "2026-09-29T10:00:00.000Z",
-          role: "user",
-          text: "hi",
+  test.each(["message.created", "message.updated"] as const)(
+    "%s changes nothing: the chat owns messages",
+    (type) => {
+      const message: EventLogEntry = {
+        id: 1,
+        projectId: "prj_1",
+        type,
+        payload: {
+          message: {
+            id: "m1",
+            projectId: "prj_1",
+            threadId: null,
+            createdAt: "2026-09-29T10:00:00.000Z",
+            role: "user",
+            text: "hi",
+          },
         },
-      },
-    };
-    expect(applyEntry(start, message)).toBe(start);
-  });
+      };
+      expect(applyEntry(start, message)).toBe(start);
+    },
+  );
 });
 
 describe("snapshots and connection", () => {
