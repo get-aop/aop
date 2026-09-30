@@ -40,8 +40,14 @@ export interface LiveProjectsDeps {
   schedule?: (run: () => void, delayMs: number) => () => void;
 }
 
-/** How often projects without a stream, and the list itself, are refetched. */
-export const POLL_INTERVAL_MS = 30_000;
+/**
+ * How often the project list is refetched. No host-level stream announces a project made on
+ * another client (streams are per project), so this is how fast one appears in the sidebar; the
+ * list is one small request.
+ */
+export const POLL_INTERVAL_MS = 5_000;
+/** Projects without a stream cost a request each, so they are refetched on every Nth poll. */
+export const IDLE_SNAPSHOT_EVERY = 6;
 /** How soon a failed fetch of a streamed project is tried again, until the host answers. */
 export const SNAPSHOT_RETRY_MS = 3_000;
 
@@ -79,6 +85,7 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
   let selectedId: string | null = null;
   let running = false;
   let pollChain = 0;
+  let pollCount = 0;
   let cancelPoll: (() => void) | null = null;
   let watched: string[] = [];
   const streams = new Map<string, { close: () => void }>();
@@ -206,9 +213,13 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
     }
   };
 
-  // Projects without a stream, and the list (a project made on another device), are refetched.
+  // The list (a project made on another device) is refetched every time, projects without a
+  // stream only on every Nth poll.
   const poll = async () => {
     await refresh();
+    const due = pollCount % IDLE_SNAPSHOT_EVERY === 0;
+    pollCount += 1;
+    if (!due) return;
     const idle = eligibleIds().filter((projectId) => !streams.has(projectId));
     await Promise.all(idle.map(snapshot));
   };
@@ -244,6 +255,7 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
       if (running) return;
       running = true;
       const chain = ++pollChain;
+      pollCount = 0;
       reconcile();
       void poll().then(() => armPoll(chain));
     },

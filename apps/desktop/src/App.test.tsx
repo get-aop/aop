@@ -258,7 +258,13 @@ describe("the host on this Mac", () => {
       local({ hostProcess: { status: "running", ownership: "adopted", version: "0.9.40" } }),
     );
 
-    expect(view.getByTestId("host-status").textContent).toContain("already running");
+    expect(view.getByTestId("host-status").textContent).toContain("running outside the app");
+    expect(view.queryByTestId("host-stop")).toBeNull();
+    expect(view.queryByTestId("host-start")).toBeNull();
+    expect(view.getByTestId("host-managed-elsewhere").textContent).toContain("background service");
+    expect(view.getByTestId("host-stop-command").textContent).toBe(
+      "launchctl unload ~/Library/LaunchAgents/com.aop.local-server.plist",
+    );
   });
 
   test("failed: shows the reason, and offers to start it again", async () => {

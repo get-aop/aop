@@ -81,7 +81,7 @@ The desktop app is a client of one host. It bundles the dashboard and serves it 
 
 ### Run the host from the Mac app
 
-On a Mac the app can be the host. Choose **Run AOP on this Mac** on the connect screen, or **Host on This Mac** in the Host menu. The app starts the bundled `aop` server, watches it, and restarts it if it dies, up to three times. If an AOP host is already listening on the port, the app uses that one and leaves its lifetime alone. The server binds `127.0.0.1` whatever the app was started with, and quitting the app stops a server the app started.
+On a Mac the app can be the host. Choose **Run AOP on this Mac** on the connect screen, or **Host on This Mac** in the Host menu. The app starts the bundled `aop` server, watches it, and restarts it if it dies, up to three times. If an AOP host is already listening on the port, for example the background service the installer sets up, the app uses that one and leaves its lifetime alone: the host page offers no Stop button for it and shows the `launchctl unload ~/Library/LaunchAgents/com.aop.local-server.plist` command that stops the service. The server binds `127.0.0.1` whatever the app was started with, and quitting the app stops a server the app started.
 
 The app's own dashboard is then the owner's direct-local case: no pairing, no token. To reach the host from other computers, turn on **Serve over Tailscale**. The app shows the `tailscale serve` command from [Reach the host with Tailscale](#reach-the-host-with-tailscale) with the host's port filled in, and you run it in Terminal; the app never runs it for you. **Pair another device** shows a one-time code, which only the host's own Mac can make.
 

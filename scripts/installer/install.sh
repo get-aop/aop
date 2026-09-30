@@ -609,9 +609,12 @@ print_success() {
   echo ""
   echo "AOP $VERSION installed successfully!"
   if [ -n "$NO_SERVICE" ]; then
+    # Nothing was started, so a dashboard address here would point at a host that is not running.
     echo "Start the host with: ${INSTALL_DIR}/aop run"
+    echo "Then open the dashboard at ${LOCAL_SERVER_URL}"
+  else
+    echo "Dashboard: ${LOCAL_SERVER_URL}"
   fi
-  echo "Dashboard: ${LOCAL_SERVER_URL}"
 }
 
 main "$@"

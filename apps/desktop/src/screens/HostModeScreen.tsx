@@ -24,6 +24,8 @@ export const HostModeScreen = ({ state, backend, onChangeHost }: HostModeScreenP
   const busy = hostProcess.status === "starting" || hostProcess.status === "stopping";
   const active =
     running || hostProcess.status === "starting" || hostProcess.status === "restarting";
+  // Stopping a host the app did not start would only make the app forget it while it keeps serving.
+  const adopted = running && hostProcess.ownership === "adopted";
 
   return (
     <main className="screen" data-testid="host-screen">
@@ -46,8 +48,10 @@ export const HostModeScreen = ({ state, backend, onChangeHost }: HostModeScreenP
           ) : null}
         </div>
 
+        {adopted ? <ManagedElsewhere /> : null}
+
         <div className="actions">
-          {active ? (
+          {adopted ? null : active ? (
             <button
               type="button"
               className="button"
@@ -97,6 +101,20 @@ export const HostModeScreen = ({ state, backend, onChangeHost }: HostModeScreenP
     </main>
   );
 };
+
+const ManagedElsewhere = () => (
+  <div className="stack" data-testid="host-managed-elsewhere">
+    <Notice tone="info">
+      This host runs outside the app, for example as a background service, so the app does not start
+      or stop it. To stop a background service, run this in Terminal.
+    </Notice>
+    <CommandBlock command={STOP_SERVICE_COMMAND} testId="host-stop-command" />
+    <p className="subtle">
+      If you started it by hand in a terminal, stop it there with Control-C. Quit the app any time;
+      the host keeps running.
+    </p>
+  </div>
+);
 
 const ReachFromOtherDevices = ({
   state,
@@ -178,6 +196,8 @@ const PairingResult = ({ result }: { result: PairingCodeResult | null }) => {
   );
 };
 
+const STOP_SERVICE_COMMAND = "launchctl unload ~/Library/LaunchAgents/com.aop.local-server.plist";
+
 const describe = (hostProcess: HostProcessState, port: number): string => {
   switch (hostProcess.status) {
     case "stopped":
@@ -186,7 +206,7 @@ const describe = (hostProcess: HostProcessState, port: number): string => {
       return "Starting…";
     case "running":
       return hostProcess.ownership === "adopted"
-        ? `Running on port ${port} (already running, started elsewhere)`
+        ? `Running on port ${port} (running outside the app)`
         : `Running on port ${port}`;
     case "restarting":
       return `Restarting after it stopped (attempt ${hostProcess.attempt})…`;

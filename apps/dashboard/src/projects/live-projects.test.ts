@@ -13,7 +13,8 @@ import {
 setupDashboardDom();
 
 const { ApiError } = await import("../api/request");
-const { createLiveProjects, POLL_INTERVAL_MS, SNAPSHOT_RETRY_MS } = await import("./live-projects");
+const { createLiveProjects, IDLE_SNAPSHOT_EVERY, POLL_INTERVAL_MS, SNAPSHOT_RETRY_MS } =
+  await import("./live-projects");
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -373,10 +374,26 @@ describe("the stream cap", () => {
     expect(h.live.getState().byId.p1?.threadsLoaded).toBe(false);
 
     threads.p5 = [makeThread({ id: "t", projectId: "p5", status: "working" })];
+    for (let tick = 1; tick < IDLE_SNAPSHOT_EVERY; tick += 1) await h.poll();
+    // The polls in between only refetch the list.
+    expect(h.live.getState().byId.p5?.threads.map((t) => t.status)).toEqual(["waiting-on-you"]);
     await h.poll();
 
     expect(h.live.getState().byId.p5?.threads.map((t) => t.status)).toEqual(["working"]);
     expect(h.live.getState().byId.p1?.threadsLoaded).toBe(false);
+  });
+
+  test("a project made on another client appears on the next poll and gets a stream", async () => {
+    const projects = [makeProject({ id: "a" })];
+    const h = await started(projects);
+    expect(h.openStreams()).toEqual(["/api/projects/a/stream"]);
+
+    projects.push(makeProject({ id: "b" }));
+    await h.poll();
+
+    expect(h.live.getState().byId.b).toBeDefined();
+    expect(h.openStreams()).toContain("/api/projects/b/stream");
+    expect(POLL_INTERVAL_MS).toBeLessThanOrEqual(5_000);
   });
 });
 

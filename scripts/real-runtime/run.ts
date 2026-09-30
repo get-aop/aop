@@ -75,6 +75,11 @@ async function scenarioCommand(): Promise<number> {
 async function reportCommand(): Promise<number> {
   assertRealRuntimeEnabled(process.env);
   const state = await loadState(name);
+  if (!state.facts) {
+    // Without a scenario there is nothing observed to judge, and a report of empty checks would read as a pass.
+    say(`no scenario ran for "${name}"; run \`scenario\` before \`report\``);
+    return 1;
+  }
   const observed = await observe(state);
   const checks = evaluate(observed);
   const report = renderReport({

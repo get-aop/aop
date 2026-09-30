@@ -21,6 +21,8 @@ describe("install.sh host install", () => {
     expect(result.output).toContain(`Installed AOP ${VERSION}`);
     expect(result.output).toContain("Skipping the background service (--no-service)");
     expect(result.output).toContain(`Start the host with: ${box.prefix}/bin/aop run`);
+    expect(result.output).toContain("Then open the dashboard at http://");
+    expect(result.output).not.toContain("Dashboard: http://");
     const version = await box.runInstalled(["--version"]);
     expect(version).toBe(`aop/${VERSION} stub`);
     expect(existsSync(join(box.prefix, "bin", "dashboard", "index.html"))).toBe(true);
