@@ -2,7 +2,10 @@ import { join } from "node:path";
 
 interface DesktopPaths {
   preloadPath: string;
-  rendererRoot: string;
+  /** The connect screen. The dashboard is a folder inside it, served as its own origin. */
+  shellRoot: string;
+  dashboardRoot: string;
+  /** Where the Mac app keeps the host server it can run. */
   resourceRoot: string;
 }
 
@@ -12,6 +15,7 @@ export const resolveDesktopPaths = (
   development: boolean,
 ): DesktopPaths => ({
   preloadPath: join(appPath, "dist-electron/preload.cjs"),
-  rendererRoot: join(appPath, "dist"),
+  shellRoot: join(appPath, "dist"),
+  dashboardRoot: join(appPath, "dist/dashboard"),
   resourceRoot: development ? join(appPath, "resources") : resourcesPath,
 });

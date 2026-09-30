@@ -1,13 +1,21 @@
 export const IPC_CHANNELS = {
-  getSetupState: "desktop:get-setup-state",
-  runSetupAction: "desktop:run-setup-action",
-  openSetupGuide: "desktop:open-setup-guide",
-  startAopSidecar: "desktop:start-aop-sidecar",
-  getSidecarState: "desktop:get-sidecar-state",
+  // The connect screen only: what it asks the app to do.
+  getState: "desktop:get-state",
+  connectHost: "desktop:connect-host",
+  forgetHost: "desktop:forget-host",
+  startHostMode: "desktop:start-host-mode",
+  stopHostMode: "desktop:stop-host-mode",
+  setServeOverTailscale: "desktop:set-serve-over-tailscale",
+  createPairingCode: "desktop:create-pairing-code",
+  openDashboard: "desktop:open-dashboard",
+  reconnect: "desktop:reconnect",
   openLogsFolder: "desktop:open-logs-folder",
   quitApp: "desktop:quit-app",
-  listWslDistros: "desktop:list-wsl-distros",
-  getExecHost: "desktop:get-exec-host",
-  setExecHost: "desktop:set-exec-host",
+  // The bundled dashboard only: which host to talk to, and that the host refused the token.
+  getHostConfig: "desktop:get-host-config",
+  hostRejected: "desktop:host-rejected",
+  // Either page.
   setZoom: "desktop:set-zoom",
+  // The app to the connect screen: something it shows changed.
+  stateChanged: "desktop:state-changed",
 } as const;

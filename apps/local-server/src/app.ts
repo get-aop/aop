@@ -1,8 +1,8 @@
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { Hono } from "hono";
-import { cors } from "hono/cors";
 import { type AuthEnv, createApiAuth } from "./auth/api-auth.ts";
+import { createApiCors } from "./auth/cross-origin.ts";
 import { createOriginGuard } from "./auth/origin-guard.ts";
 import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
@@ -52,30 +52,15 @@ export const createApp = (deps: AppDependencies) => {
   app.use("*", httpInstrumentationMiddleware({ tracerProvider: getTracerProvider() }));
 
   // Trust boundary: reject cross-site browser requests, then require a device token, its
-  // session cookie, or a direct request from the host itself (see auth/). CORS headers are
-  // only needed in dev, where the dashboard runs on its own origin; in production it is
-  // served same-origin by this server and no cross-origin access is granted.
-  app.use(
-    "/api/*",
-    createOriginGuard({
-      allowedOrigins: [
-        ...(dashboardDevOrigin ? [dashboardDevOrigin] : []),
-        ...(deps.allowedOrigins ?? []),
-      ],
-    }),
-  );
-  if (dashboardDevOrigin) {
-    app.use(
-      "/api/*",
-      cors({
-        origin: dashboardDevOrigin,
-        allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-        allowHeaders: ["Content-Type", "Authorization"],
-        exposeHeaders: ["Content-Length"],
-        credentials: true,
-      }),
-    );
-  }
+  // session cookie, or a direct request from the host itself (see auth/). The dashboard this
+  // host serves is same-origin and needs no CORS; a page served from an allowed origin (the
+  // desktop app's bundled dashboard, the dev dashboard) is granted it after the guard.
+  const allowedOrigins = [
+    ...(dashboardDevOrigin ? [dashboardDevOrigin] : []),
+    ...(deps.allowedOrigins ?? []),
+  ];
+  app.use("/api/*", createOriginGuard({ allowedOrigins }));
+  app.use("/api/*", createApiCors(allowedOrigins));
 
   app.use("/api/*", createApiAuth(ctx.authService));
 

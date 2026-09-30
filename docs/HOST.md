@@ -60,6 +60,30 @@ Five wrong codes in a minute lock pairing for the rest of that minute, including
 
 The cookie is `HttpOnly` and `SameSite=Strict`, and it is `Secure` when the request came in over HTTPS.
 
+### Clients served from another origin
+
+The dashboard the host serves is same-origin and uses the cookie. A client served from anywhere else, such as the desktop app's bundled dashboard or a development build, authenticates differently, because the cookie cannot reach it:
+
+- **Bearer token on every request.** The client sends `Authorization: Bearer aop_...`. A browser only lets a page from another origin do that if the host answers its preflight, so the host lists the origins it accepts. `app://aop`, the desktop app's origin, is always accepted: only the desktop app can produce it, since a web page cannot claim another scheme's origin. Add others with `AOP_ALLOWED_ORIGINS`. Any other origin gets `403` before it is looked at. An origin you list is trusted as far as you trust yourself: a page from it that runs in a browser on the host's own machine reads the API as the host owner, with no token.
+- **Event streams with `fetch`.** An `EventSource` cannot set a header, and the session cookie is `SameSite=Strict`, so a browser never sends it across origins: an `EventSource` from another origin ends `CLOSED` at once. A client that holds a token reads the stream with `fetch` and the bearer header instead, and resumes with `?after=<last event id>` as it always does. No token goes in a URL, and the stream closes when the device is revoked, as any other does.
+- **Version handshake.** `GET /api/health` reports `version`, `apiVersion` and `minClientApiVersion` without credentials. A client compares its own API version with them before it pairs and on every check afterwards: a client older than `minClientApiVersion` needs an app update, and one newer than `apiVersion` needs a host update. Raise `API_VERSION` in `packages/common/src/host-api.ts` for a change that would break a client one release behind.
+
+## The desktop app
+
+The desktop app is a client of one host. It bundles the dashboard and serves it as `app://aop`; the host's own dashboard is not used.
+
+- **First run.** The app asks for the host's address and a pairing code. The address must be `https://`, such as the one `tailscale serve` gives, because the app's pages are a secure context and the token would otherwise cross the network in the clear. The one exception is a host on the same computer, `http://127.0.0.1:<port>`. The app pairs with `POST /api/auth/pair`, from its main process.
+- **Where the token lives.** In the operating system's keychain, through Electron's `safeStorage`: Keychain on macOS, DPAPI on Windows. The app writes the encrypted value to `device-tokens.json` in its data folder, mode `0600`, and refuses to pair on a machine where the keychain is unavailable. The dashboard receives the token in memory when it starts and never writes it to local storage.
+- **Connection state.** The window title, the Host menu and the app's own status screen say whether the host is connected, unreachable, refusing this device (`unauthorized`, for example after it was revoked on the host) or on another API version. The app checks every fifteen seconds, faster while the host is away. It brings its status screen forward when the host turns the device away, and returns to the dashboard on its own when the host comes back. **Change Host** in the menu, or on that screen, pairs with another host; **Disconnect** removes the device from the host and forgets the token.
+- **Notifications.** The app's main process, not the dashboard, follows every active project's event stream with the token and raises an operating system notification when a coordinator posts, a thread needs the person, a thread fails, or a pull request merges or closes without merging. It runs in the main process because a notification is about any project, not the one on screen, must reach the person with the window closed, and needs the token that only the main process holds. Each project's notification level decides: `coordinator` (the default) is those events, `every-turn` adds each finished thread turn, and `off` is silence. It stays quiet while the app is in front, and it does not announce what happened more than two minutes earlier, so a laptop that wakes up does not bury the person in old news.
+- **Windows.** Windows is a client only. It bundles no server and has no host mode.
+
+### Run the host from the Mac app
+
+On a Mac the app can be the host. Choose **Run AOP on this Mac** on the connect screen, or **Host on This Mac** in the Host menu. The app starts the bundled `aop` server, watches it, and restarts it if it dies, up to three times. If an AOP host is already listening on the port, the app uses that one and leaves its lifetime alone. The server binds `127.0.0.1` whatever the app was started with, and quitting the app stops a server the app started.
+
+The app's own dashboard is then the owner's direct-local case: no pairing, no token. To reach the host from other computers, turn on **Serve over Tailscale**. The app shows the `tailscale serve` command from [Reach the host with Tailscale](#reach-the-host-with-tailscale) with the host's port filled in, and you run it in Terminal; the app never runs it for you. **Pair another device** shows a one-time code, which only the host's own Mac can make.
+
 ### List and revoke devices
 
 In the dashboard on the host, Settings, then Devices lists each paired device with when it was last seen and when it was paired, and Revoke removes one after a question. The entry is shown only to the host owner: a paired device does not see it, and its requests to these routes answer `403`. Or run these on the host.
@@ -121,7 +145,7 @@ A proxy that rewrites `Host` to `127.0.0.1` and adds no forwarding header passes
 | --- | --- | --- |
 | `AOP_LOCAL_SERVER_PORT` | none, required | Port the server listens on. |
 | `AOP_BIND_HOST` | `127.0.0.1` | Address the server listens on. Set `0.0.0.0` to serve the network directly over plain HTTP. |
-| `AOP_ALLOWED_ORIGINS` | none | Comma-separated browser origins, besides the API's own, that may call the API. |
+| `AOP_ALLOWED_ORIGINS` | none | Comma-separated browser origins, besides the API's own and the desktop app's `app://aop`, that may call the API. |
 
 Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over plain HTTP, so use it only on a network you trust, and the browser will not treat the page as a secure context. If you bind one specific non-loopback address, the host's own agents can no longer reach the MCP endpoint at `127.0.0.1`; set `AOP_MCP_URL` to an address they can reach.
 
@@ -130,3 +154,4 @@ Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over pla
 - Pairing codes and the wrong-code counter live in memory, so a host restart closes an open pairing.
 - Paired devices are trusted equally. There are no per-device permissions.
 - The `aop` CLI sends no token, so it works only on the host. It cannot reach a host across the network yet.
+- The desktop app connects over HTTPS, or to a host on its own computer. A host bound to the network over plain HTTP is for browsers, which use the cookie.

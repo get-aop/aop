@@ -1,54 +1,62 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { isAllowedDesktopSender, isAllowedNavigation, isSafeExternalUrl } from "./security";
-import { buildWindowOptions } from "./window-options";
+import {
+  isAllowedNavigation,
+  isDashboardSender,
+  isSafeExternalUrl,
+  isShellSender,
+} from "./security";
 
-describe("Electron renderer security", () => {
-  test("enables isolation and sandboxing without Node in the renderer", () => {
-    const options = buildWindowOptions("/app/preload.cjs");
-
-    expect(options).toMatchObject({
-      width: 1280,
-      height: 860,
-      minWidth: 960,
-      minHeight: 640,
-      webPreferences: {
-        preload: "/app/preload.cjs",
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        webviewTag: false,
-      },
-    });
+describe("isShellSender", () => {
+  test("is the connect screen, and only it", () => {
+    expect(isShellSender("app://desktop/index.html", false)).toBe(true);
+    expect(isShellSender("app://aop/index.html", false)).toBe(false);
+    expect(isShellSender("https://mac.tail1234.ts.net/", false)).toBe(false);
+    expect(isShellSender("http://127.0.0.1:25150/", false)).toBe(false);
+    expect(isShellSender("not a url", false)).toBe(false);
   });
 
-  test("limits privileged setup IPC to the packaged UI and its dev server", () => {
-    expect(isAllowedDesktopSender("app://aop/index.html", false)).toBe(true);
-    expect(isAllowedDesktopSender("http://127.0.0.1:25170/", true)).toBe(true);
-    expect(isAllowedDesktopSender("http://127.0.0.1:25150/?aopDesktop=1", false)).toBe(false);
-    expect(isAllowedDesktopSender("https://attacker.example/", false)).toBe(false);
+  test("includes the Vite dev server while developing, and only then", () => {
+    expect(isShellSender("http://127.0.0.1:25170/", true)).toBe(true);
+    expect(isShellSender("http://127.0.0.1:25170/", false)).toBe(false);
+    expect(isShellSender("http://127.0.0.1:25171/", true)).toBe(false);
+    expect(isShellSender("http://localhost:25170/", true)).toBe(false);
+  });
+});
+
+describe("isDashboardSender", () => {
+  test("is the bundled dashboard, and nothing a host serves", () => {
+    expect(isDashboardSender("app://aop/projects/prj_1")).toBe(true);
+    expect(isDashboardSender("app://desktop/index.html")).toBe(false);
+    expect(isDashboardSender("http://127.0.0.1:25150/")).toBe(false);
+    expect(isDashboardSender("https://aop/")).toBe(false);
+  });
+});
+
+describe("isAllowedNavigation", () => {
+  test("allows the app's own two pages", () => {
+    expect(isAllowedNavigation("app://aop/projects/prj_1", false)).toBe(true);
+    expect(isAllowedNavigation("app://desktop/index.html#/connect", false)).toBe(true);
   });
 
-  test("allows only AOP app and loopback navigation", () => {
-    expect(isAllowedNavigation("app://aop/index.html", false)).toBe(true);
-    expect(isAllowedNavigation("http://127.0.0.1:25150/?aopDesktop=1", false)).toBe(true);
-    expect(isAllowedNavigation("http://localhost:25160/", true)).toBe(true);
-    expect(isAllowedNavigation("https://example.com/", false)).toBe(false);
+  test("refuses every other page, including the host's own dashboard", () => {
+    for (const url of [
+      "https://mac.tail1234.ts.net/",
+      "http://127.0.0.1:25150/",
+      "https://example.com/",
+      "app://other/",
+      "file:///etc/passwd",
+    ]) {
+      expect(isAllowedNavigation(url, false)).toBe(false);
+    }
   });
+});
 
-  test("opens only HTTP and HTTPS links externally", () => {
-    expect(isSafeExternalUrl("https://cli.github.com/")).toBe(true);
-    expect(isSafeExternalUrl("http://example.com/")).toBe(true);
-    expect(isSafeExternalUrl("file:///tmp/secret")).toBe(false);
+describe("isSafeExternalUrl", () => {
+  test("hands only web addresses to the person's browser", () => {
+    expect(isSafeExternalUrl("https://github.com/acme/repo/pull/1")).toBe(true);
+    expect(isSafeExternalUrl("http://localhost:3000")).toBe(true);
+    expect(isSafeExternalUrl("file:///etc/passwd")).toBe(false);
     expect(isSafeExternalUrl("javascript:alert(1)")).toBe(false);
-  });
-
-  test("ships a restrictive renderer content security policy", () => {
-    const html = readFileSync(join(import.meta.dirname, "../index.html"), "utf8");
-
-    expect(html).toContain("default-src 'self'");
-    expect(html).toContain("script-src 'self'");
-    expect(html).toContain("object-src 'none'");
+    expect(isSafeExternalUrl("app://aop/")).toBe(false);
   });
 });

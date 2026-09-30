@@ -3,6 +3,7 @@
 
 import { join, resolve } from "node:path";
 import { buildElectronBundles } from "./build-electron";
+import { bundleDashboard } from "./bundle-dashboard";
 
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
 const DESKTOP_URL = "http://127.0.0.1:25170";
@@ -23,6 +24,8 @@ export const buildElectronDevPlan = (workspaceRoot = WORKSPACE_ROOT) => {
 const main = async (): Promise<void> => {
   const plan = buildElectronDevPlan();
   await buildElectronBundles(plan.workspaceRoot);
+  // The app serves the dashboard from its own build folder, not from Vite.
+  await bundleDashboard({ workspaceRoot: plan.workspaceRoot });
   const renderer = Bun.spawn(plan.rendererCommand, {
     cwd: plan.workspaceRoot,
     env: process.env,

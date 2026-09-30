@@ -4,10 +4,6 @@
 import { cp, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import cac from "cac";
-import {
-  buildElectronResourcePlan,
-  prepareElectronResources,
-} from "../desktop/prepare-electron-resources";
 
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
 const DEFAULT_RELEASE_DIR = "dist/release";
@@ -19,8 +15,6 @@ export interface WindowsInstallerPlan {
   builderOutputDir: string;
   installerPath: string;
   releaseDir: string;
-  resourcesDir: string;
-  runtimeAssetsArchive: string;
   version: string;
   workspaceRoot: string;
 }
@@ -63,8 +57,6 @@ export const buildWindowsInstallerPlan = ({
     builderOutputDir,
     installerPath: join(resolvedReleaseDir, INSTALLER_NAME),
     releaseDir: resolvedReleaseDir,
-    resourcesDir: join(root, "apps/desktop/resources"),
-    runtimeAssetsArchive: join(resolvedReleaseDir, "runtime-assets.tar.gz"),
     version,
     workspaceRoot: root,
   };
@@ -99,14 +91,7 @@ export const buildWindowsInstallerArtifacts = async ({
   ensureWindowsHost();
   const buildVersion = version ?? (await readPackageVersion(workspaceRoot));
   const plan = buildWindowsInstallerPlan({ releaseDir, version: buildVersion, workspaceRoot });
-  await prepareElectronResources(
-    buildElectronResourcePlan({
-      arch: "x64",
-      platform: "windows",
-      releaseDir: plan.releaseDir,
-      workspaceRoot: plan.workspaceRoot,
-    }),
-  );
+  // Windows is a client: the app bundles its own dashboard and carries no server or WSL runtime.
   await runCommand(["bun", "run", "--filter", "@aop/desktop", "build"], plan.workspaceRoot);
   await runCommand(
     [

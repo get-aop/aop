@@ -5,7 +5,12 @@
  * and the browser's `aop_device` cookie is the credential, on plain requests and on
  * `EventSource` alike. A client that is served from elsewhere (the desktop app, a dev build)
  * stores the host's base URL and its device token instead, and every request then carries the
- * token as a bearer header.
+ * token as a bearer header. The token reaches an event stream the same way, through a `fetch`
+ * reader (see host-event-source.ts), because an `EventSource` cannot send it.
+ *
+ * A browser keeps that pair in local storage. The desktop app does not: its main process holds
+ * the token in the OS keychain and hands the pair over in memory (`setManagedHostConfig`), so
+ * the token is never written to a file the renderer owns.
  */
 const HOST_STORAGE_KEY = "aop:host:v1";
 
@@ -16,7 +21,21 @@ export interface HostConfig {
   token: string | null;
 }
 
+let managedConfig: HostConfig | null = null;
+
+/**
+ * Sets the host this client talks to from outside, in memory only, and takes precedence over
+ * local storage until cleared. The desktop app uses it so its keychain, not a file, holds the token.
+ */
+export const setManagedHostConfig = (config: HostConfig | null): void => {
+  managedConfig = config && {
+    baseUrl: config.baseUrl?.replace(/\/+$/, "") || null,
+    token: config.token || null,
+  };
+};
+
 export const getHostConfig = (): HostConfig => {
+  if (managedConfig) return managedConfig;
   const raw = readStorage();
   if (raw === null) return { baseUrl: null, token: null };
   try {
@@ -32,6 +51,8 @@ export const getHostConfig = (): HostConfig => {
 };
 
 export const setHostConfig = (config: HostConfig): void => {
+  // A managed pair belongs to whoever set it; persisting another one beside it would leave a token on disk.
+  if (managedConfig) return;
   try {
     if (config.baseUrl === null && config.token === null) {
       window.localStorage.removeItem(HOST_STORAGE_KEY);

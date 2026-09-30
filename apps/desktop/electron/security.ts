@@ -1,20 +1,28 @@
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
+import { APP_SCHEME, DASHBOARD_HOST, SHELL_HOST } from "./app-protocol";
 
-export const isAllowedDesktopSender = (rawUrl: string, development: boolean): boolean => {
+/** Where the connect screen is served from while developing it with Vite. */
+const DEV_SHELL_ORIGIN = "http://127.0.0.1:25170";
+
+/** The connect screen may change which host the app talks to, so only it may call those channels. */
+export const isShellSender = (rawUrl: string, development: boolean): boolean => {
   const url = parseUrl(rawUrl);
   if (!url) return false;
-  if (url.protocol === "app:" && url.hostname === "aop") return true;
-  return development && LOOPBACK_HOSTS.has(url.hostname) && url.port === "25170";
+  if (url.protocol === `${APP_SCHEME}:` && url.hostname === SHELL_HOST) return true;
+  return development && url.origin === DEV_SHELL_ORIGIN;
 };
 
-export const isAllowedNavigation = (rawUrl: string, development: boolean): boolean => {
+/** The bundled dashboard: it may ask which host to use and report a refused token, nothing more. */
+export const isDashboardSender = (rawUrl: string): boolean => {
   const url = parseUrl(rawUrl);
-  if (!url) return false;
-  if (url.protocol === "app:" && url.hostname === "aop") return true;
-  if (url.protocol !== "http:" || !LOOPBACK_HOSTS.has(url.hostname)) return false;
-  if (development) return true;
-  return url.port === "25150";
+  return url?.protocol === `${APP_SCHEME}:` && url.hostname === DASHBOARD_HOST;
 };
+
+/**
+ * The window shows only the app's own two pages. Everything else, a link in a message or a
+ * pull request, opens in the person's browser instead of taking the window away from the app.
+ */
+export const isAllowedNavigation = (rawUrl: string, development: boolean): boolean =>
+  isShellSender(rawUrl, development) || isDashboardSender(rawUrl);
 
 export const isSafeExternalUrl = (rawUrl: string): boolean => {
   const url = parseUrl(rawUrl);

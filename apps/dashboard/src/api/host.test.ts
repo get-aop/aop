@@ -3,10 +3,12 @@ import { setupDashboardDom } from "../test/setup-dom";
 
 setupDashboardDom();
 
-const { apiUrl, authHeaders, getHostConfig, isRemoteHost, setHostConfig } = await import("./host");
+const { apiUrl, authHeaders, getHostConfig, isRemoteHost, setHostConfig, setManagedHostConfig } =
+  await import("./host");
 
 beforeEach(() => {
   window.localStorage.clear();
+  setManagedHostConfig(null);
 });
 
 describe("host config", () => {
@@ -41,5 +43,43 @@ describe("host config", () => {
       window.localStorage.setItem("aop:host:v1", garbage);
       expect(getHostConfig()).toEqual({ baseUrl: null, token: null });
     }
+  });
+});
+
+describe("managed host config", () => {
+  test("is what the desktop app's main process decided, and wins over local storage", () => {
+    setHostConfig({ baseUrl: "https://stored.example", token: "stored" });
+    setManagedHostConfig({ baseUrl: "https://mac.tail1234.ts.net/", token: "aop_keychain" });
+
+    expect(getHostConfig()).toEqual({
+      baseUrl: "https://mac.tail1234.ts.net",
+      token: "aop_keychain",
+    });
+    expect(apiUrl("/projects")).toBe("https://mac.tail1234.ts.net/api/projects");
+    expect(authHeaders()).toEqual({ Authorization: "Bearer aop_keychain" });
+  });
+
+  test("never writes the token to local storage, even when a pairing screen tries to", () => {
+    setManagedHostConfig({ baseUrl: "https://mac.tail1234.ts.net", token: "aop_keychain" });
+
+    setHostConfig({ baseUrl: "https://mac.tail1234.ts.net", token: "aop_other" });
+
+    expect(window.localStorage.length).toBe(0);
+    expect(getHostConfig().token).toBe("aop_keychain");
+  });
+
+  test("a host running on the owner's own Mac has a base URL and no token", () => {
+    setManagedHostConfig({ baseUrl: "http://127.0.0.1:25150", token: null });
+
+    expect(isRemoteHost()).toBe(true);
+    expect(authHeaders()).toEqual({});
+  });
+
+  test("clearing it returns to local storage", () => {
+    setHostConfig({ baseUrl: "https://stored.example", token: "stored" });
+    setManagedHostConfig({ baseUrl: "https://mac.tail1234.ts.net", token: "aop_keychain" });
+    setManagedHostConfig(null);
+
+    expect(getHostConfig()).toEqual({ baseUrl: "https://stored.example", token: "stored" });
   });
 });

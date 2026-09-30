@@ -1,246 +1,363 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { App } from "./App";
-import type { DesktopBackend, SidecarState, WslDistro } from "./backend/types";
-import type { DesktopSetupState } from "./setup/types";
+import type { DesktopState } from "./backend/types";
+import { createFakeBackend, makeState } from "./test/fake-backend";
 import { setupDesktopDom } from "./test/setup-dom";
 
 setupDesktopDom();
 
-const { act, fireEvent, render, waitFor } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
 
-describe("App", () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
+const HOST = "https://mac.tail1234.ts.net";
 
-  test("keeps dashboard gated when setup is blocked", async () => {
-    const backend = createBackend({ getSetupState: mock(async () => blockedState()) });
-    const navigateToDashboard = mock(() => undefined);
+const show = async (state: DesktopState = makeState()) => {
+  const fake = createFakeBackend(state);
+  const view = render(<App backend={fake.backend} />);
+  await waitFor(() => expect(view.container.querySelector("main")).not.toBeNull());
+  return { ...fake, view };
+};
 
-    const view = render(<App backend={backend} navigateToDashboard={navigateToDashboard} />);
+const type = (view: ReturnType<typeof render>, testId: string, value: string) =>
+  fireEvent.change(view.getByTestId(testId), { target: { value } });
 
-    expect(view.getByText("Checking desktop setup")).toBeDefined();
+beforeEach(() => {
+  cleanup();
+  window.location.hash = "";
+});
 
-    await waitFor(() => expect(view.getByText("Let's get AOP ready")).toBeDefined());
-    expect(backend.startAopSidecar).not.toHaveBeenCalled();
-    expect(navigateToDashboard).not.toHaveBeenCalled();
-  });
+describe("first run", () => {
+  test("asks for the host's address and a pairing code, with this computer's name filled in", async () => {
+    const { view } = await show();
 
-  test("opens a setup guide without running the setup action", async () => {
-    const backend = createBackend({
-      getSetupState: mock(async () => blockedState()),
-      openSetupGuide: mock(async () => undefined),
-    });
-    const navigateToDashboard = mock(() => undefined);
-
-    const view = render(<App backend={backend} navigateToDashboard={navigateToDashboard} />);
-
-    await waitFor(() => expect(view.getByText("Let's get AOP ready")).toBeDefined());
-    await act(async () => {
-      fireEvent.click(view.getByRole("button", { name: "Install Claude Code" }));
-    });
-    await waitFor(() =>
-      expect(backend.openSetupGuide).toHaveBeenCalledWith("install-runtime-claude"),
+    expect(view.getByTestId("connect-screen")).toBeDefined();
+    expect(view.getByText("Connect to your AOP host")).toBeDefined();
+    expect((view.getByTestId("connect-device-name") as HTMLInputElement).value).toBe(
+      "Marcelo's MacBook",
     );
-    expect(backend.runSetupAction).not.toHaveBeenCalled();
-    expect(backend.startAopSidecar).not.toHaveBeenCalled();
-    expect(navigateToDashboard).not.toHaveBeenCalled();
+    expect((view.getByTestId("connect-submit") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  test("starts the sidecar immediately when setup is already healthy", async () => {
-    localStorage.setItem("aopDesktopSetupSeen", "true");
-    const backend = createBackend({
-      getSetupState: mock(async () => healthyState()),
-      startAopSidecar: mock(async () => readySidecar()),
+  test("connects with what was typed, code in capitals", async () => {
+    const { view, backend } = await show();
+
+    type(view, "connect-url", "mac.tail1234.ts.net");
+    type(view, "connect-code", "k7qm-4xnp");
+    fireEvent.submit(view.getByTestId("connect-submit").closest("form") as HTMLFormElement);
+
+    await waitFor(() => expect(backend.connectHost).toHaveBeenCalledTimes(1));
+    expect(backend.connectHost).toHaveBeenCalledWith({
+      url: "mac.tail1234.ts.net",
+      code: "K7QM-4XNP",
+      deviceName: "Marcelo's MacBook",
     });
-    const navigateToDashboard = mock(() => undefined);
-
-    render(<App backend={backend} navigateToDashboard={navigateToDashboard} />);
-
-    await waitFor(() => expect(backend.startAopSidecar).toHaveBeenCalledTimes(1));
-    expect(navigateToDashboard).toHaveBeenCalledWith("http://127.0.0.1:25150/");
   });
 
-  test("shows setup on the first desktop launch even when requirements are already healthy", async () => {
-    const backend = createBackend({
-      getSetupState: mock(async () => healthyState()),
-      startAopSidecar: mock(async () => readySidecar()),
-    });
-    const navigateToDashboard = mock(() => undefined);
-
-    const view = render(<App backend={backend} navigateToDashboard={navigateToDashboard} />);
-
-    await waitFor(() => expect(view.getByText("You're all set")).toBeDefined());
-    expect(backend.startAopSidecar).not.toHaveBeenCalled();
+  test("says why a connection failed and lets the person try again", async () => {
+    const { view, backend } = await show();
+    backend.connectHost.mockImplementationOnce(async () => ({
+      ok: false as const,
+      code: "wrong-code" as const,
+      message: "Wrong or expired pairing code. Ask the host for a new one.",
+    }));
+    type(view, "connect-url", HOST);
+    type(view, "connect-code", "WRONG");
 
     await act(async () => {
-      fireEvent.click(view.getByRole("button", { name: "Open dashboard" }));
+      fireEvent.click(view.getByTestId("connect-submit"));
     });
 
-    await waitFor(() => expect(backend.startAopSidecar).toHaveBeenCalledTimes(1));
-    expect(localStorage.getItem("aopDesktopSetupSeen")).toBe("true");
-    expect(navigateToDashboard).toHaveBeenCalledWith("http://127.0.0.1:25150/");
+    await waitFor(() => expect(view.getByTestId("connect-error")).toBeDefined());
+    expect(view.getByTestId("connect-error").textContent).toContain(
+      "Wrong or expired pairing code",
+    );
+    expect((view.getByTestId("connect-submit") as HTMLButtonElement).disabled).toBe(false);
   });
 
-  test("shows a recoverable error when sidecar startup fails", async () => {
-    localStorage.setItem("aopDesktopSetupSeen", "true");
-    const backend = createBackend({
-      getSetupState: mock(async () => healthyState()),
-      startAopSidecar: mock(async () => failedSidecar()),
+  test("reports a broken connection service instead of freezing on Connecting", async () => {
+    const { view, backend } = await show();
+    backend.connectHost.mockImplementationOnce(async () => {
+      throw new Error("IPC closed");
+    });
+    type(view, "connect-url", HOST);
+    type(view, "connect-code", "K7QM-4XNP");
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("connect-submit"));
     });
 
-    const view = render(<App backend={backend} navigateToDashboard={() => undefined} />);
+    await waitFor(() => expect(view.getByTestId("connect-error")).toBeDefined());
+    expect((view.getByTestId("connect-submit") as HTMLButtonElement).disabled).toBe(false);
+  });
 
-    await waitFor(() => expect(view.getByText("AOP could not start")).toBeDefined());
-    expect(view.getByText("/Users/test/.aop/logs")).toBeDefined();
+  test("explains where a pairing code comes from", async () => {
+    const { view } = await show();
 
-    fireEvent.click(view.getByRole("button", { name: "Open logs" }));
+    expect(view.getByTestId("connect-pairing-command").textContent).toContain(
+      "/api/auth/pairing-codes",
+    );
+  });
+
+  test("offers to run the host on this Mac only where the app can", async () => {
+    const mac = await show();
+    fireEvent.click(mac.view.getByTestId("connect-run-local"));
+    expect(mac.backend.startHostMode).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    const windows = await show(makeState({ platform: "win32", hostModeAvailable: false }));
+    expect(windows.view.queryByTestId("connect-run-local")).toBeNull();
+  });
+
+  test("has no Back button until there is a host to go back to", async () => {
+    const fresh = await show();
+    expect(fresh.view.queryByTestId("connect-back")).toBeNull();
+    cleanup();
+
+    window.location.hash = "#/connect";
+    const withHost = await show(
+      makeState({
+        mode: "remote",
+        remoteUrl: HOST,
+        connection: { status: "connected", host: HOST, hostVersion: "1" },
+      }),
+    );
+    expect(withHost.view.getByTestId("connect-back")).toBeDefined();
+    expect((withHost.view.getByTestId("connect-url") as HTMLInputElement).value).toBe(HOST);
+  });
+
+  test("tells a person whose device was removed to pair again", async () => {
+    window.location.hash = "#/connect";
+    const { view } = await show(
+      makeState({
+        mode: "remote",
+        remoteUrl: HOST,
+        connection: { status: "unauthorized", host: HOST },
+      }),
+    );
+
+    expect(view.getByTestId("connect-removed").textContent).toContain(
+      "no longer accepts this device",
+    );
+  });
+});
+
+describe("a remote host", () => {
+  const remote = (connection: DesktopState["connection"]) =>
+    makeState({ mode: "remote", remoteUrl: HOST, connection });
+
+  test("connected: names the host and its version, and opens the dashboard", async () => {
+    const { view, backend } = await show(
+      remote({ status: "connected", host: HOST, hostVersion: "0.9.51" }),
+    );
+
+    expect(view.getByTestId("status-label").textContent).toBe("Connected to mac.tail1234.ts.net");
+    expect(view.getByTestId("status-label").getAttribute("data-tone")).toBe("ok");
+    expect(view.getByTestId("status-host-version").textContent).toBe("0.9.51");
+    fireEvent.click(view.getByTestId("status-open-dashboard"));
+    expect(backend.openDashboard).toHaveBeenCalledTimes(1);
+  });
+
+  test("unreachable: says why, offers to check again, and has no dashboard to open", async () => {
+    const { view, backend } = await show(
+      remote({ status: "unreachable", host: HOST, message: "The host refused the connection." }),
+    );
+
+    expect(view.getByTestId("status-explanation").textContent).toContain(
+      "The host refused the connection.",
+    );
+    expect(view.queryByTestId("status-open-dashboard")).toBeNull();
+    fireEvent.click(view.getByTestId("status-retry"));
+    expect(backend.reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  test("refused token: offers to pair again", async () => {
+    const { view } = await show(remote({ status: "unauthorized", host: HOST }));
+
+    expect(view.getByTestId("status-explanation").textContent).toContain(
+      "does not know this device",
+    );
+    expect(view.queryByTestId("status-retry")).toBeNull();
+    fireEvent.click(view.getByTestId("status-pair-again"));
+    expect(window.location.hash).toBe("#/connect");
+  });
+
+  test.each([
+    ["client-too-old", "Update the app"],
+    ["host-too-old", "Update AOP on the host"],
+    ["not-aop", "not as an AOP host"],
+  ] as const)("incompatible (%s): says which side to update", async (reason, expected) => {
+    const { view } = await show(
+      remote({ status: "incompatible", host: HOST, reason, hostVersion: "9" }),
+    );
+
+    expect(view.getByTestId("status-explanation").textContent).toContain(expected);
+  });
+
+  test("Change host goes to the connect screen, and Back returns", async () => {
+    const { view } = await show(remote({ status: "connected", host: HOST, hostVersion: "1" }));
+
+    fireEvent.click(view.getByTestId("status-change-host"));
+    await waitFor(() => expect(view.getByTestId("connect-screen")).toBeDefined());
+
+    fireEvent.click(view.getByTestId("connect-back"));
+    await waitFor(() => expect(view.getByTestId("status-screen")).toBeDefined());
+  });
+
+  test("Disconnect forgets the host", async () => {
+    const { view, backend } = await show(
+      remote({ status: "connected", host: HOST, hostVersion: "1" }),
+    );
+
+    fireEvent.click(view.getByTestId("status-disconnect"));
+
+    expect(backend.forgetHost).toHaveBeenCalledTimes(1);
+  });
+
+  test("follows what the app pushes: connecting, then connected", async () => {
+    const { view, push } = await show(remote({ status: "connecting", host: HOST }));
+    expect(view.getByTestId("status-label").getAttribute("data-tone")).toBe("busy");
+
+    act(() => push(remote({ status: "connected", host: HOST, hostVersion: "1" })));
+
+    await waitFor(() =>
+      expect(view.getByTestId("status-label").getAttribute("data-tone")).toBe("ok"),
+    );
+  });
+});
+
+describe("the host on this Mac", () => {
+  const local = (overrides: Partial<DesktopState> = {}) =>
+    makeState({ mode: "local", ...overrides });
+
+  test("stopped: offers to start it, and cannot pair a device yet", async () => {
+    const { view, backend } = await show(local());
+
+    expect(view.getByTestId("host-status").textContent).toBe("Not running");
+    expect((view.getByTestId("host-pairing-create") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(view.getByTestId("host-start"));
+    expect(backend.startHostMode).toHaveBeenCalledTimes(1);
+  });
+
+  test("running: says which port, offers to stop it, and opens the dashboard once connected", async () => {
+    const { view, backend } = await show(
+      local({
+        hostProcess: { status: "running", ownership: "spawned", version: "0.9.51" },
+        connection: { status: "connected", host: "http://127.0.0.1:25150", hostVersion: "0.9.51" },
+      }),
+    );
+
+    expect(view.getByTestId("host-status").textContent).toBe("Running on port 25150");
+    expect(view.queryByTestId("host-start")).toBeNull();
+    fireEvent.click(view.getByTestId("host-stop"));
+    expect(backend.stopHostMode).toHaveBeenCalledTimes(1);
+    fireEvent.click(view.getByTestId("host-open-dashboard"));
+    expect(backend.openDashboard).toHaveBeenCalledTimes(1);
+  });
+
+  test("says when it is using a host that was already running", async () => {
+    const { view } = await show(
+      local({ hostProcess: { status: "running", ownership: "adopted", version: "0.9.40" } }),
+    );
+
+    expect(view.getByTestId("host-status").textContent).toContain("already running");
+  });
+
+  test("failed: shows the reason, and offers to start it again", async () => {
+    const { view } = await show(
+      local({
+        hostProcess: { status: "failed", message: "Port 25150 is used by another program." },
+      }),
+    );
+
+    expect(view.getByTestId("host-error").textContent).toContain("Port 25150 is used");
+    expect(view.getByTestId("host-start")).toBeDefined();
+  });
+
+  test("starting: cannot be started or stopped a second time", async () => {
+    const { view } = await show(local({ hostProcess: { status: "starting" } }));
+
+    expect((view.getByTestId("host-stop") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("the Tailscale toggle shows the command to run, and only then", async () => {
+    const { view, backend, push } = await show(local());
+    expect(view.queryByTestId("host-tailscale-command")).toBeNull();
+
+    fireEvent.click(view.getByTestId("host-tailscale-toggle"));
+    expect(backend.setServeOverTailscale).toHaveBeenCalledWith(true);
+
+    act(() => push(local({ serveOverTailscale: true })));
+    await waitFor(() => expect(view.getByTestId("host-tailscale-command")).toBeDefined());
+    expect(view.getByTestId("host-tailscale-command").textContent).toBe(
+      "tailscale serve --bg --https=443 http://127.0.0.1:25150",
+    );
+    expect(view.getByTestId("host-tailscale-toggle").getAttribute("aria-checked")).toBe("true");
+    expect(view.getByTestId("host-tailscale-steps").textContent).toContain("tailscale serve reset");
+  });
+
+  test("hands out a pairing code for another device", async () => {
+    const { view, backend } = await show(
+      local({ hostProcess: { status: "running", ownership: "spawned", version: "1" } }),
+    );
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("host-pairing-create"));
+    });
+
+    await waitFor(() => expect(view.getByTestId("host-pairing-code")).toBeDefined());
+    expect(view.getByTestId("host-pairing-code").textContent).toBe("K7QM-4XNP");
+    expect(backend.createPairingCode).toHaveBeenCalledTimes(1);
+  });
+
+  test("shows why a pairing code could not be made", async () => {
+    const { view, backend } = await show(
+      local({ hostProcess: { status: "running", ownership: "spawned", version: "1" } }),
+    );
+    backend.createPairingCode.mockImplementationOnce(async () => ({
+      ok: false as const,
+      message: "The host would not give a code to this app.",
+    }));
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId("host-pairing-create"));
+    });
+
+    await waitFor(() => expect(view.getByTestId("host-pairing-error")).toBeDefined());
+  });
+
+  test("connecting to a different host goes to the connect screen", async () => {
+    const { view } = await show(local());
+
+    fireEvent.click(view.getByTestId("host-change"));
+
+    await waitFor(() => expect(view.getByTestId("connect-screen")).toBeDefined());
+  });
+
+  test("opens the logs folder", async () => {
+    const { view, backend } = await show(local());
+
+    fireEvent.click(view.getByTestId("host-open-logs"));
 
     expect(backend.openLogsFolder).toHaveBeenCalledTimes(1);
   });
+});
 
-  test("recovers from a transient sidecar health timeout", async () => {
-    localStorage.setItem("aopDesktopSetupSeen", "true");
-    const startAopSidecar = mock(async () =>
-      startAopSidecar.mock.calls.length === 1 ? failedSidecar() : readySidecar(),
-    );
-    const backend = createBackend({
-      getSetupState: mock(async () => healthyState()),
-      startAopSidecar,
-    });
-    const navigateToDashboard = mock(() => undefined);
+describe("the app's address decides the screen", () => {
+  test("#/host shows the host screen, and a build without host mode falls back to connect", async () => {
+    window.location.hash = "#/host";
+    const mac = await show(makeState({ mode: "remote", remoteUrl: HOST }));
+    expect(mac.view.getByTestId("host-screen")).toBeDefined();
+    cleanup();
 
-    const view = render(<App backend={backend} navigateToDashboard={navigateToDashboard} />);
-
-    await waitFor(() => expect(view.getByText("AOP could not start")).toBeDefined());
-    await waitFor(() => expect(startAopSidecar).toHaveBeenCalledTimes(2), { timeout: 2000 });
-    expect(navigateToDashboard).toHaveBeenCalledWith("http://127.0.0.1:25150/");
+    const windows = await show(makeState({ hostModeAvailable: false }));
+    expect(windows.view.getByTestId("connect-screen")).toBeDefined();
   });
 
-  test("keeps setup gated when opening a guide fails", async () => {
-    const backend = createBackend({
-      getSetupState: mock(async () => blockedState()),
-      openSetupGuide: mock(async () => {
-        throw new Error("brew failed");
-      }),
-    });
+  test("stops listening for pushed state when the window goes away", async () => {
+    const { view, listenerCount } = await show();
+    expect(listenerCount()).toBe(1);
 
-    const view = render(<App backend={backend} navigateToDashboard={() => undefined} />);
+    view.unmount();
 
-    await waitFor(() => expect(view.getByText("Let's get AOP ready")).toBeDefined());
-    await act(async () => {
-      fireEvent.click(view.getByRole("button", { name: "Install Claude Code" }));
-    });
-    await waitFor(() => expect(view.getByText("Could not open installation guide")).toBeDefined());
-    expect(backend.startAopSidecar).not.toHaveBeenCalled();
+    expect(listenerCount()).toBe(0);
   });
-
-  test("quits the desktop app when setup is declined", async () => {
-    const backend = createBackend({ getSetupState: mock(async () => blockedState()) });
-
-    const view = render(<App backend={backend} navigateToDashboard={() => undefined} />);
-
-    await waitFor(() => expect(view.getByText("Let's get AOP ready")).toBeDefined());
-    fireEvent.click(view.getByRole("button", { name: "Quit setup" }));
-
-    expect(backend.quitApp).toHaveBeenCalledTimes(1);
-  });
-
-  test("shows a recoverable error when the sidecar command rejects", async () => {
-    localStorage.setItem("aopDesktopSetupSeen", "true");
-    const backend = createBackend({
-      getSetupState: mock(async () => healthyState()),
-      startAopSidecar: mock(async () => {
-        throw new Error("sidecar missing");
-      }),
-    });
-
-    const view = render(<App backend={backend} navigateToDashboard={() => undefined} />);
-
-    await waitFor(() => expect(view.getByText("AOP could not start")).toBeDefined());
-    expect(view.getByText("sidecar missing")).toBeDefined();
-  });
-});
-
-const createBackend = (overrides: Partial<DesktopBackend> = {}): DesktopBackend => ({
-  getSetupState: mock(async () => healthyState()),
-  runSetupAction: mock(async () => healthyState()),
-  openSetupGuide: mock(async () => undefined),
-  startAopSidecar: mock(async () => readySidecar()),
-  getSidecarState: mock(async () => readySidecar()),
-  openLogsFolder: mock(async () => undefined),
-  quitApp: mock(async () => undefined),
-  listWslDistros: mock(async () => [] as WslDistro[]),
-  getExecHost: mock(async () => "native"),
-  setExecHost: mock(async () => undefined),
-  ...overrides,
-});
-
-const blockedState = (): DesktopSetupState => ({
-  ready: false,
-  blockingRequirements: ["runtime"],
-  requirements: [
-    { id: "git", status: "ready", label: "Git", message: "Git is installed." },
-    { id: "github-cli", status: "ready", label: "GitHub CLI", message: "Authenticated." },
-    {
-      id: "runtime",
-      status: "missing",
-      label: "Agent runtime",
-      message: "Install and sign in to one.",
-      actions: [
-        {
-          id: "install-runtime-claude",
-          label: "Install Claude Code",
-          requirementId: "runtime",
-          requiresConsent: false,
-          runtimeId: "claude",
-        },
-      ],
-    },
-  ],
-  runtimes: [
-    {
-      id: "claude",
-      status: "missing",
-      label: "Claude Code",
-      message: "Not installed.",
-      recommended: true,
-    },
-  ],
-});
-
-const healthyState = (): DesktopSetupState => ({
-  ready: true,
-  blockingRequirements: [],
-  requirements: [
-    { id: "git", status: "ready", label: "Git", message: "Git is installed." },
-    { id: "github-cli", status: "ready", label: "GitHub CLI", message: "Authenticated." },
-    {
-      id: "runtime",
-      status: "ready",
-      label: "Agent runtime",
-      message: "Claude Code is available.",
-    },
-  ],
-  runtimes: [
-    {
-      id: "claude",
-      status: "ready",
-      label: "Claude Code",
-      message: "Installed.",
-      recommended: true,
-    },
-  ],
-});
-
-const readySidecar = (): SidecarState => ({
-  status: "ready",
-  dashboardUrl: "http://127.0.0.1:25150/",
-  message: "AOP is ready.",
-});
-
-const failedSidecar = (): SidecarState => ({
-  status: "failed",
-  logPath: "/Users/test/.aop/logs",
-  message: "The AOP local server exited before it became healthy.",
 });

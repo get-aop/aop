@@ -179,7 +179,7 @@ dist/release/
   runtime-assets.tar.gz
 ```
 
-The DMGs are packaged on macOS with Electron Builder. The app opens to setup, asks before installing missing tools, starts the bundled AOP sidecar, and renders the dashboard inside the desktop window.
+The DMGs are packaged on macOS with Electron Builder. The app is a client of an AOP host with the dashboard bundled inside; it asks for the host's address and a pairing code, and on a Mac can run the bundled `aop` server as the host.
 
 ```bash
 bun run package:macos-dmg
@@ -240,12 +240,11 @@ curl -s http://127.0.0.1:25150/api/health
 - **Binary size**: ~97MB per platform (Bun runtime is embedded)
 - **SQLite**: Bundled in the Bun runtime, no external dependency
 - **Dashboard**: Pre-built and embedded in the binary, served automatically
-- **Desktop app**: Electron shell with setup-first prerequisite checks and bundled sidecar resources
+- **Desktop app**: Electron thin client with the dashboard bundled; the Mac app also carries the `aop` server for host mode
 - **Data directory**: `~/.aop/` on macOS/Linux, `%USERPROFILE%\.aop\` on Windows (database, logs, PID file)
 - **Windows**: native NSIS installer (`aop-windows-x64-setup.exe`) plus the CLI binary
   (`aop-windows-x64.exe`). Unsigned in the alpha, so SmartScreen warns on first run (choose
-  "More info → Run anyway") and Defender may quarantine the unsigned `aop.exe` sidecar.
+  "More info → Run anyway") and Defender may quarantine the unsigned `aop.exe`.
   `install.ps1` runs `Unblock-File` to clear the Mark-of-the-Web. To remove the warnings,
   set `AOP_WINDOWS_PFX_BASE64` + `AOP_WINDOWS_PFX_PASSWORD` so the release Authenticode-signs
-  the installer. WSL users should install the Linux build inside their distro (Model B)
-  instead of the native Windows package.
+  the installer. The Windows desktop app is a client: it carries no server and needs no WSL.

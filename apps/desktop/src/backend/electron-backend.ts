@@ -1,19 +1,14 @@
-import type { DesktopSetupState } from "../setup/types";
-import type { DesktopBackend, SidecarState, WslDistro } from "./types";
+import type { DesktopBackend } from "./types";
 
-export interface ElectronDesktopBridge {
-  getSetupState: () => Promise<DesktopSetupState>;
-  runSetupAction: (actionId: string) => Promise<DesktopSetupState>;
-  openSetupGuide: (actionId: string) => Promise<void>;
-  startAopSidecar: () => Promise<SidecarState>;
-  getSidecarState: () => Promise<SidecarState>;
-  openLogsFolder: () => Promise<void>;
-  quitApp: () => Promise<void>;
-  listWslDistros: () => Promise<WslDistro[]>;
-  getExecHost: () => Promise<string>;
-  setExecHost: (mode: string) => Promise<void>;
+/** The dashboard's half of the preload bridge: which host to use, and a refused token. */
+export interface DashboardBridge {
+  getHostConfig: () => Promise<{ baseUrl: string; token: string | null }>;
+  hostRejected: () => Promise<void>;
   setZoom: (zoomFactor: number) => Promise<void>;
 }
+
+/** Everything the preload script exposes as `window.aopDesktop`. Each page may use its own half. */
+export interface ElectronDesktopBridge extends DesktopBackend, DashboardBridge {}
 
 declare global {
   interface Window {
@@ -21,20 +16,7 @@ declare global {
   }
 }
 
-export const createElectronBackend = (bridge: ElectronDesktopBridge): DesktopBackend => ({
-  getSetupState: bridge.getSetupState,
-  runSetupAction: bridge.runSetupAction,
-  openSetupGuide: bridge.openSetupGuide,
-  startAopSidecar: bridge.startAopSidecar,
-  getSidecarState: bridge.getSidecarState,
-  openLogsFolder: bridge.openLogsFolder,
-  quitApp: bridge.quitApp,
-  listWslDistros: bridge.listWslDistros,
-  getExecHost: bridge.getExecHost,
-  setExecHost: bridge.setExecHost,
-});
-
 export const electronBackend = (): DesktopBackend => {
   if (!window.aopDesktop) throw new Error("AOP Desktop preload bridge is unavailable.");
-  return createElectronBackend(window.aopDesktop);
+  return window.aopDesktop;
 };

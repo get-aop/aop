@@ -8,6 +8,7 @@ import {
   ResyncSchema,
 } from "@aop/common";
 import { apiUrl, isRemoteHost } from "../api/host";
+import { openHostEventSource, type StreamSource } from "../api/host-event-source";
 
 /** `EventSource.readyState` values; the constants are not on the test environment's global. */
 const READY_STATE_CLOSED = 2;
@@ -28,13 +29,13 @@ export interface StreamHandlers {
 }
 
 export interface StreamDeps {
-  createSource: (url: string, withCredentials: boolean) => EventSource;
+  createSource: (url: string, withCredentials: boolean) => StreamSource;
   /** Runs `run` after `delayMs`; returns what cancels it. */
   schedule: (run: () => void, delayMs: number) => () => void;
 }
 
 export const browserStreamDeps: StreamDeps = {
-  createSource: (url, withCredentials) => new EventSource(url, { withCredentials }),
+  createSource: openHostEventSource,
   schedule: (run, delayMs) => {
     const timer = setTimeout(run, delayMs);
     return () => clearTimeout(timer);
@@ -57,7 +58,7 @@ export const connectProjectStream = (
   handlers: StreamHandlers,
   deps: StreamDeps = browserStreamDeps,
 ): { close: () => void } => {
-  let source: EventSource | null = null;
+  let source: StreamSource | null = null;
   let cursor: number | null = null;
   let failures = 0;
   let cancelRetry: (() => void) | null = null;

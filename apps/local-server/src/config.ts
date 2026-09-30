@@ -32,7 +32,9 @@ export const getAllowedOrigins = (): string[] =>
 
 const toOrigin = (entry: string): string => {
   try {
-    return new URL(entry).origin;
+    const url = new URL(entry);
+    // A custom scheme such as app:// has no origin for the URL parser, but browsers send one.
+    return url.origin === "null" ? `${url.protocol}//${url.host}` : url.origin;
   } catch {
     throw new Error(`AOP_ALLOWED_ORIGINS entry is not a URL: ${entry}`);
   }

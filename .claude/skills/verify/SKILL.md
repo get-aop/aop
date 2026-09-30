@@ -9,7 +9,7 @@ AOP is a local control plane: `apps/local-server` (Bun + Hono + SQLite) is the s
 
 Read `features/README.md` before driving; the matching feature file is the recipe. A proof that drives one convenient entry point is incomplete when the map lists others.
 
-Surface: the dashboard (`/` lists projects, a project opens its thread grid, Settings is a dialog) and the CLI. The Electron app in `apps/desktop` is not covered.
+Surface: the dashboard (`/` lists projects, a project opens its thread grid, Settings is a dialog) and the CLI. The Electron app in `apps/desktop` is covered by [Desktop app](features/desktop.md): Claude in Chrome cannot drive its window, so that recipe drives it over the DevTools protocol (`scripts/desktop-cdp.ts`) and proves its cross-origin transport in Chrome.
 
 All commands run from the repo root. `S=.claude/skills/verify/scripts`.
 
@@ -84,4 +84,5 @@ Kills only the two PIDs recorded for this run (process groups), deletes `home/` 
 | `scripts/verify-stack.ts` | `bun $S/verify-stack.ts <start\|doctor\|env\|aop\|restart-server\|stop> [--name run] [--crash] [-- aop args]`; `restart-server --crash` SIGKILLs only the server and restarts it on the same port and DB |
 | `scripts/seed.ts` | `bun $S/seed.ts [--name run] [--fake-runtime]` after `start`; idempotent |
 | `scripts/fake-gh.ts` | A fake GitHub CLI: put it first on the server's `PATH` as `gh` (a two-line wrapper), never the real one; see `features/projects.md` for thread pull requests |
+| `scripts/desktop-cdp.ts` | `bun $S/desktop-cdp.ts <targets\|js\|jsfile\|shot\|errors> [argument]` against an app started with `--remote-debugging-port=9333`; see `features/desktop.md` |
 | `scripts/seed-events.ts` | `bun $S/seed-events.ts [--name run] <project\|thread\|status\|message\|remove> ...` appends project events for the project stream; see `features/project-stream.md` |

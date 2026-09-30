@@ -1,6 +1,6 @@
 # AOP architecture
 
-AOP is a local-first control plane layered on top of external coding-agent CLIs. This guide covers the product/runtime boundary, local storage, detached execution, dashboard and desktop shells, Windows execution, and updates.
+AOP is a local-first control plane layered on top of external coding-agent CLIs. This guide covers the product/runtime boundary, local storage, detached execution, dashboard and desktop shells, and updates.
 
 > **Legacy page.** It describes the previous Sessions, task, and workflow product, which the rewrite around Projects (see the [README](../../README.md)) is removing. It is rewritten as the replacement lands; do not read it as the Projects design.
 
@@ -56,9 +56,7 @@ Task detail lives at `/tasks/:id` (deep links from chat cards). Legacy routes (`
 
 ## Desktop and Windows
 
-`AOP.app` is an Electron shell around the local product. Setup checks Git, GitHub CLI, and supported agent runtimes, then opens official installation guides for anything missing instead of installing host tools itself. The app launches the bundled AOP sidecar and renders the local dashboard through a sandboxed window and narrow preload bridge.
-
-Windows execution runs through a managed WSL distro; the design is recorded in the Windows-WSL execution ADR inside the repository.
+The desktop app is a thin client of one AOP host. It bundles the dashboard, serves it to its window as `app://aop`, and keeps the host's address and its device token (in the operating system's keychain) in its main process, handing them to the dashboard in memory over a narrow preload bridge. The main process also watches the host's event streams to raise operating system notifications. On a Mac the app can run the host itself, bound to loopback. Windows is a client only and runs no server. [The host guide](../HOST.md) covers pairing, the cross-origin rules, and host mode.
 
 ## Updates
 

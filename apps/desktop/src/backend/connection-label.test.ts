@@ -1,0 +1,52 @@
+import { describe, expect, test } from "bun:test";
+import { connectionLabel, hostName, windowTitle } from "./connection-label";
+import type { ConnectionState } from "./types";
+
+const HOST = "https://mac.tail1234.ts.net";
+
+describe("connectionLabel", () => {
+  const cases: [ConnectionState, string][] = [
+    [{ status: "unconfigured" }, "No host chosen"],
+    [{ status: "connecting", host: HOST }, "Connecting to mac.tail1234.ts.net…"],
+    [{ status: "connected", host: HOST, hostVersion: "1" }, "Connected to mac.tail1234.ts.net"],
+    [{ status: "unreachable", host: HOST, message: "x" }, "Cannot reach mac.tail1234.ts.net"],
+    [{ status: "unauthorized", host: HOST }, "mac.tail1234.ts.net does not accept this device"],
+    [
+      { status: "incompatible", host: HOST, reason: "client-too-old", hostVersion: "2" },
+      "mac.tail1234.ts.net needs a newer AOP app",
+    ],
+    [
+      { status: "incompatible", host: HOST, reason: "host-too-old", hostVersion: "0" },
+      "mac.tail1234.ts.net needs an update",
+    ],
+    [
+      {
+        status: "incompatible",
+        host: "http://127.0.0.1:25150",
+        reason: "not-aop",
+        hostVersion: null,
+      },
+      "127.0.0.1:25150 needs an AOP host",
+    ],
+  ];
+
+  test.each(cases)("%j reads %p", (state, label) => {
+    expect(connectionLabel(state)).toBe(label);
+  });
+});
+
+describe("windowTitle", () => {
+  test("is the app's name until there is a host to name", () => {
+    expect(windowTitle({ status: "unconfigured" })).toBe("AOP");
+    expect(windowTitle({ status: "connected", host: HOST, hostVersion: "1" })).toBe(
+      "AOP · Connected to mac.tail1234.ts.net",
+    );
+  });
+});
+
+describe("hostName", () => {
+  test("shows the host and port, not the scheme", () => {
+    expect(hostName("http://127.0.0.1:25150")).toBe("127.0.0.1:25150");
+    expect(hostName("not a url")).toBe("not a url");
+  });
+});

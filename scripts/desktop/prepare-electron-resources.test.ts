@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildElectronResourcePlan, prepareElectronResources } from "./prepare-electron-resources";
@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 describe("Electron desktop resources", () => {
-  test("plans macOS resources in the Electron app directory", () => {
+  test("plans the Mac app's resources in the Electron app directory", () => {
     expect(
       buildElectronResourcePlan({
         arch: "arm64",
@@ -23,41 +23,39 @@ describe("Electron desktop resources", () => {
     ).toMatchObject({
       binaryPath: join("/repo", "dist/release/aop-darwin-arm64"),
       resourcesDir: join("/repo", "apps/desktop/resources"),
-      sidecarPath: join("/repo", "apps/desktop/resources/aop"),
+      hostServerPath: join("/repo", "apps/desktop/resources/aop"),
     });
   });
 
-  test("stages the native binary and extracted runtime assets on macOS", async () => {
+  test("stages the host server and the dashboard files it serves", async () => {
     const root = await createReleaseFixture();
     const plan = buildElectronResourcePlan({ arch: "arm64", workspaceRoot: root });
 
     await prepareElectronResources(plan);
 
-    expect(await readFile(plan.sidecarPath, "utf8")).toBe("native-binary");
+    expect(await readFile(plan.hostServerPath, "utf8")).toBe("native-binary");
+    expect((await stat(plan.hostServerPath)).mode & 0o111).not.toBe(0);
     expect(await readFile(join(plan.resourcesDir, "dashboard/index.html"), "utf8")).toBe(
       "dashboard",
     );
   });
 
-  test("stages the fingerprinted Linux runtime inputs on Windows", async () => {
+  test("stages nothing a Windows client would need: no Linux server, no WSL runtime", async () => {
     const root = await createReleaseFixture();
-    const plan = buildElectronResourcePlan({
-      arch: "x64",
-      platform: "windows",
-      workspaceRoot: root,
-    });
+    const plan = buildElectronResourcePlan({ arch: "arm64", workspaceRoot: root });
 
     await prepareElectronResources(plan);
 
-    expect((await readdir(plan.resourcesDir)).sort()).toEqual([
-      ".gitkeep",
-      "aop-linux-x64",
-      "desktop-runtime.sha256",
-      "runtime-assets.tar.gz",
-    ]);
-    expect(
-      (await readFile(join(plan.resourcesDir, "desktop-runtime.sha256"), "utf8")).trim(),
-    ).toMatch(/^[a-f0-9]{64}$/u);
+    expect((await readdir(plan.resourcesDir)).sort()).toEqual([".gitkeep", "aop", "dashboard"]);
+  });
+
+  test("says which input is missing", async () => {
+    const root = await createReleaseFixture();
+    await rm(join(root, "dist/release/aop-darwin-arm64"));
+
+    await expect(
+      prepareElectronResources(buildElectronResourcePlan({ arch: "arm64", workspaceRoot: root })),
+    ).rejects.toThrow("Host server binary not found");
   });
 });
 
@@ -69,7 +67,6 @@ const createReleaseFixture = async (): Promise<string> => {
   await mkdir(join(archiveRoot, "dashboard"), { recursive: true });
   await mkdir(releaseDir, { recursive: true });
   await writeFile(join(releaseDir, "aop-darwin-arm64"), "native-binary");
-  await writeFile(join(releaseDir, "aop-linux-x64"), "linux-binary");
   await writeFile(join(archiveRoot, "dashboard/index.html"), "dashboard");
   await Bun.$`tar -czf ${join(releaseDir, "runtime-assets.tar.gz")} -C ${archiveRoot} dashboard`.quiet();
   return root;

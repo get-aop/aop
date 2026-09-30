@@ -46,6 +46,12 @@ describe("config", () => {
       ]);
     });
 
+    test("keeps the origin of a custom scheme, which the URL parser reports as null", () => {
+      process.env.AOP_ALLOWED_ORIGINS = "app://aop/index.html,capacitor://localhost";
+
+      expect(getAllowedOrigins()).toEqual(["app://aop", "capacitor://localhost"]);
+    });
+
     test("refuses an entry that is not a URL instead of silently allowing nothing", () => {
       process.env.AOP_ALLOWED_ORIGINS = "mac.tail1234.ts.net";
 

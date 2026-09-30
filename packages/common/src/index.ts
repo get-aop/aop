@@ -1,6 +1,16 @@
 export { AOP_PORTS, AOP_URLS } from "./env.ts";
+export type { HostCompatibility, HostHealth } from "./host-api.ts";
+export {
+  API_VERSION,
+  checkHostCompatibility,
+  DESKTOP_APP_ORIGIN,
+  HostHealthSchema,
+  MIN_CLIENT_API_VERSION,
+} from "./host-api.ts";
 export * from "./projects/index.ts";
 export { suggestSessionBranchName } from "./session-branch.ts";
+export type { SseMessage, SseParser } from "./sse.ts";
+export { createSseParser, readSseBody } from "./sse.ts";
 export type {
   ChatCheckpointCaptureStatus,
   ChatTurnDiffFileSummary,

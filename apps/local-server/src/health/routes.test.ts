@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { API_VERSION, HostHealthSchema, MIN_CLIENT_API_VERSION } from "@aop/common";
 import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
@@ -29,6 +30,27 @@ describe("health routes", () => {
       expect(body.ok).toBe(true);
       expect(body.service).toBe("aop");
       expect(body.db).toEqual({ connected: true });
+    });
+
+    test("tells a client which API this host speaks, in a shape the client's schema reads", async () => {
+      const res = await app.request("/");
+
+      expect(HostHealthSchema.parse(await res.json())).toEqual({
+        service: "aop",
+        version: expect.any(String),
+        apiVersion: API_VERSION,
+        minClientApiVersion: MIN_CLIENT_API_VERSION,
+      });
+    });
+
+    test("reports the build version the installer set", async () => {
+      process.env.AOP_BUILD_VERSION = "9.9.9";
+      try {
+        const body: AnyJson = await (await app.request("/")).json();
+        expect(body.version).toBe("9.9.9");
+      } finally {
+        delete process.env.AOP_BUILD_VERSION;
+      }
     });
   });
 });

@@ -51,7 +51,7 @@ Release CI builds two Electron desktop disk images:
 | `aop-macos-arm64.dmg` | Apple silicon Macs |
 | `aop-macos-x64.dmg` | Intel Macs |
 
-The DMG contains `AOP.app`. Opening it shows a setup-first desktop window, verifies Git, GitHub CLI auth, and at least one supported runtime, then starts the bundled AOP sidecar and loads the dashboard inside the app. The app stores data in `~/.aop`, like the curl-installed binary.
+The DMG contains `AOP.app`, a client of an AOP host with the dashboard bundled inside. Opening it asks for the host's address and a pairing code (see [the host guide](./HOST.md)). On a Mac it can also run the host itself: the app carries the `aop` server and starts it on request, bound to loopback, with data in `~/.aop` like the curl-installed binary.
 
 Unsigned DMGs work without an Apple Developer Program account:
 

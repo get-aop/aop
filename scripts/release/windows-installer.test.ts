@@ -25,8 +25,6 @@ describe("windows-installer release planning", () => {
       builderOutputDir: join("/repo", "dist/electron-builder"),
       installerPath: join("/repo", "dist/release/aop-windows-x64-setup.exe"),
       releaseDir: join("/repo", "dist/release"),
-      resourcesDir: join("/repo", "apps/desktop/resources"),
-      runtimeAssetsArchive: join("/repo", "dist/release/runtime-assets.tar.gz"),
       version: "0.2.11",
       workspaceRoot: "/repo",
     });

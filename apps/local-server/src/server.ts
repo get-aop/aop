@@ -1,3 +1,4 @@
+import { DESKTOP_APP_ORIGIN } from "@aop/common";
 import { getLogger } from "@aop/infra";
 import { createApp } from "./app.ts";
 import { runStartupCheckpointCleanup } from "./chat-session/checkpoint-cleanup-service.ts";
@@ -31,7 +32,8 @@ export interface ServerHandle {
 export const startServer = async (options?: ServerOptions): Promise<ServerHandle> => {
   const port = options?.port ?? getPort();
   const bindHost = getBindHost();
-  const allowedOrigins = getAllowedOrigins();
+  // The desktop app is a first-class client: it needs no entry in AOP_ALLOWED_ORIGINS.
+  const allowedOrigins = [DESKTOP_APP_ORIGIN, ...getAllowedOrigins()];
   const startTimeMs = Date.now();
 
   const dbPath = options?.dbPath ?? process.env.AOP_DB_PATH ?? getDefaultDbPath();

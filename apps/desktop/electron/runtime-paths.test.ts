@@ -2,25 +2,19 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { resolveDesktopPaths } from "./runtime-paths";
 
-describe("Electron runtime paths", () => {
-  test("resolves packaged files from app.asar instead of the source checkout", () => {
-    const appPath = "/Applications/AOP.app/Contents/Resources/app.asar";
-    const resourcesPath = "/Applications/AOP.app/Contents/Resources";
+describe("resolveDesktopPaths", () => {
+  test("serves the dashboard from a folder inside the connect screen's build", () => {
+    const paths = resolveDesktopPaths("/app", "/Resources", false);
 
-    expect(resolveDesktopPaths(appPath, resourcesPath, false)).toEqual({
-      preloadPath: join(appPath, "dist-electron/preload.cjs"),
-      rendererRoot: join(appPath, "dist"),
-      resourceRoot: resourcesPath,
-    });
+    expect(paths.shellRoot).toBe(join("/app", "dist"));
+    expect(paths.dashboardRoot).toBe(join("/app", "dist", "dashboard"));
+    expect(paths.preloadPath).toBe(join("/app", "dist-electron", "preload.cjs"));
   });
 
-  test("resolves development files from the desktop workspace", () => {
-    const appPath = "/repo/apps/desktop";
-
-    expect(resolveDesktopPaths(appPath, "/unused", true)).toEqual({
-      preloadPath: join(appPath, "dist-electron/preload.cjs"),
-      rendererRoot: join(appPath, "dist"),
-      resourceRoot: join(appPath, "resources"),
-    });
+  test("looks for the host server in the app's resources when packaged, and beside the source in development", () => {
+    expect(resolveDesktopPaths("/app", "/Resources", false).resourceRoot).toBe("/Resources");
+    expect(resolveDesktopPaths("/app", "/Resources", true).resourceRoot).toBe(
+      join("/app", "resources"),
+    );
   });
 });
