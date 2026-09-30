@@ -1,4 +1,4 @@
-import { getLogger } from "@aop/infra";
+import { getLogger, mapLimit } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import { defaultRunGh, type RunGh } from "../github-cli/index.ts";
 import type { ChatEngine } from "../project/engine.ts";
@@ -144,21 +144,6 @@ const groupByRepo = (items: readonly WatchedThread[]): WatchedThread[][] => {
   const groups = new Map<string, WatchedThread[]>();
   for (const item of items) groups.set(item.repoId, [...(groups.get(item.repoId) ?? []), item]);
   return [...groups.values()];
-};
-
-/** Runs `work` on every item, at most `limit` at a time, and waits for all of them. */
-const mapLimit = async <T>(
-  items: readonly T[],
-  limit: number,
-  work: (item: T) => Promise<void>,
-): Promise<void> => {
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    for (let index = next++; index < items.length; index = next++) {
-      await work(items[index] as T);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 };
 
 /** How often the server looks for pull requests that are due; each one still keeps its own schedule. */

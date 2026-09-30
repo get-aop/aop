@@ -1,5 +1,7 @@
 import type { SessionDiffFile, SessionDiffFileStatus } from "@aop/common";
+import { mapLimit } from "@aop/infra";
 import type { RunGit } from "./service.ts";
+import { countUntrackedFile } from "./untracked-file.ts";
 
 type StatCounts = { additions: number; deletions: number; binary?: boolean };
 
@@ -100,6 +102,9 @@ const summaryFile = (
   detailsPending: true,
 });
 
+/** Files read at once while counting, so thousands of untracked files never hold as many handles. */
+const UNTRACKED_READ_CONCURRENCY = 16;
+
 export const appendUntrackedSummaries = async (
   runGit: RunGit,
   workspace: string,
@@ -111,8 +116,13 @@ export const appendUntrackedSummaries = async (
   );
   if (untracked.exitCode !== 0) return;
   const known = new Set(files.map((file) => file.path));
-  for (const relativePath of untracked.stdout.split("\n").map((line) => line.trim())) {
-    if (!relativePath || known.has(relativePath)) continue;
-    files.push(summaryFile(relativePath, null, "added", { additions: 0, deletions: 0 }));
-  }
+  const paths = untracked.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((relativePath) => relativePath && !known.has(relativePath));
+  const summaries = await mapLimit(paths, UNTRACKED_READ_CONCURRENCY, async (relativePath) => {
+    const { status, additions } = await countUntrackedFile(workspace, relativePath);
+    return summaryFile(relativePath, null, status, { additions, deletions: 0 });
+  });
+  for (const summary of summaries) files.push(summary);
 };

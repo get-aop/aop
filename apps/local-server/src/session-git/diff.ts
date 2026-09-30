@@ -13,6 +13,7 @@ import {
   resolveMergeBase,
 } from "./git-helpers.ts";
 import { defaultRunGit, type RunGit } from "./service.ts";
+import { readUntrackedFileDiff } from "./untracked-file.ts";
 
 export type {
   SessionDiffFile,
@@ -250,7 +251,7 @@ const readWorkspaceDiffFile = async (
     workspace,
   );
   if (untracked.exitCode !== 0 || !untracked.stdout.trim()) return null;
-  return applyPerFileCap(await buildUntrackedFileDiff(workspace, path), PER_FILE_LINE_CAP);
+  return applyPerFileCap(await readUntrackedFileDiff(workspace, path), PER_FILE_LINE_CAP);
 };
 
 const resolveMergeBaseRef = async (
@@ -271,62 +272,8 @@ const appendUntrackedDiffs = async (
   if (untracked.exitCode !== 0) return;
   for (const relativePath of untracked.stdout.split("\n").map((line) => line.trim())) {
     if (!relativePath) continue;
-    files.push(await buildUntrackedFileDiff(workspace, relativePath));
+    files.push(await readUntrackedFileDiff(workspace, relativePath));
   }
-};
-
-const buildUntrackedFileDiff = async (
-  workspace: string,
-  relativePath: string,
-): Promise<SessionDiffFile> => {
-  try {
-    const file = Bun.file(`${workspace}/${relativePath}`);
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    if (looksBinary(bytes)) {
-      return {
-        path: relativePath,
-        oldPath: null,
-        status: "binary",
-        additions: 0,
-        deletions: 0,
-        truncated: false,
-        hunks: [],
-      };
-    }
-    const text = new TextDecoder().decode(bytes);
-    const contentLines = text.length === 0 ? [] : text.replace(/\n$/, "").split("\n");
-    const lines: SessionDiffLine[] = contentLines.map((line, index) => ({
-      type: "add" as const,
-      oldNo: null,
-      newNo: index + 1,
-      text: line,
-    }));
-    return {
-      path: relativePath,
-      oldPath: null,
-      status: "added",
-      additions: lines.length,
-      deletions: 0,
-      truncated: false,
-      hunks: lines.length > 0 ? [{ oldStart: 0, newStart: 1, lines }] : [],
-    };
-  } catch {
-    return {
-      path: relativePath,
-      oldPath: null,
-      status: "added",
-      additions: 0,
-      deletions: 0,
-      truncated: false,
-      hunks: [],
-    };
-  }
-};
-
-const looksBinary = (bytes: Uint8Array): boolean => {
-  const sample = bytes.subarray(0, Math.min(bytes.length, 8000));
-  return sample.includes(0);
 };
 
 export const applyPerFileCap = (file: SessionDiffFile, cap: number): SessionDiffFile => {

@@ -18,6 +18,7 @@ export {
   type LogLevel,
   resetLogging,
 } from "./logger.ts";
+export { mapLimit } from "./map-limit.ts";
 export { type CrudHelpers, createCrudHelpers } from "./repository-helpers.ts";
 export { buildClaudeCodeSpawnEnv, buildSpawnEnv } from "./spawn-env.ts";
 export {

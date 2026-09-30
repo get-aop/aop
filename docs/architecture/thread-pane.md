@@ -51,7 +51,7 @@ When the host refuses, the pane shows the host's own sentence and its code (`UNP
 
 ## Changes
 
-`GET /api/threads/:id/diff` lists the files the thread changed in its worktree against the default branch, with counts and no lines; a file's lines come from `/diff/file` when it is opened. Files open by default unless there are twelve or more. The list is read again when a turn ends or the pull request changes. A file the thread wrote and has not committed shows with no counts until its lines are read, because the host counts untracked files only then.
+`GET /api/threads/:id/diff` lists the files the thread changed in its worktree against the default branch, with counts and no lines; a file's lines come from `/diff/file` when it is opened. Files open by default unless there are twelve or more. The list is read again when a turn ends or the pull request changes. A file the thread wrote and has not committed has its counts in the list too, so folded rows show them: the host reads the untracked file to count it, by the same rule as the lines `/diff/file` returns. Only an untracked text file over 1 MiB shows `+0 −0` until it is opened.
 
 A line takes a review comment through the `+` in its gutter. Comments queue in this browser (per thread) and go to the thread together, as one message, from "Send N comments to the thread"; a send that fails keeps them. A thread whose worktree was removed (resolved, or its pull request merged) has no diff: the pane says so.
 

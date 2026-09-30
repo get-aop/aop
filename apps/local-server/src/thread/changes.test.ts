@@ -27,10 +27,10 @@ describe("what a thread changed", () => {
     expect(result).toMatchObject({ success: true, diff: { defaultBranch: "main" } });
     if (!result.success) return;
     expect(result.diff.summaryOnly).toBe(true);
-    // A tracked file has its counts in the summary; an untracked one is counted when its body is read.
+    // Git counts the tracked file; the host reads the untracked one to count it the same way.
     expect(result.diff.files).toMatchObject([
       { path: ".gitkeep", status: "modified", additions: 1, deletions: 0, hunks: [] },
-      { path: "notes.md", status: "added", additions: 0, detailsPending: true, hunks: [] },
+      { path: "notes.md", status: "added", additions: 1, detailsPending: true, hunks: [] },
     ]);
   });
 
