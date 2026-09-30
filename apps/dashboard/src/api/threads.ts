@@ -2,6 +2,7 @@ import type {
   Message,
   PullRequestRef,
   SessionDiffFile,
+  SessionDiffHunk,
   SessionGitDiff,
   Thread,
   ThreadActivity,
@@ -78,11 +79,15 @@ export const syncThreadPullRequest = async (threadId: string): Promise<Thread> =
   (await post<{ thread: Thread }>(threadUrl(threadId, "/pull-request/sync"))).thread;
 
 /** The files the thread changed in its worktree, with their counts and no hunks. */
-export const getThreadDiff = (threadId: string): Promise<SessionGitDiff> =>
-  request<SessionGitDiff>(threadUrl(threadId, "/diff"));
+export const getThreadDiff = async (threadId: string): Promise<SessionGitDiff> => {
+  const diff = await request<WireDiff>(threadUrl(threadId, "/diff"));
+  return { ...diff, files: diff.files.map(withHunks) };
+};
 
-export const getThreadDiffFile = (threadId: string, path: string): Promise<SessionDiffFile> =>
-  request<SessionDiffFile>(threadUrl(threadId, `/diff/file?path=${encodeURIComponent(path)}`));
+export const getThreadDiffFile = async (threadId: string, path: string): Promise<SessionDiffFile> =>
+  withHunks(
+    await request<WireDiffFile>(threadUrl(threadId, `/diff/file?path=${encodeURIComponent(path)}`)),
+  );
 
 /** The tool calls and status paragraphs of the thread's latest turns, which its messages do not carry. */
 export const getThreadActivity = (threadId: string): Promise<ThreadActivity> =>
@@ -91,3 +96,10 @@ export const getThreadActivity = (threadId: string): Promise<ThreadActivity> =>
 /** Everything the thread's runs consumed. */
 export const getThreadUsage = (threadId: string): Promise<ThreadUsage> =>
   request<ThreadUsage>(`/usage/threads/${encodeURIComponent(threadId)}`);
+
+// A host may leave `hunks` out of a file it lists without its lines (see
+// `SessionDiffFile.detailsPending`); every caller here gets the declared shape.
+type WireDiffFile = Omit<SessionDiffFile, "hunks"> & { hunks?: SessionDiffHunk[] };
+type WireDiff = Omit<SessionGitDiff, "files"> & { files: WireDiffFile[] };
+
+const withHunks = (file: WireDiffFile): SessionDiffFile => ({ ...file, hunks: file.hunks ?? [] });

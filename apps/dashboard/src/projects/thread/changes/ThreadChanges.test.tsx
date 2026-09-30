@@ -12,6 +12,7 @@ import {
   modified,
   serveDiff,
   untracked,
+  withoutHunks,
 } from "./test-utils";
 
 setupDashboardDom();
@@ -281,6 +282,56 @@ describe("a file whose lines cannot be read", () => {
     expect(toastError).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("thread-diff-file-loading")).toBeNull();
     expect(files().map((file) => file.getAttribute("data-path"))).toContain("src/a.ts");
+  });
+});
+
+describe("a host answer that leaves the hunks out", () => {
+  // A summary is allowed to omit `hunks` (see `SessionDiffFile.detailsPending`).
+  const answerSummary = (listed: object[], fileAnswer: () => Response) =>
+    host.respondWith(({ url }) =>
+      url === DIFF_URL
+        ? json({ defaultBranch: "main", perFileLineCap: 2000, summaryOnly: true, files: listed })
+        : fileAnswer(),
+    );
+
+  test("a listed file with nothing pending draws with no lines, and the pane stays", async () => {
+    answerSummary(
+      [withoutHunks(modified), { ...withoutHunks(binary), detailsPending: false }],
+      () => hostError(404, "FILE_NOT_FOUND", "No diff for that path"),
+    );
+    render(<Harness />);
+
+    await waitFor(() => expect(files()).toHaveLength(2));
+    expect(files().map((file) => file.getAttribute("data-path"))).toEqual(["src/a.ts", "logo.png"]);
+    expect(files()[1]?.textContent).toContain("Binary file");
+    expect(screen.queryAllByTestId("thread-diff-line")).toHaveLength(0);
+    expect(fileRequests("src/a.ts")).toHaveLength(0);
+  });
+
+  test("a file whose lines then cannot be read is still listed", async () => {
+    answerSummary([{ ...withoutHunks(modified), detailsPending: true }], () =>
+      hostError(500, "GIT_FAILED", "git could not read the file"),
+    );
+    render(<Harness />);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("git could not read the file"));
+    await settled();
+
+    expect(files().map((file) => file.getAttribute("data-path"))).toEqual(["src/a.ts"]);
+    expect(screen.queryByTestId("thread-diff-file-loading")).toBeNull();
+    expect(fileRequests("src/a.ts")).toHaveLength(1);
+  });
+
+  test("a file's own answer without hunks draws as a file with no lines", async () => {
+    serve([modified], { "src/a.ts": json(withoutHunks(modified)) });
+    render(<Harness />);
+
+    await waitFor(() => expect(fileRequests("src/a.ts")).toHaveLength(1));
+    await settled();
+
+    expect(files().map((file) => file.getAttribute("data-path"))).toEqual(["src/a.ts"]);
+    expect(screen.queryByTestId("thread-diff-file-loading")).toBeNull();
+    expect(screen.queryAllByTestId("thread-diff-line")).toHaveLength(0);
   });
 });
 

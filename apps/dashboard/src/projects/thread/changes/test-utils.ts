@@ -82,6 +82,12 @@ export const manyFiles = (count: number): SessionDiffFile[] =>
     ],
   }));
 
+/** A file as a host may send it when it leaves the lines out: with no `hunks` key at all. */
+export const withoutHunks = ({
+  hunks: _left,
+  ...file
+}: SessionDiffFile): Omit<SessionDiffFile, "hunks"> => file;
+
 export type Answer = SessionDiffFile | Response | Promise<Response>;
 
 /** What the real host sends first: the list and counts, no lines, every file waiting for its body. */

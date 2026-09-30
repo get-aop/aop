@@ -70,6 +70,60 @@ describe("reading", () => {
     ]);
   });
 
+  describe("a changed file the host sent without hunks", () => {
+    const listed = {
+      path: "NOTES.md",
+      oldPath: null,
+      status: "added",
+      additions: 0,
+      deletions: 0,
+      truncated: false,
+    };
+    const hunk = {
+      oldStart: 0,
+      newStart: 1,
+      lines: [{ type: "add", oldNo: null, newNo: 1, text: "hello" }],
+    };
+
+    test("comes back from the list with no hunks, whether or not its lines are pending", async () => {
+      host.respondWith(() =>
+        json({
+          defaultBranch: "main",
+          perFileLineCap: 2000,
+          summaryOnly: true,
+          files: [
+            { ...listed, detailsPending: true },
+            { ...listed, path: "b.md" },
+            { ...listed, path: "c.md", hunks: [hunk] },
+          ],
+        }),
+      );
+
+      const diff = await getThreadDiff("thr_1");
+
+      expect(diff.files).toEqual([
+        { ...listed, detailsPending: true, hunks: [] },
+        { ...listed, path: "b.md", hunks: [] },
+        { ...listed, path: "c.md", hunks: [hunk] },
+      ] as never);
+      expect(diff).toMatchObject({
+        defaultBranch: "main",
+        perFileLineCap: 2000,
+        summaryOnly: true,
+      });
+    });
+
+    test("comes back from its own route with no hunks", async () => {
+      host.respondWith(() => json({ ...listed, detailsPending: false }));
+
+      expect(await getThreadDiffFile("thr_1", "NOTES.md")).toEqual({
+        ...listed,
+        detailsPending: false,
+        hunks: [],
+      } as never);
+    });
+  });
+
   test("reads the tool calls of the thread's turns", async () => {
     host.respondWith(() => json({ turns: [] }));
 
