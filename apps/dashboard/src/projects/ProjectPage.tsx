@@ -1,16 +1,16 @@
 import { Link, projectsPath, type Route } from "../shell/router";
-import { CoordinatorChatPane } from "./chat/CoordinatorChatPane";
-import { unseenCount } from "./chat/project-chat";
 import { useProjectChat } from "./chat/use-project-chat";
-import { ProjectHeader } from "./ProjectHeader";
+import { ProjectLayout } from "./layout/ProjectLayout";
 import { useProjectEntry, useProjectsState } from "./ProjectsProvider";
+import { ProjectTopBar } from "./ProjectTopBar";
 import { ProjectSettingsPane } from "./settings/ProjectSettingsPane";
-import { ThreadOverview } from "./ThreadOverview";
-import { ThreadPane } from "./thread/ThreadPane";
 
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
 
-/** One project: its header, then the screen the route names. */
+/**
+ * One project: the three-pane screen (chat and threads panel) for its home and its threads,
+ * or its settings on a screen of their own, under the same top bar.
+ */
 export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
   const entry = useProjectEntry(route.projectId);
   const { phase } = useProjectsState();
@@ -20,39 +20,22 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
     return phase === "ready" ? <ProjectNotFound /> : <ProjectLoading />;
   }
 
-  const { project, threads, threadsLoaded, threadsError } = entry;
   return (
-    <div data-testid="project-page" data-project-id={project.id} className="flex h-full flex-col">
-      <ProjectHeader
-        entry={entry}
-        route={route}
-        coordinatorUnseen={route.name === "coordinator" ? 0 : unseenCount(model)}
-      />
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {route.name === "project" ? <ThreadOverview entry={entry} /> : null}
-        {route.name === "coordinator" ? (
-          <CoordinatorChatPane
-            project={project}
-            threads={threads}
-            threadsLoaded={threadsLoaded}
-            threadsError={threadsError}
-            chat={chat}
-            model={model}
-          />
-        ) : null}
-        {route.name === "thread" ? (
-          <ThreadPane
-            project={project}
-            thread={threads.find((thread) => thread.id === route.threadId)}
-            threads={threads}
-            threadsLoaded={threadsLoaded}
-            threadsError={threadsError}
-          />
-        ) : null}
-        {route.name === "project-settings" ? (
-          <ProjectSettingsPane entry={entry} section={route.section} />
-        ) : null}
-      </main>
+    <div
+      data-testid="project-page"
+      data-project-id={entry.project.id}
+      className="flex h-full flex-col"
+    >
+      {route.name === "project-settings" ? (
+        <>
+          <ProjectTopBar entry={entry} panel={null} settingsOpen />
+          <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <ProjectSettingsPane entry={entry} section={route.section} />
+          </main>
+        </>
+      ) : (
+        <ProjectLayout entry={entry} route={route} chat={chat} model={model} />
+      )}
     </div>
   );
 };

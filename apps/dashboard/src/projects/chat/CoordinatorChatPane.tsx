@@ -28,6 +28,7 @@ export const CoordinatorChatPane = ({
   threadsError,
   chat,
   model,
+  active = true,
 }: {
   project: Project;
   threads: readonly Thread[];
@@ -35,8 +36,10 @@ export const CoordinatorChatPane = ({
   threadsError: string | null;
   chat: ProjectChat;
   model: ChatModel;
+  /** Whether the pane is on screen; replies are only read while it is. */
+  active?: boolean;
 }) => {
-  const visible = usePageVisible();
+  const visible = usePageVisible() && active;
   const projectActive = project.status === "active";
   const working = projectActive && isWorking(model);
   const firstNewId = useFirstNewId(model);

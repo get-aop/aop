@@ -7,7 +7,6 @@ const { act, cleanup, fireEvent, render, renderHook, screen } = await import(
   "@testing-library/react"
 );
 const {
-  coordinatorPath,
   Link,
   navigate,
   parseRoute,
@@ -26,7 +25,7 @@ describe("parseRoute", () => {
     expect(parseRoute("/")).toEqual({ name: "projects" });
     expect(parseRoute("/projects/p1")).toEqual({ name: "project", projectId: "p1" });
     expect(parseRoute("/projects/p1/")).toEqual({ name: "project", projectId: "p1" });
-    expect(parseRoute("/projects/p1/chat")).toEqual({ name: "coordinator", projectId: "p1" });
+    expect(parseRoute("/projects/p1/chat")).toEqual({ name: "project", projectId: "p1" });
     expect(parseRoute("/projects/p1/settings")).toEqual({
       name: "project-settings",
       projectId: "p1",
@@ -68,7 +67,6 @@ describe("parseRoute", () => {
   test("path builders and the parser agree, including ids that need escaping", () => {
     const id = "proj/odd id";
     expect(parseRoute(projectPath(id))).toEqual({ name: "project", projectId: id });
-    expect(parseRoute(coordinatorPath(id))).toEqual({ name: "coordinator", projectId: id });
     expect(parseRoute(projectSettingsPath(id))).toEqual({
       name: "project-settings",
       projectId: id,
@@ -88,7 +86,7 @@ describe("parseRoute", () => {
 
   test("routeProjectId is the project a route belongs to, or null", () => {
     expect(routeProjectId({ name: "projects" })).toBeNull();
-    expect(routeProjectId({ name: "coordinator", projectId: "p1" })).toBe("p1");
+    expect(routeProjectId({ name: "project", projectId: "p1" })).toBe("p1");
   });
 });
 
@@ -104,7 +102,15 @@ describe("useRoute", () => {
       window.history.pushState({}, "", "/projects/p2/chat");
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
-    expect(result.current).toEqual({ name: "coordinator", projectId: "p2" });
+    expect(result.current).toEqual({ name: "project", projectId: "p2" });
+  });
+
+  test("the old chat address is rewritten to the project screen", () => {
+    window.history.pushState({}, "", "/projects/p1/chat");
+    const { result } = renderHook(() => useRoute());
+
+    expect(result.current).toEqual({ name: "project", projectId: "p1" });
+    expect(window.location.pathname).toBe("/projects/p1");
   });
 
   test("rewrites an address no screen owns to /, so the bar says what is shown", () => {

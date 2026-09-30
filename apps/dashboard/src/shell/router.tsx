@@ -5,20 +5,19 @@ export const PROJECT_SETTINGS_SECTIONS = ["general", "memory", "environment", "u
 export type ProjectSettingsSection = (typeof PROJECT_SETTINGS_SECTIONS)[number];
 
 /**
- * The app's screens. `project` is the project home (its thread grid); the rest are panes of
- * a project: the coordinator chat, a thread, and one section of the project's settings.
+ * The app's screens. `project` is the project screen: the coordinator chat with the threads
+ * panel on its overview. `thread` is the same screen with one thread open in the panel;
+ * `project-settings` is one section of the project's settings, on a screen of its own.
  */
 export type Route =
   | { name: "projects" }
   | { name: "project"; projectId: string }
-  | { name: "coordinator"; projectId: string }
   | { name: "thread"; projectId: string; threadId: string }
   | { name: "project-settings"; projectId: string; section: ProjectSettingsSection };
 
 export const projectsPath = (): string => "/";
 export const projectPath = (projectId: string): string =>
   `/projects/${encodeURIComponent(projectId)}`;
-export const coordinatorPath = (projectId: string): string => `${projectPath(projectId)}/chat`;
 export const threadPath = (projectId: string, threadId: string): string =>
   `${projectPath(projectId)}/threads/${encodeURIComponent(threadId)}`;
 export const projectSettingsPath = (
@@ -39,7 +38,8 @@ const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
   const [pane, detail, ...extra] = rest;
   if (extra.length > 0) return null;
   if (!pane) return { name: "project", projectId };
-  if (pane === "chat") return detail === undefined ? { name: "coordinator", projectId } : null;
+  // The chat used to have its own address; it is the project screen now (see `useRoute`).
+  if (pane === "chat") return detail === undefined ? { name: "project", projectId } : null;
   if (pane === "settings") return parseSettingsRoute(projectId, detail);
   if (pane === "threads" && detail) return { name: "thread", projectId, threadId: detail };
   return null;
@@ -53,6 +53,8 @@ const parseSettingsRoute = (projectId: string, detail: string | undefined): Rout
   );
   return section ? { name: "project-settings", projectId, section } : null;
 };
+
+const LEGACY_CHAT_PATH = /^\/projects\/[^/]+\/chat\/?$/;
 
 export const routeProjectId = (route: Route): string | null =>
   route.name === "projects" ? null : route.projectId;
@@ -79,15 +81,19 @@ const subscribe = (listener: () => void): (() => void) => {
 };
 
 /**
- * The current route. An address no screen owns (an old bookmark) is rewritten to `/`, so the
- * address bar says what is shown; until that happens it reads as the projects screen.
+ * The current route. An address no screen owns (an old bookmark) is rewritten to `/`, and the
+ * old `/projects/:id/chat` to `/projects/:id`, so the address bar says what is shown; until
+ * that happens it reads as the screen it will become.
  */
 export const useRoute = (): Route => {
   const pathname = useSyncExternalStore(subscribe, () => window.location.pathname);
   const route = useMemo(() => parseRoute(pathname), [pathname]);
   useEffect(() => {
     if (route === null) navigate(projectsPath(), { replace: true });
-  }, [route]);
+    else if (route.name === "project" && LEGACY_CHAT_PATH.test(pathname)) {
+      navigate(projectPath(route.projectId), { replace: true });
+    }
+  }, [route, pathname]);
   return route ?? { name: "projects" };
 };
 

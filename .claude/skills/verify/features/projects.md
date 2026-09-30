@@ -1,6 +1,6 @@
 # Projects and threads (API)
 
-A project is one coordinator chat plus the threads it starts. This map covers the HTTP API. The dashboard shows the result as projects in the sidebar and threads as cards on the project home, and [Projects shell](./projects-shell.md) is the recipe for watching that; the coordinator chat is drawn by the Coordinator tab ([Projects chat](./projects-chat.md)), and a thread's transcript, question, pull request bar and changes by the thread pane ([Projects thread pane and Overview](./projects-thread.md)). Coordinator and thread sessions never appear in `GET /api/chat-sessions`.
+A project is one coordinator chat plus the threads it starts. This map covers the HTTP API. The dashboard shows the result as projects in the sidebar and threads as rows in the panel beside the chat, and [Projects shell](./projects-shell.md) is the recipe for watching that; the coordinator chat is drawn by the Coordinator tab ([Projects chat](./projects-chat.md)), and a thread's transcript, question, pull request bar and changes by the thread pane ([Projects thread pane and Overview](./projects-thread.md)). Coordinator and thread sessions never appear in `GET /api/chat-sessions`.
 
 Everything here needs a stack seeded with `--fake-runtime`: projects resolve their coordinator and thread runtime from the first runtime configuration, which then is the fake CLI, so no model is called. Confirm before sending anything: `sqlite3 "$AOP_DB_PATH" "select kind, runtime_alias from chat_sessions"` shows the path of `fake-cli.ts` for the coordinator and every thread.
 
@@ -75,4 +75,4 @@ Preconditions: a project on the fixture repo, a thread with work whose pull requ
 - `gh` availability is cached for a minute per process, so make the fake unavailable (remove it from `PATH`) before the first call of a test that wants that failure.
 - A `[fake: ...]` marker inside a thread's title or brief is replayed on every turn, because both go into the brief: give a thread with a marker in its prompt an explicit `title`.
 - Two markers in one message do not add up: the last one wins.
-- A thread has a dashboard screen (the thread pane, see [Projects thread pane and Overview](./projects-thread.md)) and the coordinator chat has one, the Coordinator tab. `apps/local-server/src/project/coordinator.fake-cli.test.ts` runs the same flows against the engine.
+- A thread has a dashboard screen (the thread pane, see [Projects thread pane and Overview](./projects-thread.md)) and the coordinator chat has one, the middle pane of the project screen. `apps/local-server/src/project/coordinator.fake-cli.test.ts` runs the same flows against the engine.

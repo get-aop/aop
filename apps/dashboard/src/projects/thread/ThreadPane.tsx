@@ -26,12 +26,15 @@ export const ThreadPane = ({
   threads,
   threadsLoaded,
   threadsError,
+  headerActions,
 }: {
   project: Project;
   thread: Thread | undefined;
   threads: readonly Thread[];
   threadsLoaded: boolean;
   threadsError: string | null;
+  /** The holder's buttons (expand, close), drawn in the thread's header. */
+  headerActions?: React.ReactNode;
 }) => {
   if (thread) {
     return (
@@ -42,6 +45,7 @@ export const ThreadPane = ({
         threads={threads}
         threadsLoaded={threadsLoaded}
         threadsError={threadsError}
+        headerActions={headerActions}
       />
     );
   }
@@ -65,12 +69,14 @@ const ThreadView = ({
   threads,
   threadsLoaded,
   threadsError,
+  headerActions,
 }: {
   project: Project;
   thread: Thread;
   threads: readonly Thread[];
   threadsLoaded: boolean;
   threadsError: string | null;
+  headerActions?: React.ReactNode;
 }) => {
   const [tab, setTab] = useState<Tab>("transcript");
   useMarkRead(thread);
@@ -90,10 +96,10 @@ const ThreadView = ({
       data-status={thread.status}
       className="flex min-h-0 flex-1 flex-col"
     >
-      <ThreadHeader project={project} thread={thread} />
+      <ThreadHeader project={project} thread={thread} actions={headerActions} />
       {thread.repoId ? (
         <>
-          <div className="mt-1.5 flex items-end gap-5 border-b border-border px-6">
+          <div className="mt-1.5 flex flex-wrap items-end gap-x-5 border-b border-border px-6">
             <nav aria-label="Thread" className="flex items-end gap-5">
               <TabButton
                 active={tab === "transcript"}
@@ -119,7 +125,7 @@ const ThreadView = ({
               </TabButton>
             </nav>
             <span className="flex-1" />
-            <div className="flex h-9 items-center">
+            <div className="flex min-h-9 max-w-full items-center py-0.5">
               <PullRequestBar thread={thread} controls={pullRequest} />
             </div>
           </div>

@@ -1,6 +1,6 @@
 # The Overview and the thread pane in the dashboard
 
-A project's Threads tab is its Overview: every thread grouped by what it needs from the person. Choosing a thread opens the thread pane at `/projects/:id/threads/:threadId`: its transcript, the question it waits on, the box to steer it, its pull request, and the files it changed. The code is in `apps/dashboard/src/projects/` (`ThreadOverview.tsx`, `selectors.ts`) and `apps/dashboard/src/projects/thread/`. The wire types (`Thread`, `Message`, `MessageDelta`, `ThreadActivity`) are in `@aop/common`; the routes are in [Threads and git](../THREADS.md) and [Run scheduling](../SCHEDULING.md).
+The threads panel beside a project's chat opens on the Overview: every thread grouped by what it needs from the person. Choosing a thread replaces the Overview in the panel with the thread pane, at `/projects/:id/threads/:threadId`: its transcript, the question it waits on, the box to steer it, its pull request, and the files it changed. The code is in `apps/dashboard/src/projects/` (`ThreadOverview.tsx`, `selectors.ts`) and `apps/dashboard/src/projects/thread/`. The wire types (`Thread`, `Message`, `MessageDelta`, `ThreadActivity`) are in `@aop/common`; the routes are in [Threads and git](../THREADS.md) and [Run scheduling](../SCHEDULING.md).
 
 ## The Overview
 
@@ -41,7 +41,7 @@ While a turn runs, its text arrives as `delta` frames and shows typed out in the
 - **Steering.** The composer sends `POST /api/threads/:id/messages`: queued while the thread works, a new turn while it is idle, a reopen once it is resolved. A thread in `landing` takes no message, and neither does a paused or archived project; the box says why.
 - **Stop.** While a turn runs, waits for a slot or waits out a rate limit, the composer has a Stop button, and Escape in the box does the same.
 - **Resume.** A rate-limited thread shows when it resumes by itself, counted down, and Resume now (`POST /api/threads/:id/resume`). The same button is on its card in the Overview and in the coordinator chat.
-- **Resolve and Delete** are in the header menu. Resolve is refused by the host while a turn runs or a merge is landing, so the item is disabled for those statuses. Delete asks first, since it removes the thread with its worktree and branch.
+- **Resolve and Delete**: a check button in the header resolves, and the header menu has both. Resolve is refused by the host while a turn runs or a merge is landing, so the item is disabled for those statuses. Delete asks first, since it removes the thread with its worktree and branch.
 
 ## The pull request bar
 

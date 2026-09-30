@@ -5,6 +5,7 @@ import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { openNewProjectDialog } from "../shell/dialog-store";
 import { Link, projectPath } from "../shell/router";
+import { ShellNav } from "../shell/ShellNav";
 import { ProjectMenu } from "./ProjectMenu";
 import { useProjectsState } from "./ProjectsProvider";
 import { ProjectTile } from "./ProjectTile";
@@ -40,7 +41,10 @@ export const ProjectsIndex = () => {
 
   return (
     <div data-testid="projects-index" className="flex h-full flex-col overflow-y-auto">
-      <header className="flex items-center gap-4 px-6 pt-6 pb-4">
+      <div className="flex h-12 shrink-0 items-center px-2">
+        <ShellNav />
+      </div>
+      <header className="flex items-center gap-4 px-6 pt-2 pb-4">
         <div className="min-w-0 flex-1">
           <h1 className="text-[20px] font-semibold text-text">Projects</h1>
           {total > 0 ? (

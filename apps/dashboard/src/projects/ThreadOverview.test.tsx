@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Thread, ThreadStatus } from "@aop/common";
+import { useEffect } from "react";
 import { setupDashboardDom } from "../test/setup-dom";
 import type { ProjectEntry } from "./projects-state";
 import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "./test-utils";
@@ -8,10 +9,31 @@ setupDashboardDom();
 
 const { cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
 const { ThreadOverview } = await import("./ThreadOverview");
+const { useOverviewFilters } = await import("./layout/use-overview-filters");
 const { ProjectsProvider } = await import("./ProjectsProvider");
 
 afterEach(cleanup);
 beforeEach(() => window.history.pushState({}, "", "/"));
+
+// The overview as the panel holds it: its search box open, and the filters it is handed.
+const NO_FILTER: ThreadStatus[] = [];
+const Overview = ({
+  entry,
+  hide = NO_FILTER,
+  onNewThread = () => {},
+}: {
+  entry: ProjectEntry;
+  hide?: ThreadStatus[];
+  onNewThread?: () => void;
+}) => {
+  const filters = useOverviewFilters();
+  const { toggleSearch, toggleStatus } = filters;
+  useEffect(() => {
+    toggleSearch();
+    for (const status of hide) toggleStatus(status);
+  }, [toggleSearch, toggleStatus, hide]);
+  return <ThreadOverview entry={entry} filters={filters} onNewThread={onNewThread} />;
+};
 
 const project = makeProject({ id: "p1" });
 const entryOf = (threads: Thread[], overrides: Partial<ProjectEntry> = {}) =>
@@ -45,7 +67,7 @@ const counter = (name: string) =>
 
 describe("the groups", () => {
   test("come in the order a person should look at them, whatever order the threads arrive in", () => {
-    render(<ThreadOverview entry={entryOf(onePerStatus())} />);
+    render(<Overview entry={entryOf(onePerStatus())} />);
 
     expect(groups().map((group) => group.getAttribute("data-status"))).toEqual([
       "waiting-on-you",
@@ -61,7 +83,7 @@ describe("the groups", () => {
 
   test("a status with no thread has no group", () => {
     render(
-      <ThreadOverview
+      <Overview
         entry={entryOf([
           makeThread({ id: "a", status: "working" }),
           makeThread({ id: "b", status: "idle" }),
@@ -74,7 +96,7 @@ describe("the groups", () => {
 
   test("each group counts its threads and the newest activity leads", () => {
     render(
-      <ThreadOverview
+      <Overview
         entry={entryOf([
           makeThread({
             id: "old",
@@ -101,9 +123,7 @@ describe("the groups", () => {
 
   test("every card opens its thread", () => {
     render(
-      <ThreadOverview
-        entry={entryOf([makeThread({ id: "t 1", projectId: "p1", title: "Fix it" })])}
-      />,
+      <Overview entry={entryOf([makeThread({ id: "t 1", projectId: "p1", title: "Fix it" })])} />,
     );
 
     const link = screen.getByTestId("thread-card-link") as HTMLAnchorElement;
@@ -115,7 +135,7 @@ describe("the groups", () => {
 
 describe("folding", () => {
   test("resolved work starts folded away and opens when asked for; the rest starts open", () => {
-    render(<ThreadOverview entry={entryOf(onePerStatus())} />);
+    render(<Overview entry={entryOf(onePerStatus())} />);
 
     const resolved = groupOf("resolved");
     expect(resolved.getAttribute("data-open")).toBe("false");
@@ -131,7 +151,7 @@ describe("folding", () => {
   });
 
   test("an open group folds and opens again", () => {
-    render(<ThreadOverview entry={entryOf(onePerStatus())} />);
+    render(<Overview entry={entryOf(onePerStatus())} />);
 
     fireEvent.click(within(groupOf("idle")).getByTestId("thread-group-toggle"));
     expect(groupOf("idle").getAttribute("data-open")).toBe("false");
@@ -149,7 +169,7 @@ describe("search", () => {
     fireEvent.change(screen.getByTestId("thread-search"), { target: { value: query } });
 
   test("filters the threads, opens every group so a match is never hidden, and says how many match", () => {
-    render(<ThreadOverview entry={entryOf(onePerStatus())} />);
+    render(<Overview entry={entryOf(onePerStatus())} />);
 
     search("resolved");
 
@@ -160,7 +180,7 @@ describe("search", () => {
   });
 
   test("clearing the search brings back the groups as they were", () => {
-    render(<ThreadOverview entry={entryOf(onePerStatus())} />);
+    render(<Overview entry={entryOf(onePerStatus())} />);
 
     search("resolved");
     search("");
@@ -171,13 +191,52 @@ describe("search", () => {
   });
 
   test("says when nothing matches and draws no group", () => {
-    render(<ThreadOverview entry={entryOf(onePerStatus())} />);
+    render(<Overview entry={entryOf(onePerStatus())} />);
 
     search("zzz");
 
     expect(screen.getByTestId("threads-no-match").textContent).toContain("zzz");
     expect(screen.queryByTestId("thread-group")).toBeNull();
     expect(screen.queryByTestId("thread-groups")).toBeNull();
+  });
+});
+
+describe("the status filter", () => {
+  const OFF: ThreadStatus[] = ["working", "idle"];
+  const ONLY_WORKING: ThreadStatus[] = ["working"];
+
+  test("a status switched off leaves the overview, and the count says how many are shown", () => {
+    render(<Overview entry={entryOf(onePerStatus())} hide={OFF} />);
+
+    expect(groups().map((group) => group.getAttribute("data-status"))).not.toContain("working");
+    expect(groups().map((group) => group.getAttribute("data-status"))).not.toContain("idle");
+    expect(screen.getByTestId("thread-count").textContent).toBe("6 of 8");
+  });
+
+  test("a filtered overview opens every group, and Clear brings everything back", () => {
+    render(<Overview entry={entryOf(onePerStatus())} hide={OFF} />);
+
+    expect(groupOf("resolved").getAttribute("data-open")).toBe("true");
+    fireEvent.click(screen.getByTestId("thread-filters-clear"));
+    expect(groups()).toHaveLength(8);
+    expect(screen.getByTestId("thread-count").textContent).toBe("8 threads");
+  });
+
+  test("when the filter leaves nothing it says so", () => {
+    render(<Overview entry={entryOf([makeThread({ status: "working" })])} hide={ONLY_WORKING} />);
+
+    expect(screen.getByTestId("threads-no-match").textContent).toBe("No threads match the filter.");
+  });
+});
+
+describe("the greeting", () => {
+  test("says how many threads wait on the person", () => {
+    const { rerender } = render(<Overview entry={entryOf(onePerStatus())} />);
+    expect(screen.getByTestId("overview-greeting").textContent).toBe("Welcome back.");
+    expect(screen.getByTestId("project-attention").textContent).toBe("1 thread is waiting on you.");
+
+    rerender(<Overview entry={entryOf([makeThread({ status: "working" })])} />);
+    expect(screen.getByTestId("project-attention").textContent).toBe("Nothing is waiting on you.");
   });
 });
 
@@ -207,7 +266,7 @@ describe("counters", () => {
   ];
 
   test("count what needs the person, what runs, what waits for review, open pull requests and what is done", () => {
-    render(<ThreadOverview entry={entryOf(threads())} />);
+    render(<Overview entry={entryOf(threads())} />);
 
     const values = Object.fromEntries(
       ["waiting", "running", "readyForReview", "openPullRequests", "resolved"].map((name) => [
@@ -229,11 +288,11 @@ describe("counters", () => {
   });
 
   test("follow the threads as the stream changes them", () => {
-    const { rerender } = render(<ThreadOverview entry={entryOf(threads())} />);
+    const { rerender } = render(<Overview entry={entryOf(threads())} />);
     expect(counter("waiting").getAttribute("data-value")).toBe("2");
 
     rerender(
-      <ThreadOverview
+      <Overview
         entry={entryOf(
           threads().map((thread) =>
             thread.id === "q1" ? makeThread({ id: "q1", status: "working" }) : thread,
@@ -247,7 +306,7 @@ describe("counters", () => {
   });
 
   test("count the project's threads, not only the ones a search shows", () => {
-    render(<ThreadOverview entry={entryOf(threads())} />);
+    render(<Overview entry={entryOf(threads())} />);
 
     fireEvent.change(screen.getByTestId("thread-search"), {
       target: { value: "nothing like this" },
@@ -259,7 +318,7 @@ describe("counters", () => {
 
 describe("before there is anything to group", () => {
   test("says it is loading while the threads are fetched", () => {
-    render(<ThreadOverview entry={entryOf([], { threadsLoaded: false })} />);
+    render(<Overview entry={entryOf([], { threadsLoaded: false })} />);
 
     expect(screen.getByTestId("threads-loading")).toBeTruthy();
     expect(screen.queryByTestId("threads-error")).toBeNull();
@@ -271,7 +330,7 @@ describe("before there is anything to group", () => {
     const stub = stubLiveProjects(makeState([entry]));
     render(
       <ProjectsProvider live={stub.live}>
-        <ThreadOverview entry={entry} />
+        <Overview entry={entry} />
       </ProjectsProvider>,
     );
 
@@ -287,20 +346,19 @@ describe("before there is anything to group", () => {
   });
 
   test("an error left from an earlier fetch does not hide threads that have loaded", () => {
-    render(
-      <ThreadOverview entry={entryOf(onePerStatus(), { threadsError: "Request failed (500)" })} />,
-    );
+    render(<Overview entry={entryOf(onePerStatus(), { threadsError: "Request failed (500)" })} />);
 
     expect(screen.getByTestId("thread-overview")).toBeTruthy();
     expect(screen.queryByTestId("threads-error")).toBeNull();
   });
 
-  test("a project with no threads points at the coordinator", () => {
-    render(<ThreadOverview entry={entryOf([])} />);
+  test("a project with no threads sends the person to the coordinator's composer", () => {
+    const onNewThread = mock();
+    render(<Overview entry={entryOf([])} onNewThread={onNewThread} />);
 
     expect(screen.getByTestId("threads-empty")).toBeTruthy();
     expect(screen.queryByTestId("thread-groups")).toBeNull();
     fireEvent.click(screen.getByTestId("threads-empty-chat"));
-    expect(window.location.pathname).toBe("/projects/p1/chat");
+    expect(onNewThread).toHaveBeenCalledTimes(1);
   });
 });

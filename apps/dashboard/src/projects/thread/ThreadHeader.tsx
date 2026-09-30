@@ -1,12 +1,14 @@
 import type { Project, Thread, ThreadStatus } from "@aop/common";
 import {
   CheckCheckIcon,
-  ChevronLeftIcon,
+  CheckCircle2Icon,
+  ChevronRightIcon,
   EllipsisIcon,
   FolderGit2Icon,
   GitBranchIcon,
   Trash2Icon,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import {
   DropdownMenu,
@@ -16,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import type { RegisteredRepo } from "../../api/client";
+import { IconButton } from "../../components/IconButton";
 import { Link, projectPath } from "../../shell/router";
 import { formatAge, THREAD_STATUS_LABEL } from "../selectors";
 import { ThreadStatusDot } from "../ThreadStatusDot";
@@ -34,10 +37,21 @@ const CANNOT_RESOLVE: ReadonlySet<ThreadStatus> = new Set([
 ]);
 
 /**
- * Who the thread is: a way back, its title, and in one line where it stands, where it works
- * (repository and branch), what runs it, what it has used, and how long ago it moved.
+ * Who the thread is: the breadcrumb back to the overview with its title, the buttons that
+ * resolve it and (from the panel that holds it) expand and close, and in one line where it
+ * stands, where it works (repository and branch), what runs it, what it has used, and how
+ * long ago it moved.
  */
-export const ThreadHeader = ({ project, thread }: { project: Project; thread: Thread }) => {
+export const ThreadHeader = ({
+  project,
+  thread,
+  actions,
+}: {
+  project: Project;
+  thread: Thread;
+  /** Buttons of whatever holds the thread, between the thread's own and its menu. */
+  actions?: ReactNode;
+}) => {
   const repos = useRegisteredRepos();
   const now = useNow();
   const blocked = thread.status === "waiting-on-you";
@@ -48,14 +62,11 @@ export const ThreadHeader = ({ project, thread }: { project: Project; thread: Th
         <Link
           to={projectPath(project.id)}
           data-testid="thread-back"
-          className="-ml-1 inline-flex shrink-0 items-center gap-0.5 rounded-row px-1 text-[13px] text-text-subtle transition-colors duration-[120ms] hover:text-text"
+          className="-ml-1 inline-flex shrink-0 items-center rounded-row px-1 text-[13px] text-text-subtle transition-colors duration-[120ms] hover:text-text"
         >
-          <ChevronLeftIcon aria-hidden="true" className="size-3.5" />
           Threads
         </Link>
-        <span aria-hidden="true" className="text-text-subtle">
-          /
-        </span>
+        <ChevronRightIcon aria-hidden="true" className="size-3.5 shrink-0 text-text-subtle" />
         <h2
           data-testid="thread-title"
           title={thread.title}
@@ -63,6 +74,15 @@ export const ThreadHeader = ({ project, thread }: { project: Project; thread: Th
         >
           {thread.title}
         </h2>
+        <IconButton
+          testId="thread-resolve-button"
+          label="Mark resolved"
+          disabled={CANNOT_RESOLVE.has(thread.status)}
+          onClick={() => void threadActions.resolve(thread)}
+        >
+          <CheckCircle2Icon />
+        </IconButton>
+        {actions}
         <ThreadMenu thread={thread} />
       </div>
       <div

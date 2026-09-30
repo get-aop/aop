@@ -113,15 +113,6 @@ export const createProjectChat = (deps: ProjectChatDeps): ProjectChat => {
   };
 };
 
-/** Replies this device has not looked at yet; a thread's report is an event, not something to open the chat for. */
-export const unseenCount = ({ messages, seenAt }: ChatModel): number =>
-  seenAt === null
-    ? 0
-    : messages.filter(
-        (message) =>
-          message.role === "assistant" && Date.parse(message.createdAt) > Date.parse(seenAt),
-      ).length;
-
 const latestInstant = (messages: readonly Message[]): string | null =>
   messages.reduce<string | null>(
     (latest, { createdAt }) =>

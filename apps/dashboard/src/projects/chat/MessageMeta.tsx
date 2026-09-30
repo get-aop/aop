@@ -18,7 +18,7 @@ export const MessageMeta = ({
   <div
     data-testid="message-meta"
     className={cn(
-      "chat-message-meta flex w-full items-center gap-2 text-xs tabular-nums opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100",
+      "chat-message-meta flex w-full items-center gap-2 text-xs tabular-nums opacity-60 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100",
       align === "end" ? "justify-end pe-1" : "justify-start",
     )}
   >

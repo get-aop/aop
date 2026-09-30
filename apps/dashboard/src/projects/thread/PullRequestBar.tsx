@@ -49,7 +49,7 @@ export const PullRequestBar = ({
       data-testid="pr-bar"
       data-state={pullRequest?.state ?? "none"}
       aria-label="Pull request"
-      className="flex items-center gap-2"
+      className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1"
     >
       <StateSummary thread={thread} />
       {landing ? null : <Actions thread={thread} controls={controls} disabled={disabled} />}
@@ -57,7 +57,7 @@ export const PullRequestBar = ({
   );
 };
 
-const SUMMARY_CLASS = "flex items-center gap-1.5 text-[12.5px] text-text-muted";
+const SUMMARY_CLASS = "flex items-center gap-1.5 whitespace-nowrap text-[12.5px] text-text-muted";
 
 const StateSummary = ({ thread }: { thread: Thread }) => {
   const pullRequest = pullRequestOf(thread);

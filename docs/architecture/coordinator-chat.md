@@ -1,6 +1,6 @@
 # The coordinator chat in the dashboard
 
-The Coordinator tab of a project is the conversation with its coordinator: what was said, the reply being written, the cards of the threads it started, and a box to say more. The code is in `apps/dashboard/src/projects/chat/`. The wire types (`Message`, `MessageBlock`, `MessageDelta`, `Resync`) are in `@aop/common`, and the stream is described in [Project event stream](./project-event-stream.md).
+The coordinator chat, the middle pane of a project's screen, is the conversation with its coordinator: what was said, the reply being written, the cards of the threads it started, and a box to say more. The code is in `apps/dashboard/src/projects/chat/`. The wire types (`Message`, `MessageBlock`, `MessageDelta`, `Resync`) are in `@aop/common`, and the stream is described in [Project event stream](./project-event-stream.md).
 
 ## Three sources, one rule
 
@@ -14,7 +14,7 @@ Every message is applied by its id (`chat-state.ts`). Applying one the page alre
 
 ## Staying complete
 
-`useProjectChat` starts when a project opens and runs until it closes, whichever tab is showing. It listens to the stream first and fetches after, so a message stored between the two is either in the fetch or on the stream.
+`useProjectChat` starts when a project opens and runs until it closes, whether or not the pane is on screen. It listens to the stream first and fetches after, so a message stored between the two is either in the fetch or on the stream.
 
 - **A fetch in flight.** Messages, and updates to them, that arrive while it runs are applied at once and again on top of its result, so a fetch that was read before them cannot roll them back. When a newer fetch starts, an older one that is still running is dropped.
 - **Resync.** A `resync` event means the log cannot catch this client up, so the chat fetches again, starting after the event. The result replaces what the page held: a message the host no longer has disappears, and the ones that arrived meanwhile are put back on top.
@@ -72,7 +72,7 @@ The coordinator's `propose_threads` tool attaches a `suggested-threads` block to
 
 ## What this device has seen
 
-The host keeps no read state for the chat, so the page does. The first time a device loads a project, everything already there counts as seen. After that the newest message it has looked at is kept in local storage, and the Coordinator tab shows how many replies came after it while another tab is open. Opening the chat draws a "New" line above the first reply that came since and keeps it there while the chat stays open; a message is looked at only while the page is visible.
+The host keeps no read state for the chat, so the page does. The first time a device loads a project, everything already there counts as seen. After that the newest message it has looked at is kept in local storage, and opening the chat draws a "New" line above the first reply that came since and keeps it there while the chat stays open; a message is looked at only while the page is visible and the chat is on screen (not hidden by an expanded panel or, on a phone, by the panel).
 
 ## Paused and archived projects
 

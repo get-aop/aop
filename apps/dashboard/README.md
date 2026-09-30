@@ -24,9 +24,9 @@ Dev expects `AOP_LOCAL_SERVER_URL` pointing at the API (local-server sets CORS f
 | Path | Screen | Purpose |
 | --- | --- | --- |
 | `/` | `ProjectsIndex` | Every project as a card, search, New project |
-| `/projects/:id` | `ThreadOverview` | The project home: counters, then its threads grouped by status (questions first, resolved folded), search |
-| `/projects/:id/chat` | `CoordinatorChatPane` | The coordinator chat (see [The coordinator chat](#the-coordinator-chat)) |
-| `/projects/:id/threads/:threadId` | `ThreadPane` | One thread: transcript, its question, steering, pull request, changes (see [The thread pane](#the-thread-pane)) |
+| `/projects/:id` | `ProjectLayout` | The project screen in three panes (see [The project screen](#the-project-screen)): the coordinator chat (`CoordinatorChatPane`, see [The coordinator chat](#the-coordinator-chat)) in the middle and the threads panel at the right, on the overview (`ThreadOverview`: a greeting, then its threads grouped by status, questions first, resolved folded, with search and filter) |
+| `/projects/:id/threads/:threadId` | `ProjectLayout` | The same screen with one thread in the panel (`ThreadPane`: transcript, its question, steering, pull request, changes; see [The thread pane](#the-thread-pane)) |
+| `/projects/:id/chat` | none | The chat's old address; rewritten to `/projects/:id` |
 | `/projects/:id/settings` | `ProjectSettingsPane` | Project settings, memory, usage |
 | any other path | none | Rewritten to `/` |
 
@@ -52,6 +52,12 @@ The host answers `401 UNAUTHENTICATED` to a browser it does not know. `src/auth/
 
 `src/projects/chat/` is the conversation with a project's coordinator. `docs/architecture/coordinator-chat.md` describes how it stays correct across reconnects, resyncs and reloads; in short, `useProjectChat` runs for as long as a project is open, keeps the messages in a pure state applied by message id (`chat-state.ts`), and gets them from a fetch of `GET /api/projects/:id/messages`, from the stream's entries and live-text deltas (`useLiveProjects().subscribeEvents`), and from the message a send returns. Whatever a reply is made of is drawn by `MessageBlocks`: prose with thread and pull request chips, the routing receipt, thread cards that follow their thread, suggested threads (the host records their Start and Skip answers and republishes the message as `message.updated`), and forwarded quotes. `Composer`, `MessageList` and `MessageBlocks` do not know the coordinator, so the thread pane reuses them.
 
+## The project screen
+
+`src/projects/layout/` lays a project out in three panes: the projects sidebar (the shell's), the coordinator chat, which is always mounted, and a threads panel. The panel shows the overview or, when the address names a thread, that thread under a breadcrumb; closing the panel on a thread takes the thread off the address. The top bar (`ProjectTopBar`, with the sidebar toggle and browser back/forward from `shell/ShellNav`) holds the panel toggle, which has a dot while a thread waits on the person.
+
+How the panes share the room depends on the width of the area right of the sidebar, measured with a `ResizeObserver` (`panel-layout.ts`): from 900px the panel sits beside the chat with a draggable divider; from 600px it lies over the chat; below that only one pane shows at a time, switched from the top bar. Only the wide layout uses the remembered open state. This browser remembers the panel's open state and width in `localStorage` under `aop:threads-panel:v1`; a blocked storage only means nothing is remembered. Expanding the panel hides the chat without unmounting it, so the chat keeps its stream, scroll place and draft.
+
 ## The thread pane
 
 `src/projects/thread/` is one thread at `/projects/:id/threads/:threadId`. `docs/architecture/thread-pane.md` describes it; in short, the thread comes from the project's live state, its transcript from `chat/conversation.ts` (the coordinator chat's engine, scoped to the thread id), the tool calls of each turn from `GET /api/threads/:id/activity`, and the changed files from `GET /api/threads/:id/diff`. The pane holds no state the host owns: Stop, Resume, Resolve, Delete, answering and merging call the host (`src/projects/thread-actions.ts`, `thread/use-pull-request.ts`), and the page follows the entry the host publishes. The diff view (`thread/changes/`) takes line comments that queue in the browser and go to the thread as one message.
@@ -61,6 +67,7 @@ The host answers `401 UNAUTHENTICATED` to a browser it does not know. `src/auth/
 ```text
 src/
   projects/     the domain: live state, stream, sidebar rows, the Overview, New project dialog
+  projects/layout/  the project screen's panes: top-level layout, threads panel, divider, remembered state
   projects/chat/  the coordinator chat: state, messages and blocks, composer
   projects/thread/  the thread pane: header, transcript, answer card, pull request bar
   projects/thread/changes/  the thread's changed files: diff view and review comments

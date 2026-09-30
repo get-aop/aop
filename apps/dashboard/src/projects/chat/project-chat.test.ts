@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Message } from "@aop/common";
 import type { ChatApi } from "./chat-api";
 import { FETCH_RETRY_MS } from "./conversation";
-import { createProjectChat, unseenCount } from "./project-chat";
+import { createProjectChat } from "./project-chat";
 import {
   at,
   createFakeEvents,
@@ -297,15 +297,15 @@ describe("what this device has seen", () => {
     await flush();
 
     expect(seen.saved.prj_1).toBe(at(2));
-    expect(unseenCount(chat.getState())).toBe(0);
 
     fake.entry(3, reply("a2", 5, undefined));
     fake.entry(4, report("r1", 6));
     fake.entry(5, reply("a3", 7));
-    expect(unseenCount(chat.getState())).toBe(2);
+    expect(seen.saved.prj_1).toBe(at(2));
+    expect(chat.getState().seenAt).toBe(at(2));
   });
 
-  test("marking the chat seen clears the count and is kept for the next visit", async () => {
+  test("marking the chat seen is kept for the next visit", async () => {
     const { chat, fake, seen } = setup({ fetches: [Promise.resolve([userMessage("u1", 1)])] });
     chat.start();
     await flush();
@@ -313,28 +313,7 @@ describe("what this device has seen", () => {
 
     chat.markSeen();
 
-    expect(unseenCount(chat.getState())).toBe(0);
+    expect(chat.getState().seenAt).toBe(at(3));
     expect(seen.saved.prj_1).toBe(at(3));
-  });
-
-  test("a project seen on an earlier visit counts what came after", async () => {
-    const { chat } = setup({
-      seen: { prj_1: at(2) },
-      fetches: [Promise.resolve([userMessage("u1", 1), reply("a1", 2), reply("a2", 4)])],
-    });
-    chat.start();
-    await flush();
-
-    expect(unseenCount(chat.getState())).toBe(1);
-  });
-
-  test("an empty chat seen for the first time counts the first reply", async () => {
-    const { chat, fake } = setup({ fetches: [Promise.resolve([])] });
-    chat.start();
-    await flush();
-
-    fake.entry(1, reply("a1", 1));
-
-    expect(unseenCount(chat.getState())).toBe(1);
   });
 });

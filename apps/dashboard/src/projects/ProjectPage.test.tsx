@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
-import { at, page, reply } from "./chat/test-utils";
+import { mockEmptyThreadHost, silentChatHost } from "./layout/test-utils";
 import type { ProjectsState } from "./projects-state";
 import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "./test-utils";
-import { hostError, json, mockHost } from "./thread/test-utils";
 
 setupDashboardDom();
 
@@ -11,36 +10,18 @@ const { act, cleanup, fireEvent, render, screen, within } = await import("@testi
 const { ProjectsProvider } = await import("./ProjectsProvider");
 const { ProjectPage } = await import("./ProjectPage");
 const { ChatApiProvider } = await import("./chat/chat-api");
+const { SidebarProvider } = await import("@/ui/sidebar");
 type Route = import("../shell/router").Route;
-type ChatApi = import("./chat/chat-api").ChatApi;
 
-// The chat asks the host for its messages when a project opens; these tests are about the
-// page, so the host never answers and the chat stays loading.
-const silentHost: ChatApi = {
-  listMessages: () => new Promise(() => {}),
-  sendMessage: () => new Promise(() => {}),
-  startSuggestion: () => new Promise(() => {}),
-  skipSuggestion: () => new Promise(() => {}),
-  unskipSuggestion: () => new Promise(() => {}),
-};
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
 
-let host: ReturnType<typeof mockHost>;
+let host: ReturnType<typeof mockEmptyThreadHost>;
 
 // A thread's pane asks the host for what it shows; these tests are about the page around it.
 beforeEach(() => {
   window.localStorage.clear();
   window.history.pushState({}, "", "/");
-  host = mockHost();
-  host.respondWith(({ url }) => {
-    if (url.endsWith("/messages")) return json({ messages: [] });
-    if (url.endsWith("/activity")) return json({ turns: [] });
-    if (url.endsWith("/status")) return json({ repos: [] });
-    if (url.endsWith("/diff")) {
-      return json({ defaultBranch: "main", files: [], perFileLineCap: 2000, summaryOnly: true });
-    }
-    return hostError(404, "NOT_FOUND", "not found");
-  });
+  host = mockEmptyThreadHost();
 });
 afterEach(() => {
   cleanup();
@@ -50,11 +31,13 @@ afterEach(() => {
 const renderPage = (state: ProjectsState, route: ProjectRoute) => {
   const stub = stubLiveProjects(state);
   render(
-    <ChatApiProvider value={silentHost}>
-      <ProjectsProvider live={stub.live}>
-        <ProjectPage route={route} />
-      </ProjectsProvider>
-    </ChatApiProvider>,
+    <SidebarProvider>
+      <ChatApiProvider value={silentChatHost}>
+        <ProjectsProvider live={stub.live}>
+          <ProjectPage route={route} />
+        </ProjectsProvider>
+      </ChatApiProvider>
+    </SidebarProvider>,
   );
   return stub;
 };
@@ -144,6 +127,7 @@ describe("project home", () => {
 
   test("search narrows the threads by title, status line or question, and says when nothing matches", () => {
     renderPage(makeState([makeEntry(project, threads)]), home);
+    fireEvent.click(screen.getByTestId("panel-search"));
     const search = screen.getByTestId("thread-search");
 
     fireEvent.change(search, { target: { value: "bisect" } });
@@ -158,13 +142,15 @@ describe("project home", () => {
     expect(screen.queryByTestId("thread-groups")).toBeNull();
   });
 
-  test("a project with no threads points at the coordinator", () => {
+  test("a project with no threads sends the person to the coordinator's composer", async () => {
     renderPage(makeState([makeEntry(project, [])]), home);
 
     expect(screen.getByTestId("threads-empty")).toBeTruthy();
     expect(screen.getByTestId("project-attention").textContent).toBe("Nothing is waiting on you.");
     fireEvent.click(screen.getByTestId("threads-empty-chat"));
-    expect(window.location.pathname).toBe("/projects/p1/chat");
+    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+    expect(document.activeElement).toBe(screen.getByTestId("composer-input"));
+    expect(window.location.pathname).toBe("/");
   });
 
   test("while the threads load, it says so", () => {
@@ -196,26 +182,29 @@ describe("project home", () => {
 describe("project screens", () => {
   const state = () => makeState([makeEntry(project, threads)]);
 
-  test("the tabs move between the threads and the coordinator, and mark where you are", () => {
-    renderPage(state(), { name: "coordinator", projectId: "p1" });
+  test("the project route shows the chat and the panel on its overview, side by side", () => {
+    renderPage(state(), home);
 
-    expect(screen.getByTestId("project-tab-coordinator").getAttribute("aria-current")).toBe("page");
-    expect(screen.getByTestId("project-tab-threads").getAttribute("aria-current")).toBeNull();
     expect(screen.getByTestId("coordinator-chat-pane")).toBeTruthy();
-    expect(screen.queryByTestId("thread-groups")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("project-tab-threads"));
-    expect(window.location.pathname).toBe("/projects/p1");
-    fireEvent.click(screen.getByTestId("project-tab-settings"));
-    expect(window.location.pathname).toBe("/projects/p1/settings");
+    expect(screen.getByTestId("threads-panel")).toBeTruthy();
+    expect(screen.getByTestId("panel-tab-threads").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("thread-groups")).toBeTruthy();
+    expect(screen.queryByTestId("thread-pane")).toBeNull();
+    expect(screen.queryByTestId("project-tab-coordinator")).toBeNull();
   });
 
-  test("a thread route shows that thread's pane under the Threads tab", async () => {
+  test("a thread route keeps the chat and puts that thread in the panel, under a breadcrumb", async () => {
     renderPage(state(), { name: "thread", projectId: "p1", threadId: "blocked" });
     await act(async () => {});
 
+    expect(screen.getByTestId("coordinator-chat-pane")).toBeTruthy();
     expect(screen.getByTestId("thread-pane").textContent).toContain("Pick a database");
-    expect(screen.getByTestId("project-tab-threads").getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByTestId("thread-groups")).toBeNull();
+    expect(screen.getByTestId("thread-back").textContent).toBe("Threads");
+    expect(screen.getByTestId("thread-title").textContent).toBe("Pick a database");
+
+    fireEvent.click(screen.getByTestId("thread-back"));
+    expect(window.location.pathname).toBe("/projects/p1");
   });
 
   test("a thread that does not exist says so", () => {
@@ -223,56 +212,25 @@ describe("project screens", () => {
     expect(screen.getByTestId("thread-not-found")).toBeTruthy();
   });
 
-  test("the settings route shows the settings pane, on the section the address names", () => {
+  test("the settings route shows the settings pane alone, on the section the address names", () => {
     renderPage(state(), { name: "project-settings", projectId: "p1", section: "general" });
     const pane = screen.getByTestId("project-settings-pane");
     expect(pane.getAttribute("data-section")).toBe("general");
     expect((screen.getByTestId("settings-name") as HTMLInputElement).value).toBe("Checkout");
-    expect(screen.getByTestId("project-tab-settings").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("project-settings-link").getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("project-settings-nav-general").getAttribute("aria-current")).toBe(
       "page",
     );
-  });
-});
-
-describe("the coordinator tab", () => {
-  const answered: ChatApi = {
-    ...silentHost,
-    listMessages: async () =>
-      page([
-        { id: "u1", projectId: "p1", threadId: null, createdAt: at(1), role: "user", text: "Hi" },
-        reply("a1", 2),
-        reply("a2", 10),
-      ]),
-  };
-
-  const renderWith = async (route: ProjectRoute, seenAt: string) => {
-    window.localStorage.setItem("aop:coordinator-seen:v1", JSON.stringify({ p1: seenAt }));
-    const stub = stubLiveProjects(makeState([makeEntry(project, threads)]));
-    await act(async () => {
-      render(
-        <ChatApiProvider value={answered}>
-          <ProjectsProvider live={stub.live}>
-            <ProjectPage route={route} />
-          </ProjectsProvider>
-        </ChatApiProvider>,
-      );
-    });
-  };
-
-  test("counts the replies this device has not looked at, while another tab is open", async () => {
-    await renderWith(home, at(2));
-
-    expect(screen.getByTestId("project-tab-coordinator-unseen").textContent).toBe("1");
+    expect(screen.queryByTestId("coordinator-chat-pane")).toBeNull();
+    expect(screen.queryByTestId("panel-toggle")).toBeNull();
   });
 
-  test("shows no count on the tab that is open, and none when everything was seen", async () => {
-    await renderWith({ name: "coordinator", projectId: "p1" }, at(2));
-    expect(screen.queryByTestId("project-tab-coordinator-unseen")).toBeNull();
-    cleanup();
+  test("the settings button in the top bar opens the settings", () => {
+    renderPage(state(), home);
 
-    await renderWith(home, at(10));
-    expect(screen.queryByTestId("project-tab-coordinator-unseen")).toBeNull();
+    fireEvent.click(screen.getByTestId("project-settings-link"));
+
+    expect(window.location.pathname).toBe("/projects/p1/settings");
   });
 });
 
