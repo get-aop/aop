@@ -99,7 +99,7 @@ export class PiCliRuntimeAdapter implements PiRuntimeAdapter {
     const piEnv = buildPiEnv(options.env, options.inactivityTimeoutMs, options.accessMode);
     const spawnEnv = buildSpawnEnv(piEnv);
 
-    const proc = (options.execHost ?? resolveExecHost()).spawn({
+    const proc = resolveExecHost().spawn({
       cmd: this.buildCommand({ ...options, env: piEnv }),
       stdout: options.logFilePath ? { file: options.logFilePath } : "ignore",
       stderr: options.logFilePath ? { file: `${options.logFilePath}.stderr` } : "ignore",

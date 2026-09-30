@@ -61,6 +61,7 @@ describe("runMigrations", () => {
       { version: 5, name: "scheduling" },
       { version: 6, name: "thread-pull-request" },
       { version: 7, name: "pull-request-watch" },
+      { version: 8, name: "remove-exec-hosts" },
     ]);
   });
 
@@ -83,7 +84,7 @@ describe("runMigrations", () => {
       .executeTakeFirstOrThrow();
     expect(saved.value).toBe("be brief");
     const ledger = await db.selectFrom("schema_migrations").select("version").execute();
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
   test("refuses a database written by a newer build", async () => {

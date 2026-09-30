@@ -1,4 +1,4 @@
-import type { ExecHost, OutputHandler } from "@aop/infra";
+import type { OutputHandler } from "@aop/infra";
 import type { RunUsage } from "./logs/usage";
 import type { RunMode } from "./plan-mode";
 
@@ -78,11 +78,6 @@ export interface RunOptions {
    * support MCP should pass this through their spawn config when set.
    */
   mcpServerUrl?: string;
-  /**
-   * When set, spawn through this host instead of resolveExecHost().
-   * Used for SSH remote execution hosts.
-   */
-  execHost?: ExecHost;
 }
 
 export interface RunResult {

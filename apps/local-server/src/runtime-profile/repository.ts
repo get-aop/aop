@@ -64,7 +64,6 @@ const toInsertRecord = (input: RuntimeProfileInput) => ({
   model: input.model,
   reasoning: input.reasoning,
   fast_mode: input.fastMode,
-  exec_host_id: input.execHostId?.trim() ? input.execHostId : null,
 });
 
 const toUpdateRecord = (patch: RuntimeProfilePatch) => ({
@@ -74,10 +73,6 @@ const toUpdateRecord = (patch: RuntimeProfilePatch) => ({
   ...(patch.model === undefined ? {} : { model: patch.model }),
   ...(patch.reasoning === undefined ? {} : { reasoning: patch.reasoning }),
   ...(patch.fastMode === undefined ? {} : { fast_mode: patch.fastMode }),
-  // Empty string clears the binding; omit when the field is not in the patch.
-  ...("execHostId" in patch
-    ? { exec_host_id: patch.execHostId?.trim() ? patch.execHostId : null }
-    : {}),
 });
 
 const toRuntimeProfile = (record: RuntimeProfileRecord): RuntimeProfile => ({
@@ -88,7 +83,6 @@ const toRuntimeProfile = (record: RuntimeProfileRecord): RuntimeProfile => ({
   model: record.model,
   reasoning: record.reasoning as RuntimeProfile["reasoning"],
   fastMode: Boolean(record.fast_mode),
-  ...(record.exec_host_id ? { execHostId: record.exec_host_id } : {}),
   createdAt: record.created_at,
   updatedAt: record.updated_at,
 });

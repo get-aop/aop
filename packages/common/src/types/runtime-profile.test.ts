@@ -54,23 +54,4 @@ describe("runtime profiles", () => {
     });
     expect(RuntimeProfilePatchSchema.safeParse({}).success).toBe(false);
   });
-
-  test("accepts an optional execHostId", () => {
-    expect(
-      RuntimeProfileInputSchema.parse({
-        ...claudeProfile,
-        command: "claude",
-        fastMode: false,
-        execHostId: "ehost_desktop",
-      }),
-    ).toMatchObject({ execHostId: "ehost_desktop" });
-  });
-
-  test("allows empty execHostId for clearing a host binding", () => {
-    expect(
-      RuntimeProfilePatchSchema.parse({
-        execHostId: "",
-      }),
-    ).toEqual({ execHostId: "" });
-  });
 });

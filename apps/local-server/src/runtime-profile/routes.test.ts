@@ -81,54 +81,6 @@ describe("runtime profile routes", () => {
     });
   });
 
-  test("saves and loads a profile bound to an execution host", async () => {
-    await ctx.settingsRepository.set(
-      "remote_exec_hosts_json",
-      JSON.stringify([
-        {
-          id: "ehost_desktop",
-          name: "Desktop",
-          host: "192.168.1.10",
-          remoteRoot: "/tmp/aop",
-        },
-      ]),
-    );
-
-    const createResponse = await request("/api/runtime-profiles", "POST", {
-      ...claudeProfile,
-      name: "Remote Claude",
-      command: "claude",
-      fastMode: false,
-      execHostId: "ehost_desktop",
-    });
-    expect(createResponse.status).toBe(201);
-    const created: AnyJson = await createResponse.json();
-    expect(created.profile).toMatchObject({
-      name: "Remote Claude",
-      execHostId: "ehost_desktop",
-    });
-
-    const listResponse = await app.request("/api/runtime-profiles");
-    expect(((await listResponse.json()) as AnyJson).profiles[0]).toMatchObject({
-      execHostId: "ehost_desktop",
-    });
-  });
-
-  test("rejects a profile bound to an unknown execution host", async () => {
-    const response = await request("/api/runtime-profiles", "POST", {
-      ...claudeProfile,
-      name: "Missing Host",
-      command: "claude",
-      fastMode: false,
-      execHostId: "ehost_missing",
-    });
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({
-      code: "UNKNOWN_EXEC_HOST",
-      field: "execHostId",
-    });
-  });
-
   test("returns field validation errors and duplicate conflicts", async () => {
     const invalid = await request("/api/runtime-profiles", "POST", {
       ...claudeProfile,

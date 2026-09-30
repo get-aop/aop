@@ -1,32 +1,7 @@
 export { useTestAopHome } from "./aop-paths.test-utils.ts";
 export { aopPaths } from "./aop-paths.ts";
 
-export {
-  commandExistsInvocation,
-  type ExecHost,
-  type ExecHostKind,
-  type ExecHostShellOptions,
-  type ExecHostSpawnSpec,
-  type ExecHostStdio,
-  NativeUnixHost,
-  NativeWindowsHost,
-  resolveExecHost,
-  resolveUnixShell,
-  shellInvocation,
-} from "./exec-host.ts";
-export {
-  type PathMapEntry,
-  remoteScript,
-  SshExecHost,
-  type SshExecHostOptions,
-  type SshHostConfig,
-  type SshSpawnImpl,
-  sanitizeForwardedEnv,
-  shellQuote,
-  sshBaseArgs,
-  sshInvocation,
-  sshTarget,
-} from "./exec-host-ssh.ts";
+export { type ExecHost, resolveExecHost } from "./exec-host.ts";
 export {
   createFileOutputHandler,
   type FileOutputHandlerOptions,
@@ -61,4 +36,3 @@ export {
   isValidTypeId,
   type TypeIdPrefix,
 } from "./typeid.ts";
-export { isWindowsPath, windowsToWsl, wslToWindows } from "./wsl-path.ts";

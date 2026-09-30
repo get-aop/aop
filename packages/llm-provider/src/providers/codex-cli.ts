@@ -58,7 +58,7 @@ export class CodexCliProvider implements LLMProvider {
   async run(options: RunOptions): Promise<RunResult> {
     const spawnEnv = buildSpawnEnv(buildCodexEnv(options.env));
 
-    const proc = (options.execHost ?? resolveExecHost()).spawn({
+    const proc = resolveExecHost().spawn({
       cmd: this.buildCommand(options),
       stdout: options.logFilePath ? { file: options.logFilePath } : "ignore",
       stderr: options.logFilePath ? { file: `${options.logFilePath}.stderr` } : "ignore",

@@ -14,7 +14,6 @@ Shared types, Zod schemas, and constants for AOP apps and packages. Consumers im
 | **Session git** | Branch, diff, and pull request wire types | `src/types/session-git.ts` |
 | **SSE** | `SSEInitEvent`, `SSERepoRemovedEvent`, `SSEDataResetEvent`, `SSEChatUnreadEvent` | `src/types/sse-events.ts` |
 | **Updates** | `AopUpdateStatus`, release-version helpers | `src/types/updates.ts`, `src/version.ts` |
-| **Execution hosts** | `ExecHostConfig` and its schemas | `src/types/exec-host-config.ts` |
 
 ## Scripts
 

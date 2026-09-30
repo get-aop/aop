@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getProviderCapabilities, probeProviderClis } from "./capabilities.ts";
+import { getProviderCapabilities } from "./capabilities.ts";
 
 describe("provider capabilities", () => {
   test("lists Claude Code as the only runtime", async () => {
@@ -58,23 +58,5 @@ describe("provider capabilities", () => {
       versionDetected: false,
       canSpawn: false,
     });
-  });
-
-  test("probes only the CLIs in the catalog", async () => {
-    const probed: string[] = [];
-    const probes = await probeProviderClis({
-      commandExists: async (command) => {
-        probed.push(command);
-        return true;
-      },
-      readVersion: async () => "1.0.0",
-      hasAuth: () => true,
-      canWriteLog: async () => true,
-    });
-
-    expect(probed).toEqual(["claude"]);
-    expect(probes).toEqual([
-      { id: "claude-code", installed: true, version: "1.0.0", authenticated: true },
-    ]);
   });
 });

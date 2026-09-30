@@ -15,11 +15,6 @@ const RuntimeProfileFieldsSchema = z.object({
     .regex(SAFE_CUSTOM_RUNTIME_MODEL_PATTERN, "Model must be a valid provider model identifier"),
   reasoning: z.enum(["low", "medium", "high", "extra-high", "max"]),
   fastMode: z.boolean(),
-  /**
-   * When set, agent CLI and verification run on this SSH execution host.
-   * Empty string clears a previously bound host (PATCH).
-   */
-  execHostId: z.string().trim().optional(),
 });
 
 export const RuntimeProfileInputSchema = RuntimeProfileFieldsSchema.superRefine((profile, ctx) => {

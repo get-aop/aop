@@ -28,7 +28,7 @@ There is no `apps/server` in this tree. Install serves the dashboard from local-
 |-------|-----|
 | `/` | Sessions — rail, thread, composer, right panel, terminal dock |
 | `/tasks/:taskId` | Task detail (logs, plan, specs, PR/CI actions) |
-| `/settings` | General + License, Repositories, Runtimes, Execution hosts, Workflows, About |
+| `/settings` | General, Repositories, Runtimes, Devices, About |
 | legacy paths | `/chat` `/pool` `/workers` `/metrics` `/workflows/:id` redirect to `/` |
 
 ### Local-server domains (vertical slices)

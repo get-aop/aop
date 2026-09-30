@@ -24,7 +24,6 @@ describe("settings/handlers", () => {
       const result = await getAllSettings(ctx);
 
       expect(result.settings).toEqual([
-        { key: "remote_exec_hosts_json", value: "" },
         { key: "chat_global_instructions", value: "" },
         { key: "max_concurrent_runs", value: "4" },
       ]);
@@ -57,14 +56,14 @@ describe("settings/handlers", () => {
     test("saves multiple settings at once", async () => {
       const result = await setAllSettings(ctx, [
         { key: "chat_global_instructions", value: "be concise" },
-        { key: "remote_exec_hosts_json", value: "[]" },
+        { key: "max_concurrent_runs", value: "2" },
       ]);
 
       expect(result.success).toBe(true);
       if (!result.success) return;
       expect(result.settings).toHaveLength(2);
       expect(await ctx.settingsRepository.get("chat_global_instructions")).toBe("be concise");
-      expect(await ctx.settingsRepository.get("remote_exec_hosts_json")).toBe("[]");
+      expect(await ctx.settingsRepository.get("max_concurrent_runs")).toBe("2");
     });
 
     test("rejects the batch without writing when any key is invalid", async () => {
@@ -163,31 +162,6 @@ describe("settings/handlers", () => {
       await setAllSettings(ctx, [{ key: "max_concurrent_runs", value: "2" }], effects);
 
       expect(started).toBe(2);
-    });
-
-    test("stores remote_exec_hosts_json as a plain setting", async () => {
-      const payload = JSON.stringify([
-        {
-          id: "ehost_1",
-          name: "Desktop",
-          host: "192.168.1.10",
-          remoteRoot: "/tmp/aop",
-        },
-      ]);
-      const setResult = await setSetting(ctx, SettingKey.REMOTE_EXEC_HOSTS, payload);
-      expect(setResult).toEqual({
-        success: true,
-        key: SettingKey.REMOTE_EXEC_HOSTS,
-        value: payload,
-      });
-      expect(await ctx.settingsRepository.get(SettingKey.REMOTE_EXEC_HOSTS)).toBe(payload);
-
-      const getResult = await getSetting(ctx, SettingKey.REMOTE_EXEC_HOSTS);
-      expect(getResult).toEqual({
-        success: true,
-        key: SettingKey.REMOTE_EXEC_HOSTS,
-        value: payload,
-      });
     });
   });
 });

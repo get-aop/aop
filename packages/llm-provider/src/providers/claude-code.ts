@@ -224,7 +224,7 @@ export class ClaudeCodeProvider implements LLMProvider {
   private async runWithFileOutput(options: RunOptions, logFilePath: string): Promise<RunResult> {
     const spawnEnv = buildClaudeCodeSpawnEnv(options.env);
 
-    const proc = (options.execHost ?? resolveExecHost()).spawn({
+    const proc = resolveExecHost().spawn({
       cmd: this.buildCommand(options),
       stdout: { file: logFilePath },
       stderr: "ignore",
@@ -283,7 +283,7 @@ export class ClaudeCodeProvider implements LLMProvider {
   private async runWithPipeOutput(options: RunOptions): Promise<RunResult> {
     const spawnEnv = buildClaudeCodeSpawnEnv(options.env);
 
-    const proc = (options.execHost ?? resolveExecHost()).spawn({
+    const proc = resolveExecHost().spawn({
       cmd: this.buildCommand(options),
       stdout: "pipe",
       stderr: "inherit",

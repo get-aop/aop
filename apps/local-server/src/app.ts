@@ -9,7 +9,6 @@ import { createChatSessionRoutes } from "./chat-session/routes.ts";
 import type { LocalServerContext } from "./context.ts";
 import { createEventStreamRoutes } from "./event-log/routes.ts";
 import { createEventsSSEHandler } from "./events/index.ts";
-import { createExecHostRoutes } from "./exec-hosts/routes.ts";
 import { createFsRoutes } from "./fs/routes.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
@@ -125,7 +124,6 @@ export const createApp = (deps: AppDependencies) => {
     "/api/settings",
     createSettingsRoutes(ctx, { runCapChanged: () => projects.chat.dispatchQueuedRuns() }),
   );
-  app.route("/api/exec-hosts", createExecHostRoutes(ctx));
   app.route("/api/runtime-profiles", createRuntimeProfileRoutes(ctx));
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));

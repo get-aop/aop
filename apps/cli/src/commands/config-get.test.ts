@@ -28,7 +28,7 @@ describe("configGetCommand", () => {
       data: {
         settings: [
           { key: "chat_global_instructions", value: "Prefer small diffs" },
-          { key: "remote_exec_hosts_json", value: "" },
+          { key: "max_concurrent_runs", value: "4" },
         ],
       },
     });
@@ -64,7 +64,7 @@ describe("configGetCommand", () => {
       status: 400,
       error: {
         error: "Invalid key",
-        validKeys: ["remote_exec_hosts_json", "chat_global_instructions"],
+        validKeys: ["chat_global_instructions", "max_concurrent_runs"],
       },
     });
 

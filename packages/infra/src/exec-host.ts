@@ -1,10 +1,7 @@
 // ExecHost — the single seam that owns subprocess creation for agent and runtime spawns.
 //
-// Providers and the executor describe *what* to run via an ExecHostSpawnSpec; the host
-// decides *how* to spawn it on the current platform. This is the abstraction that lets the
-// same code run on native macOS/Linux and native Windows (and, via Model B, inside a WSL
-// distro as native Linux) — see docs/adr/windows-wsl-execution-model.md — without each
-// call site branching on OS.
+// Providers describe *what* to run via an ExecHostSpawnSpec; the host decides *how* to spawn
+// it on the current platform, so call sites do not branch on OS.
 //
 // The native hosts are faithful pass-throughs to Bun.spawn; only the shell and
 // command-existence probes differ by platform (zsh/`command -v` vs cmd/`where`).
@@ -33,7 +30,7 @@ export interface ExecHostSpawnSpec {
 
 export type ExecHostShellOptions = Omit<ExecHostSpawnSpec, "cmd" | "detached" | "unref">;
 
-export type ExecHostKind = "native-unix" | "native-windows" | "wsl" | "ssh";
+export type ExecHostKind = "native-unix" | "native-windows";
 
 export interface ExecHost {
   readonly kind: ExecHostKind;
@@ -156,27 +153,6 @@ export class NativeWindowsHost extends BaseNativeHost {
   readonly kind = "native-windows" as const;
 }
 
-/**
- * Resolve the execution host for the current platform and AOP_EXEC_HOST setting.
- *
- * - darwin/linux → NativeUnixHost. Under WSL Model B the sidecar already runs *inside*
- *   the distro as a native Linux process, so `AOP_EXEC_HOST=wsl:<distro>` still resolves
- *   here — the `wsl:` form only tells the desktop how to launch the sidecar.
- * - win32 → NativeWindowsHost. `AOP_EXEC_HOST=wsl:<distro>` on Windows would be Model A
- *   (per-command wsl.exe wrapping), which is out of scope.
- */
-export const resolveExecHost = (
-  platform: NodeJS.Platform = process.platform,
-  execHost: string | undefined = process.env.AOP_EXEC_HOST,
-): ExecHost => {
-  if (platform === "win32") {
-    if (execHost?.startsWith("wsl:")) {
-      throw new Error(
-        "ExecHost: WSL Model A (per-command wsl.exe wrapping) is out of scope. The in-distro " +
-          "sidecar (Model B) runs as native Linux — see docs/adr/windows-wsl-execution-model.md",
-      );
-    }
-    return new NativeWindowsHost();
-  }
-  return new NativeUnixHost();
-};
+/** The execution host for the current platform: native Windows on win32, native Unix elsewhere. */
+export const resolveExecHost = (platform: NodeJS.Platform = process.platform): ExecHost =>
+  platform === "win32" ? new NativeWindowsHost() : new NativeUnixHost();

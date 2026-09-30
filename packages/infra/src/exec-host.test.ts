@@ -17,21 +17,13 @@ const readStream = async (stream: unknown): Promise<string> => {
 };
 
 describe("resolveExecHost", () => {
-  test("returns NativeUnixHost on darwin/linux when AOP_EXEC_HOST is unset", () => {
-    expect(resolveExecHost("linux", undefined).kind).toBe("native-unix");
-    expect(resolveExecHost("darwin", undefined).kind).toBe("native-unix");
+  test("returns NativeUnixHost on darwin and linux", () => {
+    expect(resolveExecHost("linux").kind).toBe("native-unix");
+    expect(resolveExecHost("darwin").kind).toBe("native-unix");
   });
 
-  test("treats wsl:<distro> on a unix host as native (Model B runs in-distro)", () => {
-    expect(resolveExecHost("linux", "wsl:Ubuntu").kind).toBe("native-unix");
-  });
-
-  test("returns NativeWindowsHost for win32 + native", () => {
-    expect(resolveExecHost("win32", undefined).kind).toBe("native-windows");
-  });
-
-  test("rejects WSL Model A on win32 as out of scope", () => {
-    expect(() => resolveExecHost("win32", "wsl:Ubuntu")).toThrow(/Model A|out of scope/i);
+  test("returns NativeWindowsHost on win32", () => {
+    expect(resolveExecHost("win32").kind).toBe("native-windows");
   });
 });
 

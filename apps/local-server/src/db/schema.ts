@@ -17,8 +17,6 @@ export interface RuntimeProfilesTable {
   model: string;
   reasoning: string;
   fast_mode: Generated<boolean>;
-  /** Optional SSH execution host id (null = this machine). */
-  exec_host_id: Generated<string | null>;
   created_at: Generated<string>;
   updated_at: Generated<string>;
 }

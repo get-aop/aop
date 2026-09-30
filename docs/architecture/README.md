@@ -50,9 +50,9 @@ Repository removal resets AOP-owned repository data. Runtime authentication home
 The dashboard is Sessions-first:
 
 - **Sessions** `/` — the rail, thread, composer, right panel, and terminal dock.
-- **Settings** `/settings` — General + License, Repositories, Runtimes, Execution hosts, Workflows, About.
+- **Settings** `/settings` — General, Repositories, Runtimes, Devices, About.
 
-Task detail lives at `/tasks/:id` (deep links from chat cards). Legacy routes (`/chat`, `/pool`, `/workers`, `/metrics`, `/workflows/:id`) redirect to the home page. The rail footer shows the installed version, update action when available, and an execution host selector when applicable.
+Task detail lives at `/tasks/:id` (deep links from chat cards). Legacy routes (`/chat`, `/pool`, `/workers`, `/metrics`, `/workflows/:id`) redirect to the home page. The rail footer shows the installed version and the update action when one is available.
 
 ## Desktop and Windows
 

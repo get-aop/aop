@@ -286,41 +286,6 @@ describe("run", () => {
     }
   });
 
-  test("spawns through an injected execHost when provided", async () => {
-    const mockProc = {
-      pid: 4242,
-      exited: Promise.resolve(0),
-      kill: mock(() => {}),
-      unref: mock(() => {}),
-    };
-    const spawnCalls: unknown[] = [];
-    const execHost = {
-      kind: "ssh" as const,
-      spawn: (spec: unknown) => {
-        spawnCalls.push(spec);
-        return mockProc as unknown as Bun.Subprocess;
-      },
-      shell: () => mockProc as unknown as Bun.Subprocess,
-      commandExists: async () => true,
-    };
-
-    spawnSpy = spyOn(Bun, "spawn").mockImplementation(() => {
-      throw new Error("Bun.spawn should not be called when execHost is injected");
-    });
-
-    const provider = new CodexCliProvider();
-    const result = await provider.run({
-      prompt: "remote",
-      logFilePath: "/tmp/log.txt",
-      execHost,
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(result.pid).toBe(4242);
-    expect(spawnCalls).toHaveLength(1);
-    expect(spawnSpy).not.toHaveBeenCalled();
-  });
-
   test("keeps Codex stderr out of the JSON stdout log", async () => {
     const mockProc = {
       pid: 31337,

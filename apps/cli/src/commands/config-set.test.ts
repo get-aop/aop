@@ -42,7 +42,7 @@ describe("configSetCommand", () => {
       status: 400,
       error: {
         error: "Invalid key",
-        validKeys: ["remote_exec_hosts_json", "chat_global_instructions"],
+        validKeys: ["chat_global_instructions", "max_concurrent_runs"],
       },
     });
 

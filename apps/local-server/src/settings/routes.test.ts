@@ -37,7 +37,6 @@ describe("settings/routes", () => {
 
       expect(res.status).toBe(200);
       expect(body.settings).toEqual([
-        { key: "remote_exec_hosts_json", value: "" },
         { key: "chat_global_instructions", value: "" },
         { key: "max_concurrent_runs", value: "4" },
       ]);
@@ -166,7 +165,7 @@ describe("settings/routes", () => {
       const res = await putJson(app, "/api/settings", {
         settings: [
           { key: "chat_global_instructions", value: "Hi" },
-          { key: "remote_exec_hosts_json", value: "[]" },
+          { key: "max_concurrent_runs", value: "2" },
         ],
       });
       const body: AnyJson = await res.json();

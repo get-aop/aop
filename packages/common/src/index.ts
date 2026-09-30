@@ -47,12 +47,6 @@ export type {
 } from "./types/chat-work-log.ts";
 export type { ControlCommand } from "./types/control-command.ts";
 export { formatControlCommandMarker, parseControlCommand } from "./types/control-command.ts";
-export type { ExecHostConfig, ExecHostUpsert } from "./types/exec-host-config.ts";
-export {
-  ExecHostConfigSchema,
-  ExecHostUpsertSchema,
-  parseExecHostList,
-} from "./types/exec-host-config.ts";
 export type { MarkdownFileContent } from "./types/markdown-file.ts";
 export { MARKDOWN_FILE_LIMITS } from "./types/markdown-file.ts";
 export {

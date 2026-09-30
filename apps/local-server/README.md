@@ -50,7 +50,6 @@ Registered in `src/app.ts`:
 | `/api/settings` | Key/value settings |
 | `/api/runtime-profiles`, `/api/runtime-configuration` | Runtime catalog and per-runtime configuration |
 | `/api/mcp` | The AOP MCP server (its tools depend on the calling session) |
-| `/api/exec-hosts` | Exec hosts |
 | `/api/fs` | Directory browse for settings UI |
 | `/api/updates` | Self-update |
 
@@ -83,7 +82,7 @@ src/
   runtime-configuration/, runtime-profile/, providers/
   events/             SSE + log tailing
   auth/               device tokens, pairing, cookie sessions, request guard
-  exec-hosts/, github-cli/, mcp/, updates/
+  github-cli/, mcp/, updates/
   settings/, health/, db/, fs/
 ```
 

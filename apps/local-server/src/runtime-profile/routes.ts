@@ -5,22 +5,17 @@ import {
 } from "@aop/common";
 import { type Context, Hono } from "hono";
 import type { LocalServerContext } from "../context.ts";
-import { createExecHostsService } from "../exec-hosts/service.ts";
 import { createRuntimeProfileRepository, type RuntimeProfileRepository } from "./repository.ts";
 
 export const createRuntimeProfileRoutes = (ctx: LocalServerContext) => {
   const routes = new Hono();
   const repository = createRuntimeProfileRepository(ctx.db);
-  const execHosts = createExecHostsService(ctx);
 
   routes.get("/", async (c) => c.json({ profiles: await repository.list() }));
 
   routes.post("/", async (c) => {
     const parsed = RuntimeProfileInputSchema.safeParse(await readBody(c));
     if (!parsed.success) return validationResponse(c, parsed.error.issues);
-
-    const hostError = await validateExecHostId(execHosts, parsed.data.execHostId);
-    if (hostError) return c.json(hostError, 400);
 
     try {
       return c.json({ profile: await repository.create(parsed.data) }, 201);
@@ -48,9 +43,6 @@ export const createRuntimeProfileRoutes = (ctx: LocalServerContext) => {
 
     const merged = RuntimeProfileInputSchema.safeParse({ ...existing, ...patch.data });
     if (!merged.success) return validationResponse(c, merged.error.issues);
-
-    const hostError = await validateExecHostId(execHosts, merged.data.execHostId);
-    if (hostError) return c.json(hostError, 400);
 
     return persistProfileUpdate(c, repository, existing.id, merged.data);
   });
@@ -108,17 +100,3 @@ const isDuplicateNameError = (error: unknown): boolean =>
   error instanceof Error &&
   (error.message.includes("idx_runtime_profiles_name_nocase") ||
     error.message.includes("UNIQUE constraint failed: runtime_profiles.name"));
-
-const validateExecHostId = async (
-  execHosts: ReturnType<typeof createExecHostsService>,
-  execHostId: string | undefined,
-): Promise<{ error: string; code: string; field: string } | null> => {
-  if (!execHostId || execHostId.length === 0) return null;
-  const host = await execHosts.getExecHost(execHostId);
-  if (host) return null;
-  return {
-    error: `Unknown execution host: ${execHostId}`,
-    code: "UNKNOWN_EXEC_HOST",
-    field: "execHostId",
-  };
-};
