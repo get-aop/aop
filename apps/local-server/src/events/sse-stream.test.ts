@@ -3,12 +3,12 @@ import type { SSEStreamingApi } from "hono/streaming";
 import { createSSEStreamHelper } from "./sse-stream.ts";
 
 const createMockStream = (options?: { failOnWrite?: boolean }) => {
-  const written: { data: string; event: string; id: string }[] = [];
+  const written: { data: string; event: string; id?: string }[] = [];
   let abortCallback: (() => void) | null = null;
 
   return {
     stream: {
-      writeSSE: mock(async (event: { data: string; event: string; id: string }) => {
+      writeSSE: mock(async (event: { data: string; event: string; id?: string }) => {
         if (options?.failOnWrite) {
           throw new Error("Connection closed");
         }
@@ -36,6 +36,17 @@ describe("sse-stream", () => {
     expect(written).toHaveLength(2);
     expect(written[0]).toEqual({ data: '{"foo":"bar"}', event: "test", id: "0" });
     expect(written[1]).toEqual({ data: '{"baz":123}', event: "test", id: "1" });
+  });
+
+  test("sends the id it is given, or none, without touching the counter", async () => {
+    const { stream, written } = createMockStream();
+    const sse = createSSEStreamHelper(stream);
+
+    await sse.sendEvent("entry", { n: 1 }, 41);
+    await sse.sendEvent("heartbeat", {}, null);
+    await sse.sendEvent("test", { n: 2 });
+
+    expect(written.map((frame) => frame.id)).toEqual(["41", undefined, "0"]);
   });
 
   test("sendRaw sends data without JSON serialization", async () => {

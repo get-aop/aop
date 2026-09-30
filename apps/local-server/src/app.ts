@@ -7,6 +7,7 @@ import { createOriginGuard } from "./auth/origin-guard.ts";
 import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
 import type { LocalServerContext } from "./context.ts";
+import { createEventStreamRoutes } from "./event-log/routes.ts";
 import { createEventsSSEHandler } from "./events/index.ts";
 import { createExecHostRoutes } from "./exec-hosts/routes.ts";
 import { createFsRoutes } from "./fs/routes.ts";
@@ -119,6 +120,7 @@ export const createApp = (deps: AppDependencies) => {
     createEventsSSEHandler(ctx, () => listRepoSummaries(ctx), deps.eventsSSEOptions),
   );
   app.route("/api/auth", createAuthRoutes(ctx));
+  app.route("/api/projects", createEventStreamRoutes(ctx, deps.eventsSSEOptions));
   app.route("/api", createProviderRoutes());
   app.route("/api/chat-sessions", createChatSessionRoutes(ctx));
   app.route("/api/chat-sessions", createSessionGitRoutes(ctx));

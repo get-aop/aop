@@ -26,6 +26,7 @@ import {
   createChatWorkLogRepository,
 } from "./chat-session/work-log-repository.ts";
 import type { Database } from "./db/schema.ts";
+import { createEventPublisher, type EventPublisher } from "./event-log/publisher.ts";
 import { getTaskEventEmitter, type TaskEventEmitter } from "./events/index.ts";
 import { createRepoRepository, type RepoRepository } from "./repo/repository.ts";
 import { createSettingsRepository, type SettingsRepository } from "./settings/repository.ts";
@@ -41,6 +42,8 @@ export interface LocalServerContext {
   chatCheckpointCleanupRepository: ChatCheckpointCleanupRepository;
   /** Shared barrier so destructive maintenance cannot race chat mutations. */
   sessionMutationLock: SessionMutationLock;
+  /** How domains tell clients a project changed; open project streams deliver it. */
+  eventPublisher: EventPublisher;
   settingsRepository: SettingsRepository;
   taskEventEmitter: TaskEventEmitter;
 }
@@ -62,6 +65,7 @@ export const createCommandContext = (
   chatRevertRepository: createChatRevertRepository(db),
   chatCheckpointCleanupRepository: createChatCheckpointCleanupRepository(db),
   sessionMutationLock: createSessionMutationLock(),
+  eventPublisher: createEventPublisher(db),
   settingsRepository: createSettingsRepository(db),
   taskEventEmitter: options.taskEventEmitter ?? getTaskEventEmitter(),
 });

@@ -48,6 +48,13 @@ export {
   RuntimePreferenceSchema,
   RuntimeSelectionSchema,
 } from "./runtime.ts";
+export type { MessageDelta, Resync, ResyncReason } from "./stream.ts";
+export {
+  MessageDeltaSchema,
+  PROJECT_STREAM_EVENTS,
+  ResyncReasonSchema,
+  ResyncSchema,
+} from "./stream.ts";
 export type {
   BlockedQuestion,
   Thread,

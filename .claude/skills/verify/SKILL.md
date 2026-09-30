@@ -83,3 +83,4 @@ Kills only the two PIDs recorded for this run (process groups), deletes `home/` 
 | --- | --- |
 | `scripts/verify-stack.ts` | `bun $S/verify-stack.ts <start\|doctor\|env\|aop\|restart-server\|stop> [--name run] [--crash] [-- aop args]`; `restart-server --crash` SIGKILLs only the server and restarts it on the same port and DB |
 | `scripts/seed.ts` | `bun $S/seed.ts [--name run] [--fake-runtime]` after `start`; idempotent |
+| `scripts/seed-events.ts` | `bun $S/seed-events.ts [--name run] <project\|thread\|status\|message\|remove> ...` appends project events for the project stream; see `features/project-stream.md` |

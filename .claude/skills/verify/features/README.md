@@ -32,6 +32,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Features
 
+- [Project event stream](./project-stream.md) covers `GET /api/projects/:id/stream`: live entries, resume, restart, removal.
 - [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the dashboard attach dialog.
 - [Sessions](./sessions.md) covers the chat workbench, the composer, runtime-free commands, and settling.
 - [Settings](./settings.md) covers the Settings dialog and its sections.
