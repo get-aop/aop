@@ -2,7 +2,13 @@ import { getLogger } from "@aop/infra";
 import { createApp } from "./app.ts";
 import { runStartupCheckpointCleanup } from "./chat-session/checkpoint-cleanup-service.ts";
 import { shutdownChatSessions } from "./chat-session/service.ts";
-import { getDashboardDevOrigin, getDashboardStaticPath, getPort } from "./config.ts";
+import {
+  getAllowedOrigins,
+  getBindHost,
+  getDashboardDevOrigin,
+  getDashboardStaticPath,
+  getPort,
+} from "./config.ts";
 import { createCommandContext } from "./context.ts";
 import { createDatabase, getDefaultDbPath } from "./db/connection.ts";
 import { runMigrations } from "./db/migrations.ts";
@@ -22,6 +28,8 @@ export interface ServerHandle {
 
 export const startServer = async (options?: ServerOptions): Promise<ServerHandle> => {
   const port = options?.port ?? getPort();
+  const bindHost = getBindHost();
+  const allowedOrigins = getAllowedOrigins();
   const startTimeMs = Date.now();
 
   const dbPath = options?.dbPath ?? process.env.AOP_DB_PATH ?? getDefaultDbPath();
@@ -41,6 +49,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     startTimeMs,
     dashboardStaticPath: options?.dashboardStaticPath ?? getDashboardStaticPath(),
     dashboardDevOrigin: getDashboardDevOrigin(),
+    allowedOrigins,
   });
 
   let server: ReturnType<typeof Bun.serve>;
@@ -48,7 +57,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     server = Bun.serve({
       fetch: app.fetch,
       port,
-      hostname: "127.0.0.1",
+      hostname: bindHost,
       // Bun max is 255s. Chat replies stream over SSE and no longer hold HTTP open,
       // but SSE heartbeats are 15s and other long endpoints still need headroom.
       idleTimeout: 255,
@@ -62,7 +71,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     throw new Error(message);
   }
 
-  logger.info("Local server listening on http://127.0.0.1:{port}", { port });
+  logger.info("Local server listening on http://{bindHost}:{port}", { bindHost, port });
 
   return {
     shutdown: async () => {

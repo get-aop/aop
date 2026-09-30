@@ -9,7 +9,7 @@ import { isDesktopApp } from "../../utils/desktop-runtime";
 interface ChatMarkdownProps {
   content: string;
   desktop?: boolean;
-  openLink?: (url: string) => Promise<void>;
+  openLink?: (url: string) => void;
   lineBreaks?: boolean;
 }
 
@@ -172,9 +172,9 @@ const handleLinkClick = (
   event: MouseEvent<HTMLAnchorElement>,
   href: string | undefined,
   desktop: boolean,
-  openLink: (url: string) => Promise<void>,
+  openLink: (url: string) => void,
 ): void => {
   if (!href || !desktop) return;
   event.preventDefault();
-  void openLink(href).catch(() => undefined);
+  openLink(href);
 };

@@ -103,7 +103,7 @@ describe("MergedPrBar", () => {
   });
 
   test("opens PR links through the desktop external URL bridge", async () => {
-    const openLink = mock(async () => undefined);
+    const openLink = mock(() => undefined);
     render(
       <MergedPrBar
         merged={mergedFixture()}

@@ -2,14 +2,13 @@ import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { type AuthEnv, createApiAuth } from "./auth/api-auth.ts";
+import { createOriginGuard } from "./auth/origin-guard.ts";
+import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
 import type { LocalServerContext } from "./context.ts";
 import { createEventsSSEHandler } from "./events/index.ts";
 import { createExecHostRoutes } from "./exec-hosts/routes.ts";
-import {
-  isAllowedExternalUrl,
-  openExternalUrl as openExternalUrlWithSystem,
-} from "./external-url.ts";
 import { createFsRoutes } from "./fs/routes.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
@@ -19,7 +18,6 @@ import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
 import { createRuntimeProfileRoutes } from "./runtime-profile/routes.ts";
-import { createOriginGuard } from "./security/origin-guard.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
 import { createUpdateRoutes } from "./updates/routes.ts";
@@ -35,23 +33,29 @@ export interface AppDependencies {
   startTimeMs: number;
   dashboardStaticPath?: string;
   dashboardDevOrigin?: string;
+  /** Origins besides the API's own that may call it from a browser (`AOP_ALLOWED_ORIGINS`). */
+  allowedOrigins?: readonly string[];
   eventsSSEOptions?: EventsSSEOptions;
-  openExternalUrl?: (url: string) => Promise<void>;
 }
 
 export const createApp = (deps: AppDependencies) => {
   const { ctx, dashboardStaticPath, dashboardDevOrigin } = deps;
-  const app = new Hono();
+  const app = new Hono<AuthEnv>();
 
   app.use("*", httpInstrumentationMiddleware({ tracerProvider: getTracerProvider() }));
 
-  // Loopback trust boundary: reject DNS-rebound hosts and cross-origin
-  // browser requests. CORS headers are only needed in dev, where the
-  // dashboard runs on its own origin; in production it is served
-  // same-origin by this server and no cross-origin access is granted.
+  // Trust boundary: reject cross-site browser requests, then require a device token, its
+  // session cookie, or a direct request from the host itself (see auth/). CORS headers are
+  // only needed in dev, where the dashboard runs on its own origin; in production it is
+  // served same-origin by this server and no cross-origin access is granted.
   app.use(
     "/api/*",
-    createOriginGuard({ allowedOrigins: dashboardDevOrigin ? [dashboardDevOrigin] : [] }),
+    createOriginGuard({
+      allowedOrigins: [
+        ...(dashboardDevOrigin ? [dashboardDevOrigin] : []),
+        ...(deps.allowedOrigins ?? []),
+      ],
+    }),
   );
   if (dashboardDevOrigin) {
     app.use(
@@ -65,6 +69,8 @@ export const createApp = (deps: AppDependencies) => {
       }),
     );
   }
+
+  app.use("/api/*", createApiAuth(ctx.authService));
 
   app.use("/api/*", async (c, next) => {
     await next();
@@ -107,26 +113,11 @@ export const createApp = (deps: AppDependencies) => {
 
   app.get("/api/status", async (c) => c.json(await listRepoSummaries(ctx)));
 
-  app.post("/api/open-external", async (c) => {
-    const body = await c.req.json<{ url?: unknown }>().catch(() => null);
-    const url = typeof body?.url === "string" ? body.url : "";
-    if (!isAllowedExternalUrl(url)) {
-      return c.json({ error: "Only https URLs and loopback http URLs can be opened." }, 400);
-    }
-
-    try {
-      await (deps.openExternalUrl ?? openExternalUrlWithSystem)(url);
-      return c.json({ ok: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to open external URL.";
-      return c.json({ error: message }, 500);
-    }
-  });
-
   app.get(
     "/api/events",
     createEventsSSEHandler(ctx, () => listRepoSummaries(ctx), deps.eventsSSEOptions),
   );
+  app.route("/api/auth", createAuthRoutes(ctx));
   app.route("/api", createProviderRoutes());
   app.route("/api/chat-sessions", createChatSessionRoutes(ctx));
   app.route("/api/chat-sessions", createSessionGitRoutes(ctx));

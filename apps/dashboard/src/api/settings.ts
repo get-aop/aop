@@ -81,16 +81,13 @@ export const installUpdate = async (): Promise<AopUpdateInstallResult> => {
   return request<AopUpdateInstallResult>("/updates/install", { method: "POST" });
 };
 
-export const openExternalUrl = async (url: string): Promise<void> => {
-  try {
-    await request<{ ok: true }>("/open-external", {
-      method: "POST",
-      body: JSON.stringify({ url }),
-    });
-  } catch {
-    // Plain-web fallback when the loopback opener is unavailable (e.g. dev static preview).
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
+/**
+ * Opens the link on the machine the user is sitting at: a new tab in a browser, and in the
+ * desktop app the window-open handler hands it to the OS browser. The host never opens
+ * links for a client, because the host may be another machine.
+ */
+export const openExternalUrl = (url: string): void => {
+  window.open(url, "_blank", "noopener,noreferrer");
 };
 
 export const getProviderCapabilities = async (): Promise<ProviderCapabilityEntry[]> => {

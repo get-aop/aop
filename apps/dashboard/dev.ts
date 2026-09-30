@@ -149,6 +149,10 @@ const main = async () => {
 
   Bun.serve({
     port: PORT,
+    // Loopback only. The proxy below reaches the API from 127.0.0.1 with no forwarding
+    // headers, so the API takes its requests as the host owner's own; listening on every
+    // interface would hand that trust to anyone on the network.
+    hostname: "127.0.0.1",
     async fetch(req) {
       const url = new URL(req.url);
 

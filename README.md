@@ -35,6 +35,7 @@ To remove it, run `./uninstall`. It stops the service and unlinks the CLI, and i
 | [Runtimes](./docs/RUNTIMES.md) | The supported agent CLI and where its state lives |
 | [MCP](./docs/MCP.md) | Tools that MCP-capable runtimes can call, and how the endpoint is authenticated |
 | [Pull requests](./docs/session-github-workflow.md) | Worktree, pull request, checks, and merge flow |
+| [Running the host](./docs/HOST.md) | Pairing devices, device tokens, and reaching the host with `tailscale serve` |
 | [CLI](./apps/cli/README.md) | Commands of the `aop` HTTP client |
 | [Architecture](./docs/architecture/README.md) | The previous architecture, kept until it is rewritten |
 | [Releasing](./docs/RELEASE.md) | Cutting a release and publishing installers |

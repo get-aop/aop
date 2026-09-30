@@ -7,6 +7,7 @@ test("the package index exports the projects contract", () => {
     expect.arrayContaining([
       "ArtifactSchema",
       "AssistantMessageSchema",
+      "AuthPrincipalSchema",
       "BlockedQuestionSchema",
       "CliProviderSchema",
       "DeviceSchema",
@@ -15,6 +16,9 @@ test("the package index exports the projects contract", () => {
       "MessageBlockSchema",
       "MessageSchema",
       "NotificationLevelSchema",
+      "PairDeviceRequestSchema",
+      "PairedDeviceSchema",
+      "PairingCodeSchema",
       "ProjectPatchSchema",
       "ProjectSchema",
       "ProjectSettingsSchema",

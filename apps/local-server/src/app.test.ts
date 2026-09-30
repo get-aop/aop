@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { aopPaths, useTestAopHome } from "@aop/infra";
 import type { Kysely } from "kysely";
-import { type AppDependencies, createApp } from "./app.ts";
+import type { AppDependencies, createApp } from "./app.ts";
+import { createLoopbackApp } from "./auth/test-utils.ts";
 import { createCommandContext, type LocalServerContext } from "./context.ts";
 import type { Database } from "./db/schema.ts";
 import { type AnyJson, createTestDb, createTestRepo } from "./db/test-utils.ts";
@@ -18,7 +19,7 @@ describe("app", () => {
     db = await createTestDb();
     ctx = createCommandContext(db);
     deps = { ctx, startTimeMs: Date.now() - 5000 };
-    app = createApp(deps);
+    app = createLoopbackApp(deps);
   });
 
   afterEach(async () => {
@@ -72,43 +73,15 @@ describe("app", () => {
     });
   });
 
-  describe("POST /api/open-external", () => {
-    test("opens an https URL with the injected opener", async () => {
-      const openExternalUrl = mock(async () => undefined);
-      const appWithOpener = createApp({
-        ...deps,
-        openExternalUrl,
-      });
-
-      const res = await appWithOpener.request("/api/open-external", {
+  describe("removed host-side routes", () => {
+    test("does not open URLs on the host: the client opens links itself", async () => {
+      const res = await app.request("/api/open-external", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: "https://github.com/get-aop/aop-mono/pull/99" }),
       });
-      const body: AnyJson = await res.json();
 
-      expect(res.status).toBe(200);
-      expect(body.ok).toBe(true);
-      expect(openExternalUrl).toHaveBeenCalledWith("https://github.com/get-aop/aop-mono/pull/99");
-    });
-
-    test("rejects non-web external URLs", async () => {
-      const openExternalUrl = mock(async () => undefined);
-      const appWithOpener = createApp({
-        ...deps,
-        openExternalUrl,
-      });
-
-      const res = await appWithOpener.request("/api/open-external", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: "file:///home/marcelorm/.ssh/id_rsa" }),
-      });
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(400);
-      expect(body.error).toBe("Only https URLs and loopback http URLs can be opened.");
-      expect(openExternalUrl).not.toHaveBeenCalled();
+      expect(res.status).toBe(404);
     });
   });
 
@@ -141,7 +114,7 @@ describe("app - static file serving", () => {
     writeFileSync(`${tempDir}/style.css`, "body { color: red; }");
     writeFileSync(`${tempDir}/main-pgsvk45c.js`, "console.log('bundle')");
 
-    const app = createApp({
+    const app = createLoopbackApp({
       ctx,
       startTimeMs: Date.now(),
       dashboardStaticPath: tempDir,
@@ -187,7 +160,7 @@ describe("app - static file serving", () => {
     mkdirSync(tempDir, { recursive: true });
     writeFileSync(`${tempDir}/index.html`, "<html></html>");
 
-    const app = createApp({
+    const app = createLoopbackApp({
       ctx,
       startTimeMs: Date.now(),
       dashboardStaticPath: tempDir,
@@ -211,7 +184,7 @@ describe("app - static file serving", () => {
     const { mkdirSync, rmSync, existsSync } = await import("node:fs");
     mkdirSync(tempDir, { recursive: true });
 
-    const app = createApp({
+    const app = createLoopbackApp({
       ctx,
       startTimeMs: Date.now(),
       dashboardStaticPath: tempDir,
@@ -231,7 +204,7 @@ describe("app - static file serving", () => {
     const db = await createTestDb();
     const ctx = createCommandContext(db);
 
-    const app = createApp({
+    const app = createLoopbackApp({
       ctx,
       startTimeMs: Date.now(),
       dashboardDevOrigin: "http://localhost:25160",
@@ -259,7 +232,7 @@ describe("app - filesystem routes", () => {
   beforeEach(async () => {
     db = await createTestDb();
     ctx = createCommandContext(db);
-    app = createApp({ ctx, startTimeMs: Date.now() });
+    app = createLoopbackApp({ ctx, startTimeMs: Date.now() });
 
     const { mkdirSync } = await import("node:fs");
     testDir = `/tmp/aop-app-fs-test-${Date.now()}`;

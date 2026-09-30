@@ -181,7 +181,7 @@ const SessionSourceControlActions = ({
     try {
       const result = await pr.create(mode);
       if ("compareUrl" in result) {
-        void openExternalUrl(result.compareUrl);
+        openExternalUrl(result.compareUrl);
         onToast("Branch pushed — opening GitHub to create the PR");
       } else {
         onToast(`PR #${result.number} ${mode === "draft" ? "draft " : ""}created`, {
@@ -198,7 +198,7 @@ const SessionSourceControlActions = ({
   };
 
   const viewPullRequest = () => {
-    if (state.prUrl) void openExternalUrl(state.prUrl);
+    if (state.prUrl) openExternalUrl(state.prUrl);
   };
 
   const copyBranch = async () => {

@@ -4,6 +4,18 @@ export type { MessageBlock, ThreadCardVariant } from "./blocks.ts";
 export { MessageBlockSchema } from "./blocks.ts";
 export type { Device } from "./device.ts";
 export { DeviceSchema } from "./device.ts";
+export type {
+  AuthPrincipal,
+  PairDeviceRequest,
+  PairedDevice,
+  PairingCode,
+} from "./device-auth.ts";
+export {
+  AuthPrincipalSchema,
+  PairDeviceRequestSchema,
+  PairedDeviceSchema,
+  PairingCodeSchema,
+} from "./device-auth.ts";
 export type { EventLogEntry } from "./event-log.ts";
 export { EventLogEntrySchema } from "./event-log.ts";
 export type { AssistantMessage, Message, UserMessage } from "./message.ts";

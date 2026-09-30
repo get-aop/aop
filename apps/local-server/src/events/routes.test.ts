@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Kysely } from "kysely";
-import { createApp } from "../app.ts";
+import type { createApp } from "../app.ts";
+import { createLoopbackApp } from "../auth/test-utils.ts";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
@@ -62,7 +63,7 @@ describe("events/routes", () => {
     db = await createTestDb();
     emitter = createTaskEventEmitter();
     ctx = createCommandContext(db, { taskEventEmitter: emitter });
-    app = createApp({ ctx, startTimeMs: Date.now() });
+    app = createLoopbackApp({ ctx, startTimeMs: Date.now() });
   });
 
   afterEach(async () => {
@@ -221,7 +222,7 @@ describe("events/routes", () => {
     let heartbeatApp: ReturnType<typeof createApp>;
 
     beforeEach(() => {
-      heartbeatApp = createApp({
+      heartbeatApp = createLoopbackApp({
         ctx,
         startTimeMs: Date.now(),
         eventsSSEOptions: { heartbeatIntervalMs: 50 },

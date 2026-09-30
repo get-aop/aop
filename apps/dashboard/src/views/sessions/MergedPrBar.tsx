@@ -11,7 +11,7 @@ interface MergedPrBarProps {
   branch: string | null;
   onDismiss: () => void;
   desktop?: boolean;
-  openLink?: (url: string) => Promise<void>;
+  openLink?: (url: string) => void;
 }
 
 /** Shown above the composer once this session's pull request is merged. */
@@ -52,7 +52,7 @@ export const MergedPrBar = ({
 interface MergedPrLinkProps {
   merged: SessionMergedPullRequest;
   desktop: boolean;
-  openLink: (url: string) => Promise<void>;
+  openLink: (url: string) => void;
 }
 
 const MergedPrLink = ({ merged, desktop, openLink }: MergedPrLinkProps) => {
@@ -60,7 +60,7 @@ const MergedPrLink = ({ merged, desktop, openLink }: MergedPrLinkProps) => {
   const openExternally = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!desktop) return;
     event.preventDefault();
-    void openLink(merged.url);
+    openLink(merged.url);
   };
 
   return (

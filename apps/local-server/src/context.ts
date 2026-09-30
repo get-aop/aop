@@ -1,4 +1,6 @@
 import type { Kysely } from "kysely";
+import { createDeviceRepository } from "./auth/device-repository.ts";
+import { type AuthService, createAuthService } from "./auth/service.ts";
 import {
   type ChatCheckpointCleanupRepository,
   createChatCheckpointCleanupRepository,
@@ -30,6 +32,7 @@ import { createSettingsRepository, type SettingsRepository } from "./settings/re
 
 export interface LocalServerContext {
   db: Kysely<Database>;
+  authService: AuthService;
   repoRepository: RepoRepository;
   chatSessionRepository: ChatSessionRepository;
   chatCheckpointRepository: ChatCheckpointRepository;
@@ -51,6 +54,7 @@ export const createCommandContext = (
   options: CreateCommandContextOptions = {},
 ): LocalServerContext => ({
   db,
+  authService: createAuthService({ deviceRepository: createDeviceRepository(db) }),
   repoRepository: createRepoRepository(db),
   chatSessionRepository: createChatSessionRepository(db),
   chatCheckpointRepository: createChatCheckpointRepository(db),

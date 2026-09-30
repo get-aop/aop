@@ -40,7 +40,8 @@ Registered in `src/app.ts`:
 
 | Prefix | Domain |
 |--------|--------|
-| `/api/health` | Liveness |
+| `/api/health` | Liveness (no credentials) |
+| `/api/auth` | Device pairing, session cookie, device list and revocation; see [Running the AOP host](../../docs/HOST.md) |
 | `/api/status` | Registered repos and summaries |
 | `/api/chat-sessions` | Chat sessions, messages, runs, session git |
 | `/api/repos` | Register/remove repositories |
@@ -50,13 +51,16 @@ Registered in `src/app.ts`:
 | `/api/exec-hosts` | Exec hosts |
 | `/api/fs` | Directory browse for settings UI |
 | `/api/updates` | Self-update |
-| `/api/open-external` | Open a URL or path on the host |
+
+Every route except health, `POST /api/auth/pair`, and `/api/mcp` needs a device token, its session cookie, or a direct request from the host itself. Who may call what is in `src/auth/route-policy.ts`.
 
 ## Environment
 
 | Variable | Purpose |
 |----------|---------|
 | `AOP_LOCAL_SERVER_PORT` | Listen port (required at runtime) |
+| `AOP_BIND_HOST` | Listen address; defaults to `127.0.0.1` |
+| `AOP_ALLOWED_ORIGINS` | Extra browser origins allowed to call the API, comma-separated |
 | `AOP_LOCAL_SERVER_URL` | Public base URL for callbacks and CLI |
 | `DASHBOARD_STATIC_PATH` | Built dashboard assets (install sets this) |
 | `AOP_HOME` | Override `~/.aop` data root |
@@ -75,7 +79,8 @@ src/
   process/            process supervision
   runtime-configuration/, runtime-profile/, providers/
   events/             SSE + log tailing
-  exec-hosts/, github-cli/, mcp/, security/, updates/
+  auth/               device tokens, pairing, cookie sessions, request guard
+  exec-hosts/, github-cli/, mcp/, updates/
   settings/, health/, db/, fs/
 ```
 
