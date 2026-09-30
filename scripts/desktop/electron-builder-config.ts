@@ -3,11 +3,14 @@ import packageInfo from "../../package.json";
 interface ElectronBuilderConfigOptions {
   version: string;
   notarize: boolean;
+  /** True when a Developer ID identity is configured; false builds get an ad-hoc signature. */
+  signed?: boolean;
 }
 
 export const createElectronBuilderConfig = ({
   version,
   notarize,
+  signed = true,
 }: ElectronBuilderConfigOptions) => ({
   appId: "com.getaop.aop",
   productName: "AOP",
@@ -48,7 +51,14 @@ export const createElectronBuilderConfig = ({
     artifactName: "aop-macos-${arch}.${ext}",
     category: "public.app-category.developer-tools",
     darkModeSupport: true,
-    hardenedRuntime: true,
+    // An unsigned build still has to carry a valid signature: flipping the Electron fuses breaks the
+    // one the framework ships with, and Apple silicon kills a process whose signature is invalid
+    // ("Killed: 9" at launch). An ad-hoc signature ("-") keeps it launchable; Gatekeeper still
+    // warns about an unidentified developer, which is the documented first-run step. Hardened
+    // runtime is off for ad-hoc builds because its library validation rejects the
+    // differently-signed Electron frameworks.
+    identity: signed ? undefined : "-",
+    hardenedRuntime: signed,
     icon: "apps/desktop/build/icon.icns",
     notarize,
     target: [{ target: "dmg", arch: ["x64", "arm64"] }],
@@ -76,6 +86,7 @@ export const createElectronBuilderConfig = ({
 
 export default createElectronBuilderConfig({
   version: packageInfo.version,
+  signed: Boolean(process.env.AOP_MACOS_SIGN_IDENTITY?.trim()),
   notarize:
     process.env.AOP_MACOS_NOTARIZE === "1" ||
     process.env.AOP_MACOS_NOTARIZE?.toLowerCase() === "true",

@@ -1,9 +1,17 @@
 #!/bin/sh
-# AOP install script — download, install, and start AOP.
+# AOP host install script: download the host (macOS or Linux), put `aop` on PATH, and start it
+# as a background user service (launchd or systemd). Windows is desktop-app only and has no host.
+#
 # Usage: curl -fsSL https://getaop.com/install.sh | sh
 #        curl -fsSL https://getaop.com/install.sh | sh -s -- --prefix /custom/path --version 0.2.0
+#        curl -fsSL https://getaop.com/install.sh | sh -s -- --no-service
+#
+# The release workflow replaces the placeholder below with the release's own version when it
+# publishes this file, so the copy on getaop.com installs that release and no "latest version"
+# file has to exist. An unstamped copy (a checkout) needs --version.
 set -eu
 
+DEFAULT_VERSION="__AOP_VERSION__"
 RELEASES_BASE_URL="${AOP_RELEASES_URL:-https://getaop.com}"
 AOP_GITHUB_REPO="${AOP_GITHUB_REPO:-get-aop/aop-mono}"
 RUNTIME_ASSETS_NAME="runtime-assets.tar.gz"
@@ -12,8 +20,6 @@ DASHBOARD_PORT="${AOP_DASHBOARD_PORT:-25160}"
 LOCAL_SERVER_URL="${AOP_LOCAL_SERVER_URL:-http://aop.localhost:${LOCAL_SERVER_PORT}}"
 LOCAL_SERVER_HEALTH_URL="http://127.0.0.1:${LOCAL_SERVER_PORT}"
 DASHBOARD_URL="${AOP_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT}}"
-CHECKOUT_PRO_URL="${AOP_CHECKOUT_PRO_URL:-}"
-CHECKOUT_TEAM_URL="${AOP_CHECKOUT_TEAM_URL:-}"
 LOG_DIR="${AOP_LOG_DIR:-${HOME}/.aop/logs}"
 LOG_PATH="${LOG_DIR}/local-server.log"
 SERVICE_NAME="com.aop.local-server"
@@ -43,6 +49,12 @@ main() {
 
 PREFIX=""
 VERSION=""
+# --no-service (or AOP_INSTALL_NO_SERVICE=1) installs the files and leaves launchd, systemd and
+# any running server alone. Start the host yourself with `aop run`.
+NO_SERVICE=""
+case "${AOP_INSTALL_NO_SERVICE:-}" in
+  1|true|yes) NO_SERVICE="1" ;;
+esac
 
 parse_args() {
   while [ $# -gt 0 ]; do
@@ -55,9 +67,13 @@ parse_args() {
         VERSION="$2"
         shift 2
         ;;
+      --no-service)
+        NO_SERVICE="1"
+        shift
+        ;;
       *)
         echo "Unknown argument: $1" >&2
-        echo "Usage: install.sh [--prefix <dir>] [--version <version>]" >&2
+        echo "Usage: install.sh [--prefix <dir>] [--version <version>] [--no-service]" >&2
         exit 1
         ;;
     esac
@@ -81,7 +97,8 @@ detect_platform() {
     Darwin) OS="darwin" ;;
     *)
       echo "Error: Unsupported operating system: $uname_os" >&2
-      echo "Supported platforms: Linux (x64, arm64), macOS (x64, arm64)" >&2
+      echo "The AOP host runs on macOS and Linux. On Windows, install the desktop app and" >&2
+      echo "connect it to a host running on a Mac or Linux machine." >&2
       exit 1
       ;;
   esac
@@ -186,13 +203,14 @@ resolve_version() {
     return
   fi
 
-  echo "Fetching latest version..."
-  VERSION="$(http_get "${RELEASES_BASE_URL}/latest/version")" || {
-    echo "Error: Failed to fetch latest version from ${RELEASES_BASE_URL}/latest/version" >&2
+  if [ "$DEFAULT_VERSION" = "__AOP_VERSION__" ]; then
+    echo "Error: this copy of install.sh is not tied to a release. Pass --version <x.y.z>," >&2
+    echo "or use the copy published with a release: curl -fsSL https://getaop.com/install.sh | sh" >&2
     exit 1
-  }
-  VERSION="$(echo "$VERSION" | tr -d '[:space:]')"
-  echo "Latest version: $VERSION"
+  fi
+
+  VERSION="$DEFAULT_VERSION"
+  echo "Installing AOP $VERSION"
 }
 
 # --- Install Directory ---
@@ -360,16 +378,11 @@ install_runtime_assets() {
     exit 1
   fi
 
-  rm -rf "${INSTALL_DIR}/dashboard" "${INSTALL_DIR}/templates" "${INSTALL_DIR}/methodology"
+  rm -rf "${INSTALL_DIR}/dashboard"
   tar -xzf "${TMP_DIR}/${RUNTIME_ASSETS_NAME}" -C "$INSTALL_DIR"
 
   if [ ! -f "${INSTALL_DIR}/dashboard/index.html" ]; then
     echo "Error: dashboard assets were not installed correctly" >&2
-    exit 1
-  fi
-
-  if [ ! -f "${INSTALL_DIR}/templates/codebase-research.md.hbs" ]; then
-    echo "Error: prompt template assets were not installed correctly" >&2
     exit 1
   fi
 
@@ -384,6 +397,10 @@ service_path() {
 }
 
 stop_existing_service() {
+  if [ -n "$NO_SERVICE" ]; then
+    return
+  fi
+
   if [ "$OS" = "darwin" ]; then
     local plist="${HOME}/Library/LaunchAgents/${SERVICE_NAME}.plist"
     if command -v launchctl >/dev/null 2>&1; then
@@ -421,6 +438,11 @@ clear_local_server_port() {
 }
 
 start_local_server() {
+  if [ -n "$NO_SERVICE" ]; then
+    echo "Skipping the background service (--no-service); start the host with: ${INSTALL_DIR}/aop run"
+    return
+  fi
+
   mkdir -p "$LOG_DIR"
 
   if [ "$OS" = "darwin" ]; then
@@ -438,8 +460,6 @@ start_local_server() {
   AOP_DASHBOARD_PORT="$DASHBOARD_PORT" \
   AOP_LOCAL_SERVER_URL="$LOCAL_SERVER_URL" \
   AOP_DASHBOARD_URL="$DASHBOARD_URL" \
-  AOP_CHECKOUT_PRO_URL="$CHECKOUT_PRO_URL" \
-  AOP_CHECKOUT_TEAM_URL="$CHECKOUT_TEAM_URL" \
   NODE_ENV="production" \
   PATH="$(service_path)" \
     "${INSTALL_DIR}/aop" run --background --port "$LOCAL_SERVER_PORT"
@@ -478,10 +498,6 @@ install_launchd_service() {
     <string>${LOCAL_SERVER_URL}</string>
     <key>AOP_DASHBOARD_URL</key>
     <string>${DASHBOARD_URL}</string>
-    <key>AOP_CHECKOUT_PRO_URL</key>
-    <string>${CHECKOUT_PRO_URL}</string>
-    <key>AOP_CHECKOUT_TEAM_URL</key>
-    <string>${CHECKOUT_TEAM_URL}</string>
     <key>NODE_ENV</key>
     <string>production</string>
     <key>PATH</key>
@@ -524,8 +540,6 @@ Environment=AOP_LOCAL_SERVER_PORT=${LOCAL_SERVER_PORT}
 Environment=AOP_DASHBOARD_PORT=${DASHBOARD_PORT}
 Environment=AOP_LOCAL_SERVER_URL=${LOCAL_SERVER_URL}
 Environment=AOP_DASHBOARD_URL=${DASHBOARD_URL}
-Environment=AOP_CHECKOUT_PRO_URL=${CHECKOUT_PRO_URL}
-Environment=AOP_CHECKOUT_TEAM_URL=${CHECKOUT_TEAM_URL}
 Environment=NODE_ENV=production
 Environment=PATH=${env_path}
 Restart=on-failure
@@ -542,6 +556,10 @@ EOF
 }
 
 wait_for_local_server() {
+  if [ -n "$NO_SERVICE" ]; then
+    return
+  fi
+
   local health_url="${LOCAL_SERVER_HEALTH_URL}/api/health"
   local attempts=30
   local i=0
@@ -569,11 +587,12 @@ wait_for_local_server() {
 check_post_install_warnings() {
   local all_found=true
 
-  # Warn if install dir is not on PATH
+  # `aop` only runs by name when its folder is on PATH. Say exactly what to add when it is not.
   case ":${PATH}:" in
     *":${INSTALL_DIR}:"*) ;;
     *)
-      echo "Warning: ${INSTALL_DIR} is not on your PATH. Add it with:" >&2
+      echo "Warning: ${INSTALL_DIR} is not on your PATH, so \`aop\` will not be found by name." >&2
+      echo "Add this line to your shell profile (~/.zshrc or ~/.bashrc), then open a new terminal:" >&2
       echo "  export PATH=\"${INSTALL_DIR}:\$PATH\"" >&2
       all_found=false
       ;;
@@ -589,6 +608,9 @@ check_post_install_warnings() {
 print_success() {
   echo ""
   echo "AOP $VERSION installed successfully!"
+  if [ -n "$NO_SERVICE" ]; then
+    echo "Start the host with: ${INSTALL_DIR}/aop run"
+  fi
   echo "Dashboard: ${LOCAL_SERVER_URL}"
 }
 

@@ -216,35 +216,39 @@
     </div>
     <h1>Installation</h1>
     <p class="lead">
-      Local-first agent orchestration for macOS, Linux, and Windows. Pick a prebuilt binary or
-      install from source with Bun (contributors and latest <code>main</code>).
+      Install the AOP host on a Mac or Linux computer, then connect to it from the desktop app on
+      macOS or Windows, or from any browser. Contributors can install from source with Bun.
     </p>
 
     <div class="install-card">
       <div class="tabs" role="tablist" aria-label="Install method">
-        <button type="button" class="tab" role="tab" id="tab-curl" aria-selected="true" aria-controls="panel-curl"
-          data-tab="curl">
-          CURL
+        <button type="button" class="tab" role="tab" id="tab-host" aria-selected="true" aria-controls="panel-host"
+          data-tab="host">
+          HOST
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-desktop" aria-selected="false"
+          aria-controls="panel-desktop" data-tab="desktop">
+          DESKTOP APP
         </button>
         <button type="button" class="tab" role="tab" id="tab-bun" aria-selected="false" aria-controls="panel-bun"
           data-tab="bun">
-          BUN
+          SOURCE
         </button>
-        <button type="button" class="tab" role="tab" id="tab-windows" aria-selected="false"
-          aria-controls="panel-windows" data-tab="windows">
-          WINDOWS
-        </button>
-        <span class="platforms">MACOS · LINUX · WINDOWS</span>
+        <span class="platforms">HOST: MACOS · LINUX | APP: MACOS · WINDOWS</span>
       </div>
 
-      <div class="panel" id="panel-curl" role="tabpanel" aria-labelledby="tab-curl" data-active="true">
+      <div class="panel" id="panel-host" role="tabpanel" aria-labelledby="tab-host" data-active="true">
         <div class="command-row">
           <code class="command"
             id="cmd-curl"><span class="prompt">$ </span>curl -fsSL https://getaop.com/install.sh | sh</code>
           <button type="button" class="copy-btn" data-copy="cmd-curl">COPY</button>
         </div>
-        <p class="hint">Downloads the compiled <code>aop</code> binary (CLI + local-server + dashboard). Requires Git
-          and an agent CLI for runs.</p>
+        <p class="hint">One command installs the <code>aop</code> binary and its dashboard, puts <code>aop</code> on
+          your PATH, and starts the host as a background service (launchd on macOS, systemd on Linux). Requires Git,
+          the GitHub CLI signed in, and Claude Code signed in on that machine. To install without starting the
+          service, add <code>--no-service</code>.</p>
+        <p class="hint">Windows cannot run the host. Install it on a Mac or Linux computer and use the desktop app
+          from Windows.</p>
       </div>
 
       <div class="panel" id="panel-bun" role="tabpanel" aria-labelledby="tab-bun">
@@ -253,32 +257,38 @@
 cd aop-mono && ./install</code>
           <button type="button" class="copy-btn" data-copy="cmd-bun">COPY</button>
         </div>
-        <p class="hint">Installs from source: <code>bun install</code>, links <code>aop</code>, builds the dashboard,
-          and registers the local-server user service.</p>
+        <p class="hint">Installs the host from source on macOS or Linux: <code>bun install</code>, links
+          <code>aop</code>, builds the dashboard, and registers the local-server user service.</p>
       </div>
 
-      <div class="panel" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows">
+      <div class="panel" id="panel-desktop" role="tabpanel" aria-labelledby="tab-desktop">
         <div class="command-row">
+          <code class="command"
+            id="cmd-mac-arm"><span class="prompt">DL&gt; </span>https://getaop.com/latest/aop-macos-arm64.dmg</code>
+          <button type="button" class="copy-btn" data-copy="cmd-mac-arm">COPY</button>
+        </div>
+        <div class="command-row" style="margin-top: 0.75rem;">
+          <code class="command"
+            id="cmd-mac-x64"><span class="prompt">DL&gt; </span>https://getaop.com/latest/aop-macos-x64.dmg</code>
+          <button type="button" class="copy-btn" data-copy="cmd-mac-x64">COPY</button>
+        </div>
+        <div class="command-row" style="margin-top: 0.75rem;">
           <code class="command"
             id="cmd-windows-setup"><span class="prompt">DL&gt; </span>https://getaop.com/latest/aop-windows-x64-setup.exe</code>
           <button type="button" class="copy-btn" data-copy="cmd-windows-setup">COPY</button>
         </div>
-        <p class="hint">Desktop app installer (<code>aop-windows-x64-setup.exe</code>) — a client for your AOP
-          host on a Mac or Linux computer. Unsigned in alpha: SmartScreen may warn (More info → Run anyway).</p>
-        <div class="command-row" style="margin-top: 0.75rem;">
-          <code class="command"
-            id="cmd-windows"><span class="prompt">PS&gt; </span>irm https://getaop.com/install.ps1 | iex</code>
-          <button type="button" class="copy-btn" data-copy="cmd-windows">COPY</button>
-        </div>
-        <p class="hint">CLI-only install via PowerShell (prebuilt <code>aop-windows-x64.exe</code> + runtime
-          assets under <code>%LOCALAPPDATA%\aop</code>).
-          <br />WSL users: run the Linux <code>curl</code> command <em>inside your distro</em> instead.</p>
+        <p class="hint">A client of your AOP host: enter the host's <code>https://</code> address and a pairing
+          code. The macOS app comes in Apple silicon (arm64) and Intel (x64) builds. The Windows app starts no
+          server.</p>
+        <p class="hint">These builds are not signed yet. On macOS, right-click the app and choose Open the first
+          time (or allow it in System Settings, Privacy &amp; Security). On Windows, SmartScreen says "Windows
+          protected your PC": choose More info, then Run anyway.</p>
       </div>
     </div>
 
     <footer>
       <span>MIT</span>
-      <span>Requires Bun 1.2+ (source path) · Git</span>
+      <span>Bun (source install only) · Git</span>
       <a href="https://github.com/get-aop/aop-mono">read the source ↗</a>
     </footer>
   </main>

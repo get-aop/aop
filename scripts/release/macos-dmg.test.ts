@@ -93,6 +93,13 @@ describe("macos-dmg signing config", () => {
     );
   });
 
+  test("keeps the ad-hoc signature on an unsigned build even on a CI pull request", () => {
+    expect(electronBuilderSigningEnv({ mode: "unsigned" })).toEqual({
+      CSC_IDENTITY_AUTO_DISCOVERY: "false",
+      CSC_FOR_PULL_REQUEST: "true",
+    });
+  });
+
   test("removes the certificate class prefix for Electron Builder", () => {
     expect(
       electronBuilderSigningEnv({

@@ -1,9 +1,24 @@
 name: Release
 
-# Full AOP release: builds linux/darwin/windows binaries, signs + notarizes the
-# macOS DMGs, packages the Windows NSIS installer, publishes the GitHub Release,
-# and deploys artifacts + the latest/version pointer to Cloudflare R2 (and the
-# legacy SSH host on tag pushes).
+# What ships:
+#   - the host for macOS and Linux: aop-{linux,darwin}-{x64,arm64} plus runtime-assets.tar.gz,
+#     installed by scripts/installer/install.sh (one terminal command, no installer app);
+#   - the desktop app, a client of a host that launches no server on Windows: aop-macos-*.dmg and
+#     aop-windows-x64-setup.exe.
+# Windows has no host, CLI or server build.
+#
+# On a pull request the workflow builds and checks every artifact and stops there: nothing is
+# published. Publishing (GitHub Release + Cloudflare R2) runs only for a v* tag push or a manual
+# dispatch.
+#
+# Builds are UNSIGNED for now (decided for issue 342; signing is not settled). The signing secrets
+# are only read when the repository variable AOP_SIGN_RELEASES is "true" AND the run is a release
+# (never a pull request), so setting a secret alone does not turn signing on. To sign, set the
+# variable and make sure these secrets exist; no workflow change is needed:
+#   macOS:   AOP_MACOS_CERTIFICATE_P12_BASE64, AOP_MACOS_CERTIFICATE_PASSWORD,
+#            AOP_MACOS_SIGN_IDENTITY, AOP_MACOS_NOTARIZE, APPLE_ID, APPLE_TEAM_ID,
+#            APPLE_APP_SPECIFIC_PASSWORD
+#   Windows: AOP_WINDOWS_PFX_BASE64, AOP_WINDOWS_PFX_PASSWORD
 on:
   push:
     tags:
@@ -14,9 +29,16 @@ on:
         description: Git ref whose source should be packaged
         required: false
         type: string
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "apps/desktop/**"
+      - "scripts/desktop/**"
+      - "scripts/installer/**"
+      - "scripts/release/**"
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CHECKOUT_REF: ${{ inputs.release_ref || github.ref }}
@@ -50,7 +72,7 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # Cross-compiles all 6 CLI binaries (linux/darwin/windows) + runtime-assets.tar.gz.
+      # Cross-compiles the 4 host binaries (linux/darwin x x64/arm64) + runtime-assets.tar.gz.
       - run: bun run build:release
 
       - uses: actions/upload-artifact@v7.0.1
@@ -62,6 +84,8 @@ jobs:
   package-macos:
     needs: build
     runs-on: macos-latest
+    env:
+      SIGN_RELEASE: ${{ github.event_name != 'pull_request' && vars.AOP_SIGN_RELEASES == 'true' }}
     steps:
       - uses: actions/checkout@v7.0.0
         with:
@@ -78,15 +102,18 @@ jobs:
           name: release-binaries
           path: dist/release
 
+      # TODO(signing): set the AOP_SIGN_RELEASES variable (see the top of this file) to sign. Until
+      # then this step is skipped and the DMGs are unsigned, so macOS Gatekeeper warns on first open.
       - name: Import Apple Developer ID certificate
+        if: env.SIGN_RELEASE == 'true'
         env:
-          AOP_MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.AOP_MACOS_CERTIFICATE_P12_BASE64 }}
-          AOP_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.AOP_MACOS_CERTIFICATE_PASSWORD }}
-          AOP_MACOS_KEYCHAIN_PASSWORD: ${{ secrets.AOP_MACOS_KEYCHAIN_PASSWORD }}
+          AOP_MACOS_CERTIFICATE_P12_BASE64: ${{ env.SIGN_RELEASE == 'true' && secrets.AOP_MACOS_CERTIFICATE_P12_BASE64 || '' }}
+          AOP_MACOS_CERTIFICATE_PASSWORD: ${{ env.SIGN_RELEASE == 'true' && secrets.AOP_MACOS_CERTIFICATE_PASSWORD || '' }}
+          AOP_MACOS_KEYCHAIN_PASSWORD: ${{ env.SIGN_RELEASE == 'true' && secrets.AOP_MACOS_KEYCHAIN_PASSWORD || '' }}
         run: |
           if [ -z "${AOP_MACOS_CERTIFICATE_P12_BASE64:-}" ]; then
-            echo "No Apple certificate configured; macOS DMGs will be unsigned."
-            exit 0
+            echo "AOP_SIGN_RELEASES is on but no Apple certificate is configured." >&2
+            exit 1
           fi
 
           KEYCHAIN_PASSWORD="${AOP_MACOS_KEYCHAIN_PASSWORD:-$(uuidgen)}"
@@ -101,13 +128,15 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+      # TODO(notarization): set AOP_MACOS_NOTARIZE=1 with APPLE_ID, APPLE_TEAM_ID and
+      # APPLE_APP_SPECIFIC_PASSWORD to have Apple notarize the DMGs.
       - name: Package macOS DMGs
         env:
-          AOP_MACOS_SIGN_IDENTITY: ${{ secrets.AOP_MACOS_SIGN_IDENTITY }}
-          AOP_MACOS_NOTARIZE: ${{ secrets.AOP_MACOS_NOTARIZE }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          AOP_MACOS_SIGN_IDENTITY: ${{ env.SIGN_RELEASE == 'true' && secrets.AOP_MACOS_SIGN_IDENTITY || '' }}
+          AOP_MACOS_NOTARIZE: ${{ env.SIGN_RELEASE == 'true' && secrets.AOP_MACOS_NOTARIZE || '' }}
+          APPLE_ID: ${{ env.SIGN_RELEASE == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_TEAM_ID: ${{ env.SIGN_RELEASE == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ env.SIGN_RELEASE == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
         run: bun run package:macos-dmg -- --version "${{ needs.build.outputs.version }}"
 
       - uses: actions/upload-artifact@v7.0.1
@@ -118,9 +147,13 @@ jobs:
             dist/release/aop-macos-arm64.dmg
           retention-days: 1
 
+  # The Windows app is a client of a host: it bundles the dashboard and carries no server, so this
+  # job needs neither the host binaries nor any cross-compilation.
   package-windows:
     needs: build
     runs-on: windows-latest
+    env:
+      SIGN_RELEASE: ${{ github.event_name != 'pull_request' && vars.AOP_SIGN_RELEASES == 'true' }}
     steps:
       - uses: actions/checkout@v7.0.0
         with:
@@ -132,34 +165,13 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - uses: actions/download-artifact@v8.0.1
-        with:
-          name: release-binaries
-          path: dist/release
-
-      - name: Prime Bun Linux cross-compile target
-        shell: pwsh
-        run: |
-          # Bun cannot extract cross-compile targets when the project is on the runner's D: drive.
-          $primeDir = Join-Path $env:SystemDrive "aop-bun-cross-compile"
-          Remove-Item $primeDir -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $primeDir | Out-Null
-          Set-Content -Path (Join-Path $primeDir "index.ts") -Value "console.log('aop')"
-          Push-Location $primeDir
-          try {
-            bun build index.ts --compile --target=bun-linux-x64 --outfile aop-cross-compile-prime
-          } finally {
-            Pop-Location
-            Remove-Item $primeDir -Recurse -Force -ErrorAction SilentlyContinue
-          }
-
-      - name: Build Windows installer inputs
-        run: bun run build:release -- --target linux-x64
-
-      - name: Package Windows installer
+      # TODO(signing): set the AOP_SIGN_RELEASES variable, with AOP_WINDOWS_PFX_BASE64 and
+      # AOP_WINDOWS_PFX_PASSWORD, to Authenticode-sign the installer. Until then it is unsigned, so
+      # Windows SmartScreen warns on first run.
+      - name: Package Windows desktop installer
         env:
-          AOP_WINDOWS_PFX_BASE64: ${{ secrets.AOP_WINDOWS_PFX_BASE64 }}
-          AOP_WINDOWS_PFX_PASSWORD: ${{ secrets.AOP_WINDOWS_PFX_PASSWORD }}
+          AOP_WINDOWS_PFX_BASE64: ${{ env.SIGN_RELEASE == 'true' && secrets.AOP_WINDOWS_PFX_BASE64 || '' }}
+          AOP_WINDOWS_PFX_PASSWORD: ${{ env.SIGN_RELEASE == 'true' && secrets.AOP_WINDOWS_PFX_PASSWORD || '' }}
         run: bun run package:windows -- --version "${{ needs.build.outputs.version }}"
 
       - uses: actions/upload-artifact@v7.0.1
@@ -168,7 +180,9 @@ jobs:
           path: dist/release/aop-windows-x64-setup.exe
           retention-days: 1
 
-  release:
+  # Puts the pieces together and checks that exactly the expected set exists. This is the last step
+  # a pull request reaches.
+  assemble:
     needs: [build, package-macos, package-windows]
     runs-on: ubuntu-latest
     steps:
@@ -182,7 +196,6 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # Reassemble the full artifact set produced across the build/package jobs.
       - uses: actions/download-artifact@v8.0.1
         with:
           name: release-binaries
@@ -198,8 +211,60 @@ jobs:
           name: release-windows
           path: dist/release
 
+      - name: Check the artifact set
+        run: |
+          for name in aop-linux-x64 aop-linux-arm64 aop-darwin-x64 aop-darwin-arm64 \
+            aop-macos-x64.dmg aop-macos-arm64.dmg aop-windows-x64-setup.exe runtime-assets.tar.gz; do
+            if [ ! -s "dist/release/$name" ]; then
+              echo "Missing or empty release artifact: $name" >&2
+              exit 1
+            fi
+          done
+          # Windows never hosts: a server or CLI build for it means an old target crept back in.
+          if [ -e dist/release/aop-windows-x64.exe ]; then
+            echo "Unexpected Windows host binary: aop-windows-x64.exe" >&2
+            exit 1
+          fi
+
       - name: Generate release checksums
         run: bun run ./scripts/release/checksums.ts dist/release
+
+      - name: List release artifacts
+        run: |
+          ls -l dist/release
+          cat dist/release/checksums.sha256
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: release-all
+          path: |
+            dist/release/aop-linux-x64
+            dist/release/aop-linux-arm64
+            dist/release/aop-darwin-x64
+            dist/release/aop-darwin-arm64
+            dist/release/aop-macos-x64.dmg
+            dist/release/aop-macos-arm64.dmg
+            dist/release/aop-windows-x64-setup.exe
+            dist/release/runtime-assets.tar.gz
+            dist/release/checksums.sha256
+          retention-days: 1
+
+  # Never runs for a pull request.
+  release:
+    if: github.event_name != 'pull_request'
+    needs: [build, assemble]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: release-all
+          path: dist/release
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3.0.1
@@ -212,27 +277,17 @@ jobs:
             dist/release/aop-linux-arm64
             dist/release/aop-darwin-x64
             dist/release/aop-darwin-arm64
-            dist/release/aop-windows-x64.exe
-            dist/release/aop-windows-x64-setup.exe
             dist/release/aop-macos-x64.dmg
             dist/release/aop-macos-arm64.dmg
+            dist/release/aop-windows-x64-setup.exe
             dist/release/runtime-assets.tar.gz
             dist/release/checksums.sha256
 
+      # Uploads the versioned artifacts, then the install script stamped with this version. See
+      # scripts/release/deploy-r2.sh.
       - name: Deploy release assets to Cloudflare R2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           AOP_RELEASES_R2_BUCKET: ${{ secrets.AOP_RELEASES_R2_BUCKET }}
         run: bash scripts/release/deploy-r2.sh "${{ needs.build.outputs.version }}"
-
-      - name: Deploy to legacy SSH host
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        env:
-          GETAOP_DEPLOY_HOST: ${{ secrets.GETAOP_DEPLOY_HOST }}
-          GETAOP_DEPLOY_USER: ${{ secrets.GETAOP_DEPLOY_USER }}
-          GETAOP_DEPLOY_SSH_KEY: ${{ secrets.GETAOP_DEPLOY_SSH_KEY }}
-          GETAOP_DEPLOY_PATH: ${{ secrets.GETAOP_DEPLOY_PATH }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          bash scripts/release/deploy-getaop.sh "$VERSION"

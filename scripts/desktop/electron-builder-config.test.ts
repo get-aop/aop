@@ -37,6 +37,19 @@ describe("Electron Builder configuration", () => {
     });
   });
 
+  test("gives an unsigned macOS build an ad-hoc signature so Apple silicon can launch it", () => {
+    const unsigned = createElectronBuilderConfig({
+      version: "0.9.49",
+      notarize: false,
+      signed: false,
+    });
+    const signed = createElectronBuilderConfig({ version: "0.9.49", notarize: false });
+
+    expect(unsigned.mac).toMatchObject({ identity: "-", hardenedRuntime: false });
+    expect(signed.mac.identity).toBeUndefined();
+    expect(signed.mac.hardenedRuntime).toBe(true);
+  });
+
   test("keeps the Windows installer per-user and x64", () => {
     const config = createElectronBuilderConfig({ version: "0.9.49", notarize: false });
 

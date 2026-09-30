@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { generateChecksumFile, RELEASE_CHECKSUM_ARTIFACTS } from "./checksums.ts";
 
 describe("release checksums", () => {
-  test("includes the Windows installer in the release manifest", () => {
+  test("includes the Windows desktop installer but no Windows host binary", () => {
     expect(RELEASE_CHECKSUM_ARTIFACTS).toContain("aop-windows-x64-setup.exe");
+    expect(RELEASE_CHECKSUM_ARTIFACTS).not.toContain("aop-windows-x64.exe");
   });
 
   test("writes checksums for binaries and DMGs using artifact basenames", async () => {

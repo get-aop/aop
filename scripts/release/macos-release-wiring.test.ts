@@ -7,7 +7,7 @@ const readReleaseWorkflow = (): Promise<string> =>
   readFile(join(ROOT, ".github/workflows/release.yml"), "utf8");
 
 describe("release wiring", () => {
-  test("exposes package scripts for local DMG and Windows installer builds", async () => {
+  test("exposes package scripts for local DMG and Windows desktop installer builds", async () => {
     const pkg = await Bun.file(join(ROOT, "package.json")).json();
 
     expect(pkg.scripts["package:macos-dmg"]).toBe("bun run ./scripts/release/macos-dmg.ts");
@@ -26,7 +26,7 @@ describe("release wiring", () => {
     expect(builderConfig).toContain('import packageInfo from "../../package.json"');
   });
 
-  test("runs one tag-triggered release workflow with mac, windows, and core jobs", async () => {
+  test("runs one release workflow with host, mac, windows, assemble and release jobs", async () => {
     const releaseWorkflow = await readReleaseWorkflow();
 
     expect(releaseWorkflow).toContain("on:");
@@ -35,8 +35,21 @@ describe("release wiring", () => {
     expect(releaseWorkflow).toContain("package-macos:");
     expect(releaseWorkflow).toContain("package-windows:");
     expect(releaseWorkflow).toContain("build:");
+    expect(releaseWorkflow).toContain("assemble:");
     expect(releaseWorkflow).toContain("release:");
     expect(releaseWorkflow).not.toContain("[self-hosted, windows]");
+  });
+
+  test("builds every artifact on a pull request but publishes only from a tag or dispatch", async () => {
+    const releaseWorkflow = await readReleaseWorkflow();
+    const releaseJob = releaseWorkflow.slice(releaseWorkflow.indexOf("\n  release:"));
+
+    expect(releaseWorkflow).toContain("pull_request:");
+    expect(releaseJob).toContain("if: github.event_name != 'pull_request'");
+    // Only the publishing job may write; everything a pull request reaches is read-only.
+    expect(releaseWorkflow.match(/contents: write/g)).toHaveLength(1);
+    expect(releaseJob).toContain("contents: write");
+    expect(releaseWorkflow).toContain("permissions:\n  contents: read");
   });
 
   test("packages macOS with certificate import, signing, and notarization on macos-latest", async () => {
@@ -54,21 +67,44 @@ describe("release wiring", () => {
     expect(releaseWorkflow).not.toContain("rust-toolchain");
   });
 
-  test("packages the Windows NSIS installer on windows-latest", async () => {
+  test("reads signing secrets only for a release with AOP_SIGN_RELEASES on, never for a pull request", async () => {
     const releaseWorkflow = await readReleaseWorkflow();
+    const secretLines = releaseWorkflow
+      .split("\n")
+      .filter((line) => /secrets\.(AOP_MACOS|APPLE|AOP_WINDOWS)/.test(line));
 
-    expect(releaseWorkflow).toContain("package-windows:");
-    expect(releaseWorkflow).toContain("runs-on: windows-latest");
-    expect(releaseWorkflow).toContain("- name: Prime Bun Linux cross-compile target");
-    expect(releaseWorkflow).toContain("--compile --target=bun-linux-x64");
-    expect(releaseWorkflow).toContain("bun run package:windows");
-    expect(releaseWorkflow).toContain("aop-windows-x64-setup.exe");
+    const switchExpression =
+      "{{ github.event_name != 'pull_request' && vars.AOP_SIGN_RELEASES == 'true' }}";
+
+    expect(releaseWorkflow).toContain(`SIGN_RELEASE: $${switchExpression}`);
+    expect(secretLines.length).toBeGreaterThan(0);
+    // Every signing secret is behind the switch, so a pull request build cannot notarize or sign.
+    for (const line of secretLines) {
+      expect(line).toContain("env.SIGN_RELEASE == 'true' &&");
+    }
   });
 
-  test("assembles the GitHub Release from every job's artifacts and deploys to R2", async () => {
+  test("packages the Windows desktop client on windows-latest without a server build", async () => {
+    const releaseWorkflow = await readReleaseWorkflow();
+    const windowsJob = releaseWorkflow.slice(
+      releaseWorkflow.indexOf("  package-windows:"),
+      releaseWorkflow.indexOf("  assemble:"),
+    );
+
+    expect(windowsJob).toContain("runs-on: windows-latest");
+    expect(windowsJob).toContain("bun run package:windows");
+    expect(windowsJob).toContain("aop-windows-x64-setup.exe");
+    expect(windowsJob).toContain("AOP_WINDOWS_PFX_BASE64");
+    // Windows is a client: no host binaries are downloaded and nothing is cross-compiled.
+    expect(windowsJob).not.toContain("release-binaries");
+    expect(windowsJob).not.toContain("build:release");
+    expect(windowsJob).not.toContain("--compile");
+  });
+
+  test("assembles the GitHub Release from the checked artifact set and deploys to R2", async () => {
     const releaseWorkflow = await readReleaseWorkflow();
 
-    const releaseIndex = releaseWorkflow.indexOf("  release:");
+    const releaseIndex = releaseWorkflow.indexOf("\n  release:");
     const r2Index = releaseWorkflow.indexOf("Deploy release assets to Cloudflare R2");
     expect(releaseIndex).toBeGreaterThan(-1);
     expect(r2Index).toBeGreaterThan(releaseIndex);
@@ -80,7 +116,22 @@ describe("release wiring", () => {
     expect(releaseWorkflow).toContain("checksums.sha256");
     expect(releaseWorkflow).toContain("bash scripts/release/deploy-r2.sh");
     expect(releaseWorkflow).toContain("CLOUDFLARE_API_TOKEN");
-    expect(releaseWorkflow).toContain("Deploy to legacy SSH host");
+  });
+
+  test("ships no Windows host, PowerShell installer, version feed or legacy SSH deploy", async () => {
+    const releaseWorkflow = await readReleaseWorkflow();
+    const pkg = await Bun.file(join(ROOT, "package.json")).json();
+
+    // The assemble job names the file only to fail the build if it ever reappears.
+    expect(releaseWorkflow).not.toContain("dist/release/aop-windows-x64.exe\n");
+    expect(releaseWorkflow).toContain("Unexpected Windows host binary");
+    expect(releaseWorkflow).not.toContain("install.ps1");
+    expect(releaseWorkflow).not.toContain("latest/version");
+    expect(releaseWorkflow).not.toContain("legacy SSH");
+    expect(releaseWorkflow).not.toContain("GETAOP_DEPLOY");
+    expect(await Bun.file(join(ROOT, "scripts/installer/install.ps1")).exists()).toBe(false);
+    expect(await Bun.file(join(ROOT, "scripts/release/deploy-getaop.sh")).exists()).toBe(false);
+    expect(pkg.scripts["build:release"]).toBeDefined();
   });
 
   test("removes the standalone self-hosted Windows workflow", async () => {
@@ -94,18 +145,18 @@ describe("release wiring", () => {
     expect(localPublisher).toContain('"./scripts/release/checksums.ts"');
   });
 
-  test("publishes macOS immediately and Windows when its independent artifacts exist", async () => {
+  test("publishes the desktop downloads and the stamped install script from R2", async () => {
     const r2 = await readFile(join(ROOT, "scripts/release/deploy-r2.sh"), "utf8");
-    const legacy = await readFile(join(ROOT, "scripts/release/deploy-getaop.sh"), "utf8");
-    const releaseDirRef = "$" + "{RELEASE_DIR}";
 
     // Anchored to line start so a commented-out (# upload_...) line fails the test.
     expect(r2).toMatch(/^upload_artifact "aop-macos-x64\.dmg" "application\/x-apple-diskimage"/m);
     expect(r2).toMatch(
       /^upload_optional_artifact "aop-windows-x64-setup\.exe" "application\/octet-stream"/m,
     );
-    expect(r2).toMatch(/^\s+upload_object "latest\/aop-windows-x64-setup\.exe"/m);
-    expect(legacy).toContain(`"${releaseDirRef}/aop-macos-x64.dmg"`);
-    expect(legacy).toContain(`"${releaseDirRef}/aop-windows-x64-setup.exe"`);
+    expect(r2).toMatch(/^upload_latest_alias "aop-windows-x64-setup\.exe"/m);
+    expect(r2).toMatch(/^upload_object "install\.sh"/m);
+    expect(r2).not.toContain("latest/version");
+    expect(r2).not.toContain("install.ps1");
+    expect(r2).not.toContain("aop-windows-x64.exe");
   });
 });

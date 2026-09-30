@@ -97,7 +97,7 @@ export const runRelease = async (
     console.log("");
     console.log("Release commit and tag pushed.");
     console.log(
-      "The Release workflow (macOS + Windows + Linux + R2 deploy) now runs from the tag push.",
+      "The Release workflow (host binaries, macOS and Windows desktop apps, R2 deploy) now runs from the tag push.",
     );
     console.log("Watch it with: gh run watch --repo get-aop/aop-mono");
     console.log("");

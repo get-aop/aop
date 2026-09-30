@@ -1,15 +1,16 @@
 # Install page
 
-Static install UI (`index.html`) with **CURL** and **BUN** tabs, styled like a minimal product install block.
+Static install UI (`index.html`) with **HOST**, **DESKTOP APP** and **SOURCE** tabs, styled like a minimal product install block.
 
-The page should sell the install target, not only the command. The copy should make clear what AOP installs: a local server and dashboard that drive the agent CLIs you already have.
+The page says what each install gives you: the host is the server that keeps your projects and runs the agents (macOS and Linux only), and the desktop app is a client that connects to a host (macOS and Windows). Windows has no host, CLI or server.
 
-## Commands
+## Tabs
 
-| Tab | What it does |
-|-----|----------------|
-| **CURL** | `curl -fsSL https://getaop.com/install.sh \| sh` — prebuilt binary from [`scripts/installer/install.sh`](../../scripts/installer/install.sh) |
-| **BUN** | Clone [get-aop/aop-mono](https://github.com/get-aop/aop-mono) and run `./install` (source + user service) |
+| Tab | What it shows |
+| --- | --- |
+| **HOST** | `curl -fsSL https://getaop.com/install.sh \| sh`: fetches the build for the machine, puts `aop` on PATH and starts the background service. The script is [`scripts/installer/install.sh`](../../scripts/installer/install.sh). `--no-service` installs without starting it. |
+| **DESKTOP APP** | Durable download links for the macOS DMGs and the Windows installer, with the first-run warnings for unsigned builds. |
+| **SOURCE** | Clone [get-aop/aop-mono](https://github.com/get-aop/aop-mono) and run `./install` (builds from source and registers the service). |
 
 ## Preview locally
 
@@ -21,11 +22,4 @@ bunx serve docs/install
 
 ## Deploy (getaop.com)
 
-Copy to your static host next to `install.sh`:
-
-```bash
-cp docs/install/index.html /var/www/getaop.com/index.html
-cp scripts/installer/install.sh /var/www/getaop.com/install.sh
-```
-
-See [`scripts/installer/DEPLOY.md`](../../scripts/installer/DEPLOY.md) for the full release layout.
+`index.html` is static; copy it to the site root. `install.sh` and the download links are published by the release, not by hand: see [Releasing AOP](../RELEASE.md).

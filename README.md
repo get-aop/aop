@@ -6,7 +6,7 @@ The AOP host runs on your own machine and is reached over Tailscale. Every compu
 
 ## Status
 
-AOP is alpha software. Phase 1 is Claude Code only; the host runs on macOS or Linux, and Windows and macOS are clients. The Codex CLI and PI adapters stay in the tree but are not exposed until Phase 2, and there is no cloud host or mobile client yet. The builds published at [getaop.com](https://getaop.com) are the earlier product, not this one. Expect breaking changes.
+AOP is alpha software. Phase 1 is Claude Code only; the host runs on macOS or Linux, and Windows and macOS are clients. The Codex CLI and PI adapters stay in the tree but are not exposed until Phase 2, and there is no cloud host or mobile client yet. The builds published at [getaop.com](https://getaop.com) are the earlier product until the first release is cut from this tree (see [Releasing](./docs/RELEASE.md)); until then, install from source. Expect breaking changes.
 
 ## What you need
 
@@ -17,15 +17,31 @@ AOP is alpha software. Phase 1 is Claude Code only; the host runs on macOS or Li
 
 ## Install the host
 
+The host runs on macOS and Linux. Windows has no host: use the desktop app there and connect it to a host on a Mac or Linux computer.
+
+From a release, one command downloads the build for your machine, puts `aop` on your PATH and starts the host as a background service (launchd on macOS, systemd on Linux):
+
+```bash
+curl -fsSL https://getaop.com/install.sh | sh
+```
+
+It needs Git, the GitHub CLI signed in, and Claude Code signed in on that machine, and it says what is missing before it changes anything. `--no-service` installs the files without starting the service; run the host yourself with `aop run`. To pin a version, add `--version X.Y.Z` (`sh -s -- --version X.Y.Z`).
+
+From source:
+
 ```bash
 git clone https://github.com/get-aop/aop-mono.git
 cd aop-mono
 ./install
 ```
 
-The installer builds AOP, links the `aop` CLI, and registers the host as a background launchd or systemd user service, so closing a browser does not stop work. It keeps its state under `~/.aop/`. When it finishes, open `http://aop.localhost:25150` (set `AOP_OPEN_DASHBOARD=1` before `./install` to have it open the page for you).
+The source installer builds AOP, links the `aop` CLI, and registers the host as a background launchd or systemd user service, so closing a browser does not stop work. Either way the host keeps its state under `~/.aop/`. When it finishes, open `http://aop.localhost:25150` (set `AOP_OPEN_DASHBOARD=1` before `./install` to have it open the page for you).
 
-To remove it, run `./uninstall`. It stops the service and unlinks the CLI, and it leaves `~/.aop/` intact.
+To remove a source install, run `./uninstall`. It stops the service and unlinks the CLI, and it leaves `~/.aop/` intact. To remove a release install, stop the service (`launchctl unload ~/Library/LaunchAgents/com.aop.local-server.plist` on macOS, `systemctl --user disable --now aop-local-server` on Linux), delete that service file, and delete `aop` and the `dashboard` folder next to it (in `/usr/local/bin` or `~/.local/bin`).
+
+## Install the desktop app
+
+The desktop app for macOS (Apple silicon or Intel) and Windows connects to a host. You do not need it on the host itself, where the dashboard opens in a browser. Download it from [getaop.com](https://getaop.com). The builds are not signed yet, so the first launch shows a warning: on macOS, right-click the app and choose Open; on Windows, choose More info, then Run anyway in SmartScreen. [Running the host](./docs/HOST.md#the-desktop-app) has the details.
 
 ## Your first project
 
@@ -56,7 +72,7 @@ If a message to the coordinator comes back with `Runtime exited with code ...`, 
 | [MCP](./docs/MCP.md) | The tools the coordinator and threads call, and how the endpoint is authenticated |
 | [CLI](./apps/cli/README.md) | Commands of the `aop` HTTP client |
 | [Architecture](./docs/architecture/README.md) | How projects, threads, the chat engine and the clients fit together, and the deeper guides on each part |
-| [Releasing](./docs/RELEASE.md) | Cutting a release and publishing installers |
+| [Releasing](./docs/RELEASE.md) | Cutting a release, what it publishes, and signing the builds |
 
 ## Contributing
 

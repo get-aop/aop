@@ -4,7 +4,8 @@ import { basename, isAbsolute, join, resolve } from "node:path";
 const MAC_ARCHES = ["x64", "arm64"] as const;
 
 /**
- * The full set of release artifacts the central release job checksums. This is the single
+ * The full set of release artifacts the central release job checksums. The host binaries are macOS
+ * and Linux only; the Windows installer is the desktop app, which carries no server. This is the single
  * source of truth for what ships in checksums.sha256 — the build/package jobs must not
  * write the authoritative file. Missing files are skipped (resolvePresentReleaseArtifacts),
  * so partial local builds still produce a valid manifest.
@@ -15,7 +16,6 @@ export const RELEASE_CHECKSUM_ARTIFACTS = [
   "aop-linux-arm64",
   "aop-darwin-x64",
   "aop-darwin-arm64",
-  "aop-windows-x64.exe",
   ...MAC_ARCHES.map((arch) => `aop-macos-${arch}.dmg`),
   "aop-windows-x64-setup.exe",
 ];

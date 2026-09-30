@@ -18,19 +18,19 @@ const REQUIRED_ARTIFACTS = [
   "runtime-assets.tar.gz",
   "checksums.sha256",
 ];
-const OPTIONAL_ARTIFACTS = ["aop-windows-x64.exe", "aop-windows-x64-setup.exe"];
+const OPTIONAL_ARTIFACTS = ["aop-windows-x64-setup.exe"];
 
 describe("deploy-r2.sh release commit point", () => {
-  test("flips latest/version last, after verifying every artifact on the public CDN", async () => {
+  test("publishes the stamped install script last, after verifying every artifact on the public CDN", async () => {
     const harness = await createHarness();
 
     const result = await harness.run();
 
     expect(result.exitCode).toBe(0);
     const lines = await harness.readCallLog();
-    const pointerIndex = uploadIndex(lines, "latest/version");
-    // The pointer flip is the commit point, so it must be the very last call.
-    expect(pointerIndex).toBe(lines.length - 1);
+    // The install script is the commit point, so it must be the very last call.
+    const installIndex = uploadIndex(lines, "install.sh");
+    expect(installIndex).toBe(lines.length - 1);
 
     const uploaded = [...REQUIRED_ARTIFACTS, ...OPTIONAL_ARTIFACTS];
     const uploadIndexes = uploaded.map((name) => uploadIndex(lines, `v${VERSION}/${name}`));
@@ -40,16 +40,43 @@ describe("deploy-r2.sh release commit point", () => {
     }
 
     // Every verification probe runs after every versioned upload and before the
-    // flip, with only verification between the stable pointers and the flip.
+    // durable desktop download URLs and the install script go live.
     const lastUpload = Math.max(...uploadIndexes);
     const firstVerify = Math.min(...verifyIndexes);
     expect(firstVerify).toBeGreaterThan(lastUpload);
-    expect(Math.max(...verifyIndexes)).toBeLessThan(pointerIndex);
-    for (const key of ["install.sh", "install.ps1", "latest/aop-windows-x64-setup.exe"]) {
-      const stableIndex = uploadIndex(lines, key);
-      expect(stableIndex).toBeGreaterThanOrEqual(0);
-      expect(stableIndex).toBeLessThan(firstVerify);
+    for (const key of [
+      "latest/aop-macos-arm64.dmg",
+      "latest/aop-macos-x64.dmg",
+      "latest/aop-windows-x64-setup.exe",
+    ]) {
+      const aliasIndex = uploadIndex(lines, key);
+      expect(aliasIndex).toBeGreaterThan(Math.max(...verifyIndexes));
+      expect(aliasIndex).toBeLessThan(installIndex);
     }
+  });
+
+  test("stamps the release version into the uploaded install script", async () => {
+    const harness = await createHarness();
+
+    const result = await harness.run();
+
+    expect(result.exitCode).toBe(0);
+    const uploadedScript = await harness.readUploadedFile("install.sh");
+    expect(uploadedScript).toContain(`DEFAULT_VERSION="${VERSION}"`);
+    expect(uploadedScript).not.toContain('DEFAULT_VERSION="__AOP_VERSION__"');
+    // The guard that rejects an unstamped copy keeps its placeholder so it still works.
+    expect(uploadedScript).toContain('[ "$DEFAULT_VERSION" = "__AOP_VERSION__" ]');
+  });
+
+  test("publishes no version feed, Windows host binary or PowerShell installer", async () => {
+    const harness = await createHarness();
+
+    await harness.run();
+
+    const lines = await harness.readCallLog();
+    expect(lines.some((line) => line.includes("latest/version"))).toBe(false);
+    expect(lines.some((line) => line.includes("install.ps1"))).toBe(false);
+    expect(lines.some((line) => line.includes("aop-windows-x64.exe"))).toBe(false);
   });
 
   test("rides out CDN propagation by retrying until an artifact appears", async () => {
@@ -61,10 +88,10 @@ describe("deploy-r2.sh release commit point", () => {
     expect(result.exitCode).toBe(0);
     const lines = await harness.readCallLog();
     expect(countProbes(lines, "aop-darwin-arm64")).toBe(2);
-    expect(uploadIndex(lines, "latest/version")).toBe(lines.length - 1);
+    expect(uploadIndex(lines, "install.sh")).toBe(lines.length - 1);
   });
 
-  test("aborts without flipping the pointer when an artifact never becomes available", async () => {
+  test("aborts without publishing the install script when an artifact never becomes available", async () => {
     const harness = await createHarness();
     await harness.markUnavailable("aop-darwin-arm64");
 
@@ -75,23 +102,24 @@ describe("deploy-r2.sh release commit point", () => {
       `Release artifact never became publicly available: ${artifactUrl("aop-darwin-arm64")}`,
     );
     const lines = await harness.readCallLog();
-    // Installed clients must never learn about a release with missing assets.
-    expect(uploadIndex(lines, "latest/version")).toBe(-1);
+    // Nobody is pointed at a release with missing assets.
+    expect(uploadIndex(lines, "install.sh")).toBe(-1);
+    expect(uploadIndex(lines, "latest/aop-macos-arm64.dmg")).toBe(-1);
     expect(countProbes(lines, "aop-darwin-arm64")).toBe(2);
-    // The abort happens at verification time, after the artifact uploads ran.
-    expect(uploadIndex(lines, "install.sh")).toBeGreaterThanOrEqual(0);
   });
 
-  test("skips verification for optional artifacts that were not uploaded", async () => {
+  test("skips verification and the alias for optional artifacts that were not built", async () => {
     const harness = await createHarness({ withOptionalArtifacts: false });
 
     const result = await harness.run();
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Skipping optional release artifact: aop-windows-x64.exe");
+    expect(result.stdout).toContain(
+      "Skipping optional release artifact: aop-windows-x64-setup.exe",
+    );
     const lines = await harness.readCallLog();
     expect(lines.some((line) => line.includes("aop-windows-x64"))).toBe(false);
-    expect(uploadIndex(lines, "latest/version")).toBe(lines.length - 1);
+    expect(uploadIndex(lines, "install.sh")).toBe(lines.length - 1);
   });
 });
 
@@ -107,6 +135,7 @@ type Harness = {
   readCallLog: () => Promise<string[]>;
   markUnavailable: (name: string) => Promise<void>;
   markUnavailableOnce: (name: string) => Promise<void>;
+  readUploadedFile: (key: string) => Promise<string>;
 };
 
 type RunResult = { exitCode: number; stdout: string; stderr: string };
@@ -128,6 +157,8 @@ const createHarness = async ({ withOptionalArtifacts = true } = {}): Promise<Har
   await writeStub(join(binDir, "curl"), CURL_STUB);
 
   const callLogPath = join(workDir, "calls.log");
+  const uploadsDir = join(workDir, "uploads");
+  await mkdir(uploadsDir);
   const unavailablePath = join(workDir, "curl-unavailable");
   const unavailableOncePath = join(workDir, "curl-unavailable-once");
 
@@ -140,6 +171,7 @@ const createHarness = async ({ withOptionalArtifacts = true } = {}): Promise<Har
         releaseDir,
         unavailableOncePath,
         unavailablePath,
+        uploadsDir,
         workDir,
       }),
     readCallLog: async () => {
@@ -148,6 +180,7 @@ const createHarness = async ({ withOptionalArtifacts = true } = {}): Promise<Har
     },
     markUnavailable: (name) => appendFile(unavailablePath, `${artifactUrl(name)}\n`),
     markUnavailableOnce: (name) => appendFile(unavailableOncePath, `${artifactUrl(name)}\n`),
+    readUploadedFile: (key) => readFile(join(uploadsDir, key.replaceAll("/", "__")), "utf8"),
   };
 };
 
@@ -158,6 +191,7 @@ type RunScriptOptions = {
   releaseDir: string;
   unavailableOncePath: string;
   unavailablePath: string;
+  uploadsDir: string;
   workDir: string;
 };
 
@@ -179,6 +213,7 @@ const runScript = async (options: RunScriptOptions): Promise<RunResult> => {
       AOP_RELEASES_VERIFY_ATTEMPTS: "3",
       AOP_RELEASES_VERIFY_DELAY_SECONDS: "0",
       AOP_TEST_CALL_LOG: options.callLogPath,
+      AOP_TEST_UPLOADS_DIR: options.uploadsDir,
       AOP_TEST_CURL_UNAVAILABLE: options.unavailablePath,
       AOP_TEST_CURL_UNAVAILABLE_ONCE: options.unavailableOncePath,
       ...options.env,
@@ -215,8 +250,23 @@ const countProbes = (lines: string[], name: string): number =>
 
 const probeLine = (name: string): string => `curl -fsSIL -o /dev/null ${artifactUrl(name)}`;
 
+// Records each call and keeps a copy of the uploaded file, so a test can read what the script
+// actually published (the install script is stamped into a temp file that is deleted on exit).
 const NPX_STUB = `#!/bin/sh
 printf 'npx %s\\n' "$*" >> "$AOP_TEST_CALL_LOG"
+key=""
+file=""
+prev=""
+for arg in "$@"; do
+  case "$prev" in
+    put) key="$arg" ;;
+    --file) file="$arg" ;;
+  esac
+  prev="$arg"
+done
+if [ -n "$key" ] && [ -n "$file" ]; then
+  cp "$file" "$AOP_TEST_UPLOADS_DIR/$(printf '%s' "\${key#*/}" | sed 's#/#__#g')"
+fi
 exit 0
 `;
 

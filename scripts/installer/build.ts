@@ -7,14 +7,8 @@ import { join } from "node:path";
 import cac from "cac";
 import { generateChecksumFile } from "../release/checksums.ts";
 
-// Windows is x64-only (no bun-windows-arm64 target exists); WoA runs the x64 build via emulation.
-const TARGETS = [
-  "bun-linux-x64",
-  "bun-linux-arm64",
-  "bun-darwin-x64",
-  "bun-darwin-arm64",
-  "bun-windows-x64",
-] as const;
+// The host runs on macOS and Linux only. Windows gets the desktop app, which carries no server.
+const TARGETS = ["bun-linux-x64", "bun-linux-arm64", "bun-darwin-x64", "bun-darwin-arm64"] as const;
 
 type Target = (typeof TARGETS)[number];
 
@@ -26,10 +20,7 @@ const RUNTIME_ASSETS_ARCHIVE = "runtime-assets.tar.gz";
 
 const targetToFilename = (target: Target): string => {
   const [, os, arch] = target.split("-");
-  // Bun appends .exe for the windows target; bake it into the name so the outfile and
-  // checksum inputs reference the real artifact instead of a missing extensionless path.
-  const ext = os === "windows" ? ".exe" : "";
-  return `aop-${os}-${arch}${ext}`;
+  return `aop-${os}-${arch}`;
 };
 
 const getBuildVersion = async (): Promise<string> => {

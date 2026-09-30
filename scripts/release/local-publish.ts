@@ -63,7 +63,8 @@ export const buildLocalReleasePlan = ({
   }
 
   // Desktop installers can only be built on their native host, so each host
-  // contributes its installer to the same create-or-update GitHub Release.
+  // contributes its installer to the same create-or-update GitHub Release. Windows builds the
+  // desktop app only; the host runs on macOS and Linux.
   if (platform === "darwin" && !skipMacos) {
     steps.push({
       label: "Package signed macOS DMGs",
@@ -73,7 +74,7 @@ export const buildLocalReleasePlan = ({
 
   if (platform === "win32" && !skipWindows) {
     steps.push({
-      label: "Package Windows installer",
+      label: "Package Windows desktop installer",
       command: ["bun", "run", "package:windows", "--", "--version", normalized],
     });
   }
@@ -97,16 +98,15 @@ export const buildLocalReleasePlan = ({
       label: "Deploy release assets to R2",
       command: ["bash", "scripts/release/deploy-r2.sh", normalized],
     });
+    steps.push({
+      label: "Verify the published install script",
+      command: [
+        "sh",
+        "-c",
+        `for i in $(seq 1 12); do curl -fsSL https://getaop.com/install.sh | grep -q '^DEFAULT_VERSION="${normalized}"' && exit 0; sleep 10; done; exit 1`,
+      ],
+    });
   }
-
-  steps.push({
-    label: "Verify public latest/version",
-    command: [
-      "sh",
-      "-c",
-      `for i in $(seq 1 12); do v=$(curl -fsSL https://getaop.com/latest/version || true); echo "$v"; [ "$v" = "${normalized}" ] && exit 0; sleep 10; done; exit 1`,
-    ],
-  });
 
   return { version: normalized, tag, repo, steps };
 };
@@ -179,9 +179,9 @@ const main = async (): Promise<void> => {
     .option("--repo <repo>", "GitHub repository for the release", { default: DEFAULT_REPO })
     .option("--skip-build", "Use existing dist/release binaries")
     .option("--skip-macos", "Skip the macOS DMG build (no-op off macOS)")
-    .option("--skip-windows", "Skip the Windows installer build (no-op off Windows)")
+    .option("--skip-windows", "Skip the Windows desktop installer build (no-op off Windows)")
     .option("--skip-github-release", "Do not create the GitHub Release")
-    .option("--skip-r2", "Do not deploy to Cloudflare R2/latest")
+    .option("--skip-r2", "Do not deploy to Cloudflare R2")
     .option("--dry-run", "Print commands without running them");
 
   cli.help();

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createBinDir, ghStub, successStub, unameStub } from "./test-utils.ts";
 
 const INSTALLER = join(import.meta.dir, "install.sh");
 
@@ -146,34 +146,3 @@ const runInstaller = async (binDir: string, env: Record<string, string> = {}) =>
     output: `${stdout}\n${stderr}`,
   };
 };
-
-const createBinDir = async (commands: Record<string, string>): Promise<string> => {
-  const binDir = await mkdtemp(join(tmpdir(), "aop-install-preflight-bin-"));
-
-  for (const [name, content] of Object.entries(commands)) {
-    const path = join(binDir, name);
-    await writeFile(path, content);
-    await chmod(path, 0o755);
-  }
-
-  return binDir;
-};
-
-const unameStub = (): string => `#!/bin/sh
-if [ "$1" = "-s" ]; then
-  echo Darwin
-else
-  echo arm64
-fi
-`;
-
-const successStub = (): string => `#!/bin/sh
-exit 0
-`;
-
-const ghStub = ({ authenticated }: { authenticated: boolean }): string => `#!/bin/sh
-if [ "$1" = "auth" ] && [ "$2" = "status" ]; then
-  ${authenticated ? "exit 0" : "exit 1"}
-fi
-exit 0
-`;

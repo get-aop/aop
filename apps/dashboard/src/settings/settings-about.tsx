@@ -12,7 +12,7 @@ export const SettingsAbout = () => {
       </div>
 
       <a
-        href="https://github.com/aop/aop/releases"
+        href="https://github.com/get-aop/aop-mono/releases"
         target="_blank"
         rel="noreferrer"
         className="flex items-center gap-1.5 rounded-row px-1 text-[12.5px] text-running hover:underline"

@@ -23,5 +23,5 @@ self-hosted deployments are separate attack surfaces.
 ## Supported versions
 
 Only the latest release is supported for security fixes. Releases are
-published from `main`; check `https://getaop.com/latest/version` for the
-current version.
+published from `main`; the newest one is on the
+[releases page](https://github.com/get-aop/aop-mono/releases).

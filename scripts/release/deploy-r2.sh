@@ -2,6 +2,7 @@
 set -euo pipefail
 
 VERSION="${1:?Usage: deploy-r2.sh <version>}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RELEASE_DIR="${RELEASE_DIR:-dist/release}"
 BUCKET="${AOP_RELEASES_R2_BUCKET:-}"
 PUBLIC_BASE="${AOP_RELEASES_PUBLIC_BASE_URL:-https://getaop.com}"
@@ -62,15 +63,11 @@ upload_artifact "aop-darwin-x64" "application/octet-stream" "public, max-age=315
 upload_artifact "aop-darwin-arm64" "application/octet-stream" "public, max-age=31536000, immutable"
 upload_artifact "aop-macos-x64.dmg" "application/x-apple-diskimage" "public, max-age=31536000, immutable"
 upload_artifact "aop-macos-arm64.dmg" "application/x-apple-diskimage" "public, max-age=31536000, immutable"
-upload_optional_artifact "aop-windows-x64.exe" "application/octet-stream" "public, max-age=31536000, immutable"
+# A local release from a Mac cannot build the Windows desktop installer, so it may be absent.
 upload_optional_artifact "aop-windows-x64-setup.exe" "application/octet-stream" "public, max-age=31536000, immutable"
 upload_artifact "runtime-assets.tar.gz" "application/gzip" "public, max-age=31536000, immutable"
 upload_artifact "checksums.sha256" "text/plain; charset=utf-8" "public, max-age=31536000, immutable"
 
-# Stable (non-versioned) pointers the auto-updater and installer read. These
-# must update on every release, so the release owns them in R2 instead of the
-# aop-web static build (which only advances on an aop-web redeploy). Short,
-# revalidated cache — never immutable.
 upload_object() {
   local key="$1"
   local source_path="$2"
@@ -84,13 +81,6 @@ upload_object() {
     --content-type "$content_type" \
     --cache-control "$cache_control"
 }
-
-upload_object "install.sh" "scripts/installer/install.sh" "text/plain; charset=utf-8" "public, max-age=300, must-revalidate"
-upload_object "install.ps1" "scripts/installer/install.ps1" "text/plain; charset=utf-8" "public, max-age=300, must-revalidate"
-# Durable Windows download URL that always points at the newest installer.
-if [ -f "${RELEASE_DIR}/aop-windows-x64-setup.exe" ]; then
-  upload_object "latest/aop-windows-x64-setup.exe" "${RELEASE_DIR}/aop-windows-x64-setup.exe" "application/octet-stream" "public, max-age=300, must-revalidate"
-fi
 
 verify_artifact_available() {
   local name="$1"
@@ -112,19 +102,38 @@ verify_artifact_available() {
   return 1
 }
 
-# The latest/version pointer is this release's commit point: installed clients
-# update the moment it flips, and the updater stops their server before it
-# downloads. Flip it only after every uploaded artifact is confirmed
-# downloadable through the public CDN, so an instant updater can never strand
-# an install on assets that have not propagated yet.
-echo "Verifying public availability of v${VERSION} artifacts before flipping latest/version"
+# Everything below the versioned uploads is what people reach first, so it goes live only after
+# every uploaded artifact is confirmed downloadable through the public CDN.
+echo "Verifying public availability of v${VERSION} artifacts before publishing the install script"
 for name in "${UPLOADED_ARTIFACTS[@]}"; do
   verify_artifact_available "$name"
 done
 
-VERSION_POINTER="$(mktemp)"
-trap 'rm -f "$VERSION_POINTER"' EXIT
-printf '%s\n' "$VERSION" > "$VERSION_POINTER"
-upload_object "latest/version" "$VERSION_POINTER" "text/plain; charset=utf-8" "public, max-age=60, must-revalidate"
+# Durable download URLs for the desktop apps (people paste these into chat, the install page links
+# to them). They are copies of files already verified above, not a version feed.
+upload_latest_alias() {
+  local name="$1"
+  local content_type="$2"
+  if [ ! -f "${RELEASE_DIR}/${name}" ]; then
+    return
+  fi
+  upload_object "latest/${name}" "${RELEASE_DIR}/${name}" "$content_type" "public, max-age=300, must-revalidate"
+}
+
+upload_latest_alias "aop-macos-arm64.dmg" "application/x-apple-diskimage"
+upload_latest_alias "aop-macos-x64.dmg" "application/x-apple-diskimage"
+upload_latest_alias "aop-windows-x64-setup.exe" "application/octet-stream"
+
+# The host install script is this release's commit point. It carries the release's own version, so
+# `curl .../install.sh | sh` installs exactly this release and no "latest version" file is needed.
+# Publish it last so nobody is pointed at a release whose assets have not propagated yet.
+INSTALL_SCRIPT="$(mktemp)"
+trap 'rm -f "$INSTALL_SCRIPT"' EXIT
+sed "s/^DEFAULT_VERSION=\"__AOP_VERSION__\"/DEFAULT_VERSION=\"${VERSION}\"/" "$SCRIPT_DIR/../installer/install.sh" > "$INSTALL_SCRIPT"
+if ! grep -q "^DEFAULT_VERSION=\"${VERSION}\"" "$INSTALL_SCRIPT"; then
+  echo "install.sh does not carry a DEFAULT_VERSION placeholder to stamp" >&2
+  exit 1
+fi
+upload_object "install.sh" "$INSTALL_SCRIPT" "text/plain; charset=utf-8" "public, max-age=300, must-revalidate"
 
 echo "Uploaded AOP ${VERSION} release artifacts to Cloudflare R2"

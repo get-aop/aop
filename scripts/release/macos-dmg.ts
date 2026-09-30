@@ -233,7 +233,11 @@ const buildSingleDmg = async (plan: MacDmgPlan, signingConfig: MacSigningConfig)
 export const electronBuilderSigningEnv = (
   signingConfig: MacSigningConfig,
 ): Record<string, string> => {
-  if (signingConfig.mode === "unsigned") return { CSC_IDENTITY_AUTO_DISCOVERY: "false" };
+  // Electron Builder skips all signing on CI pull requests, which would leave the unsigned app
+  // without even the ad-hoc signature Apple silicon needs to launch it. No certificate is involved.
+  if (signingConfig.mode === "unsigned") {
+    return { CSC_IDENTITY_AUTO_DISCOVERY: "false", CSC_FOR_PULL_REQUEST: "true" };
+  }
   const env: Record<string, string> = {
     CSC_IDENTITY_AUTO_DISCOVERY: "true",
     CSC_NAME: signingConfig.identity.replace(/^Developer ID Application:\s*/u, ""),
