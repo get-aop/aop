@@ -1,6 +1,15 @@
 import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-export const TEST_BASE_DIR = "/tmp/git-manager-test";
+/**
+ * One folder per test process: `cleanupTestRepos` deletes it, so a folder shared with another
+ * run (two terminals, a watcher, CI shards) would be deleted from under that run's repos.
+ */
+export const TEST_BASE_DIR = join(
+  tmpdir(),
+  `git-manager-test-${process.pid}-${Math.random().toString(36).slice(2, 8)}`,
+);
 
 export interface TestRepoOptions {
   withInitialCommit?: boolean;

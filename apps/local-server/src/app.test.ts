@@ -110,7 +110,7 @@ describe("app - static file serving", () => {
     const ctx = createCommandContext(db);
 
     // Create a temp dir with test files
-    const tempDir = `/tmp/aop-test-static-${Date.now()}`;
+    const tempDir = `/tmp/aop-test-static-${crypto.randomUUID()}`;
     const { mkdirSync, writeFileSync, rmSync, existsSync } = await import("node:fs");
     mkdirSync(tempDir, { recursive: true });
     writeFileSync(`${tempDir}/index.html`, "<html><body>Test</body></html>");
@@ -196,7 +196,7 @@ describe("app - static file serving", () => {
     const db = await createTestDb();
     const ctx = createCommandContext(db);
 
-    const tempDir = `/tmp/aop-test-static-api-${Date.now()}`;
+    const tempDir = `/tmp/aop-test-static-api-${crypto.randomUUID()}`;
     const { mkdirSync, rmSync, existsSync, writeFileSync } = await import("node:fs");
     mkdirSync(tempDir, { recursive: true });
     writeFileSync(`${tempDir}/index.html`, "<html></html>");
@@ -221,7 +221,7 @@ describe("app - static file serving", () => {
     const db = await createTestDb();
     const ctx = createCommandContext(db);
 
-    const tempDir = `/tmp/aop-test-static-no-index-${Date.now()}`;
+    const tempDir = `/tmp/aop-test-static-no-index-${crypto.randomUUID()}`;
     const { mkdirSync, rmSync, existsSync } = await import("node:fs");
     mkdirSync(tempDir, { recursive: true });
 
@@ -276,7 +276,7 @@ describe("app - filesystem routes", () => {
     app = createLoopbackApp({ ctx, startTimeMs: Date.now() });
 
     const { mkdirSync } = await import("node:fs");
-    testDir = `/tmp/aop-app-fs-test-${Date.now()}`;
+    testDir = `/tmp/aop-app-fs-test-${crypto.randomUUID()}`;
     mkdirSync(testDir, { recursive: true });
     mkdirSync(`${testDir}/projects`);
     mkdirSync(`${testDir}/.hidden`);

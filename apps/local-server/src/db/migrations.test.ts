@@ -4,8 +4,9 @@ import { seedChatSessionGraph, seedRevertOperation } from "../chat-session/test-
 import { DEFAULT_SETTINGS } from "../settings/types.ts";
 import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { createDatabase } from "./connection.ts";
-import { applyMigrations, type Migration, runMigrations } from "./migrations.ts";
+import { applyMigrations, MIGRATIONS, type Migration, runMigrations } from "./migrations.ts";
 import type { Database } from "./schema.ts";
+import { registeredLedger } from "./test-utils.ts";
 
 const BASELINE_TABLES = [
   "chat_checkpoint_cleanup_jobs",
@@ -47,7 +48,7 @@ describe("runMigrations", () => {
     await db.destroy();
   });
 
-  test("creates the baseline, projects, usage and watch tables and records every version", async () => {
+  test("creates the baseline, projects, usage and watch tables", async () => {
     await runMigrations(db);
 
     expect(await listTables(db)).toEqual(
@@ -59,19 +60,14 @@ describe("runMigrations", () => {
         ...SUGGESTION_TABLES,
       ].sort(),
     );
+  });
+
+  test("records every registered version, in order", async () => {
+    await runMigrations(db);
+
     const ledger = await db.selectFrom("schema_migrations").selectAll().execute();
-    expect(ledger.map(({ version, name }) => ({ version, name }))).toEqual([
-      { version: 1, name: "baseline" },
-      { version: 2, name: "projects" },
-      { version: 3, name: "run-usage" },
-      { version: 4, name: "coordinator" },
-      { version: 5, name: "scheduling" },
-      { version: 6, name: "thread-pull-request" },
-      { version: 7, name: "pull-request-watch" },
-      { version: 8, name: "remove-exec-hosts" },
-      { version: 9, name: "default-runtime" },
-      { version: 10, name: "suggestion-answers" },
-    ]);
+    expect(ledger.map(({ version, name }) => ({ version, name }))).toEqual(registeredLedger());
+    expect(ledger.length).toBe(MIGRATIONS.length);
   });
 
   test("seeds default settings and never overwrites a saved value on the next start", async () => {
@@ -93,7 +89,7 @@ describe("runMigrations", () => {
       .executeTakeFirstOrThrow();
     expect(saved.value).toBe("be brief");
     const ledger = await db.selectFrom("schema_migrations").select("version").execute();
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(ledger.map((row) => row.version)).toEqual(MIGRATIONS.map((m) => m.version));
   });
 
   test("refuses a database written by a newer build", async () => {

@@ -8,7 +8,7 @@ describe("listDirectories", () => {
   let testDir: string;
 
   beforeEach(() => {
-    testDir = `/tmp/aop-fs-test-${Date.now()}`;
+    testDir = `/tmp/aop-fs-test-${crypto.randomUUID()}`;
     mkdirSync(testDir, { recursive: true });
   });
 

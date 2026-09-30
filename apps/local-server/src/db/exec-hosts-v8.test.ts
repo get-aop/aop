@@ -3,16 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Kysely, sql } from "kysely";
-import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { createDatabase } from "./connection.ts";
-import { COORDINATOR_V4_STATEMENTS } from "./coordinator-v4.ts";
 import { applyMigrations, runMigrations } from "./migrations.ts";
-import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
-import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
-import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
 import type { Database } from "./schema.ts";
-import { THREAD_GIT_V6_STATEMENTS } from "./thread-git-v6.ts";
-import { USAGE_V3_STATEMENTS } from "./usage-v3.ts";
+import { migrationsThrough } from "./test-utils.ts";
 
 const listColumns = async (db: Kysely<Database>, table: string): Promise<string[]> => {
   const { rows } = await sql<{
@@ -39,15 +33,7 @@ describe("migration v8 on a database that ran versions 1 to 7", () => {
 
   const seedVersion7 = async () => {
     const db = createDatabase(path);
-    await applyMigrations(db, [
-      { version: 1, name: "baseline", statements: BASELINE_V1_STATEMENTS },
-      { version: 2, name: "projects", statements: PROJECTS_V2_STATEMENTS },
-      { version: 3, name: "run-usage", statements: USAGE_V3_STATEMENTS },
-      { version: 4, name: "coordinator", statements: COORDINATOR_V4_STATEMENTS },
-      { version: 5, name: "scheduling", statements: SCHEDULING_V5_STATEMENTS },
-      { version: 6, name: "thread-pull-request", statements: THREAD_GIT_V6_STATEMENTS },
-      { version: 7, name: "pull-request-watch", statements: PULL_REQUEST_WATCH_V7_STATEMENTS },
-    ]);
+    await applyMigrations(db, migrationsThrough(7));
     await sql`
       INSERT INTO runtime_profiles (id, name, base_provider, command, model, reasoning, exec_host_id)
       VALUES ('rprof_1', 'Work', 'claude-code', 'claude', 'claude-opus-5', 'high', 'ehost_desktop')

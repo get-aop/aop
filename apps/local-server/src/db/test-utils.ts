@@ -6,7 +6,7 @@ import { aopPaths } from "@aop/infra";
 import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import { createDatabase } from "./connection.ts";
-import { runMigrations } from "./migrations.ts";
+import { MIGRATIONS, type Migration, runMigrations } from "./migrations.ts";
 import type { Database } from "./schema.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: JSON responses in tests need flexible typing
@@ -22,6 +22,14 @@ export const createTestDb = async (): Promise<Kysely<Database>> => {
   await runMigrations(db);
   return db;
 };
+
+/** The registry as an older build left it, for tests that upgrade a database from `version`. */
+export const migrationsThrough = (version: number): readonly Migration[] =>
+  MIGRATIONS.filter((migration) => migration.version <= version);
+
+/** What `schema_migrations` holds after a full migrate; derived so a new version edits no test. */
+export const registeredLedger = (): { version: number; name: string }[] =>
+  MIGRATIONS.map(({ version, name }) => ({ version, name }));
 
 export const createTestRepo = async (
   db: Kysely<Database>,

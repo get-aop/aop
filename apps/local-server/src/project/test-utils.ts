@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectSettings } from "@aop/common";
+import { buildProjectSettings } from "@aop/common/test-utils";
 import { ClaudeCodeProvider, type LLMProvider, type RunOptions } from "@aop/llm-provider";
 import { FAKE_CLI_PATH } from "@aop/llm-provider/test-fixtures";
 import { Hono } from "hono";
@@ -24,18 +25,14 @@ import { createThreadRoutes } from "../thread/routes.ts";
 import { createProjectRoutes } from "./routes.ts";
 import { createProjectServices, type ProjectServices } from "./services.ts";
 
-export const projectSettings = (overrides: Partial<ProjectSettings> = {}): ProjectSettings => ({
-  name: "Checkout revamp",
-  goal: "Ship the new checkout",
-  instructions: "Keep pull requests small.",
-  coordinator: { provider: "claude-code", model: null, effort: "low" },
-  thread: { provider: "claude-code", model: "claude-opus-4-8", effort: "high" },
-  notificationLevel: "coordinator",
-  threadAccess: "auto-accept-edits",
-  autoFixPullRequests: true,
-  repoIds: [],
-  ...overrides,
-});
+export const projectSettings = (overrides: Partial<ProjectSettings> = {}): ProjectSettings =>
+  buildProjectSettings({
+    name: "Checkout revamp",
+    goal: "Ship the new checkout",
+    instructions: "Keep pull requests small.",
+    thread: { provider: "claude-code", model: "claude-opus-4-8", effort: "high" },
+    ...overrides,
+  });
 
 /** Inserts a bare project row, bypassing the repository, for tests of the schema itself. */
 export const insertProjectRow = async (db: Kysely<Database>, id: string): Promise<void> => {

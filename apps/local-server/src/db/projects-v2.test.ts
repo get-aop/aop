@@ -6,10 +6,10 @@ import { THREAD_STATUSES, type ThreadStatus } from "@aop/common";
 import { type Insertable, type Kysely, sql } from "kysely";
 import { seedChatSessionGraph, seedRepoRow } from "../chat-session/test-utils.ts";
 import { insertProjectRow, insertProjectSession } from "../project/test-utils.ts";
-import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { createDatabase } from "./connection.ts";
-import { applyMigrations, runMigrations } from "./migrations.ts";
+import { applyMigrations, MIGRATIONS, runMigrations } from "./migrations.ts";
 import type { ChatSessionsTable, Database } from "./schema.ts";
+import { migrationsThrough, registeredLedger } from "./test-utils.ts";
 
 const THREAD_COLUMNS = [
   "project_id",
@@ -63,27 +63,16 @@ describe("migration v2 on a database file", () => {
     const db = createDatabase(path);
     await runMigrations(db);
 
-    expect((await listLedger(db)).map(({ version, name }) => ({ version, name }))).toEqual([
-      { version: 1, name: "baseline" },
-      { version: 2, name: "projects" },
-      { version: 3, name: "run-usage" },
-      { version: 4, name: "coordinator" },
-      { version: 5, name: "scheduling" },
-      { version: 6, name: "thread-pull-request" },
-      { version: 7, name: "pull-request-watch" },
-      { version: 8, name: "remove-exec-hosts" },
-      { version: 9, name: "default-runtime" },
-      { version: 10, name: "suggestion-answers" },
-    ]);
+    expect((await listLedger(db)).map(({ version, name }) => ({ version, name }))).toEqual(
+      registeredLedger(),
+    );
     expect(await listColumns(db, "chat_sessions")).toEqual(expect.arrayContaining(THREAD_COLUMNS));
     await db.destroy();
   });
 
   test("an existing v1 file is upgraded once and keeps its sessions", async () => {
     const v1 = createDatabase(path);
-    await applyMigrations(v1, [
-      { version: 1, name: "baseline", statements: BASELINE_V1_STATEMENTS },
-    ]);
+    await applyMigrations(v1, migrationsThrough(1));
     await seedChatSessionGraph(v1, {
       sessionId: "legacy",
       repoId: "r1",
@@ -99,7 +88,7 @@ describe("migration v2 on a database file", () => {
     await runMigrations(db);
 
     const ledger = await listLedger(db);
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(ledger.map((row) => row.version)).toEqual(MIGRATIONS.map((m) => m.version));
     expect(ledger[0]).toEqual(ledgerV1[0]);
 
     const legacy = await db
@@ -136,9 +125,7 @@ describe("migration v2 on a database file", () => {
 
   test("a version 2 that fails part-way leaves the v1 file exactly as it was", async () => {
     const db = createDatabase(path);
-    await applyMigrations(db, [
-      { version: 1, name: "baseline", statements: BASELINE_V1_STATEMENTS },
-    ]);
+    await applyMigrations(db, migrationsThrough(1));
     // Taken name: the last statements of v2, after its tables and columns, cannot run.
     await sql`CREATE INDEX idx_chat_sessions_project_state ON repos(name)`.execute(db);
 

@@ -201,7 +201,7 @@ describe("the notification level", () => {
   });
 
   test("a project that is paused or archived does not notify", () => {
-    for (const status of ["paused", "archived"]) {
+    for (const status of ["paused", "archived"] as const) {
       expect(
         decide(entryFor({ thread: waitingThread() }), { project: makeProject({ status }) }),
       ).toBeNull();

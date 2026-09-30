@@ -31,6 +31,13 @@ const transcript = async (s: ProjectStack, threadId: string): Promise<Message[]>
 
 const secondsUntil = (iso: string): number => (Date.parse(iso) - Date.now()) / 1000;
 
+/**
+ * A thread shows as held before the turn that held it has armed its resume timer, which it does
+ * as the last thing it does. A test that cancels timers to imitate a restart has to wait for that,
+ * or the late timer, armed for the old time, replaces the one the restart armed.
+ */
+const settleTheHold = (s: ProjectStack): Promise<void> => s.settle();
+
 describe("a run the CLI refuses on a usage limit", () => {
   test("puts the thread on hold instead of failing it, and it resumes by itself at the reset", async () => {
     const { s, project } = await setup();
@@ -161,6 +168,7 @@ describe("a wait on a rate limit", () => {
     const { s, project } = await setup();
     const thread = await spawnThread(s, project.id, "Fix it [fake: ratelimit=3600]");
     await untilStatus(s, thread.id, "rate-limited");
+    await settleTheHold(s);
 
     // The server stops, and comes back with the reset one second away.
     cancelAllResumeTimers();
@@ -183,6 +191,7 @@ describe("a wait on a rate limit", () => {
     const { s, project } = await setup();
     const thread = await spawnThread(s, project.id, "Fix it [fake: ratelimit=3600]");
     await untilStatus(s, thread.id, "rate-limited");
+    await settleTheHold(s);
     cancelAllResumeTimers();
     await s.db
       .updateTable("chat_sessions")

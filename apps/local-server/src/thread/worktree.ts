@@ -6,6 +6,7 @@ import { BranchNotFoundError, GitManager, WorktreeExistsError } from "@aop/git-m
 import { aopPaths, getLogger } from "@aop/infra";
 import { resolveChatWorkspace } from "../chat-session/workspace-binding.ts";
 import { type RunGit, stageAndCommitChanges } from "../session-git/service.ts";
+import { createKeyedQueue } from "./keyed-queue.ts";
 
 const logger = getLogger("thread", "worktree");
 
@@ -36,6 +37,14 @@ const NO_PROMPTS = { GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", GCM_INTERACTIVE:
 
 /** Fetches under way, by repo and branch, for threads started together to share. */
 const fetching = new Map<string, Promise<void>>();
+
+/**
+ * One command that adds, removes or prunes worktrees at a time per repository. git reads every
+ * worktree of the repo while it runs one of them, and a read that meets another command's
+ * half-made entry dies with "failed to read .../commondir": threads spawned or released together
+ * would fail at random. Different repos share no entries, so they still run side by side.
+ */
+const oneWorktreeChangeAtATime = createKeyedQueue();
 
 /**
  * `aop/<title>-<last six of the id>`, or the same with `-2`, `-3`... when a branch of that
@@ -80,13 +89,13 @@ export const ensureWorktree = async (
         message: `The worktree at ${path} exists but git cannot use it; it was left as it is`,
       };
     }
-    await clearStaleCheckout(runGit, repo, path);
+    await oneWorktreeChangeAtATime(repo.path, () => clearStaleCheckout(runGit, repo, path));
     const defaultBranch = await manager.getDefaultBranch();
     if (!(await branchExists(runGit, repo.path, branch))) {
       await refreshRemoteBranch(runGit, repo.path, defaultBranch);
     }
     const base = await startPoint(runGit, repo.path, defaultBranch);
-    await manager.createWorktree(threadId, base, branch);
+    await oneWorktreeChangeAtATime(repo.path, () => manager.createWorktree(threadId, base, branch));
     return { ok: true, path };
   } catch (error) {
     // Another call made it between the check and the create: the end state is the same.
@@ -161,9 +170,11 @@ const removeWorktree = async (
       ? await stageAndCommitChanges(runGit, path, options.title)
       : { ok: true as const };
     if (!kept.ok) return { ok: false, message: kept.error.message };
-    await removeCheckout(runGit, repo, path);
   }
-  await runGit(["worktree", "prune"], repo.path);
+  await oneWorktreeChangeAtATime(repo.path, async () => {
+    if (existsSync(path)) await removeCheckout(runGit, repo, path);
+    await runGit(["worktree", "prune"], repo.path);
+  });
   return { ok: true };
 };
 
@@ -173,7 +184,10 @@ const removeBranch = async (
   branch: string,
   options: ReleaseOptions,
 ): Promise<WorktreeResult> => {
-  const deleted = await runGit(["branch", "-D", branch], repo.path);
+  // `branch -D` reads every worktree too, to refuse a branch that one has checked out.
+  const deleted = await oneWorktreeChangeAtATime(repo.path, () =>
+    runGit(["branch", "-D", branch], repo.path),
+  );
   if (deleted.exitCode !== 0 && (await branchExists(runGit, repo.path, branch))) {
     return { ok: false, message: deleted.stderr.trim() || `Could not delete branch ${branch}` };
   }

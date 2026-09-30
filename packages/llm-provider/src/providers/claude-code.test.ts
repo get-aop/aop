@@ -1111,7 +1111,7 @@ describe("run with logFilePath (file-based output)", () => {
       mockProc as unknown as ReturnType<typeof Bun.spawn>,
     );
 
-    const logFilePath = `/tmp/aop-claude-file-session-${Date.now()}.jsonl`;
+    const logFilePath = `/tmp/aop-claude-file-session-${crypto.randomUUID()}.jsonl`;
     writeFileSync(
       logFilePath,
       `${JSON.stringify({ type: "system", session_id: "claude-session-1" })}\n`,

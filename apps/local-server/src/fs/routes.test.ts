@@ -11,7 +11,7 @@ describe("fs routes", () => {
   let routes: ReturnType<typeof createFsRoutes>;
 
   beforeEach(() => {
-    testDir = `/tmp/aop-fs-routes-test-${Date.now()}`;
+    testDir = `/tmp/aop-fs-routes-test-${crypto.randomUUID()}`;
     mkdirSync(testDir, { recursive: true });
     routes = createFsRoutes();
   });

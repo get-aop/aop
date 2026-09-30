@@ -1,5 +1,11 @@
 import { expect } from "bun:test";
 import type { z } from "zod";
+import {
+  CreateProjectInputSchema,
+  type Project,
+  ProjectSchema,
+  type ProjectSettings,
+} from "./project.ts";
 
 type Overrides = Record<string, unknown>;
 
@@ -70,6 +76,25 @@ export const makeProject = (overrides: Overrides = {}) => ({
   updatedAt: AT,
   ...overrides,
 });
+
+/**
+ * A complete `ProjectSettings` for tests that need a real one without listing each setting. Every
+ * setting starts at what a create call gives it, so a new required setting takes its default from
+ * `CreateProjectInputSchema` and no fixture built here has to change.
+ */
+export const buildProjectSettings = (overrides: Partial<ProjectSettings> = {}): ProjectSettings =>
+  CreateProjectInputSchema.parse({ name: "checkout-service", ...overrides });
+
+/** A complete, parsed `Project`; see `buildProjectSettings` for how the defaults are kept current. */
+export const buildProject = (overrides: Partial<Project> = {}): Project =>
+  ProjectSchema.parse({
+    ...buildProjectSettings(),
+    id: "prj_1",
+    status: "active",
+    createdAt: AT,
+    updatedAt: AT,
+    ...overrides,
+  });
 
 export const makeUserMessage = (overrides: Overrides = {}) => ({
   id: "msg_1",

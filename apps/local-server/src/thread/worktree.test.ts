@@ -162,6 +162,39 @@ describe("ensuring a worktree", () => {
   });
 });
 
+// git lists every worktree of a repository while it adds, removes or prunes one, and a listing
+// that meets another command's half-made entry dies with "failed to read .../commondir". Threads
+// spawned or released together in one repository must not depend on winning that race.
+describe("worktrees made and released together in one repository", () => {
+  const ROUNDS = 6;
+  const THREADS = 10;
+
+  test("every one of them succeeds, however many run at once", async () => {
+    const repo = repoFor();
+    const failures: string[] = [];
+
+    for (let round = 0; round < ROUNDS; round += 1) {
+      const threads = Array.from({ length: THREADS }, (_, index) => ({
+        id: `isess_r${round}t${index}`,
+        branch: `aop/work-r${round}t${index}`,
+      }));
+      const ensured = await Promise.all(
+        threads.map(({ id, branch }) => ensureWorktree(defaultRunGit, repo, id, branch)),
+      );
+      const released = await Promise.all(
+        threads.map(({ id, branch }) =>
+          releaseWorktree(defaultRunGit, repo, id, branch, { title: "Work" }),
+        ),
+      );
+      for (const result of [...ensured, ...released]) {
+        if (!result.ok) failures.push(result.message);
+      }
+    }
+
+    expect(failures).toEqual([]);
+  }, 60_000);
+});
+
 describe("where a new thread's branch starts", () => {
   const withOrigin = () => {
     const repo = repoFor();

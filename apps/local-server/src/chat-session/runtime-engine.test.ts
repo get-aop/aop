@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import type { LLMProvider, RunOptions, RunResult } from "@aop/llm-provider";
 import type { ChatSession } from "../db/schema.ts";
 import { isProcessAlive } from "../process/liveness.ts";
+import { eventually } from "../project/test-utils.ts";
 import {
   interruptSessionRun,
   isSessionRunActive,
@@ -50,6 +51,21 @@ const mockSignalsToExitedProcess = () =>
     if (signal === 0) throw Object.assign(new Error("kill ESRCH"), { code: "ESRCH" });
     return true;
   }) as typeof process.kill);
+
+/**
+ * The engine scans the process table with an async `ps` before it signals the root, so the
+ * signal lands after a delay that grows with machine load. Wait for it; never sleep a fixed time.
+ */
+const untilSignalled = (
+  kill: ReturnType<typeof mockSignalsToExitedProcess>,
+  target: number,
+  signal: string,
+) =>
+  eventually(
+    () =>
+      kill.mock.calls.some((call) => call[0] === target && call[1] === signal) ? true : undefined,
+    `${signal} to reach ${target}`,
+  );
 
 describe("runSessionPrompt", () => {
   let previousMcpUrl: string | undefined;
@@ -611,23 +627,24 @@ describe("runSessionPrompt", () => {
       },
     } as LLMProvider;
     const kill = mockSignalsToExitedProcess();
-    const run = runSessionPrompt({
-      session: session({ id: "isess_graceful", runtime: "claude-code" }),
-      repoPath: "/tmp/repo",
-      prompt: "hello",
-      createProviderFn: () => provider,
-    });
-    await providerStarted;
+    try {
+      const run = runSessionPrompt({
+        session: session({ id: "isess_graceful", runtime: "claude-code" }),
+        repoPath: "/tmp/repo",
+        prompt: "hello",
+        createProviderFn: () => provider,
+      });
+      await providerStarted;
 
-    interruptSessionRun("isess_graceful");
-    // Descendant discovery is async now (non-blocking ps), so allow the scan
-    // to complete before asserting the root was signaled.
-    await Bun.sleep(250);
-    expect(kill).toHaveBeenCalledWith(-77_777, "SIGINT");
+      interruptSessionRun("isess_graceful");
+      await untilSignalled(kill, -77_777, "SIGINT");
+      expect(kill).toHaveBeenCalledWith(-77_777, "SIGINT");
 
-    finishProvider?.({ exitCode: 130 });
-    await run;
-    kill.mockRestore();
+      finishProvider?.({ exitCode: 130 });
+      await run;
+    } finally {
+      kill.mockRestore();
+    }
   });
 
   test("unwraps provider errors that prefix a JSON payload", async () => {
@@ -916,26 +933,30 @@ describe("session run lifecycle registration", () => {
       },
     };
     const kill = mockSignalsToExitedProcess();
-    const run = runSessionPrompt({
-      session: session({ id: "isess_cancel_while_spawn" }),
-      repoPath: "/tmp/repo",
-      prompt: "hello",
-      registration: registration ?? undefined,
-      createProviderFn: () => provider,
-    });
+    try {
+      const run = runSessionPrompt({
+        session: session({ id: "isess_cancel_while_spawn" }),
+        repoPath: "/tmp/repo",
+        prompt: "hello",
+        registration: registration ?? undefined,
+        createProviderFn: () => provider,
+      });
 
-    await providerStarted;
-    expect(sessionRunPhase("isess_cancel_while_spawn")).toBe("running");
-    expect(interruptSessionRun("isess_cancel_while_spawn", "abort")).toBe(true);
-    expect(sessionRunPhase("isess_cancel_while_spawn")).toBe("cancelling");
-    await Bun.sleep(20);
-    expect(kill).toHaveBeenCalledWith(-88_001, "SIGTERM");
+      await providerStarted;
+      expect(sessionRunPhase("isess_cancel_while_spawn")).toBe("running");
+      expect(interruptSessionRun("isess_cancel_while_spawn", "abort")).toBe(true);
+      expect(sessionRunPhase("isess_cancel_while_spawn")).toBe("cancelling");
+      await untilSignalled(kill, -88_001, "SIGTERM");
+      expect(kill).toHaveBeenCalledWith(-88_001, "SIGTERM");
 
-    finishProvider?.({ exitCode: 143 });
-    const result = await run;
-    expect(result.interrupted).toBe(true);
-    expect(result.aborted).toBe(true);
-    kill.mockRestore();
+      finishProvider?.({ exitCode: 143 });
+      const result = await run;
+      expect(result.interrupted).toBe(true);
+      expect(result.aborted).toBe(true);
+    } finally {
+      kill.mockRestore();
+      if (registration) releaseSessionRunRegistration(registration);
+    }
   });
 
   test("cancellation before onSpawn terminates the late provider process", async () => {
@@ -975,7 +996,7 @@ describe("session run lifecycle registration", () => {
       const phaseBeforeSpawn = sessionRunPhase("isess_cancel_before_spawn");
       expect(interruptSessionRun("isess_cancel_before_spawn", "abort")).toBe(true);
       allowSpawn?.();
-      await Bun.sleep(20);
+      await untilSignalled(kill, -88_002, "SIGTERM");
       finishProvider?.({ exitCode: 143 });
       const result = await run;
 

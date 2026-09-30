@@ -130,6 +130,21 @@ const installWindowGlobals = (win: Window): void => {
   });
 };
 
+/**
+ * `waitFor` and `findBy*` give up after one second by default. A screen that loads through a
+ * lazily rendered fetch takes longer than that on a busy machine (other test runs, CI shards),
+ * and they return the moment the condition holds, so a longer deadline costs a passing test
+ * nothing. It stays under bun's own five-second test timeout so a real failure still reports the
+ * element that never appeared.
+ */
+const ASYNC_UTIL_TIMEOUT_MS = 4000;
+
+// Loaded here, after the DOM globals exist: `screen` binds to `document.body` when the module loads.
+const raiseAsyncUtilTimeout = (): void => {
+  const { configure } = require("@testing-library/dom") as typeof import("@testing-library/dom");
+  configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
+};
+
 export const setupDashboardDom = () => {
   if (!globalThis.document || !("defaultView" in globalThis.document)) {
     const win = new Window({ url: "http://localhost" });
@@ -143,6 +158,7 @@ export const setupDashboardDom = () => {
   installWindowGlobals(activeWindow);
   installDialogElementPolyfill();
   installResizeObserverForTests();
+  raiseAsyncUtilTimeout();
 
   // Base UI scroll-area uses Element.getAnimations — happy-dom does not
   // implement it. Return an empty list so components render without motion.

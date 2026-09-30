@@ -23,7 +23,7 @@ export interface Migration {
  * next version instead. Versions are recorded in `schema_migrations`, so a step
  * runs once, inside one transaction, and a partial failure leaves no trace.
  */
-const MIGRATIONS: readonly Migration[] = [
+export const MIGRATIONS: readonly Migration[] = [
   { version: 1, name: "baseline", statements: BASELINE_V1_STATEMENTS },
   { version: 2, name: "projects", statements: PROJECTS_V2_STATEMENTS },
   { version: 3, name: "run-usage", statements: USAGE_V3_STATEMENTS },

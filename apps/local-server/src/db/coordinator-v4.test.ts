@@ -5,11 +5,10 @@ import { join } from "node:path";
 import { type Kysely, sql } from "kysely";
 import { seedChatSessionGraph } from "../chat-session/test-utils.ts";
 import { insertProjectRow } from "../project/test-utils.ts";
-import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { createDatabase } from "./connection.ts";
 import { applyMigrations, runMigrations } from "./migrations.ts";
-import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import type { Database } from "./schema.ts";
+import { migrationsThrough } from "./test-utils.ts";
 
 const tableNames = async (db: Kysely<Database>): Promise<string[]> => {
   const { rows } = await sql<{ name: string }>`
@@ -112,10 +111,7 @@ describe("migration v4 on a version 2 file", () => {
   test("keeps projects, sessions, messages and runs, and adds the new columns with defaults", async () => {
     const path = join(dir, "projects.sqlite");
     const v2 = createDatabase(path);
-    await applyMigrations(v2, [
-      { version: 1, name: "baseline", statements: BASELINE_V1_STATEMENTS },
-      { version: 2, name: "projects", statements: PROJECTS_V2_STATEMENTS },
-    ]);
+    await applyMigrations(v2, migrationsThrough(2));
     await insertProjectRow(v2, "p1");
     await seedChatSessionGraph(v2, { sessionId: "s1", turns: 2, withCheckpoints: false });
     await v2.destroy();

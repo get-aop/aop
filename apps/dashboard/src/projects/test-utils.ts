@@ -1,25 +1,18 @@
 import type { EventLogEntry, Project, Thread, ThreadStatus } from "@aop/common";
+import { buildProject } from "@aop/common/test-utils";
 import type { LiveProjects, ProjectStreamEvent } from "./live-projects";
 import type { ProjectEntry, ProjectsState } from "./projects-state";
 
 export const AT = "2026-09-29T10:00:00.000Z";
 
-export const makeProject = (overrides: Partial<Project> = {}): Project => ({
-  id: "prj_1",
-  name: "checkout-service",
-  goal: "Keep checkout fast and safe to change",
-  instructions: "",
-  coordinator: { provider: "claude-code", model: null, effort: "low" },
-  thread: { provider: "claude-code", model: null, effort: "high" },
-  notificationLevel: "coordinator",
-  threadAccess: "auto-accept-edits",
-  autoFixPullRequests: true,
-  repoIds: ["repo_1"],
-  status: "active",
-  createdAt: AT,
-  updatedAt: AT,
-  ...overrides,
-});
+export const makeProject = (overrides: Partial<Project> = {}): Project =>
+  buildProject({
+    goal: "Keep checkout fast and safe to change",
+    repoIds: ["repo_1"],
+    createdAt: AT,
+    updatedAt: AT,
+    ...overrides,
+  });
 
 type ThreadOverrides = Partial<
   Omit<Thread, "status" | "blockedQuestion" | "resolvedAt" | "resumesAt">

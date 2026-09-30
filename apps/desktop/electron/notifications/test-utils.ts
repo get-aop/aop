@@ -4,10 +4,10 @@ import {
   type Message,
   MessageSchema,
   type Project,
-  ProjectSchema,
   type Thread,
   ThreadSchema,
 } from "@aop/common";
+import { buildProject } from "@aop/common/test-utils";
 
 type Overrides = Record<string, unknown>;
 
@@ -15,23 +15,8 @@ export const NOW = Date.parse("2026-09-30T12:00:00.000Z");
 export const JUST_NOW = "2026-09-30T11:59:50.000Z";
 export const LONG_AGO = "2026-09-30T09:00:00.000Z";
 
-export const makeProject = (overrides: Overrides = {}): Project =>
-  ProjectSchema.parse({
-    id: "prj_1",
-    name: "checkout-service",
-    goal: "",
-    instructions: "",
-    coordinator: { provider: "claude-code", model: null, effort: "low" },
-    thread: { provider: "claude-code", model: null, effort: "high" },
-    notificationLevel: "coordinator",
-    threadAccess: "auto-accept-edits",
-    autoFixPullRequests: true,
-    repoIds: [],
-    status: "active",
-    createdAt: LONG_AGO,
-    updatedAt: LONG_AGO,
-    ...overrides,
-  });
+export const makeProject = (overrides: Partial<Project> = {}): Project =>
+  buildProject({ createdAt: LONG_AGO, updatedAt: LONG_AGO, ...overrides });
 
 export const makeThread = (overrides: Overrides = {}): Thread =>
   ThreadSchema.parse({
