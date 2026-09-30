@@ -9,6 +9,7 @@
     "./db": "./src/db/connection.ts",
     "./db/migrations": "./src/db/migrations.ts",
     "./db/schema": "./src/db/schema.ts",
+    "./github-cli": "./src/github-cli/index.ts",
     "./settings/types": "./src/settings/types.ts"
   },
   "scripts": {

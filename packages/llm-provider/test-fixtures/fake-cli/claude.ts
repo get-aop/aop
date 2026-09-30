@@ -38,10 +38,35 @@ export const claudeDialect: Dialect = {
       permissionMode: "default",
       apiKeySource: "none",
     },
+    ...(ctx.usageWarning ? [usageWarning(ctx)] : []),
   ],
   beat: renderBeat,
   end: renderEnding,
 };
+
+// What a real Max login writes on an ordinary run, recorded from Claude Code 2.1.285 by the
+// real-runtime harness: a warning event, not a limit. `status` is `allowed_warning` once a window
+// passes a threshold (here 75% of the week), and `rejected` only when the plan refuses the run.
+// There is no `overageStatus` on it.
+function usageWarning(ctx: TurnContext): JsonLine {
+  const now = Math.round(Date.now() / 1000);
+  return {
+    type: "rate_limit_event",
+    rate_limit_info: {
+      status: "allowed_warning",
+      resetsAt: now + 7 * 24 * 3600,
+      rateLimitType: "seven_day",
+      utilization: 0.86,
+      isUsingOverage: false,
+      surpassedThreshold: 0.75,
+      unifiedWindows: {
+        five_hour: { utilization: 0.06, resetsAt: now + 5 * 3600 },
+        seven_day: { utilization: 0.86, resetsAt: now + 7 * 24 * 3600 },
+      },
+    },
+    session_id: ctx.sessionId,
+  };
+}
 
 function parseInvocation(args: string[]): Invocation {
   const { flags, values, variadicValues, positionals } = parseArgv(args, {
@@ -105,7 +130,14 @@ function renderBeat(beat: Beat, index: number, ctx: TurnContext): JsonLine[] {
     case "mcp": {
       const name = `mcp__${AOP_MCP_SERVER}__${beat.call.name}`;
       const { text, isError } = beat.result;
-      return toolRound(ctx, toolUseId, name, beat.call.arguments, text, isError);
+      return toolRound(
+        ctx,
+        toolUseId,
+        name,
+        beat.call.arguments,
+        [{ type: "text", text }],
+        isError,
+      );
     }
   }
 }
@@ -132,7 +164,7 @@ function renderAsk(ctx: TurnContext, toolUseId: string, ask: AskUser): JsonLine[
     toolUseId,
     name,
     input,
-    "Question sent. Wait for the user's answer.",
+    [{ type: "text", text: "Question sent. Wait for the user's answer." }],
     false,
   );
 }
@@ -142,7 +174,7 @@ function toolRound(
   toolUseId: string,
   name: string,
   input: Record<string, unknown>,
-  output: string,
+  output: string | JsonLine[],
   isError: boolean,
 ): JsonLine[] {
   return [
@@ -165,7 +197,16 @@ function renderEnding(ending: Ending, ctx: TurnContext): JsonLine[] {
     case "success":
       return [
         assistant(ctx, [{ type: "text", text: ending.text }]),
-        result(ctx, { subtype: "success", is_error: false, result: ending.text }),
+        result(ctx, {
+          subtype: "success",
+          is_error: false,
+          result: ending.text,
+          // Present on a real success, recorded from Claude Code 2.1.285.
+          api_error_status: null,
+          permission_denials: [],
+          stop_reason: "end_turn",
+          terminal_reason: "completed",
+        }),
       ];
     case "failure":
       // Real Claude Code reports failures as `error_*` result subtypes carrying `errors`.

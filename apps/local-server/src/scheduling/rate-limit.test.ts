@@ -39,6 +39,39 @@ const errorResult = (fields: object = {}) => ({
 });
 
 describe("detectRateLimit", () => {
+  // Recorded from Claude Code 2.1.285 on a Max login by the real-runtime harness: every ordinary
+  // run writes this while a window is past a threshold. It is a warning, not a refusal.
+  test("the allowed_warning event a real run writes is not a limit", () => {
+    const warning = {
+      type: "rate_limit_event",
+      rate_limit_info: {
+        status: "allowed_warning",
+        resetsAt: NOW_SECONDS + 7 * 86_400,
+        rateLimitType: "seven_day",
+        utilization: 0.86,
+        isUsingOverage: false,
+        surpassedThreshold: 0.75,
+        unifiedWindows: {
+          five_hour: { utilization: 0.06, resetsAt: NOW_SECONDS + 18_000 },
+          seven_day: { utilization: 0.86, resetsAt: NOW_SECONDS + 7 * 86_400 },
+        },
+      },
+    };
+    const success = {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      api_error_status: null,
+      result: "done",
+    };
+
+    expect(detectRateLimit(jsonl(init, warning, success), NOW)).toBeNull();
+    // Even a run that then failed for another reason is not blamed on the warning.
+    expect(
+      detectRateLimit(jsonl(init, warning, { ...success, is_error: true, result: "boom" }), NOW),
+    ).toBeNull();
+  });
+
   test("reads the reset from the rate limit event: epoch seconds, plus a margin", () => {
     const hit = detectRateLimit(jsonl(init, limitEvent(), flaggedReply("x"), errorResult()), NOW);
 

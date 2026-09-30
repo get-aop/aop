@@ -14,7 +14,13 @@ describe("parseDirectives", () => {
       crashAfter: undefined,
       usage: { input: 10, output: 5, cacheWrite: 200, cacheRead: 4000 },
       echoSystemPrompt: false,
+      usageWarning: false,
     });
+  });
+
+  test("a bare `usagewarn` asks for the warning event a real run writes", () => {
+    expect(parseDirectives("hi [fake: usagewarn]").usageWarning).toBe(true);
+    expect(parseDirectives("hi [fake: steps=1]").usageWarning).toBe(false);
   });
 
   test("a bare `system` asks the reply to echo the appended system prompt", () => {

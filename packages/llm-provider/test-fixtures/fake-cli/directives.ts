@@ -29,6 +29,8 @@ export interface Directives {
   usage: TokenUsage;
   /** Adds the appended system prompt the turn ran with to its reply, so a test or a screenshot can read it. */
   echoSystemPrompt: boolean;
+  /** Adds the `allowed_warning` rate_limit_event a real run writes once a plan window passes a threshold. */
+  usageWarning: boolean;
 }
 
 const MARKER_OPEN = "[fake:";
@@ -63,6 +65,7 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
     crashAfter: readCrashAfter(tokens),
     usage: readUsage(tokens.get("usage")),
     echoSystemPrompt: tokens.has("system"),
+    usageWarning: tokens.has("usagewarn"),
   };
 };
 

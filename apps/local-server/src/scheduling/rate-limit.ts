@@ -12,6 +12,9 @@ import { parseRawJsonlContent, type RawProviderEvent } from "@aop/llm-provider";
  * - a `result` event with `is_error: true` and `api_error_status: 429` (SDKResultMessage).
  * - the text `You've hit your session limit · resets 3:45pm`, or `... weekly limit · resets Mon
  *   12:00am` (Claude Code error reference): a local wall-clock time, with no zone.
+ * What a real run was recorded writing (harness, Claude Code 2.1.285, Max login) is only the
+ * warning: `rate_limit_info.status` is `allowed_warning` once a window passes a threshold, and it
+ * is not a limit. A refusal itself has never been seen.
  * The exit code is not relied on: a limit is recognised from what the log says, whatever the CLI
  * exited with.
  */

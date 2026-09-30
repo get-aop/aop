@@ -52,7 +52,7 @@ describe("MCP calls through the fake", () => {
       });
       expect(block(run.events[2])).toMatchObject({
         type: "tool_result",
-        content: '{"threadId":"t1"}',
+        content: [{ type: "text", text: '{"threadId":"t1"}' }],
         is_error: false,
       });
     },
@@ -65,7 +65,7 @@ describe("MCP calls through the fake", () => {
 
     expect(run.exitCode).toBe(0);
     expect(block(run.events[2])).toMatchObject({
-      content: "Repository is not part of this project",
+      content: [{ type: "text", text: "Repository is not part of this project" }],
       is_error: true,
     });
     expect(run.events.at(-1)).toMatchObject({ subtype: "success" });
@@ -88,7 +88,7 @@ describe("MCP calls through the fake", () => {
     expect(run.exitCode).toBe(0);
     expect(mcp.urls).toEqual([]);
     expect(block(run.events[2])).toMatchObject({
-      content: "MCP server aop is not connected",
+      content: [{ type: "text", text: "MCP server aop is not connected" }],
       is_error: true,
     });
   });
@@ -120,7 +120,9 @@ describe("questions through the fake", () => {
       { name: "aop_ask_user", args: { question: "Which one?", options: ["a", "b"] } },
     ]);
     expect(block(run.events[1])).toMatchObject({ name: "mcp__aop__aop_ask_user" });
-    expect(block(run.events[2])).toMatchObject({ content: "Question sent. End your turn." });
+    expect(block(run.events[2])).toMatchObject({
+      content: [{ type: "text", text: "Question sent. End your turn." }],
+    });
     expect(run.events.at(-1)).toMatchObject({ result: "Waiting on your answer." });
   });
 
@@ -131,7 +133,7 @@ describe("questions through the fake", () => {
 
     expect(mcp.urls).toEqual([]);
     expect(block(run.events[2])).toMatchObject({
-      content: "Question sent. Wait for the user's answer.",
+      content: [{ type: "text", text: "Question sent. Wait for the user's answer." }],
       is_error: false,
     });
   });

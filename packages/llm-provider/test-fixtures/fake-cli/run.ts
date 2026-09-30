@@ -75,6 +75,7 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
     turn: session.turn,
     resumed: session.resumed,
     systemPrompt: session.appendedSystemPrompt,
+    usageWarning: directives.usageWarning,
   };
   const { beats, ending } = planTurn(directives, ctx);
   const server = invocation.mcpServers[AOP_MCP_SERVER];

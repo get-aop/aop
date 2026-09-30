@@ -18,7 +18,8 @@ export type NotificationLevel = z.infer<typeof NotificationLevelSchema>;
 /**
  * How much a project's threads may do without asking. `full-access` lets a thread run any
  * command on the host and is what a new project starts with; `auto-accept-edits` lets a thread
- * edit files in its workspace and denies every other command (no approval prompt exists). Only the
+ * edit files in its workspace and denies the commands that run code or change things, while
+ * read-only ones like `git status` still run (no approval prompt exists). Only the
  * person changes it, per project: no tool the coordinator holds can. The coordinator itself
  * always runs `approval-required`, whatever a project chooses.
  */

@@ -56,6 +56,7 @@ A value is bare (`steps=2`), `"double quoted"` or `'single quoted'`. A quoted va
 | `crash[=<k>]` | Writes `k` whole events (default 2), then half of the next line, then SIGKILLs itself. |
 | `ratelimit[=<seconds>]` | Ends the turn the way a usage limit ends one, with the reset `<seconds>` away (default 3600). See [Usage limits](#usage-limits). `fail` does not override it. |
 | `usage=<in>,<out>,<cacheWrite>,<cacheRead>` | Tokens the turn reports as consumed. Omitted or non-numeric parts are 0. Without the key, or with a bare `usage`, the turn reports 10, 5, 200 and 4000. |
+| `usagewarn` | Adds the `rate_limit_event` a real Max login writes on an ordinary run once a plan window passes a threshold (`status: "allowed_warning"`, `utilization`, `surpassedThreshold`, `unifiedWindows`). It is a warning, not a limit: the turn carries on and AOP must not treat it as one. See [Usage limits](#usage-limits). |
 | `system` | Adds the appended system prompt the turn ran with (`--append-system-prompt`) to the end of its reply, between two marker lines, or `[appended system prompt: none]`. Lets a test or a screenshot read what the CLI was told. See [System prompt](#system-prompt). |
 
 Events are one JSON line each, written synchronously to stdout, so a log file tails and resumes exactly like the real CLI's.
@@ -79,7 +80,9 @@ Every turn reports the tokens from `usage=` the way Claude Code does:
 
 The exit code is 1; `exit=0` gives a limit hit that exits 0. A turn that resumes the session afterwards, with no marker, replies normally.
 
-These shapes come from Claude Code's [error reference](https://code.claude.com/docs/en/errors) (the message text) and the [Agent SDK reference](https://code.claude.com/docs/en/agent-sdk/typescript) (`SDKRateLimitEvent`, `SDKAssistantMessageError`, `api_error_status`), plus third-party reports for `resetsAt` being epoch seconds. Nothing here was checked against the real CLI, which these tests must never run: the field values, the order of the three events and the exit code are the documented or reported shape, not a recording.
+The rejected shape above comes from Claude Code's [error reference](https://code.claude.com/docs/en/errors) (the message text) and the [Agent SDK reference](https://code.claude.com/docs/en/agent-sdk/typescript) (`SDKRateLimitEvent`, `SDKAssistantMessageError`, `api_error_status`), plus third-party reports for `resetsAt` being epoch seconds. It has not been seen on the real CLI: a usage limit cannot be provoked on purpose, so the field values, the order of the three events and the exit code of a real refusal are still the documented or reported shape, not a recording.
+
+What the real-runtime harness did record (Claude Code 2.1.285, Max login): every ordinary run writes a `rate_limit_event` whose `rate_limit_info` is `{status: "allowed_warning", resetsAt, rateLimitType: "seven_day", utilization, isUsingOverage, surpassedThreshold, unifiedWindows: {five_hour: {utilization, resetsAt}, seven_day: {...}}}` once a window passes 75%, and it has no `overageStatus`. `[fake: usagewarn]` writes that event, and a successful result carries `api_error_status: null` and `permission_denials: []`.
 
 ## MCP tool calls
 
@@ -88,7 +91,7 @@ The adapter hands a run the AOP server as `--mcp-config '{"mcpServers":{"aop":{"
 1. On the first call it POSTs `initialize` (protocol `2024-11-05`, client `fake-claude`) and `notifications/initialized`, then `tools/list` once per turn. Requests go to the URL exactly as given (it already carries `sessionId` and `accessToken`), with `content-type: application/json` and `accept: application/json, text/event-stream`. Responses must be JSON.
 2. A tool that `tools/list` did not offer is not called. The model gets an error result, `No such tool available: mcp__aop__<name>`, which is how a thread's run shows that it cannot use a coordinator tool.
 3. Otherwise it POSTs `tools/call {name, arguments}`. The client is strict: `result.content` must be an array of `{type: "text", text}` blocks. Anything else, such as a plain object, becomes the error result `invalid MCP tool result`. The tool text is the blocks joined with newlines.
-4. The log shows an assistant `tool_use` named `mcp__aop__<name>` followed by a user `tool_result` carrying that text. `is_error` is true for `result.isError`, a JSON-RPC `error` (its message is the text), an HTTP error status or an unreachable server (`MCP server aop unreachable: <reason>`), and for a run with no `aop` server (`MCP server aop is not connected`). None of these fail the turn: it still ends with its normal reply, as a real model would carry on.
+4. The log shows an assistant `tool_use` named `mcp__aop__<name>` followed by a user `tool_result` carrying that text as content blocks (`[{type: "text", text}]`, as the real CLI logs an MCP result; a Bash result's content is a plain string). `is_error` is true for `result.isError`, a JSON-RPC `error` (its message is the text), an HTTP error status or an unreachable server (`MCP server aop unreachable: <reason>`), and for a run with no `aop` server (`MCP server aop is not connected`). None of these fail the turn: it still ends with its normal reply, as a real model would carry on.
 
 Each call happens when the fake reaches it, after the events before it are in the log and before its own result is written. The `tool_use` and `tool_result` lines are written together once the call returns.
 
@@ -117,7 +120,7 @@ Fake reply for turn 2 of session <id> (resumed). You said: ...
 
 The fake also imitates what Claude Code does with that text on resume, because it decides whether an edit to a project's instructions reaches a resumed thread. By default (`--system-prompt-snapshot on`) Claude Code records the system prompt of a conversation's first request, appended text included, and sends that record on every later request and resume, even when a later launch passes different text or none, until the conversation is compacted. With `--system-prompt-snapshot off` it renders the prompt afresh each request. The fake stores the first launch's text in the session file and, unless `off` is passed, echoes that record on every resume. So a caller that forgets `off` sees stale text in the echo, as it would with the real CLI.
 
-Where this comes from: `claude --help` (2.1.285, no model call) and the [CLI reference](https://code.claude.com/docs/en/cli-reference#system-prompt-flags-in-resumed-conversations), which says the flag needs Claude Code 2.1.257 or later. It has not been observed on a real model: nothing in this repo runs `claude`. Compaction, which also re-renders the prompt, is not imitated.
+Where this comes from: `claude --help` (2.1.285, no model call) and the [CLI reference](https://code.claude.com/docs/en/cli-reference#system-prompt-flags-in-resumed-conversations), which says the flag needs Claude Code 2.1.257 or later. It was confirmed on a real model by the real-runtime harness: a resumed coordinator turn, launched with `--append-system-prompt <edited instructions> --system-prompt-snapshot off`, answered from the edited text, and the resume kept the session id. Compaction, which also re-renders the prompt, is not imitated.
 
 ## Sessions and resume
 

@@ -22,6 +22,12 @@ Reasoning effort runs from Low to Max where the runtime and model support it. Pr
 
 AOP keeps some runtime state under `~/.aop/`: Codex uses `~/.aop/codex-home` as `CODEX_HOME` unless you set your own, and PI keeps its sessions in `~/.aop/pi-sessions`. These homes preserve agent logins when you remove a repository. A full uninstall cleanup can remove them.
 
+## Checking a runtime against the real CLI
+
+Everything the tests know about Claude Code's output comes from a fake CLI, so a change in the real one would go unseen. `scripts/real-runtime` is an opt-in harness that runs a short session on the real `claude` (Sonnet at medium effort, on your own login) and a private scratch GitHub repository, and writes a pass/fail report: the coordinator's restrictions, what a thread with full access or with Edit files can run, `aop_ask_user` and the resume that follows, the appended system prompt on a resumed session, thread links, the usage, `modelUsage` and rate-limit events of a result, the `gh` output the pull request watcher reads, and the watcher's fix prompt on a check that really fails.
+
+It never runs by default, in a test or in CI. It needs `AOP_REAL_RUNTIME=1`, starts an isolated stack (its own `AOP_HOME`, database and ports) whose only runtime is a gate in front of `claude`, and the gate refuses a run past `AOP_REAL_RUNTIME_MAX_RUNS`, past `AOP_REAL_RUNTIME_MAX_COST_USD` (total cost from the results), and kills one that outlives `AOP_REAL_RUNTIME_RUN_TIMEOUT_MS`. The header of `scripts/real-runtime/run.ts` lists the commands (`up`, `scenario`, `report`, `down`).
+
 ## Related guides
 
 - [MCP](./MCP.md)

@@ -22,6 +22,41 @@ describe("tailOf", () => {
     expect(tailOf(log)).toBe(`first\n${"y".repeat(300)}…\nlast`);
   });
 
+  // Recorded from the real `gh run view --log-failed` on a failing `bun test` job (real-runtime
+  // harness, gh 2.x): "<job>\t<step>\t<timestamp> <text>" on every line, a byte order mark on the
+  // first, colour codes as the text "^[[36;1m", and continuation lines of an annotation without
+  // a timestamp.
+  test("strips the job, step, timestamp, byte order mark and caret colour codes of real gh output", () => {
+    const bom = String.fromCharCode(0xfeff);
+    const log = [
+      `ci\tRun bun test\t${bom}2026-09-30T17:30:45.9282859Z ##[group]Run bun test`,
+      "ci\tRun bun test\t2026-09-30T17:30:45.9283206Z ^[[36;1mbun test^[[0m",
+      "ci\tRun bun test\t2026-09-30T17:30:45.9756429Z error: expect(received).toBe(expected)",
+      "ci\tRun bun test\t2026-09-30T17:30:45.9756757Z",
+      'ci\tRun bun test\t2026-09-30T17:30:45.9787861Z ##[error]Expected: "HELLO AOP!"',
+      'ci\tRun bun test\tReceived: "HELLO, AOP!"',
+      "ci\tRun bun test",
+      "ci\tRun bun test\t2026-09-30T17:30:45.9803889Z ##[error]Process completed with exit code 1.",
+    ].join("\n");
+
+    expect(tailOf(log)).toBe(
+      [
+        "##[group]Run bun test",
+        "bun test",
+        "error: expect(received).toBe(expected)",
+        '##[error]Expected: "HELLO AOP!"',
+        'Received: "HELLO, AOP!"',
+        "##[error]Process completed with exit code 1.",
+      ].join("\n"),
+    );
+  });
+
+  test("leaves tabs alone in a log that is not gh's", () => {
+    expect(tailOf("--- FAIL\tTestX (0.00s)\n\tfoo_test.go:12: boom")).toBe(
+      "--- FAIL\tTestX (0.00s)\n\tfoo_test.go:12: boom",
+    );
+  });
+
   test("is bounded in lines and in size, and it is the end that survives", () => {
     const lines = Array.from({ length: 200 }, (_, index) => `line ${index}`);
     const byLines = tailOf(lines.join("\n")).split("\n");

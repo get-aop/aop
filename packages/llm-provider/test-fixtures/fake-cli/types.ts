@@ -69,6 +69,8 @@ export interface TurnContext {
   prompt: string;
   turn: number;
   resumed: boolean;
+  /** `[fake: usagewarn]`: the turn also writes the usage warning a real Max login writes on an ordinary run. */
+  usageWarning?: boolean;
   /** The appended system prompt this turn ran with: what the launch passed, or the recorded one on a resume. */
   systemPrompt?: string;
 }

@@ -224,7 +224,7 @@ describe("claudeDialect events", () => {
     });
     expect(contentOf(ok)[0]).toMatchObject({
       type: "tool_result",
-      content: '{"threadId":"t1"}',
+      content: [{ type: "text", text: '{"threadId":"t1"}' }],
       is_error: false,
     });
     expect(contentOf(failed)[0]).toMatchObject({ is_error: true });
@@ -253,6 +253,43 @@ describe("claudeDialect events", () => {
       api_error_status: 429,
       total_cost_usd: 0,
       usage: { input_tokens: 0, output_tokens: 0 },
+    });
+  });
+
+  // Shapes recorded from Claude Code 2.1.285 on a Max login by the real-runtime harness.
+  test("a turn with usagewarn writes the real allowed_warning event, which is not a limit", () => {
+    expect(claudeDialect.start(ctx).map((line) => line.type)).toEqual(["system"]);
+
+    const [, warning] = claudeDialect.start({ ...ctx, usageWarning: true });
+
+    expect(warning).toMatchObject({
+      type: "rate_limit_event",
+      session_id: "sess-1",
+      rate_limit_info: {
+        status: "allowed_warning",
+        rateLimitType: "seven_day",
+        utilization: 0.86,
+        isUsingOverage: false,
+        surpassedThreshold: 0.75,
+        unifiedWindows: { five_hour: { utilization: 0.06 }, seven_day: { utilization: 0.86 } },
+      },
+    });
+    const info = (warning?.rate_limit_info ?? {}) as Record<string, unknown>;
+    expect(info).not.toHaveProperty("overageStatus");
+    expect(typeof info.resetsAt).toBe("number");
+  });
+
+  test("a success result carries what the real one does: a null api_error_status and no denials", () => {
+    const [, result] = claudeDialect.end({ kind: "success", text: "done" }, ctx);
+
+    expect(result).toMatchObject({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      api_error_status: null,
+      permission_denials: [],
+      stop_reason: "end_turn",
+      terminal_reason: "completed",
     });
   });
 

@@ -14,7 +14,7 @@ const OPTIONS: { value: ThreadAccess; label: string; description: string }[] = [
     value: "auto-accept-edits",
     label: "Edit files",
     description:
-      "Threads edit files in their own worktree. Every other command, such as running tests or git, is denied: there is no approval prompt.",
+      "Threads edit files in their own worktree. Commands that run code or change things, such as running tests or git commit, are denied (read-only ones like git status still run): there is no approval prompt.",
   },
 ];
 
