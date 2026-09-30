@@ -3,9 +3,11 @@ import type { Thread } from "@aop/common";
 import {
   canWaitOnRateLimit,
   closingStatusLine,
+  pullRequestOf,
   QUEUED_STATUS_LINE,
   statusAfterSchedule,
   statusAfterTurn,
+  statusChangeOf,
   type TurnEnd,
 } from "./state.ts";
 
@@ -13,10 +15,18 @@ const RESUMES_AT = "2026-09-30T16:00:00.000Z";
 const done = { label: "a", state: "done" } as const;
 const pending = { label: "b", state: "pending" } as const;
 
+const openPr = {
+  type: "pr",
+  number: 7,
+  url: "https://github.com/acme/widget/pull/7",
+  state: "open",
+} as const;
+
 const thread = (
   status: Thread["status"],
   steps: Thread["steps"] = [],
-): Pick<Thread, "status" | "steps"> => ({ status, steps });
+  artifacts: Thread["artifacts"] = [],
+): Pick<Thread, "status" | "steps" | "artifacts"> => ({ status, steps, artifacts });
 
 describe("statusAfterTurn", () => {
   test("a queued message keeps the thread working, whatever ended the turn", () => {
@@ -36,6 +46,15 @@ describe("statusAfterTurn", () => {
       status: "idle",
     });
     expect(statusAfterTurn(thread("working"), "completed", false)).toEqual({ status: "idle" });
+  });
+
+  test("a completed turn with an open pull request is ready for review, a merged one is not", () => {
+    expect(statusAfterTurn(thread("working", [], [openPr]), "completed", false)).toEqual({
+      status: "ready-for-review",
+    });
+    expect(
+      statusAfterTurn(thread("working", [], [{ ...openPr, state: "merged" }]), "completed", false),
+    ).toEqual({ status: "idle" });
   });
 
   test("a failed turn is idle, not ready for review, even with a finished checklist", () => {
@@ -152,5 +171,50 @@ describe("closingStatusLine", () => {
     const line = closingStatusLine("completed", "x".repeat(500));
     expect(line).toHaveLength(200);
     expect(line.endsWith("…")).toBe(true);
+  });
+});
+
+describe("pullRequestOf", () => {
+  test("is the pull request artifact, or null for a thread without one", () => {
+    expect(pullRequestOf({ artifacts: [{ type: "doc", name: "notes.md" }, openPr] })).toEqual({
+      number: 7,
+      url: "https://github.com/acme/widget/pull/7",
+      state: "open",
+    });
+    expect(pullRequestOf({ artifacts: [] })).toBeNull();
+  });
+});
+
+describe("statusChangeOf", () => {
+  const base: Omit<Extract<Thread, { status: "idle" }>, "status"> = {
+    id: "isess_1",
+    projectId: "proj_1",
+    title: "t",
+    runtime: { provider: "claude-code", model: "claude-opus-4-8", effort: "high" },
+    target: { kind: "host" },
+    repoId: null,
+    branch: null,
+    steps: [],
+    liveStatusLine: null,
+    artifacts: [],
+    repliesCount: 0,
+    unread: false,
+    lastActivityAt: "2026-09-30T09:00:00.000Z",
+    createdAt: "2026-09-30T09:00:00.000Z",
+  };
+
+  test("restores the field only the waiting and resolved statuses carry", () => {
+    const question = { question: "Which?", options: [] };
+    expect(
+      statusChangeOf({ ...base, status: "waiting-on-you", blockedQuestion: question }),
+    ).toEqual({ status: "waiting-on-you", blockedQuestion: question });
+    expect(
+      statusChangeOf({ ...base, status: "resolved", resolvedAt: "2026-09-30T10:00:00.000Z" }),
+    ).toEqual({ status: "resolved", resolvedAt: "2026-09-30T10:00:00.000Z" });
+    expect(statusChangeOf({ ...base, status: "idle" })).toEqual({ status: "idle" });
+    expect(statusChangeOf({ ...base, status: "queued" })).toEqual({ status: "queued" });
+    expect(
+      statusChangeOf({ ...base, status: "rate-limited", resumesAt: "2026-09-30T16:00:00.000Z" }),
+    ).toEqual({ status: "rate-limited", resumesAt: "2026-09-30T16:00:00.000Z" });
   });
 });

@@ -2,6 +2,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeDialect } from "./claude";
 import { type Directives, parseDirectives } from "./directives";
+import { writeFiles } from "./files";
 import { carryOut } from "./mcp-beats";
 import { beginTurn } from "./session-store";
 import { planTurn } from "./turn";
@@ -58,6 +59,9 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
   if (!session) {
     const message = `No conversation found with session ID: ${invocation.resumeId}`;
     return abort(io, message, FAILURE_EXIT_CODE);
+  }
+  for (const path of writeFiles(directives.writes ?? [], runtime.cwd)) {
+    io.warn(`fake-cli: refusing to write outside the working directory: ${path}`);
   }
   const ctx: TurnContext = {
     sessionId: session.id,

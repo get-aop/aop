@@ -1,4 +1,5 @@
 import type { CreateSessionPrMode, CreateSessionPrResult, MergeSessionPrMethod } from "@aop/common";
+import type { CreateProviderFn } from "../chat-session/runtime-engine.ts";
 import type { LocalServerContext } from "../context.ts";
 import {
   defaultRunGh,
@@ -39,6 +40,8 @@ export type CreateSessionPullRequestResult =
 export interface CreateSessionPullRequestOptions {
   /** Title/body generation seam; tests inject a stub so the real runtime is never spawned. */
   generateDraft?: GenerateSessionPrDraft;
+  /** Runtime behind the default draft; tests pass one that only ever runs the fake CLI. */
+  createProviderFn?: CreateProviderFn;
 }
 
 export type GenerateSessionPrDraft = (input: {
@@ -66,7 +69,8 @@ export const createSessionPullRequest = async (
     return { success: false, error: { code: "ON_DEFAULT_BRANCH" } };
   }
   const context: ReadySessionPrContext = { workspace, branch, defaultBranch, sessionTitle };
-  const generateDraft = options.generateDraft ?? defaultGenerateSessionPrDraft(runGit);
+  const generateDraft =
+    options.generateDraft ?? defaultGenerateSessionPrDraft(runGit, options.createProviderFn);
 
   const gh = await checkGhAvailable(runGh, workspace);
   if (!gh.ok) {
@@ -129,7 +133,7 @@ const pushAndCreate = async (
 
 /** Real draft seam: summarize the session conversation through its own runtime. */
 const defaultGenerateSessionPrDraft =
-  (runGit: RunGit): GenerateSessionPrDraft =>
+  (runGit: RunGit, createProviderFn: CreateProviderFn | undefined): GenerateSessionPrDraft =>
   async ({ ctx, sessionId, context }) => {
     const session = await ctx.chatSessionRepository.getById(sessionId);
     if (!session) return null;
@@ -142,6 +146,7 @@ const defaultGenerateSessionPrDraft =
       messages,
       changedFiles: await listChangedFiles(runGit, context),
       fallbackTitle: context.sessionTitle,
+      createProviderFn,
     });
   };
 

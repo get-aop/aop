@@ -16,10 +16,15 @@ import { resolveSessionRuntime } from "../project/runtime.ts";
 import { stopProjectSession } from "../project/session-control.ts";
 import { listWireMessages } from "../project/wire-messages.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import { changeThread as applyPatch } from "./change.ts";
+import type { ThreadGit } from "./git.ts";
 import { createThreadRepository, type ThreadPatch } from "./repository.ts";
-import { invalidMessage, pickRepo, threadTitle, threadWorkspace } from "./spawn-target.ts";
+import { invalidMessage, planTarget, threadTitle } from "./spawn-target.ts";
 import { insertThreadSession } from "./thread-session.ts";
 import type { ThreadError, ThreadResult } from "./types.ts";
+
+/** What a thread is known by before it has been read back from the database. */
+type SpawnedThread = Pick<Thread, "id" | "projectId" | "title" | "repoId" | "branch">;
 
 export interface SpawnThreadInput {
   /** Defaults to the first line of the prompt. */
@@ -58,10 +63,21 @@ export interface ThreadService {
     report: { line?: string | null; steps?: ThreadStep[] },
   ) => Promise<ThreadResult<{ thread: Thread }>>;
   markRead: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
+  /** The thread's pull request: opened at most once, merged, and kept in step with GitHub. */
+  openPullRequest: ThreadGit["openPullRequest"];
+  mergePullRequest: ThreadGit["mergePullRequest"];
+  syncPullRequest: ThreadGit["syncPullRequest"];
+  /** Closes the thread out: its worktree goes, its branch stays, and a message can reopen it. */
+  resolve: ThreadGit["resolve"];
+  /** Deletes the thread with its worktree and branch. */
   remove: (threadId: string) => Promise<ThreadResult<Record<never, never>>>;
 }
 
-export const createThreadService = (ctx: LocalServerContext, chat: ChatEngine): ThreadService => {
+export const createThreadService = (
+  ctx: LocalServerContext,
+  chat: ChatEngine,
+  git: ThreadGit,
+): ThreadService => {
   const runtimeConfigurations = createRuntimeConfigurationRepository(ctx.db);
 
   const reload = async (threadId: string): Promise<ThreadResult<{ thread: Thread }>> => {
@@ -91,15 +107,39 @@ export const createThreadService = (ctx: LocalServerContext, chat: ChatEngine): 
     if ("error" in active) return { success: false, error: active.error };
     const invalid = invalidMessage(text);
     if (invalid) return { success: false, error: invalid };
-    const sent = await chat.sendMessage(thread.id, { content: text, origin });
-    return sent.success
+    // A merge that finishes would take the worktree from under the turn this message starts.
+    if (thread.status === "landing") return { success: false, error: { code: "THREAD_BUSY" } };
+    // A resolved thread's worktree is gone; a turn needs it back, and nothing may take it away
+    // again between the two, so the message is stored (and the turn started) while it is held.
+    const started = await git.holding(thread, () =>
+      chat.sendMessage(thread.id, { content: text, origin }),
+    );
+    if (!started.success) return started;
+    return started.value.success
       ? reload(thread.id)
-      : { success: false, error: { code: "SEND_FAILED", reason: sent.error.code } };
+      : { success: false, error: { code: "SEND_FAILED", reason: started.value.error.code } };
   };
 
-  const removeThread = async (threadId: string, projectId: string): Promise<void> => {
-    await chat.delete(threadId);
-    await ctx.eventPublisher.transaction((tx) => recordThreadRemoved(tx, projectId, threadId));
+  const deleteSession = async (
+    thread: Pick<Thread, "id" | "projectId">,
+  ): Promise<ThreadResult<Record<never, never>>> => {
+    const deleted = await chat.delete(thread.id);
+    if (!deleted.success && deleted.error.code === "RUN_IN_PROGRESS") {
+      return { success: false, error: { code: "SESSION_BUSY", sessionId: thread.id } };
+    }
+    await ctx.eventPublisher.transaction((tx) =>
+      recordThreadRemoved(tx, thread.projectId, thread.id),
+    );
+    return { success: true };
+  };
+
+  // The worktree and branch go before the session: a delete that stops halfway leaves a thread
+  // that can be deleted again, not a directory that nothing owns.
+  const removeThread = async (
+    thread: SpawnedThread,
+  ): Promise<ThreadResult<Record<never, never>>> => {
+    const released = await git.discard(thread);
+    return released.success ? deleteSession(thread) : released;
   };
 
   // Stop has waited for the session to go idle, so a thread still `working`, `queued`,
@@ -125,10 +165,7 @@ export const createThreadService = (ctx: LocalServerContext, chat: ChatEngine): 
     if (!(await ctx.threadRepository.getById(threadId))) {
       return { success: false, error: { code: "THREAD_NOT_FOUND" } };
     }
-    await ctx.eventPublisher.transaction(async (tx) => {
-      await createThreadRepository(tx.db).update(threadId, patch);
-      await recordThreadUpserted(tx, threadId);
-    });
+    await applyPatch(ctx, threadId, patch);
     return reload(threadId);
   };
 
@@ -137,44 +174,64 @@ export const createThreadService = (ctx: LocalServerContext, chat: ChatEngine): 
     projectId: string,
     input: SpawnThreadInput,
   ): Promise<
-    | { project: Project; threadId: string; repo: Repo | null; workspace: string }
+    | { project: Project; thread: SpawnedThread; repo: Repo | null; workspace: string }
     | { error: ThreadError }
   > => {
     const active = await activeProject(projectId);
     if ("error" in active) return active;
     const invalid = invalidMessage(input.prompt);
     if (invalid) return { error: invalid };
-    const target = await pickRepo(ctx, active.project, input.repoId ?? null);
-    if ("error" in target) return target;
     const threadId = generateTypeId("isess");
-    const workspace = await threadWorkspace(projectId, threadId, target.repo);
-    if (typeof workspace !== "string") return workspace;
-    return { project: active.project, threadId, repo: target.repo, workspace };
+    const title = threadTitle(input.title, input.prompt);
+    const target = await planTarget(
+      ctx,
+      git.chooseBranch,
+      active.project,
+      { threadId, title },
+      input.repoId ?? null,
+    );
+    if ("error" in target) return target;
+    const thread = {
+      id: threadId,
+      projectId,
+      title,
+      repoId: target.repo?.id ?? null,
+      branch: target.branch,
+    };
+    return { project: active.project, thread, repo: target.repo, workspace: target.workspace };
   };
 
   const spawn: ThreadService["spawn"] = async (projectId, input) => {
     const plan = await planSpawn(projectId, input);
     if ("error" in plan) return { success: false, error: plan.error };
-    const { project, threadId } = plan;
+    const { project, thread } = plan;
     const runtime = await resolveSessionRuntime(runtimeConfigurations, project.thread);
+    // The session is stored before its worktree exists, so everything on disk has an owner in
+    // the database; a spawn that stops halfway leaves a thread whose next turn makes the worktree.
     await ctx.eventPublisher.transaction(async (tx) => {
       await insertThreadSession(tx.db, {
-        id: threadId,
+        id: thread.id,
         project,
-        title: threadTitle(input.title, input.prompt),
+        title: thread.title,
         repo: plan.repo,
         workspace: plan.workspace,
+        branch: thread.branch,
         runtime,
       });
-      await recordThreadUpserted(tx, threadId);
+      await recordThreadUpserted(tx, thread.id);
     });
 
-    const sent = await chat.sendMessage(threadId, {
+    const ready = await git.provision(thread);
+    if (!ready.success) {
+      await removeThread(thread);
+      return ready;
+    }
+    const sent = await chat.sendMessage(thread.id, {
       content: input.prompt,
       origin: { type: "coordinator-relay", quote: input.quote?.trim() || null },
     });
-    if (sent.success) return reload(threadId);
-    await removeThread(threadId, project.id);
+    if (sent.success) return reload(thread.id);
+    await removeThread(thread);
     return { success: false, error: { code: "SEND_FAILED", reason: sent.error.code } };
   };
 
@@ -254,12 +311,20 @@ export const createThreadService = (ctx: LocalServerContext, chat: ChatEngine): 
       return reload(threadId);
     },
 
+    openPullRequest: git.openPullRequest,
+    mergePullRequest: git.mergePullRequest,
+    syncPullRequest: git.syncPullRequest,
+    resolve: git.resolve,
+
     remove: async (threadId) => {
       const session = await threadSession(ctx, threadId);
-      if (!session?.project_id) return { success: false, error: { code: "THREAD_NOT_FOUND" } };
-      await stopProjectSession(ctx, chat, session);
-      await removeThread(threadId, session.project_id);
-      return { success: true };
+      const thread = session ? await ctx.threadRepository.getById(threadId) : null;
+      if (!session || !thread) return { success: false, error: { code: "THREAD_NOT_FOUND" } };
+      // A worktree is not taken from under a turn that would not stop.
+      if (!(await stopProjectSession(ctx, chat, session))) {
+        return { success: false, error: { code: "SESSION_BUSY", sessionId: threadId } };
+      }
+      return removeThread(thread);
     },
   };
 };

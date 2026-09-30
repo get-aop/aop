@@ -122,13 +122,17 @@ describe("MCP HTTP routes", () => {
       "project_settings_set",
       "propose_threads",
       "thread_list",
+      "thread_merge_pr",
+      "thread_open_pr",
       "thread_report",
+      "thread_resolve",
       "thread_spawn",
       "thread_steer",
       "thread_stop",
     ]);
     expect(await toolNames(s, spawned.thread.id)).toEqual([
       "aop_ask_user",
+      "aop_open_pr",
       "aop_report_status",
       "memory_read",
       "memory_write",

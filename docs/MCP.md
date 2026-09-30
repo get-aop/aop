@@ -19,6 +19,9 @@ The coordinator is hermetic: it runs with the AOP tools only, with no Claude set
 | `thread_stop` | Ends the thread's running turn and drops its queued messages. |
 | `thread_list` | Lists the project's threads with status, progress and the question of any thread waiting on the person. |
 | `thread_report` | Returns one thread's state and the end of its transcript. |
+| `thread_open_pr` | Opens a thread's pull request: its changes are committed, its branch pushed, the pull request opened. A thread has one, so asking again pushes what the thread did since and returns the same one; a merged or closed one is refused. |
+| `thread_merge_pr` | Merges a thread's pull request when the person asks. The thread is then resolved and its branch removed. Refused while the thread holds work the pull request lacks, and when GitHub will not merge it; the error says why. |
+| `thread_resolve` | Marks a thread resolved: its worktree is removed, its branch kept, and a later `thread_steer` reopens it. Refused while the thread is working. |
 | `propose_threads` | Attaches a "Suggested threads" block to the reply; nothing runs until the person starts one. |
 | `project_settings_get` | Reads goal, instructions, models and effort, notification level, thread access and repositories. |
 | `project_settings_set` | Changes the thread model and effort, or the notification level. The goal and instructions (which go into every session's system prompt), thread access, repositories and the coordinator's own runtime stay with the person: a call that names any of them fails with an error and changes nothing, also when it names a valid setting too. |
@@ -32,6 +35,7 @@ A thread's report reaches the coordinator as a `Thread report:` message that wak
 | --- | --- |
 | `aop_ask_user` | Puts the thread on "waiting on you" with a question and up to eight options (at most one recommended). The thread ends its turn; the person's reply resumes the same runtime session as the next turn. |
 | `aop_report_status` | Sets the thread's checklist (`pending`, `active`, `done` steps) and its one-line status. |
+| `aop_open_pr` | Opens the thread's pull request from its own branch, with the title and description the thread gives or ones written from its conversation. Called again, it pushes what the thread did since and returns the same pull request; a merged or closed one is refused. |
 | `memory_read`, `memory_write` | Same project memory as the coordinator. |
 
 Claude's own `AskUserQuestion` is withheld from threads: it cannot be answered without a terminal.
@@ -42,6 +46,8 @@ Claude's own `AskUserQuestion` is withheld from threads: it cannot be answered w
 | --- | --- |
 | `aop_list_repos` | Returns the registered repositories |
 | `aop_set_chat_workspace` | Binds the current chat to an absolute path in the same git repository |
+
+Threads, their worktrees and pull requests are described in [Threads and git](./THREADS.md).
 
 ## Results
 

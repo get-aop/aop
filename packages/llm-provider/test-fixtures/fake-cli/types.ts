@@ -16,6 +16,12 @@ export interface McpCall {
   arguments: Record<string, unknown>;
 }
 
+/** A file the script has the model write, relative to the working directory. */
+export interface FileWrite {
+  path: string;
+  content: string;
+}
+
 /** What the model sees back from a tool call. */
 export interface McpResult {
   text: string;

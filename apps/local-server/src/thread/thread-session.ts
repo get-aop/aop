@@ -1,8 +1,10 @@
-import type { Project } from "@aop/common";
+import type { Project, ThreadTarget } from "@aop/common";
 import type { Kysely } from "kysely";
 import { createChatSessionRepository } from "../chat-session/repository.ts";
 import type { Database, Repo } from "../db/schema.ts";
 import type { SessionRuntime } from "../project/runtime.ts";
+
+const HOST_TARGET: ThreadTarget = { kind: "host" };
 
 /** Inserts the chat session a new thread is: `working`, on the project's thread runtime and access. */
 export const insertThreadSession = async (
@@ -13,6 +15,8 @@ export const insertThreadSession = async (
     title: string;
     repo: Repo | null;
     workspace: string;
+    /** The thread's own branch; null for a thread with no repo. */
+    branch: string | null;
     runtime: SessionRuntime;
   },
 ): Promise<void> => {
@@ -29,6 +33,8 @@ export const insertThreadSession = async (
     runtime_alias: input.runtime.runtimeAlias,
     runtime_session_id: null,
     workspace_path: input.workspace,
+    branch: input.branch,
+    target_json: JSON.stringify(HOST_TARGET),
     runtime_access_mode: input.project.threadAccess,
     created_at: now,
     updated_at: now,

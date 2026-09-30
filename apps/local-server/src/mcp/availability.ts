@@ -21,6 +21,9 @@ export const COORDINATOR_TOOL_NAMES = [
   "thread_stop",
   "thread_list",
   "thread_report",
+  "thread_open_pr",
+  "thread_merge_pr",
+  "thread_resolve",
   "propose_threads",
   "project_settings_get",
   "project_settings_set",
@@ -30,6 +33,7 @@ export const COORDINATOR_TOOL_NAMES = [
 export const THREAD_TOOL_NAMES = [
   "aop_ask_user",
   "aop_report_status",
+  "aop_open_pr",
   ...MEMORY_TOOL_NAMES,
 ] as const;
 

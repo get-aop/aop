@@ -13,21 +13,24 @@ const IDLE_TIMEOUT_MS = 15_000;
 /**
  * Stops a project session for good: its queued messages are cancelled first (so Stop does not
  * start the next one), then the running turn is aborted, and the call returns once the engine
- * reports the session idle. A session that never settles is logged and left to the engine.
+ * reports the session idle. A session that never settles is logged and left to the engine;
+ * the result says whether it is idle, for a caller that must not pull its workspace from under it.
  */
 export const stopProjectSession = async (
   ctx: LocalServerContext,
   chat: ChatEngine,
   session: ChatSession,
-): Promise<void> => {
+): Promise<boolean> => {
   await cancelQueuedSteers(ctx, session.id, session.runtime, "abort");
   await chat.abort(session.id);
-  if (!(await waitUntilIdle(ctx, session.id))) {
+  const idle = await waitUntilIdle(ctx, session.id);
+  if (!idle) {
     logger.warn("Session {sessionId} still running {timeoutMs}ms after Stop", {
       sessionId: session.id,
       timeoutMs: IDLE_TIMEOUT_MS,
     });
   }
+  return idle;
 };
 
 const waitUntilIdle = async (ctx: LocalServerContext, sessionId: string): Promise<boolean> => {

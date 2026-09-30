@@ -15,6 +15,15 @@ export const readBody = async <T>(
     : { response: c.json({ error: "Invalid request", details: parsed.error.issues }, 400) };
 };
 
+/** Like `readBody`, for a schema whose fields are all optional: a request with no body means `{}`. */
+export const readOptionalBody = async <T>(
+  c: Context,
+  schema: ZodSchema<T>,
+): Promise<{ body: T } | { response: Response }> => {
+  const text = await c.req.text();
+  return text.trim() ? readBody(c, schema) : { body: schema.parse({}) };
+};
+
 /** The one place a service error becomes an HTTP status: not found 404, a refused state 409, bad input 400. */
 export const errorResponse = (c: Context, error: ServiceError): Response => {
   const body = { error: describeServiceError(error), code: error.code };

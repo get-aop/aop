@@ -9,7 +9,7 @@ import {
 } from "@aop/common";
 import { aopPaths, generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
-import type { ChatSession } from "../db/schema.ts";
+import type { ThreadGit } from "../thread/git.ts";
 import { createThreadRepository } from "../thread/repository.ts";
 import { invalidMessage } from "../thread/spawn-target.ts";
 import type { ThreadError } from "../thread/types.ts";
@@ -22,7 +22,7 @@ import {
 import type { ChatEngine } from "./engine.ts";
 import { recordProjectRemoved, recordProjectUpserted } from "./events.ts";
 import { createProjectRepository } from "./repository.ts";
-import { stopProjectSession } from "./session-control.ts";
+import { createProjectTeardown } from "./teardown.ts";
 import { listWireMessages } from "./wire-messages.ts";
 
 export type ProjectAction = "pause" | "resume" | "archive" | "restore";
@@ -33,7 +33,10 @@ export type ProjectError =
   | { code: "REPO_IN_USE"; repoId: string }
   | { code: "INVALID_TRANSITION"; action: ProjectAction; status: ProjectStatus }
   | { code: "SESSION_BUSY"; sessionId: string }
-  | Extract<ThreadError, { code: "PROJECT_NOT_ACTIVE" | "INVALID_MESSAGE" | "SEND_FAILED" }>;
+  | Extract<
+      ThreadError,
+      { code: "PROJECT_NOT_ACTIVE" | "INVALID_MESSAGE" | "SEND_FAILED" | "WORKTREE_FAILED" }
+    >;
 
 export type ProjectResult<T> = ({ success: true } & T) | { success: false; error: ProjectError };
 
@@ -42,7 +45,10 @@ export interface ProjectService {
   list: () => Promise<Project[]>;
   get: (projectId: string) => Promise<ProjectResult<{ project: Project }>>;
   update: (projectId: string, patch: ProjectPatch) => Promise<ProjectResult<{ project: Project }>>;
-  /** Pause and archive stop every running session; resume and restore only reopen the project. */
+  /**
+   * Pause and archive stop every running session; resume and restore only reopen the project.
+   * Archive also releases the threads' worktrees, keeping their branches.
+   */
   transition: (
     projectId: string,
     action: ProjectAction,
@@ -64,11 +70,21 @@ const TRANSITIONS: Record<ProjectAction, { from: ProjectStatus[]; to: ProjectSta
   restore: { from: ["archived"], to: "active" },
 };
 
-export const createProjectService = (ctx: LocalServerContext, chat: ChatEngine): ProjectService => {
+export const createProjectService = (
+  ctx: LocalServerContext,
+  chat: ChatEngine,
+  git: ThreadGit,
+): ProjectService => {
   const notFound = { success: false, error: { code: "PROJECT_NOT_FOUND" } } as const;
 
-  const stopAll = async (sessions: ChatSession[]): Promise<void> => {
-    for (const session of sessions) await stopProjectSession(ctx, chat, session);
+  const teardown = createProjectTeardown(ctx, chat, git);
+
+  // What a status implies for the work a project holds: paused and archived projects run
+  // nothing, and an archived one keeps its threads' branches but not their checkouts.
+  const enforceStatus = async (project: Project): Promise<void> => {
+    if (project.status === "active") return;
+    await teardown.stopSessions(await ctx.chatSessionRepository.listByProject(project.id));
+    if (project.status === "archived") await teardown.parkThreads(project.id);
   };
 
   const missingRepo = async (repoIds: readonly string[]): Promise<string | null> => {
@@ -152,7 +168,11 @@ export const createProjectService = (ctx: LocalServerContext, chat: ChatEngine):
       const current = await ctx.projectRepository.getById(projectId);
       if (!current) return notFound;
       const { from, to } = TRANSITIONS[action];
-      if (current.status === to) return { success: true, project: current };
+      if (current.status === to) {
+        // The same again finishes what an interrupted call left undone.
+        await enforceStatus(current);
+        return { success: true, project: current };
+      }
       if (!from.includes(current.status)) {
         return {
           success: false,
@@ -165,7 +185,7 @@ export const createProjectService = (ctx: LocalServerContext, chat: ChatEngine):
         return updated;
       });
       if (!project) return notFound;
-      if (to !== "active") await stopAll(await ctx.chatSessionRepository.listByProject(projectId));
+      await enforceStatus(project);
       return { success: true, project };
     },
 
@@ -186,13 +206,8 @@ export const createProjectService = (ctx: LocalServerContext, chat: ChatEngine):
       const sessions = (await ctx.chatSessionRepository.listByProject(projectId)).sort(
         (a, b) => Number(a.kind === "coordinator") - Number(b.kind === "coordinator"),
       );
-      await stopAll(sessions);
-      for (const session of sessions) {
-        const deleted = await chat.delete(session.id);
-        if (!deleted.success && deleted.error.code === "RUN_IN_PROGRESS") {
-          return { success: false, error: { code: "SESSION_BUSY", sessionId: session.id } };
-        }
-      }
+      const deleted = await teardown.deleteSessions(sessions);
+      if (!deleted.success) return deleted;
       await ctx.eventPublisher.transaction(async (tx) => {
         await createProjectRepository(tx.db).remove(projectId);
         await recordProjectRemoved(tx, projectId);

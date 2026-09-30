@@ -18,7 +18,7 @@ const repos = [
   { id: "repo_api", name: "api", path: "/work/api" },
 ];
 const noMemory = { index: null, topics: [] };
-const thread = { title: "Fix cold start", repoId: "repo_web" };
+const thread = { title: "Fix cold start", repoId: "repo_web", branch: null };
 
 describe("the coordinator's system prompt", () => {
   test("tells the coordinator its role, the goal, the instructions, the repos and the memory index", () => {
@@ -92,6 +92,16 @@ describe("the coordinator's system prompt", () => {
   });
 });
 
+describe("what the coordinator is told about pull requests", () => {
+  test("names the tools for opening, merging and resolving, and says merging waits for the person", () => {
+    const prompt = buildCoordinatorSystemPrompt({ project, repos, memory: noMemory });
+
+    expect(prompt).toContain("thread_open_pr");
+    expect(prompt).toContain("thread_merge_pr only when the person says to");
+    expect(prompt).toContain("thread_resolve");
+  });
+});
+
 describe("a thread's system prompt", () => {
   test("names the thread and its workspace and lists only the other repos, then the shared project material", () => {
     const prompt = buildThreadSystemPrompt({
@@ -112,6 +122,33 @@ describe("a thread's system prompt", () => {
     expect(prompt).toContain("- Ledger is append-only");
     expect(prompt).toContain("aop_report_status");
     expect(prompt).toContain("aop_ask_user");
+  });
+
+  test("a thread with a branch is told it has a worktree of its own and opens its pull request through aop_open_pr", () => {
+    const prompt = buildThreadSystemPrompt({
+      project,
+      repos,
+      memory: noMemory,
+      thread: { ...thread, branch: "aop/fix-abc123" },
+      workspace: "/work/web",
+    });
+
+    expect(prompt).toContain("on the branch aop/fix-abc123");
+    expect(prompt).toContain("never push to or merge into the default branch");
+    expect(prompt).toContain("call aop_open_pr");
+  });
+
+  test("a thread with no repo has no branch to mention and no pull request to open", () => {
+    const prompt = buildThreadSystemPrompt({
+      project,
+      repos: [],
+      memory: noMemory,
+      thread: { title: "Sketch", repoId: null, branch: null },
+      workspace: "/scratch",
+    });
+
+    expect(prompt).not.toContain("aop_open_pr");
+    expect(prompt).not.toContain("on the branch");
   });
 
   test("has no other repositories section when the thread holds the only one", () => {
@@ -178,7 +215,7 @@ describe("the size bound", () => {
     const coordinator = buildCoordinatorSystemPrompt(input);
     const worker = buildThreadSystemPrompt({
       ...input,
-      thread: { title: "t".repeat(500), repoId: "repo_0" },
+      thread: { title: "t".repeat(500), repoId: "repo_0", branch: `aop/${"b".repeat(60)}` },
       workspace: `/${"w".repeat(900)}`,
     });
 

@@ -22,6 +22,16 @@ describe("parseDirectives", () => {
     expect(parseDirectives("hi", "system steps=1").echoSystemPrompt).toBe(true);
   });
 
+  test("reads the files to write: path, equals sign, content, entries split by a bar", () => {
+    expect(
+      parseDirectives('x [fake: write="a.txt=one|dir/b.txt=two=2|broken|=empty"]').writes,
+    ).toEqual([
+      { path: "a.txt", content: "one" },
+      { path: "dir/b.txt", content: "two=2" },
+    ]);
+    expect(parseDirectives("hello").writes).toBeUndefined();
+  });
+
   test("reads the four token counts in order; omitted or non-numeric ones are 0", () => {
     expect(parseDirectives("[fake: usage=1200,340,5000,61000]").usage).toEqual({
       input: 1200,

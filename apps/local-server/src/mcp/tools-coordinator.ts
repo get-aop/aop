@@ -122,6 +122,55 @@ export const threadStopTool = defineTool({
   },
 });
 
+export const threadOpenPrTool = defineTool({
+  name: "thread_open_pr",
+  description:
+    "Open the pull request for a thread's work: its changes are committed, its branch is pushed and a pull request is opened against the default branch. A thread has one pull request, so asking again pushes what the thread did since and returns the same one; once it has merged or closed, start a new thread for further work. Use it when the person asks for a pull request or the thread's work is ready for one. Give a title and description when you know them; leave them out to have them written from the thread's conversation.",
+  input: z.object({
+    threadId: z.string(),
+    title: z.string().trim().min(1).max(200).optional(),
+    body: z.string().max(10_000).optional().describe("The description, in markdown."),
+    draft: z.boolean().optional().describe("Open it as a draft."),
+  }),
+  handler: async ({ threadId, ...pullRequest }, call) => {
+    await ownThread(call, threadId);
+    const opened = unwrap(await call.services.threads.openPullRequest(threadId, pullRequest));
+    return textResult({
+      pullRequest: opened.pullRequest,
+      created: opened.created,
+      thread: summarize(opened.thread),
+    });
+  },
+});
+
+export const threadMergePrTool = defineTool({
+  name: "thread_merge_pr",
+  description:
+    "Merge a thread's pull request, when the person asks you to. Once it is merged the thread is resolved and its branch is cleaned up. It is refused while the thread is working, while the thread holds work its pull request lacks (have it pushed with thread_open_pr first), and when GitHub says the pull request is not ready (failing checks, conflicts, a review still needed); tell the person why and, if it helps, steer the thread to fix it.",
+  input: z.object({
+    threadId: z.string(),
+    method: z.enum(["squash", "merge", "rebase"]).optional().describe("Defaults to squash."),
+  }),
+  handler: async (args, call) => {
+    await ownThread(call, args.threadId);
+    const merged = unwrap(
+      await call.services.threads.mergePullRequest(args.threadId, { method: args.method }),
+    );
+    return textResult(summarize(merged.thread));
+  },
+});
+
+export const threadResolveTool = defineTool({
+  name: "thread_resolve",
+  description:
+    "Mark a thread resolved when its work is done and nothing more is wanted from it. Its worktree is removed and its branch kept, and a later thread_steer reopens it. It is refused while the thread is working: stop it first.",
+  input: z.object({ threadId: z.string() }),
+  handler: async (args, call) => {
+    await ownThread(call, args.threadId);
+    return textResult(summarize(unwrap(await call.services.threads.resolve(args.threadId)).thread));
+  },
+});
+
 export const threadListTool = defineTool({
   name: "thread_list",
   description:

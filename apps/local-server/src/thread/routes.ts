@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { errorResponse, readBody } from "../project/http.ts";
+import { errorResponse, readBody, readOptionalBody } from "../project/http.ts";
 import type { ProjectServices } from "../project/services.ts";
 
 const SpawnBodySchema = z.object({
@@ -10,6 +10,14 @@ const SpawnBodySchema = z.object({
   quote: z.string().nullable().optional(),
 });
 const MessageBodySchema = z.object({ text: z.string() });
+const OpenPullRequestBodySchema = z.object({
+  draft: z.boolean().optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  body: z.string().max(10_000).optional(),
+});
+const MergePullRequestBodySchema = z.object({
+  method: z.enum(["squash", "merge", "rebase"]).optional(),
+});
 
 /** Mounted at /api: threads are listed and started under their project, and read and steered by id. */
 export const createThreadRoutes = ({ threads }: ProjectServices) => {
@@ -58,6 +66,32 @@ export const createThreadRoutes = ({ threads }: ProjectServices) => {
 
   routes.post("/threads/:threadId/stop", async (c) => {
     const result = await threads.stop(c.req.param("threadId"));
+    return result.success ? c.json({ thread: result.thread }) : errorResponse(c, result.error);
+  });
+
+  routes.post("/threads/:threadId/pull-request", async (c) => {
+    const parsed = await readOptionalBody(c, OpenPullRequestBodySchema);
+    if ("response" in parsed) return parsed.response;
+    const result = await threads.openPullRequest(c.req.param("threadId"), parsed.body);
+    if (!result.success) return errorResponse(c, result.error);
+    const { thread, pullRequest, created } = result;
+    return c.json({ thread, pullRequest, created }, created ? 201 : 200);
+  });
+
+  routes.post("/threads/:threadId/pull-request/merge", async (c) => {
+    const parsed = await readOptionalBody(c, MergePullRequestBodySchema);
+    if ("response" in parsed) return parsed.response;
+    const result = await threads.mergePullRequest(c.req.param("threadId"), parsed.body);
+    return result.success ? c.json({ thread: result.thread }) : errorResponse(c, result.error);
+  });
+
+  routes.post("/threads/:threadId/pull-request/sync", async (c) => {
+    const result = await threads.syncPullRequest(c.req.param("threadId"));
+    return result.success ? c.json({ thread: result.thread }) : errorResponse(c, result.error);
+  });
+
+  routes.post("/threads/:threadId/resolve", async (c) => {
+    const result = await threads.resolve(c.req.param("threadId"));
     return result.success ? c.json({ thread: result.thread }) : errorResponse(c, result.error);
   });
 

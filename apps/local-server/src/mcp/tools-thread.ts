@@ -89,3 +89,21 @@ export const reportStatusTool = defineTool({
     return textResult("Status updated.");
   },
 });
+
+export const openPullRequestTool = defineTool({
+  name: "aop_open_pr",
+  description:
+    "Open the pull request for your work: your changes are committed, your branch is pushed, and a pull request is opened against the default branch. Call it when the work is ready for review. Called again, it commits and pushes what you did since and returns the same pull request; once that pull request has merged or closed it is refused, and further work belongs in a new thread. Give a title and a short description of what changed and why. Leave them out to have them written from your conversation. Never push to or merge into the default branch yourself.",
+  input: z.object({
+    title: z.string().trim().min(1).max(200).optional().describe("The pull request title."),
+    body: z.string().max(10_000).optional().describe("The description, in markdown."),
+    draft: z.boolean().optional().describe("Open it as a draft."),
+  }),
+  handler: async (args, { services, session }) => {
+    const opened = await services.threads.openPullRequest(session.id, args);
+    if (!opened.success) {
+      throw new McpToolError(describeServiceError(opened.error), opened.error.code);
+    }
+    return textResult({ pullRequest: opened.pullRequest, created: opened.created });
+  },
+});

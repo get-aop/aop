@@ -11,9 +11,12 @@ import { waitForPendingChatReplies } from "../chat-session/service.ts";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { ChatSessionKind, ChatSessionsTable, Database } from "../db/schema.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
+import type { RunGh } from "../github-cli/index.ts";
 import { createAuthenticatedMcpUrl } from "../mcp/auth.ts";
 import { createMcpRoutes } from "../mcp/routes.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import type { ThreadGitDeps } from "../thread/git.ts";
+import { attachBareOrigin } from "../thread/git-test-utils.ts";
 import { createThreadRoutes } from "../thread/routes.ts";
 import { createProjectRoutes } from "./routes.ts";
 import { createProjectServices, type ProjectServices } from "./services.ts";
@@ -147,8 +150,8 @@ export interface ProjectStack {
   db: Kysely<Database>;
   services: ProjectServices;
   app: Hono;
-  /** Registered repositories, as `{ id, path }`. */
-  repos: { id: string; path: string }[];
+  /** Registered repositories, as `{ id, path }`; with `origin` each also has its bare remote's path. */
+  repos: { id: string; path: string; origin?: string }[];
   api: <T = Record<string, unknown>>(
     method: string,
     path: string,
@@ -176,7 +179,14 @@ export interface ProjectStack {
  */
 export const createProjectStack = async (
   aopHome: string,
-  options: { repos?: number; mcp?: boolean } = {},
+  options: {
+    repos?: number;
+    mcp?: boolean;
+    /** Gives every repo a bare repository as its origin, so branches push somewhere real. */
+    origin?: boolean;
+    /** The seams of the git side of threads; `runGh` defaults to one that refuses, never the real `gh`. */
+    git?: ThreadGitDeps;
+  } = {},
 ): Promise<ProjectStack> => {
   const db = await createTestDb();
   const ctx = createCommandContext(db);
@@ -186,7 +196,7 @@ export const createProjectStack = async (
     mkdirSync(path, { recursive: true });
     const id = `repo_test_${index}`;
     await createTestRepo(db, id, path);
-    repos.push({ id, path });
+    repos.push({ id, path, ...(options.origin && { origin: attachBareOrigin(path) }) });
   }
   await registerFakeRuntime(db);
 
@@ -198,10 +208,11 @@ export const createProjectStack = async (
       return fakeOnlyClaude.run(options);
     },
   };
-  const services = createProjectServices(ctx, {
-    createProviderFn: () => recordingProvider,
-    recoveryPollIntervalMs: 20,
-  });
+  const services = createProjectServices(
+    ctx,
+    { createProviderFn: () => recordingProvider, recoveryPollIntervalMs: 20 },
+    { runGh: refusingGh, ...options.git },
+  );
   const app = new Hono();
   app.route("/api/mcp", createMcpRoutes(ctx, services));
   app.route("/api/projects", createProjectRoutes(services));
@@ -261,6 +272,13 @@ export const createProjectStack = async (
     },
   };
 };
+
+/** The `gh` of a suite that did not ask for one: it is never the real GitHub CLI. */
+const refusingGh: RunGh = async () => ({
+  exitCode: 1,
+  stdout: "",
+  stderr: "gh is not available in this test",
+});
 
 /** Polls until `probe` returns something other than undefined; the fake settles within a few seconds. */
 export const eventually = async <T>(

@@ -62,8 +62,14 @@ describe("coordinator and threads against the fake CLI", () => {
       ],
     });
 
-    const firstSession = (await stack.ctx.chatSessionRepository.getById(waiting.id))
-      ?.runtime_session_id;
+    // The engine finds the session id by tailing the run's log every 100ms, and the thread's
+    // question can reach the server before that poll does: wait for the id, not for the question.
+    const firstSession = await eventually(
+      async () =>
+        (await (stack as ProjectStack).ctx.chatSessionRepository.getById(waiting.id))
+          ?.runtime_session_id ?? undefined,
+      "the runtime session id to be recorded",
+    );
     expect(firstSession).toMatch(/^[0-9a-f-]{36}$/);
 
     const replied = await stack.api<{ thread: Thread }>(

@@ -40,5 +40,23 @@ export const describeServiceError = (error: ServiceError): string => {
       return "The thread is not waiting on a rate limit";
     case "SEND_FAILED":
       return `The message could not be sent (${error.reason})`;
+    case "NO_REPOSITORY":
+      return "The thread has no repository, so it has no branch to publish";
+    case "WORKTREE_FAILED":
+      return `The thread's git worktree failed: ${error.message}`;
+    case "NOTHING_TO_PUBLISH":
+      return "The thread has no changes to open a pull request for";
+    case "NO_PULL_REQUEST":
+      return "The thread has no pull request";
+    case "PULL_REQUEST_FAILED":
+      return error.message;
+    case "PULL_REQUEST_CLOSED":
+      return "The thread's pull request was closed without merging; start a new thread for further work";
+    case "PULL_REQUEST_MERGED":
+      return "The thread's pull request already merged; start a new thread for further work";
+    case "UNPUBLISHED_WORK":
+      return "The thread has work its pull request does not include; open the pull request again to push it, then merge";
+    case "THREAD_BUSY":
+      return "The thread is busy: a turn is running, queued or waiting on a usage limit, or its pull request is landing; stop it or wait for it first";
   }
 };

@@ -32,7 +32,10 @@ export const pickRepo = async (
     : { error: { code: "REPO_UNAVAILABLE", message: `Repository ${repoId} no longer exists` } };
 };
 
-/** The repo's checkout, or a scratch directory for a thread that has no repo. */
+/**
+ * Where a new thread works: its own worktree of the repo, which the caller creates, or a
+ * scratch directory for a thread that has no repo. The repo must still be there to branch from.
+ */
 export const threadWorkspace = async (
   projectId: string,
   threadId: string,
@@ -44,13 +47,34 @@ export const threadWorkspace = async (
     return realpath(scratch);
   }
   try {
-    return await resolveChatWorkspace(repo.path, null);
+    await resolveChatWorkspace(repo.path, null);
+    return aopPaths.worktree(repo.id, threadId);
   } catch (error) {
     if (error instanceof WorkspaceBindingError) {
       return { error: { code: "REPO_UNAVAILABLE", message: error.message } };
     }
     throw error;
   }
+};
+
+/** The repo, workspace and branch a new thread gets, or why it cannot have them. */
+export const planTarget = async (
+  ctx: LocalServerContext,
+  chooseBranch: (repoPath: string, threadId: string, title: string) => Promise<string>,
+  project: Project,
+  thread: { threadId: string; title: string },
+  requestedRepoId: string | null,
+): Promise<
+  { repo: Repo | null; workspace: string; branch: string | null } | { error: ThreadError }
+> => {
+  const target = await pickRepo(ctx, project, requestedRepoId);
+  if ("error" in target) return target;
+  const workspace = await threadWorkspace(project.id, thread.threadId, target.repo);
+  if (typeof workspace !== "string") return workspace;
+  const branch = target.repo
+    ? await chooseBranch(target.repo.path, thread.threadId, thread.title)
+    : null;
+  return { repo: target.repo, workspace, branch };
 };
 
 export const invalidMessage = (text: string): ThreadError | null => {

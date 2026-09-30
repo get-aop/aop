@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLAUDE_ARGS, play, removeHomes, types } from "./test-utils";
@@ -89,6 +89,27 @@ describe("runFakeCli", () => {
       },
       modelUsage: { "fake-model": { inputTokens: 1200, cacheReadInputTokens: 61_000 } },
     });
+  });
+
+  test("write= puts files in the working directory before the first event, and refuses to leave it", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "aop-fake-cli-cwd-"));
+
+    const run = await play(
+      [...CLAUDE_ARGS, 'x [fake: write="notes.md=first|docs/api.md=second = two|../escape.md=no"]'],
+      {},
+      undefined,
+      undefined,
+      cwd,
+    );
+
+    expect(readFileSync(join(cwd, "notes.md"), "utf8")).toBe("first");
+    expect(readFileSync(join(cwd, "docs", "api.md"), "utf8")).toBe("second = two");
+    expect(existsSync(join(cwd, "..", "escape.md"))).toBe(false);
+    expect(run.warnings).toEqual([
+      "fake-cli: refusing to write outside the working directory: ../escape.md",
+    ]);
+    expect(run.exitCode).toBe(0);
+    rmSync(cwd, { recursive: true, force: true });
   });
 
   test("say replaces the default reply", async () => {

@@ -35,6 +35,7 @@ export const play = async (
   env: Record<string, string> = {},
   home = mkdtempSync(join(tmpdir(), "aop-fake-cli-run-")),
   connect: Io["mcp"] = stubMcp().connect,
+  cwd = "/work",
 ) => {
   homes.push(home);
   const io = {
@@ -52,10 +53,7 @@ export const play = async (
     },
     mcp: connect,
   };
-  const exitCode = await runFakeCli(
-    { args, env: { FAKE_CLI_HOME: home, ...env }, cwd: "/work" },
-    recorder,
-  );
+  const exitCode = await runFakeCli({ args, env: { FAKE_CLI_HOME: home, ...env }, cwd }, recorder);
   const events = io.writes
     .join("")
     .split("\n")

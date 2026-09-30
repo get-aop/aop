@@ -1,4 +1,4 @@
-import type { AskUser, McpCall, TokenUsage } from "./types";
+import type { AskUser, FileWrite, McpCall, TokenUsage } from "./types";
 
 /** How one turn should behave. Every field is optional in the script text. */
 export interface Directives {
@@ -13,6 +13,8 @@ export interface Directives {
   ask?: AskUser;
   /** MCP tool calls made after the steps and before the question, in order. */
   calls?: McpCall[];
+  /** Files written into the working directory before the first event, like edits a model made. */
+  writes?: FileWrite[];
   /** Set when `calls` is not a JSON array of `{name, arguments}`; the turn then fails loudly. */
   callsError?: string;
   /** Set means the turn ends the way a usage limit ends it, with a reset this many seconds away. */
@@ -53,6 +55,7 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
     steps: toNumber(tokens.get("steps"), 0),
     say: tokens.get("say") || undefined,
     ask: question === undefined ? undefined : readAsk(question, tokens),
+    writes: readWrites(tokens.get("write")),
     ...readCalls(tokens.get("calls")),
     rateLimitSeconds: readRateLimit(tokens),
     failMessage: readFailMessage(tokens),
@@ -124,6 +127,16 @@ const readAsk = (question: string, tokens: Map<string, string>): AskUser => ({
   options: (tokens.get("options") ?? "").split("|").filter(Boolean),
   tool: tokens.get("tool") ?? DEFAULT_ASK_TOOL,
 });
+
+// `write="a.txt=one|dir/b.txt=two"`: each entry is a path, an equals sign, then the content.
+const readWrites = (raw: string | undefined): FileWrite[] | undefined => {
+  if (raw === undefined) return undefined;
+  return raw.split("|").flatMap((entry) => {
+    const split = entry.indexOf("=");
+    const path = entry.slice(0, split).trim();
+    return split > 0 && path ? [{ path, content: entry.slice(split + 1) }] : [];
+  });
+};
 
 const readCalls = (raw: string | undefined): Pick<Directives, "calls" | "callsError"> => {
   if (raw === undefined) return {};

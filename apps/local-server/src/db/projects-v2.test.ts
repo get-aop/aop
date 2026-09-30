@@ -69,6 +69,7 @@ describe("migration v2 on a database file", () => {
       { version: 3, name: "run-usage" },
       { version: 4, name: "coordinator" },
       { version: 5, name: "scheduling" },
+      { version: 6, name: "thread-pull-request" },
     ]);
     expect(await listColumns(db, "chat_sessions")).toEqual(expect.arrayContaining(THREAD_COLUMNS));
     await db.destroy();
@@ -94,7 +95,7 @@ describe("migration v2 on a database file", () => {
     await runMigrations(db);
 
     const ledger = await listLedger(db);
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
+    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(ledger[0]).toEqual(ledgerV1[0]);
 
     const legacy = await db

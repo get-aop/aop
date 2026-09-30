@@ -12,14 +12,17 @@ import {
   projectSettingsSetTool,
   proposeThreadsTool,
   threadListTool,
+  threadMergePrTool,
+  threadOpenPrTool,
   threadReportTool,
+  threadResolveTool,
   threadSpawnTool,
   threadSteerTool,
   threadStopTool,
 } from "./tools-coordinator.ts";
 import { memoryReadTool, memoryWriteTool } from "./tools-memory.ts";
 import { listReposTool, setChatWorkspaceTool } from "./tools-platform.ts";
-import { askUserTool, reportStatusTool } from "./tools-thread.ts";
+import { askUserTool, openPullRequestTool, reportStatusTool } from "./tools-thread.ts";
 
 export { McpToolError } from "./registry.ts";
 
@@ -31,11 +34,15 @@ const TOOLS: readonly McpTool[] = [
   threadStopTool,
   threadListTool,
   threadReportTool,
+  threadOpenPrTool,
+  threadMergePrTool,
+  threadResolveTool,
   proposeThreadsTool,
   projectSettingsGetTool,
   projectSettingsSetTool,
   askUserTool,
   reportStatusTool,
+  openPullRequestTool,
   memoryReadTool,
   memoryWriteTool,
 ];

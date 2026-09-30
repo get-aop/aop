@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, realpathSync } from "node:fs";
+import { aopPaths } from "@aop/infra";
 import { parseMessageOrigin } from "../chat-session/message-origin.ts";
 import { spawnAndSettle, useThreadWorld } from "./test-utils.ts";
 
@@ -37,7 +38,12 @@ describe("spawning a thread", () => {
       repo_id: s.repos[0]?.id,
       runtime_access_mode: "full-access",
     });
-    expect(session?.workspace_path).toBe(realpathSync(s.repos[0]?.path ?? ""));
+    // The thread works in a worktree of its own, not in the repo's checkout.
+    expect(session?.workspace_path).toBe(
+      realpathSync(
+        aopPaths.worktree(s.repos[0]?.id ?? "", spawned.success ? spawned.thread.id : ""),
+      ),
+    );
   });
 
   test("its first message is the coordinator's brief, marked as a relay with the person's quote", async () => {
@@ -73,14 +79,14 @@ describe("spawning a thread", () => {
       body: "- Ledger is append-only",
     });
 
-    await spawnAndSettle(s, project.id, { prompt: "Audit", repoId: s.repos[1]?.id });
+    const thread = await spawnAndSettle(s, project.id, { prompt: "Audit", repoId: s.repos[1]?.id });
 
     const run = s.runs[0];
     expect(run?.prompt).toBe("Audit");
     expect(run?.appendSystemPrompt).toContain("Keep pull requests small.");
     expect(run?.appendSystemPrompt).toContain("Ship the new checkout");
     expect(run?.appendSystemPrompt).toContain("- Ledger is append-only");
-    expect(run?.cwd).toContain(s.repos[1]?.path.split("/").pop() ?? "");
+    expect(run?.cwd).toBe(realpathSync(aopPaths.worktree(s.repos[1]?.id ?? "", thread.id)));
     expect(run?.allowedDirectories).toEqual([s.repos[0]?.path ?? ""]);
     expect(run?.isolation).toBe("open");
     expect(run?.accessMode).toBe("auto-accept-edits");

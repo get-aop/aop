@@ -1,4 +1,4 @@
-import type { Thread, ThreadStatus } from "@aop/common";
+import type { PullRequestRef, Thread, ThreadStatus } from "@aop/common";
 import type { SchedulePhase } from "../chat-session/session-hooks.ts";
 import type { ThreadStatusChange } from "./repository.ts";
 
@@ -13,10 +13,11 @@ export type TurnEnd = "completed" | "failed" | "interrupted" | "cancelled" | "ra
  * - A message is already waiting: the next turn starts at once, so the thread keeps working.
  * - The person stopped it (cancelled, interrupted): idle, and a pending question is void.
  * - A question is pending and the turn completed or failed: it stays waiting on the person.
- * - Otherwise finished work is ready for review once its whole checklist is done, else idle.
+ * - Otherwise finished work is ready for review once its whole checklist is done or its pull
+ *   request is open, else idle.
  */
 export const statusAfterTurn = (
-  thread: Pick<Thread, "status" | "steps">,
+  thread: Pick<Thread, "status" | "steps" | "artifacts">,
   end: TurnEnd,
   hasQueuedMessage: boolean,
   resumesAt: string | null = null,
@@ -32,14 +33,37 @@ export const statusAfterTurn = (
 };
 
 const statusAfterEndedTurn = (
-  thread: Pick<Thread, "status" | "steps">,
+  thread: Pick<Thread, "status" | "steps" | "artifacts">,
   end: TurnEnd,
 ): ThreadStatusChange | null => {
   if (end === "cancelled" || end === "interrupted") return { status: "idle" };
   if (thread.status === "waiting-on-you") return null;
   if (end === "failed") return { status: "idle" };
-  const finished = thread.steps.length > 0 && thread.steps.every((step) => step.state === "done");
-  return { status: finished ? "ready-for-review" : "idle" };
+  const checklistDone =
+    thread.steps.length > 0 && thread.steps.every((step) => step.state === "done");
+  return {
+    status: checklistDone || pullRequestOf(thread)?.state === "open" ? "ready-for-review" : "idle",
+  };
+};
+
+/** The thread's pull request, if it has one: a thread has at most one. */
+export const pullRequestOf = (thread: Pick<Thread, "artifacts">): PullRequestRef | null => {
+  const artifact = thread.artifacts.find((candidate) => candidate.type === "pr");
+  return artifact ? { number: artifact.number, url: artifact.url, state: artifact.state } : null;
+};
+
+/** The change that would leave a thread in the status it is in now. */
+export const statusChangeOf = (thread: Thread): ThreadStatusChange => {
+  switch (thread.status) {
+    case "waiting-on-you":
+      return { status: "waiting-on-you", blockedQuestion: thread.blockedQuestion };
+    case "resolved":
+      return { status: "resolved", resolvedAt: thread.resolvedAt };
+    case "rate-limited":
+      return { status: "rate-limited", resumesAt: thread.resumesAt };
+    default:
+      return { status: thread.status };
+  }
 };
 
 /** Whether a rate limit that ended a turn can put a thread in this status on hold. */

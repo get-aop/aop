@@ -44,7 +44,7 @@ Registered in `src/app.ts`:
 | `/api/auth` | Device pairing, session cookie, device list and revocation; see [Running the AOP host](../../docs/HOST.md) |
 | `/api/status` | Registered repos and summaries |
 | `/api/projects` | Projects: settings, pause/archive/restore, the coordinator chat, memory files |
-| `/api/projects/:id/threads`, `/api/threads` | A project's threads: start, steer, answer a question, stop, read |
+| `/api/projects/:id/threads`, `/api/threads` | A project's threads: start, steer, answer a question, stop, read; each thread's worktree, pull request (open, merge, sync) and resolve, see [Threads and git](../../docs/THREADS.md) |
 | `/api/chat-sessions` | Chat sessions that belong to no project: messages, runs, session git |
 | `/api/repos` | Register/remove repositories |
 | `/api/settings` | Key/value settings |

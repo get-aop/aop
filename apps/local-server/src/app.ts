@@ -15,7 +15,7 @@ import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
 import { createProjectRoutes } from "./project/routes.ts";
-import { createProjectServices } from "./project/services.ts";
+import { createProjectServices, type ProjectServices } from "./project/services.ts";
 import { createProviderRoutes } from "./providers/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
@@ -41,6 +41,8 @@ export interface AppDependencies {
   /** Origins besides the API's own that may call it from a browser (`AOP_ALLOWED_ORIGINS`). */
   allowedOrigins?: readonly string[];
   eventsSSEOptions?: EventsSSEOptions;
+  /** The project services the routes call; the server passes its own so its housekeeping shares them. */
+  projectServices?: ProjectServices;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -127,7 +129,7 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api", createProviderRoutes());
   app.route("/api/chat-sessions", createChatSessionRoutes(ctx));
   app.route("/api/chat-sessions", createSessionGitRoutes(ctx));
-  const projects = createProjectServices(ctx);
+  const projects = deps.projectServices ?? createProjectServices(ctx);
   app.route("/api/mcp", createMcpRoutes(ctx, projects));
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api", createThreadRoutes(projects));

@@ -12,7 +12,9 @@ import {
 import { createCommandContext } from "./context.ts";
 import { createDatabase, getDefaultDbPath } from "./db/connection.ts";
 import { runMigrations } from "./db/migrations.ts";
+import { createProjectServices } from "./project/services.ts";
 import { cleanupOrphanRepoDirs } from "./repo/orphan-dirs.ts";
+import { startThreadMaintenance } from "./thread/lifecycle.ts";
 
 const logger = getLogger("local-server");
 
@@ -44,8 +46,10 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     logger.warn("Failed to clean orphan repo directories: {error}", { error: String(error) });
   });
 
+  const projectServices = createProjectServices(ctx);
   const app = createApp({
     ctx,
+    projectServices,
     startTimeMs,
     dashboardStaticPath: options?.dashboardStaticPath ?? getDashboardStaticPath(),
     dashboardDevOrigin: getDashboardDevOrigin(),
@@ -72,10 +76,13 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   }
 
   logger.info("Local server listening on http://{bindHost}:{port}", { bindHost, port });
+  // Threads left landing by a restart are settled, and threads idle for a week are resolved.
+  const stopMaintenance = startThreadMaintenance(projectServices.git);
 
   return {
     shutdown: async () => {
       logger.info("Shutting down...");
+      stopMaintenance();
       server.stop();
       await shutdownChatSessions(ctx);
       await db.destroy();
