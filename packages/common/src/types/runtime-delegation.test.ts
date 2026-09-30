@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { RuntimeConfigurationProvider } from "./runtime-configuration.ts";
-import {
-  defaultDelegationSelectionFromConfiguration,
-  formatRuntimeDelegationMarker,
-  parseRuntimeDelegation,
-} from "./runtime-delegation.ts";
+import { formatRuntimeDelegationMarker, parseRuntimeDelegation } from "./runtime-delegation.ts";
 
 describe("parseRuntimeDelegation", () => {
   test("preserves prompt indentation when removing the delegation marker", () => {
@@ -139,40 +134,6 @@ describe("parseRuntimeDelegation", () => {
     expect(
       badModelWithFast && "fastMode" in badModelWithFast ? badModelWithFast.fastMode : undefined,
     ).toBe(true);
-  });
-
-  test("defaults delegation from runtime configuration model and thinking preferences", () => {
-    const configurations: RuntimeConfigurationProvider[] = [
-      {
-        id: "rtprov_claude_personal",
-        name: "Claude Code personal",
-        command: "claude-personal",
-        driver: "claude-code",
-        builtIn: false,
-        position: 0,
-        supportsFastMode: true,
-        models: [
-          {
-            id: "m1",
-            providerId: "rtprov_claude_personal",
-            description: "Opus",
-            model: "claude-opus-4-8",
-            thinkingLevels: ["low", "high", "max"],
-            builtIn: false,
-            position: 0,
-            isDefault: true,
-            defaultThinkingLevel: "high",
-          },
-        ],
-      },
-    ];
-    expect(defaultDelegationSelectionFromConfiguration("claude", { configurations })).toEqual({
-      id: "claude",
-      model: "claude-opus-4-8",
-      reasoning: "high",
-      fastMode: false,
-      runtimeConfigurationId: "rtprov_claude_personal",
-    });
   });
 
   test("round-trips optional runtime configuration id with and without Fast mode", () => {

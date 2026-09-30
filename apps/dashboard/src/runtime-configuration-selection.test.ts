@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { RuntimeConfigurationProvider, StepAgent } from "@aop/common";
-import {
-  applyRuntimeConfiguration,
-  selectedRuntimeConfiguration,
-} from "./runtime-configuration-selection";
+import type { RuntimeConfigurationProvider } from "@aop/common";
+import { isRunnableRuntimeConfiguration } from "./runtime-configuration-selection";
 
 const claudePersonal: RuntimeConfigurationProvider = {
   id: "rtprov_claude_personal",
@@ -39,46 +36,12 @@ const claudePersonal: RuntimeConfigurationProvider = {
   ],
 };
 
-describe("runtime configuration selection", () => {
-  test("maps a saved Claude Code configuration to its runtime execution settings", () => {
-    const agent: StepAgent = {
-      provider: "claude-code",
-      model: "claude-opus-5",
-      reasoning: "extra-high",
-      fastMode: true,
-    };
-
-    expect(applyRuntimeConfiguration(agent, claudePersonal)).toEqual({
-      provider: "claude-code",
-      runtimeConfigurationId: "rtprov_claude_personal",
-      runtimeAlias: "claude-personal",
-      model: "claude-sonnet-4-8",
-      reasoning: "high",
-      fastMode: false,
-      ultracode: false,
-    });
+describe("isRunnableRuntimeConfiguration", () => {
+  test("accepts a configuration with at least one model", () => {
+    expect(isRunnableRuntimeConfiguration(claudePersonal)).toBe(true);
   });
 
-  test("uses a built-in configuration as the fallback for older workflow agents", () => {
-    expect(
-      selectedRuntimeConfiguration(
-        { provider: "claude-code", model: "claude-opus-4-8", reasoning: "medium" },
-        [{ ...claudePersonal, id: "claude-code", name: "Claude Code" }],
-      )?.name,
-    ).toBe("Claude Code");
-  });
-
-  test("does not replace a missing explicit configuration with a built-in provider", () => {
-    expect(
-      selectedRuntimeConfiguration(
-        {
-          provider: "claude-code",
-          runtimeConfigurationId: "rtprov_deleted",
-          model: "claude-opus-4-8",
-          reasoning: "medium",
-        },
-        [{ ...claudePersonal, id: "claude-code", name: "Claude Code" }],
-      ),
-    ).toBeUndefined();
+  test("rejects a configuration with no models", () => {
+    expect(isRunnableRuntimeConfiguration({ ...claudePersonal, models: [] })).toBe(false);
   });
 });

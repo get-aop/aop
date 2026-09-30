@@ -103,7 +103,7 @@ export type CreateSessionPrResult =
 
 export type MergeSessionPrMethod = "squash" | "merge" | "rebase";
 
-export interface SessionPullRequestCheck {
+interface SessionPullRequestCheck {
   name: string;
   workflow: string;
   state: string;
@@ -126,7 +126,7 @@ export interface SessionMergedPullRequest {
   repoNameWithOwner: string;
 }
 
-export interface SessionPullRequestRef {
+interface SessionPullRequestRef {
   number: number;
   url: string;
   title: string;

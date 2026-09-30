@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CONTROL_COMMANDS, parseControlCommand } from "./control-command.ts";
+import { parseControlCommand } from "./control-command.ts";
 
 describe("parseControlCommand", () => {
   test("preserves prompt indentation when removing the control marker", () => {
@@ -30,11 +30,7 @@ describe("parseControlCommand", () => {
     });
   });
 
-  test("exposes no Codex control command", () => {
-    expect(CONTROL_COMMANDS.map((command) => command.id)).toEqual([
-      "CC_BROWSER_USE",
-      "CC_COMPUTER_USE",
-    ]);
+  test("does not recognize a Codex control command", () => {
     expect(parseControlCommand("$CX_BROWSER_USE open the page")).toBeNull();
   });
 });

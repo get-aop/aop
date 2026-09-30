@@ -1,5 +1,5 @@
 import {
-  isWorkflowRuntimeProvider,
+  isCliProvider,
   type RuntimeConfigurationProvider,
   type RuntimeProfile,
   runtimeConfigurationSupportsFastMode,
@@ -153,9 +153,7 @@ export const sessionSupportsFastMode = (
 ): boolean => {
   const configuration = configurations.find((item) => item.id === session.runtimeConfigurationId);
   if (configuration) return runtimeConfigurationSupportsFastMode(configuration, session.model);
-  return (
-    isWorkflowRuntimeProvider(session.runtime) && supportsFastMode(session.runtime, session.model)
-  );
+  return isCliProvider(session.runtime) && supportsFastMode(session.runtime, session.model);
 };
 
 export const runtimeConfigurationNameMap = (

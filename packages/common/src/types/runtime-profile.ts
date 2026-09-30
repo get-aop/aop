@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { CliProviderSchema } from "../projects/runtime.ts";
-import type { StepAgent } from "../protocol/index.ts";
-import { SAFE_CUSTOM_RUNTIME_MODEL_PATTERN, supportsFastMode } from "./workflow-runtime.ts";
+import { SAFE_CUSTOM_RUNTIME_MODEL_PATTERN, supportsFastMode } from "./runtime-catalog.ts";
 
 const RuntimeProfileFieldsSchema = z.object({
   name: z.string().trim().min(1).max(60),
@@ -46,15 +45,3 @@ export interface RuntimeProfile extends RuntimeProfileInput {
   createdAt: string;
   updatedAt: string;
 }
-
-export const applyRuntimeProfile = (profile: RuntimeProfile): StepAgent => ({
-  provider: profile.baseProvider,
-  model: profile.model,
-  reasoning: profile.reasoning,
-  fastMode: profile.fastMode,
-  ultracode: false,
-  runtimeAlias: profile.command,
-  ...(profile.execHostId && profile.execHostId.length > 0
-    ? { execHostId: profile.execHostId }
-    : {}),
-});

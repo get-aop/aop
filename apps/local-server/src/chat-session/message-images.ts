@@ -2,11 +2,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   CHAT_DOCUMENT_LIMITS,
+  CHAT_IMAGE_LIMITS,
   type ChatDocumentAttachment,
   type ChatDocumentMimeType,
-  CREATE_TASK_IMAGE_LIMITS,
-  type CreateTaskImageAttachment,
-  type CreateTaskImageMimeType,
+  type ChatImageAttachment,
+  type ChatImageMimeType,
   imageAttachmentMarker,
 } from "@aop/common";
 import { aopPaths } from "@aop/infra";
@@ -19,7 +19,7 @@ export { expandStoredPastes, validateChatPastes } from "./message-pastes.ts";
 
 export interface StoredChatImage {
   id: string;
-  mimeType: CreateTaskImageMimeType;
+  mimeType: ChatImageMimeType;
   fileName: string;
 }
 
@@ -52,7 +52,7 @@ const IMAGE_META_MARKER = "\n\n<!--aop-chat-images:";
 const ATTACHMENT_META_MARKER = "\n\n<!--aop-chat-attachments:";
 const IMAGE_META_END = "-->";
 
-const EXTENSIONS: Record<CreateTaskImageMimeType, string> = {
+const EXTENSIONS: Record<ChatImageMimeType, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
@@ -74,21 +74,21 @@ export const attachmentPublicUrl = (sessionId: string, fileName: string): string
 
 export const validateChatImageAttachments = (
   images: unknown,
-): { success: true; images: CreateTaskImageAttachment[] } | { success: false; error: string } => {
+): { success: true; images: ChatImageAttachment[] } | { success: false; error: string } => {
   if (images === undefined) {
     return { success: true, images: [] };
   }
   if (!Array.isArray(images)) {
     return { success: false, error: "imageAttachments must be an array" };
   }
-  if (images.length > CREATE_TASK_IMAGE_LIMITS.maxCount) {
+  if (images.length > CHAT_IMAGE_LIMITS.maxCount) {
     return {
       success: false,
-      error: `At most ${CREATE_TASK_IMAGE_LIMITS.maxCount} images`,
+      error: `At most ${CHAT_IMAGE_LIMITS.maxCount} images`,
     };
   }
 
-  const validated: CreateTaskImageAttachment[] = [];
+  const validated: ChatImageAttachment[] = [];
   for (const [index, image] of images.entries()) {
     const result = validateOneImage(image, index);
     if (!result.success) return result;
@@ -120,7 +120,7 @@ export const validateChatDocumentAttachments = (
 export const materializeChatImages = async (
   sessionId: string,
   messageId: string,
-  images: CreateTaskImageAttachment[],
+  images: ChatImageAttachment[],
 ): Promise<StoredChatImage[]> => {
   if (images.length === 0) return [];
 
@@ -383,11 +383,11 @@ const validStoredArtifacts = (artifacts: unknown): StoredChatArtifact[] =>
 const validateOneImage = (
   image: unknown,
   index: number,
-): { success: true; image: CreateTaskImageAttachment } | { success: false; error: string } => {
+): { success: true; image: ChatImageAttachment } | { success: false; error: string } => {
   if (!image || typeof image !== "object") {
     return { success: false, error: `image attachment ${index + 1} is invalid` };
   }
-  const candidate = image as Partial<CreateTaskImageAttachment>;
+  const candidate = image as Partial<ChatImageAttachment>;
   const id = candidate.id?.trim() ?? "";
   const mimeType = candidate.mimeType;
   const dataBase64 = candidate.dataBase64?.trim() ?? "";
@@ -409,10 +409,10 @@ const validateOneImage = (
   if (!isValidRawBase64(dataBase64, decoded)) {
     return { success: false, error: "image attachment data must be valid base64" };
   }
-  if (decoded.length > CREATE_TASK_IMAGE_LIMITS.maxBytes) {
+  if (decoded.length > CHAT_IMAGE_LIMITS.maxBytes) {
     return {
       success: false,
-      error: `Each image must be ${Math.round(CREATE_TASK_IMAGE_LIMITS.maxBytes / (1024 * 1024))} MB or smaller`,
+      error: `Each image must be ${Math.round(CHAT_IMAGE_LIMITS.maxBytes / (1024 * 1024))} MB or smaller`,
     };
   }
 
@@ -458,9 +458,9 @@ const validateDocumentData = (dataBase64: string): string | null => {
     : null;
 };
 
-const isAllowedMime = (mimeType: unknown): mimeType is CreateTaskImageMimeType =>
+const isAllowedMime = (mimeType: unknown): mimeType is ChatImageMimeType =>
   typeof mimeType === "string" &&
-  (CREATE_TASK_IMAGE_LIMITS.allowedMimeTypes as readonly string[]).includes(mimeType);
+  (CHAT_IMAGE_LIMITS.allowedMimeTypes as readonly string[]).includes(mimeType);
 
 const isAllowedDocumentMime = (mimeType: unknown): mimeType is ChatDocumentMimeType =>
   typeof mimeType === "string" &&

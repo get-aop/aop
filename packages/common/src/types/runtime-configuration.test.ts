@@ -1,12 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
-  findRuntimeConfiguration,
   getDefaultRuntimeConfigurationModel,
   normalizeDefaultThinkingLevel,
   RuntimeConfigurationModelInputSchema,
-  type RuntimeConfigurationProvider,
   RuntimeConfigurationProviderInputSchema,
-  resolveConfiguredModelRecord,
   resolveRuntimeConfigurationReasoning,
   runtimeConfigurationSupportsFastMode,
   runtimeSupportsFastMode,
@@ -131,71 +128,5 @@ describe("runtime configuration", () => {
     expect(normalizeDefaultThinkingLevel(["low", "high"], "high")).toBe("high");
     expect(normalizeDefaultThinkingLevel(["low", "high"], "max")).toBe("low");
     expect(normalizeDefaultThinkingLevel([], "high")).toBe(null);
-  });
-
-  test("findRuntimeConfiguration prefers exact id then ordered driver/match filters", () => {
-    const model = (
-      providerId: string,
-      id: string,
-    ): RuntimeConfigurationProvider["models"][number] => ({
-      id,
-      providerId,
-      description: "Opus 5",
-      model: "claude-opus-5",
-      thinkingLevels: ["low", "high"],
-      builtIn: false,
-      position: 0,
-      isDefault: true,
-      defaultThinkingLevel: "high",
-    });
-    const configurations: RuntimeConfigurationProvider[] = [
-      {
-        id: "claude-code",
-        name: "Claude Code",
-        command: "claude",
-        driver: "claude-code",
-        builtIn: true,
-        position: 0,
-        supportsFastMode: true,
-        models: [model("claude-code", "m1")],
-      },
-      {
-        id: "rtprov_cpe",
-        name: "CPE",
-        command: "cpe",
-        driver: "claude-code",
-        builtIn: false,
-        position: 1,
-        supportsFastMode: false,
-        models: [model("rtprov_cpe", "m2")],
-      },
-      {
-        id: "rtprov_empty",
-        name: "No models",
-        command: "empty",
-        driver: "claude-code",
-        builtIn: false,
-        position: 2,
-        supportsFastMode: false,
-        models: [],
-      },
-    ];
-
-    expect(findRuntimeConfiguration(configurations, { preferredId: "rtprov_cpe" })?.id).toBe(
-      "rtprov_cpe",
-    );
-    expect(findRuntimeConfiguration(configurations, { driver: "claude-code" })?.id).toBe(
-      "claude-code",
-    );
-    expect(
-      findRuntimeConfiguration(configurations, {
-        driver: "claude-code",
-        match: (item) => item.command === "cpe",
-      })?.id,
-    ).toBe("rtprov_cpe");
-    expect(
-      findRuntimeConfiguration(configurations, { match: (item) => item.id === "rtprov_empty" }),
-    ).toBeUndefined();
-    expect(resolveConfiguredModelRecord(configurations[0], "missing")?.model).toBe("claude-opus-5");
   });
 });

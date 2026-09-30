@@ -1,15 +1,11 @@
-import {
-  CREATE_TASK_IMAGE_LIMITS,
-  type CreateTaskImageAttachment,
-  type CreateTaskImageMimeType,
-} from "@aop/common";
+import { CHAT_IMAGE_LIMITS, type ChatImageAttachment, type ChatImageMimeType } from "@aop/common";
 
-export interface LocalCreateTaskImage extends CreateTaskImageAttachment {
+export interface LocalCreateTaskImage extends ChatImageAttachment {
   previewUrl: string;
 }
 
-const isAllowedMimeType = (mimeType: string): mimeType is CreateTaskImageMimeType =>
-  (CREATE_TASK_IMAGE_LIMITS.allowedMimeTypes as readonly string[]).includes(mimeType);
+const isAllowedMimeType = (mimeType: string): mimeType is ChatImageMimeType =>
+  (CHAT_IMAGE_LIMITS.allowedMimeTypes as readonly string[]).includes(mimeType);
 
 const readFileAsBase64 = async (file: Blob): Promise<string> => {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -22,11 +18,11 @@ const readFileAsBase64 = async (file: Blob): Promise<string> => {
 
 const toLocalImage = async (
   file: Blob,
-  mimeType: CreateTaskImageMimeType,
+  mimeType: ChatImageMimeType,
 ): Promise<LocalCreateTaskImage> => {
-  if (file.size > CREATE_TASK_IMAGE_LIMITS.maxBytes) {
+  if (file.size > CHAT_IMAGE_LIMITS.maxBytes) {
     throw new Error(
-      `Each image must be ${Math.round(CREATE_TASK_IMAGE_LIMITS.maxBytes / (1024 * 1024))} MB or smaller`,
+      `Each image must be ${Math.round(CHAT_IMAGE_LIMITS.maxBytes / (1024 * 1024))} MB or smaller`,
     );
   }
 
@@ -47,7 +43,7 @@ export const revokeLocalCreateTaskImages = (images: LocalCreateTaskImage[]): voi
   }
 };
 
-export const localImageToAttachment = (image: LocalCreateTaskImage): CreateTaskImageAttachment => ({
+export const localImageToAttachment = (image: LocalCreateTaskImage): ChatImageAttachment => ({
   id: image.id,
   mimeType: image.mimeType,
   dataBase64: image.dataBase64,
@@ -91,9 +87,9 @@ export const mergeLocalCreateTaskImages = (
   incoming: LocalCreateTaskImage[],
 ): LocalCreateTaskImage[] | string => {
   const merged = [...current, ...incoming];
-  if (merged.length > CREATE_TASK_IMAGE_LIMITS.maxCount) {
+  if (merged.length > CHAT_IMAGE_LIMITS.maxCount) {
     revokeLocalCreateTaskImages(incoming);
-    return `At most ${CREATE_TASK_IMAGE_LIMITS.maxCount} images`;
+    return `At most ${CHAT_IMAGE_LIMITS.maxCount} images`;
   }
 
   return merged;

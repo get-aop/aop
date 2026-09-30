@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
-  formatWorkflowRuntimeModelLabel,
-  getWorkflowModelOptions,
-  getWorkflowThinkingOptions,
+  formatRuntimeModelLabel,
+  getRuntimeModelOptions,
+  getThinkingOptions,
   type RuntimeConfigurationProvider,
   runtimeSupportsFastMode,
 } from "@aop/common";
@@ -61,12 +61,12 @@ describe("runtime configuration routes", () => {
     if (!claude) throw new Error("Expected the Claude Code built-in");
 
     expect(claude.models.map((model) => model.model)).toEqual([
-      ...getWorkflowModelOptions("claude-code"),
+      ...getRuntimeModelOptions("claude-code"),
     ]);
     for (const model of claude.models) {
-      expect(model.description).toBe(formatWorkflowRuntimeModelLabel(model.model));
+      expect(model.description).toBe(formatRuntimeModelLabel(model.model));
       expect(model.thinkingLevels).toEqual(
-        getWorkflowThinkingOptions("claude-code", model.model).map((option) => option.value),
+        getThinkingOptions("claude-code", model.model).map((option) => option.value),
       );
     }
     expect(claude.supportsFastMode).toBe(runtimeSupportsFastMode("claude-code"));

@@ -1,203 +1,62 @@
 export { AOP_PORTS, AOP_URLS } from "./env.ts";
 export * from "./projects/index.ts";
-export type {
-  AuthRequest,
-  AuthResponse,
-  StepAgent,
-  StepCommand,
-  StepCompleteRequest,
-  StepCompleteResponse,
-  StepError,
-  TaskReadyRequest,
-  TaskReadyResponse,
-  TaskStatusResponse,
-} from "./protocol";
-export {
-  AuthRequestSchema,
-  AuthResponseSchema,
-  StepAgentSchema,
-  StepCommandSchema,
-  StepCompleteRequestSchema,
-  StepCompleteResponseSchema,
-  TaskReadyRequestSchema,
-  TaskReadyResponseSchema,
-  TaskStatusResponseSchema,
-} from "./protocol";
-export type { Result, ValidationError } from "./result.ts";
-export { err, isErr, isOk, ok, parseBody, safeParseJson } from "./result.ts";
 export { suggestSessionBranchName } from "./session-branch.ts";
 export type {
-  RepoBulkAction,
-  RepoBulkActionFailure,
-  RepoBulkActionResult,
-} from "./types/bulk-action.ts";
-export { isRepoBulkAction, REPO_BULK_ACTIONS } from "./types/bulk-action.ts";
-export type {
-  ChatCheckpointAvailability,
   ChatCheckpointCaptureStatus,
-  ChatRevertAvailability,
-  ChatRevertResult,
   ChatTurnDiffFileSummary,
-  ChatTurnDiffResponse,
-  ChatTurnDiffStatus,
-  ChatTurnDiffSummary,
-  ChatTurnDiffTotals,
-  SessionRevertedSsePayload,
 } from "./types/chat-checkpoints.ts";
 export type {
   ChatDelegationKind,
   ChatDelegationRun,
   ChatDelegationRunDto,
   ChatDelegationStatus,
-  ChatDelegationViewStatus,
 } from "./types/chat-delegation.ts";
-export {
-  BACKGROUND_TASK_LIMIT,
-  DELEGATION_STARTING_THRESHOLD_MS,
-  DELEGATION_WAITING_THRESHOLD_MS,
-  deriveDelegationViewStatus,
-  formatChatDelegationKind,
-} from "./types/chat-delegation.ts";
+export { BACKGROUND_TASK_LIMIT } from "./types/chat-delegation.ts";
+export type { ChatImageAttachment, ChatImageMimeType } from "./types/chat-image.ts";
+export { CHAT_IMAGE_LIMITS, imageAttachmentMarker } from "./types/chat-image.ts";
 export type {
-  AopMcpMutationTool,
-  AopMcpProposeTool,
-  AopMcpReadTool,
-  ApprovalCardFields,
   ChatAbortDisposition,
   ChatActionPayload,
-  ChatActionStatus,
-  ChatActionType,
   ChatDocumentAttachment,
   ChatDocumentMimeType,
   ChatRuntimeAccessMode,
-  ChatRuntimeActionIntent,
-  ChatRuntimeActionSelection,
   ChatSessionLifecycle,
   ChatSessionScope,
   ChatSessionSettledOverride,
-  ChatWorkflowSelection,
-  RuntimeActionsFields,
-  TaskAssignmentCandidate,
-  TaskAssignmentFields,
-  TaskBatchAssignmentFields,
-  TaskBatchAssignmentItem,
-  TaskBatchRoutedOutcome,
   TerminalLine,
   TerminalLineTone,
   UpdateChatSessionInput,
-  WorkflowPreviewFields,
-  WorkflowRunFields,
 } from "./types/chat-session.ts";
-export {
-  AOP_MCP_MUTATION_TOOLS,
-  AOP_MCP_PROPOSE_TOOLS,
-  AOP_MCP_READ_TOOLS,
-  CHAT_DOCUMENT_LIMITS,
-} from "./types/chat-session.ts";
+export { CHAT_DOCUMENT_LIMITS } from "./types/chat-session.ts";
 export type { ChatSessionSummary } from "./types/chat-session-summary.ts";
 export type {
-  ActiveRunWorkLogResponse,
-  AssistantWorkLogUpsertSsePayload,
-  ChatWorkLogEntry,
   ChatWorkLogEventKind,
-  ChatWorkLogJsonValue,
   ChatWorkLogPhase,
   ChatWorkLogStatus,
   ChatWorkLogToolKind,
-  CompletedMessageWorkLogResponse,
 } from "./types/chat-work-log.ts";
-export type {
-  ControlCapability,
-  ControlCommand,
-  ControlCommandSelection,
-  ControlProvider,
-  ParseControlCommandResult,
-} from "./types/control-command.ts";
+export type { ControlCommand } from "./types/control-command.ts";
+export { formatControlCommandMarker, parseControlCommand } from "./types/control-command.ts";
+export type { ExecHostConfig, ExecHostUpsert } from "./types/exec-host-config.ts";
 export {
-  CONTROL_COMMANDS,
-  controlCommandLabel,
-  defaultControlSelection,
-  formatControlCommandMarker,
-  normalizeControlSelection,
-  parseControlCommand,
-  preferredControlConfigurationId,
-  rewriteControlCommandMarker,
-} from "./types/control-command.ts";
-export type {
-  BrainstormingResult,
-  CreateTaskAnswerRequest,
-  CreateTaskCancelResponse,
-  CreateTaskCompletedResponse,
-  CreateTaskFinalizeRequest,
-  CreateTaskFinalizeResponse,
-  CreateTaskImageAttachment,
-  CreateTaskImageMimeType,
-  CreateTaskMode,
-  CreateTaskQuestion,
-  CreateTaskQuestionOption,
-  CreateTaskQuestionResponse,
-  CreateTaskStartErrorResponse,
-  CreateTaskStartRequest,
-  CreateTaskStartResponse,
-  CreateTaskStartSuccessResponse,
-  CreateTaskStepResponse,
-} from "./types/create-task.ts";
-export {
-  CREATE_TASK_IMAGE_LIMITS,
-  deriveTitleFromSourceText,
-  imageAttachmentMarker,
-} from "./types/create-task.ts";
-export type {
-  DashboardSwimlane,
-  DashboardSwimlaneOwnerRole,
-  TaskSwimlane,
-} from "./types/dashboard-swimlanes.ts";
-export {
-  DashboardSwimlaneId,
-  DEFAULT_DASHBOARD_SWIMLANES,
-  resolveTaskSwimlane,
-} from "./types/dashboard-swimlanes.ts";
-export type {
-  ExecHostConfig,
-  ExecHostConfigInput,
-  ExecHostConfigPatch,
-  ExecHostUpsert,
-} from "./types/exec-host-config.ts";
-export {
-  ExecHostConfigInputSchema,
-  ExecHostConfigPatchSchema,
   ExecHostConfigSchema,
   ExecHostUpsertSchema,
   parseExecHostList,
 } from "./types/exec-host-config.ts";
-export type {
-  FactoryHealthItem,
-  FactoryHealthSeverity,
-  FactoryHealthSnapshot,
-  FactoryHealthSummary,
-} from "./types/factory-health.ts";
 export type { MarkdownFileContent } from "./types/markdown-file.ts";
 export { MARKDOWN_FILE_LIMITS } from "./types/markdown-file.ts";
-export type {
-  AgentRole,
-  DeveloperLifecycleStage,
-  MultiAgentArchitecture,
-  MultiAgentTeam,
-  RepositoryAssignment,
-  RepositoryCoordinationMode,
-  RepositoryScope,
-} from "./types/multi-agent-architecture.ts";
 export {
-  AgentRoleSchema,
-  DeveloperLifecycleStageSchema,
-  INITIAL_MULTI_AGENT_ARCHITECTURE,
-  MultiAgentArchitectureSchema,
-  MultiAgentTeamSchema,
-  RepositoryAssignmentSchema,
-  RepositoryCoordinationModeSchema,
-  RepositoryScopeSchema,
-  renderMultiAgentArchitectureMarkdown,
-} from "./types/multi-agent-architecture.ts";
+  CLI_PROVIDER_LABELS,
+  formatRuntimeModelLabel,
+  getDefaultRuntimeModel,
+  getDefaultRuntimeReasoning,
+  getRuntimeModelOptions,
+  getThinkingLabel,
+  getThinkingOptions,
+  isCliProvider,
+  supportsFastMode,
+  THINKING_OPTIONS,
+} from "./types/runtime-catalog.ts";
 export type {
   BuiltInRuntimeConfiguration,
   RuntimeConfigurationModel,
@@ -208,52 +67,28 @@ export type {
   RuntimeThinkingLevel,
 } from "./types/runtime-configuration.ts";
 export {
-  applyRuntimeConfigurationToAgent,
   BUILT_IN_RUNTIME_CONFIGURATIONS,
-  findRuntimeConfiguration,
-  findRuntimeConfigurationForDriver,
   getDefaultRuntimeConfigurationModel,
   normalizeDefaultThinkingLevel,
   RuntimeConfigurationModelInputSchema,
   RuntimeConfigurationProviderInputSchema,
-  RuntimeDriverSchema,
   RuntimeThinkingLevelSchema,
-  resolveConfiguredModelRecord,
-  resolveConfiguredProviderDefaults,
   resolveRuntimeConfigurationReasoning,
   runtimeConfigurationSupportsFastMode,
   runtimeSupportsFastMode,
 } from "./types/runtime-configuration.ts";
 export {
-  defaultDelegationSelectionFromConfiguration,
-  findDelegationRuntimeConfiguration,
   formatRuntimeDelegationMarker,
-  normalizeDelegationSelectionWithConfiguration,
   parseRuntimeDelegation,
-  RUNTIME_DELEGATIONS,
   type RuntimeDelegation,
-  type RuntimeDelegationId,
-  type RuntimeDelegationSelection,
-  runtimeConfigurationToDelegationId,
 } from "./types/runtime-delegation.ts";
-export type {
-  RuntimeActivitySummary,
-  RuntimeEvent,
-  RuntimeEventKind,
-  VerificationEvidence,
-  VerificationEvidenceKind,
-  VerificationEvidenceStatus,
-} from "./types/runtime-events.ts";
+export type { RuntimeEventKind } from "./types/runtime-events.ts";
 export type {
   RuntimeProfile,
   RuntimeProfileInput,
   RuntimeProfilePatch,
 } from "./types/runtime-profile.ts";
-export {
-  applyRuntimeProfile,
-  RuntimeProfileInputSchema,
-  RuntimeProfilePatchSchema,
-} from "./types/runtime-profile.ts";
+export { RuntimeProfileInputSchema, RuntimeProfilePatchSchema } from "./types/runtime-profile.ts";
 export type {
   CreateSessionPrMode,
   CreateSessionPrResult,
@@ -270,8 +105,6 @@ export type {
   SessionGitPullRequest,
   SessionGitStatus,
   SessionMergedPullRequest,
-  SessionPullRequestCheck,
-  SessionPullRequestRef,
   SessionPullRequestState,
   SessionPullRequestStateStatus,
   SessionPullRequestStatus,
@@ -280,83 +113,11 @@ export type {
 export type {
   ChatUnreadKind,
   DashboardChatUnreadEvent,
-  DashboardDataResetEvent,
-  DashboardEvent,
-  DashboardHeartbeatEvent,
-  DashboardInitEvent,
-  DashboardRepoRemovedEvent,
-  DashboardTask,
-  DashboardTaskCreatedEvent,
-  DashboardTaskRemovedEvent,
-  DashboardTaskStatusChangedEvent,
-  DashboardTaskUpdatedEvent,
-  PlanReviewStatus,
-  SSEAgentRole,
   SSEChatUnreadEvent,
   SSEDataResetEvent,
-  SSEEvent,
-  SSEEventType,
-  SSEHeartbeatEvent,
   SSEInitEvent,
-  SSERepo,
   SSERepoRemovedEvent,
-  SSERepoWithTasks,
   SSEServerStatus,
-  SSETask,
-  SSETaskCreatedEvent,
-  SSETaskRemovedEvent,
-  SSETaskStatusChangedEvent,
-  SSETaskUpdatedEvent,
-  TaskCompletionMode,
-  TaskDependencyState,
-} from "./types/sse-events";
-export type { Task } from "./types/task";
-export { TaskStatus } from "./types/task";
-export type {
-  ArchitectTaskAssignment,
-  DeveloperTaskAssignment,
-  TaskCoordinationPhase,
-  TaskExecutionGuardrails,
-  TaskExecutionModel,
-} from "./types/task-execution-model.ts";
-export {
-  canExecutionPhaseLaunchDeveloperWork,
-  clampDeveloperExecutionSlots,
-  DeveloperTaskAssignmentSchema,
-  INITIAL_TASK_EXECUTION_GUARDRAILS,
-  isRepositoryAssignmentWritable,
-  readPrimaryRepository,
-  readSupportingRepositories,
-  TaskCoordinationPhase as TaskExecutionCoordinationPhase,
-  TaskCoordinationPhaseSchema,
-  TaskExecutionGuardrailsSchema,
-  TaskExecutionModelSchema,
-} from "./types/task-execution-model.ts";
+} from "./types/sse-events.ts";
 export type { AopUpdateInstallResult, AopUpdateStatus } from "./types/updates.ts";
-export type {
-  WorkflowRuntimeProvider,
-  WorkflowRuntimeReasoning,
-} from "./types/workflow-runtime.ts";
-export {
-  applyWorkflowRuntimeProviderDefaults,
-  DEFAULT_RUNTIME_MODEL,
-  formatWorkflowRuntimeModelLabel,
-  getDefaultWorkflowRuntimeModel,
-  getDefaultWorkflowRuntimeReasoning,
-  getWorkflowModelOptions,
-  getWorkflowThinkingLabel,
-  getWorkflowThinkingOptions,
-  isAllowedWorkflowRuntimeModel,
-  isSafeCustomRuntimeModel,
-  isWorkflowRuntimeProvider,
-  SAFE_CUSTOM_RUNTIME_MODEL_PATTERN,
-  supportsFastMode,
-  WORKFLOW_RUNTIME_LABELS,
-  WORKFLOW_RUNTIME_OPTIONS,
-  WORKFLOW_THINKING_OPTIONS,
-} from "./types/workflow-runtime.ts";
-export {
-  compareReleaseVersions,
-  isReleaseVersionNewer,
-  normalizeReleaseVersion,
-} from "./version.ts";
+export { isReleaseVersionNewer, normalizeReleaseVersion } from "./version.ts";

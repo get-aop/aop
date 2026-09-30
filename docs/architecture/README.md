@@ -1,6 +1,6 @@
 # AOP architecture
 
-AOP is a local-first control plane layered on top of external coding-agent CLIs. This guide covers the product/runtime boundary, local storage, detached execution, dashboard and desktop shells, Windows execution, updates, and factory limits.
+AOP is a local-first control plane layered on top of external coding-agent CLIs. This guide covers the product/runtime boundary, local storage, detached execution, dashboard and desktop shells, Windows execution, and updates.
 
 > **Legacy page.** It describes the previous Sessions, task, and workflow product, which the rewrite around Projects (see the [README](../../README.md)) is removing. It is rewritten as the replacement lands; do not read it as the Projects design.
 
@@ -63,13 +63,6 @@ Windows execution runs through a managed WSL distro; the design is recorded in t
 ## Updates
 
 The local update service polls release metadata from getaop.com. When a newer version is available, the dashboard top bar exposes **Update**; the server coordinates the platform-specific update path without moving orchestration into a hosted service.
-
-## Factory limits
-
-- Global concurrent tasks: `max_concurrent_tasks`, default 5.
-- Per-repository concurrent tasks: default 3.
-- Per-worker running tasks: 1.
-- Active workers: 4 Free, 8 Pro, unlimited Team.
 
 ## Related guides
 

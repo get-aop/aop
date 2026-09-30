@@ -1,10 +1,10 @@
 import {
-  getWorkflowModelOptions,
-  isWorkflowRuntimeProvider,
+  type CliProvider,
+  getRuntimeModelOptions,
+  isCliProvider,
+  type ReasoningEffort,
+  THINKING_OPTIONS,
   type UpdateChatSessionInput,
-  WORKFLOW_THINKING_OPTIONS,
-  type WorkflowRuntimeProvider,
-  type WorkflowRuntimeReasoning,
 } from "@aop/common";
 import type { ChatSession } from "../db/schema.ts";
 
@@ -82,12 +82,12 @@ const applyRuntime = (
   input: UpdateChatSessionInput,
 ): BuildUpdatePatchResult | null => {
   if (input.runtime === undefined) return null;
-  if (!isWorkflowRuntimeProvider(input.runtime)) {
+  if (!isCliProvider(input.runtime)) {
     return { success: false, error: { code: "INVALID_RUNTIME" } };
   }
   patch.runtime = input.runtime;
   patch.runtime_configuration_id = null;
-  patch.model = getWorkflowModelOptions(input.runtime)[0] ?? "default";
+  patch.model = getRuntimeModelOptions(input.runtime)[0] ?? "default";
   patch.runtime_session_id = null;
   return null;
 };
@@ -98,11 +98,8 @@ const applyModel = (
   input: UpdateChatSessionInput,
 ): BuildUpdatePatchResult | null => {
   if (input.model === undefined || input.runtime !== undefined) return null;
-  const runtime = existing.runtime as WorkflowRuntimeProvider;
-  if (
-    !isWorkflowRuntimeProvider(runtime) ||
-    !getWorkflowModelOptions(runtime).includes(input.model)
-  ) {
+  const runtime = existing.runtime as CliProvider;
+  if (!isCliProvider(runtime) || !getRuntimeModelOptions(runtime).includes(input.model)) {
     return { success: false, error: { code: "INVALID_MODEL" } };
   }
   patch.model = input.model;
@@ -114,9 +111,9 @@ const applyEffort = (
   input: UpdateChatSessionInput,
 ): BuildUpdatePatchResult | null => {
   if (input.reasoningEffort === undefined) return null;
-  const valid = WORKFLOW_THINKING_OPTIONS.some((option) => option.value === input.reasoningEffort);
+  const valid = THINKING_OPTIONS.some((option) => option.value === input.reasoningEffort);
   if (!valid) return { success: false, error: { code: "INVALID_EFFORT" } };
-  patch.reasoning_effort = input.reasoningEffort as WorkflowRuntimeReasoning;
+  patch.reasoning_effort = input.reasoningEffort as ReasoningEffort;
   return null;
 };
 

@@ -43,7 +43,7 @@ export const CHAT_DOCUMENT_LIMITS = {
 } as const;
 
 /** Legacy navigation actions plus chat-first typed cards. */
-export type ChatActionType =
+type ChatActionType =
   | "task"
   | "pool"
   | "workflows"
@@ -61,108 +61,7 @@ export type ChatActionType =
   | "workflow-run"
   | "runtime-actions";
 
-export type ChatActionStatus = "proposed" | "confirmed" | "stale" | "error" | "live";
-
-export interface TaskAssignmentCandidate {
-  id: string;
-  title: string;
-}
-
-export interface TaskAssignmentFields {
-  /** Confirmed / fixed selection (or initial multi-select). */
-  taskIds: string[];
-  title?: string;
-  repoId: string;
-  workerId?: string | null;
-  workflowId?: string | null;
-  workflowName?: string | null;
-  /**
-   * When set, the assignment card shows a multi-select checklist among these
-   * backlog candidates. `taskIds` is the initial selection (often empty).
-   */
-  candidates?: TaskAssignmentCandidate[];
-}
-
-export type TaskBatchRoutedOutcome = "backlog" | "assigned" | "started";
-
-export interface TaskBatchAssignmentItem {
-  taskId: string;
-  title: string;
-  /** Prefill for the row's destination select — never auto-assigns. */
-  workerId?: string | null;
-  workflowId?: string | null;
-  workflowName?: string | null;
-  /** Set after the user routes this row; restores UI after reopen/refresh. */
-  routedOutcome?: TaskBatchRoutedOutcome;
-  /** Worker chosen when routedOutcome is assigned or started. */
-  routedWorkerId?: string | null;
-}
-
-export interface TaskBatchAssignmentFields {
-  repoId: string;
-  items: TaskBatchAssignmentItem[];
-}
-
-export type ChatRuntimeActionIntent = "implement" | "review" | "audit" | "test" | "security";
-
-export interface ChatRuntimeActionSelection {
-  id: string;
-  intent: ChatRuntimeActionIntent;
-  runtimeConfigurationId: string;
-  runtimeConfigurationName?: string;
-  provider: import("./workflow-runtime.ts").WorkflowRuntimeProvider;
-  model: string;
-  reasoning: import("./workflow-runtime.ts").WorkflowRuntimeReasoning;
-  fastMode: boolean;
-  phase: "writer" | "post-work";
-}
-
-export interface ChatWorkflowSelection {
-  workflowId: string;
-  name: string;
-  stepCount: number;
-  stepTypes?: string[];
-  steps?: Array<{
-    id: string;
-    type: string;
-    provider?: string;
-    model?: string;
-    reasoning?: string;
-    fastMode?: boolean;
-  }>;
-}
-
-export interface WorkflowRunFields {
-  workflowId: string;
-  workflowName: string;
-  stepCount: number;
-}
-
-export interface RuntimeActionsFields {
-  actions: ChatRuntimeActionSelection[];
-}
-
-export interface WorkflowPreviewFields {
-  name: string;
-  workflowId?: string | null;
-  steps: Array<{
-    id: string;
-    type: string;
-    model?: string | null;
-    provider?: string | null;
-  }>;
-  /** JSON patch / draft definition for save (opaque to the card). */
-  definition?: unknown;
-}
-
-export interface ApprovalCardFields {
-  handoffId: string;
-  taskId: string;
-  title: string;
-  repoId?: string;
-  fromStep?: string | null;
-  toStep?: string | null;
-}
+type ChatActionStatus = "proposed" | "confirmed" | "stale" | "error" | "live";
 
 export interface ChatActionPayload {
   type: ChatActionType;
@@ -172,14 +71,7 @@ export interface ChatActionPayload {
   meta: string;
   status?: ChatActionStatus;
   /** Structured body for propose→confirm cards. */
-  proposal?:
-    | TaskAssignmentFields
-    | TaskBatchAssignmentFields
-    | WorkflowPreviewFields
-    | ApprovalCardFields
-    | WorkflowRunFields
-    | RuntimeActionsFields
-    | Record<string, unknown>;
+  proposal?: Record<string, unknown>;
   error?: string;
 }
 
@@ -210,14 +102,3 @@ export interface UpdateChatSessionInput {
   runtimeAccessMode?: ChatRuntimeAccessMode;
   runtimeProfileId?: string;
 }
-
-/** Known propose tools that never mutate until a REST confirm. */
-export const AOP_MCP_PROPOSE_TOOLS = [] as const;
-
-export const AOP_MCP_MUTATION_TOOLS = ["aop_set_chat_workspace"] as const;
-
-export const AOP_MCP_READ_TOOLS = ["aop_list_workflows", "aop_list_repos"] as const;
-
-export type AopMcpProposeTool = (typeof AOP_MCP_PROPOSE_TOOLS)[number];
-export type AopMcpReadTool = (typeof AOP_MCP_READ_TOOLS)[number];
-export type AopMcpMutationTool = (typeof AOP_MCP_MUTATION_TOOLS)[number];

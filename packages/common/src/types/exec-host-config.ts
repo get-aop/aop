@@ -14,20 +14,13 @@ export const ExecHostConfigSchema = z.object({
 export type ExecHostConfig = z.infer<typeof ExecHostConfigSchema>;
 
 /** Input when creating a host (id may be assigned by the server). */
-export const ExecHostConfigInputSchema = ExecHostConfigSchema.omit({ id: true });
-export type ExecHostConfigInput = z.infer<typeof ExecHostConfigInputSchema>;
+const ExecHostConfigInputSchema = ExecHostConfigSchema.omit({ id: true });
 
 /** Full-list PUT payload entry: a config whose id is assigned by the server when absent. */
 export const ExecHostUpsertSchema = ExecHostConfigInputSchema.extend({
   id: z.string().trim().min(1).optional(),
 });
 export type ExecHostUpsert = z.infer<typeof ExecHostUpsertSchema>;
-
-export const ExecHostConfigPatchSchema = ExecHostConfigInputSchema.partial().refine(
-  (patch) => Object.keys(patch).length > 0,
-  "At least one host field is required",
-);
-export type ExecHostConfigPatch = z.infer<typeof ExecHostConfigPatchSchema>;
 
 const ExecHostListSchema = z.array(ExecHostConfigSchema);
 

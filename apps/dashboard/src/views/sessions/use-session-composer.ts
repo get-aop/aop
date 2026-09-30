@@ -1,8 +1,4 @@
-import {
-  CHAT_DOCUMENT_LIMITS,
-  type ChatDocumentAttachment,
-  CREATE_TASK_IMAGE_LIMITS,
-} from "@aop/common";
+import { CHAT_DOCUMENT_LIMITS, CHAT_IMAGE_LIMITS, type ChatDocumentAttachment } from "@aop/common";
 import { useCallback, useRef, useState } from "react";
 import type { ChatSessionDetail, ChatSessionMessage } from "../../api/client";
 import type { LocalCreateTaskImage } from "../../components/create-task-images";
@@ -219,7 +215,7 @@ export const useSessionComposer = (input: SessionComposerStateInput) => {
     pendingImages,
     pendingDocuments,
     pastes,
-    imageLimitReached: pendingImages.length >= CREATE_TASK_IMAGE_LIMITS.maxCount,
+    imageLimitReached: pendingImages.length >= CHAT_IMAGE_LIMITS.maxCount,
     documentLimitReached: pendingDocuments.length >= CHAT_DOCUMENT_LIMITS.maxCount,
     imageInputRef,
     documentInputRef,

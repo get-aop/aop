@@ -2,9 +2,9 @@ import type {
   ChatAbortDisposition,
   ChatActionPayload,
   ChatDocumentAttachment,
+  ChatImageAttachment,
   ChatSessionLifecycle,
   ChatSessionScope,
-  CreateTaskImageAttachment,
   UpdateChatSessionInput as SharedUpdateChatSessionInput,
 } from "@aop/common";
 import { request } from "./request";
@@ -196,7 +196,7 @@ export interface ChatPastePayload {
 export const sendChatMessage = async (
   sessionId: string,
   content: string,
-  imageAttachments?: CreateTaskImageAttachment[],
+  imageAttachments?: ChatImageAttachment[],
   documentAttachments?: ChatDocumentAttachment[],
   midRunMode?: "queue" | "steer",
   confirmToolInterrupt?: boolean,
@@ -231,7 +231,7 @@ export const sendChatMessage = async (
 
 const buildSendChatMessageBody = (input: {
   content: string;
-  imageAttachments?: CreateTaskImageAttachment[];
+  imageAttachments?: ChatImageAttachment[];
   documentAttachments?: ChatDocumentAttachment[];
   midRunMode?: "queue" | "steer";
   confirmToolInterrupt?: boolean;

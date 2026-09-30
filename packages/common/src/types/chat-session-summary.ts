@@ -1,10 +1,10 @@
+import type { CliProvider, ReasoningEffort } from "../projects/runtime.ts";
 import type {
   ChatRuntimeAccessMode,
   ChatSessionLifecycle,
   ChatSessionScope,
   ChatSessionSettledOverride,
 } from "./chat-session.ts";
-import type { WorkflowRuntimeProvider, WorkflowRuntimeReasoning } from "./workflow-runtime.ts";
 
 /**
  * The wire shape of a chat session. Shared so server responses, SSE payloads,
@@ -19,10 +19,10 @@ export interface ChatSessionSummary {
   repoPath: string;
   title: string;
   named: boolean;
-  runtime: WorkflowRuntimeProvider;
+  runtime: CliProvider;
   runtimeConfigurationId: string | null;
   model: string;
-  reasoningEffort: WorkflowRuntimeReasoning;
+  reasoningEffort: ReasoningEffort;
   runtimeAlias: string | null;
   runtimeSessionId: string | null;
   workspacePath: string;

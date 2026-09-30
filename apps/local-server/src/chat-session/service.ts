@@ -4,26 +4,26 @@ import {
   type ChatAbortDisposition,
   type ChatActionPayload,
   type ChatDocumentAttachment,
+  type ChatImageAttachment,
   type ChatSessionLifecycle,
   type ChatSessionSettledOverride,
   type ChatSessionSummary,
+  type CliProvider,
   type ControlCommand,
-  type CreateTaskImageAttachment,
   getDefaultRuntimeConfigurationModel,
-  getDefaultWorkflowRuntimeModel,
-  getDefaultWorkflowRuntimeReasoning,
-  getWorkflowModelOptions,
-  isWorkflowRuntimeProvider,
+  getDefaultRuntimeModel,
+  getDefaultRuntimeReasoning,
+  getRuntimeModelOptions,
+  isCliProvider,
   parseControlCommand,
   parseRuntimeDelegation,
+  type ReasoningEffort,
   type RuntimeConfigurationProvider,
   type RuntimeDelegation,
   resolveRuntimeConfigurationReasoning,
   runtimeConfigurationSupportsFastMode,
   type TerminalLine,
   type UpdateChatSessionInput,
-  type WorkflowRuntimeProvider,
-  type WorkflowRuntimeReasoning,
 } from "@aop/common";
 import { aopPaths, generateTypeId, resolveExecHost } from "@aop/infra";
 import { getControlCapabilityUnsupportedReason } from "@aop/llm-provider";
@@ -123,8 +123,8 @@ import {
   WorkspaceBindingError,
 } from "./workspace-binding.ts";
 
-const DEFAULT_RUNTIME: WorkflowRuntimeProvider = "claude-code";
-const DEFAULT_EFFORT: WorkflowRuntimeReasoning = "medium";
+const DEFAULT_RUNTIME: CliProvider = "claude-code";
+const DEFAULT_EFFORT: ReasoningEffort = "medium";
 const DEFAULT_TITLE = "New session";
 const DEFAULT_GENERAL_TITLE = "New task";
 const SNIPPET_MAX = 46;
@@ -1893,7 +1893,7 @@ const validateSendContent = (
   | {
       success: true;
       text: string;
-      images: CreateTaskImageAttachment[];
+      images: ChatImageAttachment[];
       documents: ChatDocumentAttachment[];
       pastes: StoredChatPaste[];
     }
@@ -2543,7 +2543,7 @@ const handleRuntimeDelegation = async (
 type ParsedRuntimeDelegation = RuntimeDelegation & {
   prompt: string;
   model?: string;
-  reasoning?: WorkflowRuntimeReasoning;
+  reasoning?: ReasoningEffort;
   fastMode?: boolean;
   runtimeConfigurationId?: string;
 };
@@ -2670,7 +2670,7 @@ const bindDelegationToConfiguration = async (
   const configuration = await createRuntimeConfigurationRepository(ctx.db).get(
     delegation.runtimeConfigurationId ?? "",
   );
-  if (!configuration || !isWorkflowRuntimeProvider(configuration.driver)) return null;
+  if (!configuration || !isCliProvider(configuration.driver)) return null;
   const driver = configuration.driver;
   return applyDelegationConfiguration(session, delegation, configuration, driver);
 };
@@ -2679,7 +2679,7 @@ const applyDelegationConfiguration = (
   session: ChatSession,
   delegation: ParsedRuntimeDelegation,
   configuration: RuntimeConfigurationProvider,
-  driver: WorkflowRuntimeProvider,
+  driver: CliProvider,
 ): ChatSession => {
   const model =
     configuration.models.find((item) => item.model === delegation.model) ??
@@ -2866,7 +2866,7 @@ const resolveControlSettingsFromConfiguration = async (
   const configuration = await createRuntimeConfigurationRepository(ctx.db).get(
     command.runtimeConfigurationId ?? "",
   );
-  if (!configuration || !isWorkflowRuntimeProvider(configuration.driver)) return null;
+  if (!configuration || !isCliProvider(configuration.driver)) return null;
   const driver = configuration.driver;
   const modelRecord =
     configuration.models.find((item) => item.model === command.model) ??
@@ -2901,9 +2901,9 @@ const configuredModelName = (
 const resolveControlSettingsFromCatalog = (
   command: Extract<ReturnType<typeof parseControlCommand>, { command: unknown }>["command"],
 ): ControlRuntimeSettings => {
-  const model = command.model?.trim() || getDefaultWorkflowRuntimeModel(command.provider, "");
+  const model = command.model?.trim() || getDefaultRuntimeModel(command.provider, "");
   const reasoning =
-    command.reasoning ?? getDefaultWorkflowRuntimeReasoning(command.provider, model, "medium");
+    command.reasoning ?? getDefaultRuntimeReasoning(command.provider, model, "medium");
   return {
     model,
     reasoning,
@@ -3031,17 +3031,17 @@ const sessionDtoFor = async (
   };
 };
 
-const firstModelFor = (runtime: WorkflowRuntimeProvider): string =>
-  getWorkflowModelOptions(runtime)[0] ?? "default";
+const firstModelFor = (runtime: CliProvider): string =>
+  getRuntimeModelOptions(runtime)[0] ?? "default";
 
 /** Prefer the first ordered runtime configuration; fall back to Claude Code catalog defaults. */
 const resolveCreateSessionRuntimeDefaults = async (
   runtimeConfigurations: RuntimeConfigurationRepository,
 ): Promise<{
-  runtime: WorkflowRuntimeProvider;
+  runtime: CliProvider;
   runtimeConfigurationId: string | null;
   model: string;
-  reasoningEffort: WorkflowRuntimeReasoning;
+  reasoningEffort: ReasoningEffort;
   runtimeAlias: string | null;
   fastMode: boolean;
 }> => {
@@ -3075,9 +3075,9 @@ const resolveCreateSessionRuntimeDefaults = async (
 
 const firstPreferredRuntimeConfiguration = (
   configurations: RuntimeConfigurationProvider[],
-): (RuntimeConfigurationProvider & { driver: WorkflowRuntimeProvider }) | undefined => {
+): (RuntimeConfigurationProvider & { driver: CliProvider }) | undefined => {
   for (const configuration of configurations) {
-    if (!isWorkflowRuntimeProvider(configuration.driver) || configuration.models.length === 0) {
+    if (!isCliProvider(configuration.driver) || configuration.models.length === 0) {
       continue;
     }
     return { ...configuration, driver: configuration.driver };
@@ -3152,10 +3152,10 @@ const toSessionDto = (
   repoPath: extras.repo_path ?? aopPaths.generalChatWorkspace(),
   title: session.title,
   named: toBool(session.named),
-  runtime: session.runtime as WorkflowRuntimeProvider,
+  runtime: session.runtime as CliProvider,
   runtimeConfigurationId: session.runtime_configuration_id,
   model: session.model,
-  reasoningEffort: session.reasoning_effort as WorkflowRuntimeReasoning,
+  reasoningEffort: session.reasoning_effort as ReasoningEffort,
   runtimeAlias: session.runtime_alias,
   runtimeSessionId: session.runtime_session_id,
   workspacePath: session.workspace_path ?? extras.repo_path ?? aopPaths.generalChatWorkspace(),

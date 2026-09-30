@@ -1,5 +1,5 @@
 import {
-  isWorkflowRuntimeProvider,
+  isCliProvider,
   type RuntimeConfigurationProvider,
   runtimeConfigurationSupportsFastMode,
   supportsFastMode,
@@ -318,7 +318,7 @@ const configurationFastItems = (
   const { runtime, model = "" } = args.active;
   const supportsFast = configuration
     ? runtimeConfigurationSupportsFastMode(configuration, model)
-    : isWorkflowRuntimeProvider(runtime) && supportsFastMode(runtime, model);
+    : isCliProvider(runtime) && supportsFastMode(runtime, model);
   if (!supportsFast) return [];
   return [
     menuHeader("header-fast", "FAST"),

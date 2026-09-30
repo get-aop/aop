@@ -1,24 +1,24 @@
 import {
-  formatWorkflowRuntimeModelLabel,
-  getWorkflowModelOptions,
-  getWorkflowThinkingLabel,
-  WORKFLOW_RUNTIME_LABELS,
-  WORKFLOW_THINKING_OPTIONS,
-  type WorkflowRuntimeProvider,
+  CLI_PROVIDER_LABELS,
+  type CliProvider,
+  formatRuntimeModelLabel,
+  getRuntimeModelOptions,
+  getThinkingLabel,
+  THINKING_OPTIONS,
 } from "@aop/common";
 
 export interface RuntimeUiMeta {
-  key: WorkflowRuntimeProvider;
+  key: CliProvider;
   label: string;
   cmd: string;
   glyph: string;
   color: string;
 }
 
-export const RUNTIME_UI: Record<WorkflowRuntimeProvider, RuntimeUiMeta> = {
+export const RUNTIME_UI: Record<CliProvider, RuntimeUiMeta> = {
   "claude-code": {
     key: "claude-code",
-    label: WORKFLOW_RUNTIME_LABELS["claude-code"],
+    label: CLI_PROVIDER_LABELS["claude-code"],
     cmd: "claude",
     glyph: "CL",
     color: "var(--color-favorite)",
@@ -28,23 +28,20 @@ export const RUNTIME_UI: Record<WorkflowRuntimeProvider, RuntimeUiMeta> = {
 export const RUNTIME_LIST = Object.values(RUNTIME_UI);
 
 export const getRuntimeUi = (runtime: string): RuntimeUiMeta =>
-  RUNTIME_UI[runtime as WorkflowRuntimeProvider] ?? RUNTIME_UI["claude-code"];
+  RUNTIME_UI[runtime as CliProvider] ?? RUNTIME_UI["claude-code"];
 
 export const getEffectiveCmd = (runtime: string, alias: string | null | undefined): string =>
   alias?.trim() || getRuntimeUi(runtime).cmd;
 
-export const getModelLabel = (model: string): string => formatWorkflowRuntimeModelLabel(model);
+export const getModelLabel = (model: string): string => formatRuntimeModelLabel(model);
 
 export const getEffortLabel = (runtime: string, effort: string): string =>
-  getWorkflowThinkingLabel(
-    runtime as WorkflowRuntimeProvider,
-    effort as Parameters<typeof getWorkflowThinkingLabel>[1],
-  );
+  getThinkingLabel(runtime as CliProvider, effort as Parameters<typeof getThinkingLabel>[1]);
 
 export const modelOptionsFor = (runtime: string): readonly string[] =>
-  getWorkflowModelOptions(runtime as WorkflowRuntimeProvider);
+  getRuntimeModelOptions(runtime as CliProvider);
 
-export const EFFORT_OPTIONS = WORKFLOW_THINKING_OPTIONS;
+export const EFFORT_OPTIONS = THINKING_OPTIONS;
 
 export const CHAT_COMMANDS = [
   { cmd: "/skill", args: "<name>", desc: "Run a runtime skill" },

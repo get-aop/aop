@@ -1,4 +1,4 @@
-import { CHAT_DOCUMENT_LIMITS, CREATE_TASK_IMAGE_LIMITS } from "@aop/common";
+import { CHAT_DOCUMENT_LIMITS, CHAT_IMAGE_LIMITS } from "@aop/common";
 
 export const ComposerFileInputs = ({
   imageRef,
@@ -15,7 +15,7 @@ export const ComposerFileInputs = ({
     <input
       ref={imageRef}
       type="file"
-      accept={CREATE_TASK_IMAGE_LIMITS.allowedMimeTypes.join(",")}
+      accept={CHAT_IMAGE_LIMITS.allowedMimeTypes.join(",")}
       multiple
       className="hidden"
       aria-label="Attach images"

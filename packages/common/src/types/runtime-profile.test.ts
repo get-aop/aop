@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  applyRuntimeProfile,
-  RuntimeProfileInputSchema,
-  RuntimeProfilePatchSchema,
-} from "./runtime-profile.ts";
+import { RuntimeProfileInputSchema, RuntimeProfilePatchSchema } from "./runtime-profile.ts";
 
 const claudeProfile = {
   name: "Work Claude",
@@ -59,26 +55,7 @@ describe("runtime profiles", () => {
     expect(RuntimeProfilePatchSchema.safeParse({}).success).toBe(false);
   });
 
-  test("applies a profile as a full agent preset", () => {
-    expect(
-      applyRuntimeProfile({
-        id: "rprof_test",
-        ...claudeProfile,
-        reasoning: "high",
-        createdAt: "now",
-        updatedAt: "now",
-      }),
-    ).toEqual({
-      provider: "claude-code",
-      model: "claude-opus-5",
-      reasoning: "high",
-      fastMode: true,
-      ultracode: false,
-      runtimeAlias: "cpe",
-    });
-  });
-
-  test("accepts optional execHostId and threads it through applyRuntimeProfile", () => {
+  test("accepts an optional execHostId", () => {
     expect(
       RuntimeProfileInputSchema.parse({
         ...claudeProfile,
@@ -87,21 +64,6 @@ describe("runtime profiles", () => {
         execHostId: "ehost_desktop",
       }),
     ).toMatchObject({ execHostId: "ehost_desktop" });
-
-    expect(
-      applyRuntimeProfile({
-        id: "rprof_remote",
-        ...claudeProfile,
-        command: "claude",
-        fastMode: false,
-        execHostId: "ehost_desktop",
-        createdAt: "now",
-        updatedAt: "now",
-      }),
-    ).toMatchObject({
-      provider: "claude-code",
-      execHostId: "ehost_desktop",
-    });
   });
 
   test("allows empty execHostId for clearing a host binding", () => {

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   formatControlCommandMarker,
   formatRuntimeDelegationMarker,
-  getWorkflowModelOptions,
+  getRuntimeModelOptions,
 } from "@aop/common";
 import { aopPaths } from "@aop/infra";
 import type { LLMProvider } from "@aop/llm-provider";
@@ -661,7 +661,7 @@ describe("chat-session routes", () => {
     expect(body.session.title).toBe("New session");
     expect(body.session.runtime).toBe("claude-code");
     expect(body.session.runtimeConfigurationId).toBe("claude-code");
-    expect(body.session.model).toBe(getWorkflowModelOptions("claude-code")[0] ?? "");
+    expect(body.session.model).toBe(getRuntimeModelOptions("claude-code")[0] ?? "");
     expect(body.session.reasoningEffort).toBe("medium");
     expect(body.session.runtimeAlias).toBe("claude");
     expect(body.session.named).toBe(false);
@@ -2636,13 +2636,13 @@ describe("chat-session routes", () => {
       };
     };
     expect(runtimeBody.session.runtime).toBe("claude-code");
-    expect(runtimeBody.session.model).toBe(getWorkflowModelOptions("claude-code")[0] ?? "");
+    expect(runtimeBody.session.model).toBe(getRuntimeModelOptions("claude-code")[0] ?? "");
     expect(runtimeBody.session.runtimeSessionId).toBeNull();
 
     const modelPatch = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: getWorkflowModelOptions("claude-code")[1] ?? "" }),
+      body: JSON.stringify({ model: getRuntimeModelOptions("claude-code")[1] ?? "" }),
     });
     expect(modelPatch.status).toBe(200);
 
@@ -2763,7 +2763,7 @@ describe("chat-session routes", () => {
     const modelPatch = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: getWorkflowModelOptions("claude-code")[1] ?? "" }),
+      body: JSON.stringify({ model: getRuntimeModelOptions("claude-code")[1] ?? "" }),
     });
     expect(modelPatch.status).toBe(409);
     expect(await modelPatch.json()).toEqual({
@@ -2802,7 +2802,7 @@ describe("chat-session routes", () => {
   test("applies the shared catalog default when selecting a built-in runtime configuration", async () => {
     const { db, app } = await setup();
     const session = await createSession(app, "repo_chat_1");
-    const [defaultModel, otherModel] = getWorkflowModelOptions("claude-code");
+    const [defaultModel, otherModel] = getRuntimeModelOptions("claude-code");
     await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

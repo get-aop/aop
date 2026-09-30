@@ -1,25 +1,19 @@
 import { z } from "zod";
-import { CliProviderSchema } from "../projects/runtime.ts";
-import type { StepAgent } from "../protocol/index.ts";
+import { type CliProvider, CliProviderSchema, type ReasoningEffort } from "../projects/runtime.ts";
 import {
-  applyWorkflowRuntimeProviderDefaults,
-  formatWorkflowRuntimeModelLabel,
-  getDefaultWorkflowRuntimeModel,
-  getDefaultWorkflowRuntimeReasoning,
-  getWorkflowModelOptions,
-  getWorkflowThinkingOptions,
+  CLI_PROVIDER_OPTIONS,
+  formatRuntimeModelLabel,
+  getRuntimeModelOptions,
+  getThinkingOptions,
   SAFE_CUSTOM_RUNTIME_MODEL_PATTERN,
   supportsFastMode,
-  WORKFLOW_RUNTIME_OPTIONS,
-  type WorkflowRuntimeProvider,
-  type WorkflowRuntimeReasoning,
-} from "./workflow-runtime.ts";
+} from "./runtime-catalog.ts";
 
 export const RuntimeThinkingLevelSchema = z.enum(["low", "medium", "high", "extra-high", "max"]);
 export type RuntimeThinkingLevel = z.infer<typeof RuntimeThinkingLevelSchema>;
 
 /** The adapter a configuration's command speaks; the runtime catalog decides which exist. */
-export const RuntimeDriverSchema = CliProviderSchema;
+const RuntimeDriverSchema = CliProviderSchema;
 export type RuntimeDriver = z.infer<typeof RuntimeDriverSchema>;
 
 export const RuntimeConfigurationProviderInputSchema = z.object({
@@ -65,18 +59,18 @@ export interface RuntimeConfigurationProvider extends RuntimeConfigurationProvid
 
 export interface BuiltInRuntimeConfiguration
   extends Omit<RuntimeConfigurationProvider, "builtIn" | "models" | "position"> {
-  id: WorkflowRuntimeProvider;
-  driver: WorkflowRuntimeProvider;
+  id: CliProvider;
+  driver: CliProvider;
   models: RuntimeConfigurationModelInput[];
 }
 
-const RUNTIME_COMMANDS: Record<WorkflowRuntimeProvider, string> = {
+const RUNTIME_COMMANDS: Record<CliProvider, string> = {
   "claude-code": "claude",
 };
 
 /** Default Fast capability for a built-in runtime driver (not per-model). */
 export const runtimeSupportsFastMode = (driver: RuntimeDriver): boolean =>
-  getWorkflowModelOptions(driver).some((model) => supportsFastMode(driver, model));
+  getRuntimeModelOptions(driver).some((model) => supportsFastMode(driver, model));
 
 export const runtimeConfigurationSupportsFastMode = (
   configuration: Pick<RuntimeConfigurationProvider, "builtIn" | "driver" | "supportsFastMode">,
@@ -87,43 +81,18 @@ export const runtimeConfigurationSupportsFastMode = (
 };
 
 export const BUILT_IN_RUNTIME_CONFIGURATIONS: BuiltInRuntimeConfiguration[] =
-  WORKFLOW_RUNTIME_OPTIONS.map(({ value: provider, label: name }) => ({
+  CLI_PROVIDER_OPTIONS.map(({ value: provider, label: name }) => ({
     id: provider,
     name,
     command: RUNTIME_COMMANDS[provider],
     driver: provider,
     supportsFastMode: runtimeSupportsFastMode(provider),
-    models: getWorkflowModelOptions(provider).map((model) => ({
-      description: formatWorkflowRuntimeModelLabel(model),
+    models: getRuntimeModelOptions(provider).map((model) => ({
+      description: formatRuntimeModelLabel(model),
       model,
-      thinkingLevels: getWorkflowThinkingOptions(provider, model).map((option) => option.value),
+      thinkingLevels: getThinkingOptions(provider, model).map((option) => option.value),
     })),
   }));
-
-export const applyRuntimeConfigurationToAgent = (
-  agent: StepAgent,
-  configuration: RuntimeConfigurationProvider,
-): StepAgent | null => {
-  const defaults = applyWorkflowRuntimeProviderDefaults(agent, configuration.driver);
-  const model = getDefaultRuntimeConfigurationModel(configuration.models);
-  if (!model) return null;
-
-  return {
-    ...defaults,
-    model: model.model,
-    // Selecting a runtime always lands on that model's configured default thinking.
-    reasoning: resolveRuntimeConfigurationReasoning(
-      model.thinkingLevels,
-      null,
-      model.defaultThinkingLevel,
-    ),
-    fastMode: runtimeConfigurationSupportsFastMode(configuration, model.model)
-      ? (agent.fastMode ?? false)
-      : false,
-    runtimeAlias: configuration.command,
-    runtimeConfigurationId: configuration.id,
-  };
-};
 
 export const getDefaultRuntimeConfigurationModel = <Model extends { isDefault: boolean }>(
   models: Model[],
@@ -136,9 +105,9 @@ export const getDefaultRuntimeConfigurationModel = <Model extends { isDefault: b
  */
 export const resolveRuntimeConfigurationReasoning = (
   levels: RuntimeThinkingLevel[],
-  current: WorkflowRuntimeReasoning | null | undefined = null,
+  current: ReasoningEffort | null | undefined = null,
   defaultThinkingLevel: RuntimeThinkingLevel | null = null,
-): WorkflowRuntimeReasoning =>
+): ReasoningEffort =>
   (defaultThinkingLevel && levels.includes(defaultThinkingLevel)
     ? defaultThinkingLevel
     : undefined) ??
@@ -156,94 +125,4 @@ export const normalizeDefaultThinkingLevel = (
   if (levels.length === 0) return null;
   if (preferred && levels.includes(preferred)) return preferred;
   return levels[0] ?? null;
-};
-
-/**
- * Canonical runtime-configuration lookup for chat, workflow, %, and $.
- * Prefer an explicit id when present; otherwise first ordered match by driver/predicate.
- */
-export const findRuntimeConfiguration = (
-  configurations: RuntimeConfigurationProvider[] | undefined,
-  options: {
-    preferredId?: string;
-    driver?: RuntimeDriver;
-    /** Additional filter on the configuration. */
-    match?: (configuration: RuntimeConfigurationProvider) => boolean;
-  } = {},
-): RuntimeConfigurationProvider | undefined => {
-  if (!configurations?.length) return undefined;
-  const runnable = configurations.filter((item) => item.models.length > 0);
-
-  if (options.preferredId) {
-    // Exact id wins when it still has models. Callers must only pass preferred ids that
-    // are valid for their surface (e.g. control only prefers a session config when drivers match).
-    const preferred =
-      runnable.find((item) => item.id === options.preferredId) ??
-      configurations.find((item) => item.id === options.preferredId && item.models.length > 0);
-    if (preferred) return preferred;
-  }
-
-  return runnable.find((item) => {
-    if (options.driver && item.driver !== options.driver) return false;
-    if (options.match && !options.match(item)) return false;
-    return true;
-  });
-};
-
-/** First ordered runnable configuration for a driver (optional preferred id). */
-export const findRuntimeConfigurationForDriver = (
-  driver: WorkflowRuntimeProvider,
-  configurations: RuntimeConfigurationProvider[] | undefined,
-  preferredId?: string,
-): RuntimeConfigurationProvider | undefined =>
-  findRuntimeConfiguration(configurations, { preferredId, driver });
-
-/** Default model + thinking for a provider, preferring runtime configuration when present. */
-export const resolveConfiguredProviderDefaults = (
-  driver: WorkflowRuntimeProvider,
-  configurations?: RuntimeConfigurationProvider[],
-  preferredId?: string,
-): {
-  configuration?: RuntimeConfigurationProvider;
-  model: string;
-  reasoning: WorkflowRuntimeReasoning;
-  supportsFastMode: boolean;
-} => {
-  const configuration = findRuntimeConfiguration(configurations, { preferredId, driver });
-  if (configuration) {
-    const model = getDefaultRuntimeConfigurationModel(configuration.models);
-    const levels = (model?.thinkingLevels ?? []) as RuntimeThinkingLevel[];
-    return {
-      configuration,
-      model: model?.model ?? "",
-      reasoning: resolveRuntimeConfigurationReasoning(
-        levels,
-        null,
-        model?.defaultThinkingLevel ?? null,
-      ),
-      supportsFastMode: runtimeConfigurationSupportsFastMode(configuration, model?.model ?? ""),
-    };
-  }
-  const model = getDefaultWorkflowRuntimeModel(driver, "");
-  return {
-    model,
-    reasoning: getDefaultWorkflowRuntimeReasoning(driver, model, "medium"),
-    supportsFastMode: runtimeSupportsFastMode(driver),
-  };
-};
-
-/**
- * Resolve a model row inside a configuration, falling back to the default model.
- * Avoids catalog fallbacks when settings are bound but the current model was removed.
- */
-export const resolveConfiguredModelRecord = <Model extends { model: string; isDefault: boolean }>(
-  configuration: { models: Model[] } | undefined,
-  modelId: string | undefined,
-): Model | undefined => {
-  if (!configuration?.models.length) return undefined;
-  if (modelId) {
-    const matched = configuration.models.find((item) => item.model === modelId);
-    if (matched) return matched;
-  }
-  return getDefaultRuntimeConfigurationModel(configuration.models);
 };

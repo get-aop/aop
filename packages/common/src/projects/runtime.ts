@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SAFE_CUSTOM_RUNTIME_MODEL_PATTERN } from "../types/workflow-runtime.ts";
+import { SAFE_CUSTOM_RUNTIME_MODEL_PATTERN } from "../types/runtime-catalog.ts";
 
 /**
  * The agent CLIs a Project can drive: the runtime catalog. Phase 1 is Claude Code only; the id
