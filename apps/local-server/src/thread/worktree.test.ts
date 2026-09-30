@@ -2,15 +2,34 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aopPaths } from "@aop/infra";
+import { CommandTimeoutError, type RunCommandOptions } from "../command-runner.ts";
 import { useTempAopHome } from "../project/test-utils.ts";
-import { defaultRunGit } from "../session-git/service.ts";
-import { attachBareOrigin, createRepo, git, gitSucceeds, writeWorkFile } from "./git-test-utils.ts";
+import { defaultRunGit, type RunGit } from "../session-git/service.ts";
+import {
+  attachBareOrigin,
+  commitOnOrigin,
+  createRepo,
+  git,
+  gitSucceeds,
+  writeWorkFile,
+} from "./git-test-utils.ts";
 import { chooseBranchName, ensureWorktree, releaseWorktree } from "./worktree.ts";
 
 useTempAopHome();
 
 const repoFor = () => ({ id: `repo_${crypto.randomUUID().slice(0, 8)}`, path: createRepo() });
 const THREAD = "isess_abc123";
+
+/** Real git that also keeps each `git fetch` it ran, with the options it was given. */
+const recordingGit = (fetch: RunGit = defaultRunGit) => {
+  const fetches: RunCommandOptions[] = [];
+  const runGit: RunGit = (args, cwd, options) => {
+    if (args[0] !== "fetch") return defaultRunGit(args, cwd, options);
+    fetches.push(options ?? {});
+    return fetch(args, cwd, options);
+  };
+  return { runGit, fetches };
+};
 
 describe("choosing a thread's branch", () => {
   test("names it from the title and the end of the id", async () => {
@@ -140,6 +159,143 @@ describe("ensuring a worktree", () => {
       ok: false,
       message: expect.stringContaining("Not a git repository"),
     });
+  });
+});
+
+describe("where a new thread's branch starts", () => {
+  const withOrigin = () => {
+    const repo = repoFor();
+    return { repo, origin: attachBareOrigin(repo.path) };
+  };
+  const headOf = (repo: { id: string }, threadId = THREAD) =>
+    git(aopPaths.worktree(repo.id, threadId), "rev-parse", "HEAD");
+
+  test("at origin's default branch as it is now, which the checkout never pulled", async () => {
+    const { repo, origin } = withOrigin();
+    const checkoutMain = git(repo.path, "rev-parse", "main");
+    const merged = commitOnOrigin(origin, "NOTES.md", "hello\n");
+
+    const ensured = await ensureWorktree(defaultRunGit, repo, THREAD, "aop/next-abc123");
+
+    const path = aopPaths.worktree(repo.id, THREAD);
+    expect(ensured).toEqual({ ok: true, path });
+    expect(headOf(repo)).toBe(merged);
+    expect(readFileSync(join(path, "NOTES.md"), "utf8")).toBe("hello\n");
+    // Only origin's copy moved: the checkout's branch and files are as they were.
+    expect(git(repo.path, "rev-parse", "refs/remotes/origin/main")).toBe(merged);
+    expect(git(repo.path, "rev-parse", "main")).toBe(checkoutMain);
+    expect(git(repo.path, "rev-parse", "HEAD")).toBe(checkoutMain);
+    expect(existsSync(join(repo.path, "NOTES.md"))).toBe(false);
+    expect(git(repo.path, "status", "--porcelain")).toBe("");
+  });
+
+  test("with no upstream, so a bare `git push` in the worktree cannot land on the default branch", async () => {
+    const { repo } = withOrigin();
+
+    await ensureWorktree(defaultRunGit, repo, THREAD, "aop/next-abc123");
+
+    expect(gitSucceeds(repo.path, "rev-parse", "--verify", "aop/next-abc123@{upstream}")).toBe(
+      false,
+    );
+  });
+
+  test("without a commit the checkout's default branch has and origin does not", async () => {
+    const { repo } = withOrigin();
+    const published = git(repo.path, "rev-parse", "main");
+    writeWorkFile(repo.path, "local.md", "never pushed\n");
+    git(repo.path, "add", "local.md");
+    git(repo.path, "commit", "-m", "local only");
+
+    await ensureWorktree(defaultRunGit, repo, THREAD, "aop/next-abc123");
+
+    expect(headOf(repo)).toBe(published);
+    expect(existsSync(join(aopPaths.worktree(repo.id, THREAD), "local.md"))).toBe(false);
+  });
+
+  test("at what origin last had when origin cannot be reached", async () => {
+    const { repo, origin } = withOrigin();
+    const merged = commitOnOrigin(origin, "NOTES.md", "hello\n");
+    git(repo.path, "fetch", "-q", "origin");
+    rmSync(origin, { recursive: true, force: true });
+
+    const ensured = await ensureWorktree(defaultRunGit, repo, THREAD, "aop/next-abc123");
+
+    expect(ensured.ok).toBe(true);
+    expect(headOf(repo)).toBe(merged);
+  });
+
+  test("at the checkout's default branch when origin cannot be reached and was never fetched", async () => {
+    const repo = repoFor();
+    git(repo.path, "remote", "add", "origin", join(aopPaths.home(), "gone.git"));
+
+    const ensured = await ensureWorktree(defaultRunGit, repo, THREAD, "aop/next-abc123");
+
+    expect(ensured.ok).toBe(true);
+    expect(headOf(repo)).toBe(git(repo.path, "rev-parse", "main"));
+  });
+
+  test("at what origin last had when the fetch runs out of time, which is bounded and asks nothing", async () => {
+    const { repo, origin } = withOrigin();
+    const known = git(repo.path, "rev-parse", "refs/remotes/origin/main");
+    commitOnOrigin(origin, "NOTES.md", "hello\n");
+    const recorder = recordingGit(async (_args, _cwd, options) => {
+      throw new CommandTimeoutError(options?.timeoutMs ?? 0);
+    });
+
+    const ensured = await ensureWorktree(recorder.runGit, repo, THREAD, "aop/next-abc123");
+
+    expect(ensured.ok).toBe(true);
+    expect(headOf(repo)).toBe(known);
+    expect(recorder.fetches).toHaveLength(1);
+    expect(recorder.fetches[0]?.timeoutMs).toBeLessThanOrEqual(20_000);
+    expect(recorder.fetches[0]?.env).toMatchObject({ GIT_TERMINAL_PROMPT: "0" });
+  });
+
+  test("and a thread started later fetches again, so it starts from what merged in between", async () => {
+    const { repo, origin } = withOrigin();
+    await ensureWorktree(defaultRunGit, repo, THREAD, "aop/first-abc123");
+    const merged = commitOnOrigin(origin, "NOTES.md", "hello\n");
+
+    await ensureWorktree(defaultRunGit, repo, "isess_def456", "aop/second-def456");
+
+    expect(headOf(repo, "isess_def456")).toBe(merged);
+  });
+
+  test("threads started together in one repository share one fetch and all start from it", async () => {
+    const { repo, origin } = withOrigin();
+    const merged = commitOnOrigin(origin, "NOTES.md", "hello\n");
+    const recorder = recordingGit();
+    const threads = ["isess_aaa111", "isess_bbb222", "isess_ccc333"];
+
+    const ensured = await Promise.all(
+      threads.map((id) => ensureWorktree(recorder.runGit, repo, id, `aop/work-${id.slice(-6)}`)),
+    );
+
+    expect(ensured.map((result) => result.ok)).toEqual([true, true, true]);
+    expect(threads.map((id) => headOf(repo, id))).toEqual([merged, merged, merged]);
+    expect(recorder.fetches).toHaveLength(1);
+  });
+
+  test("a branch that survived comes back where it was, and nothing is fetched", async () => {
+    const { repo, origin } = withOrigin();
+    const branch = "aop/work-abc123";
+    await ensureWorktree(defaultRunGit, repo, THREAD, branch);
+    const path = aopPaths.worktree(repo.id, THREAD);
+    writeWorkFile(path, "kept.md", "committed work\n");
+    git(path, "add", "-A");
+    git(path, "commit", "-m", "work");
+    const work = git(path, "rev-parse", "HEAD");
+    git(repo.path, "worktree", "remove", "--force", path);
+    const known = git(repo.path, "rev-parse", "refs/remotes/origin/main");
+    commitOnOrigin(origin, "NOTES.md", "later\n");
+    const recorder = recordingGit();
+
+    const ensured = await ensureWorktree(recorder.runGit, repo, THREAD, branch);
+
+    expect(ensured).toEqual({ ok: true, path });
+    expect(headOf(repo)).toBe(work);
+    expect(recorder.fetches).toHaveLength(0);
+    expect(git(repo.path, "rev-parse", "refs/remotes/origin/main")).toBe(known);
   });
 });
 

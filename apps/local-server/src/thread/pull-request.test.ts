@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { createProjectStack, projectSettings, useTempAopHome } from "../project/test-utils.ts";
-import { git, writeWorkFile } from "./git-test-utils.ts";
+import { commitOnOrigin, git, writeWorkFile } from "./git-test-utils.ts";
 import {
   type PrWorld,
   reloadThread,
@@ -183,6 +183,18 @@ describe("opening a thread's pull request", () => {
     expect(w.github.prs[0]?.title).toBe("Fix the cold start");
   });
 
+  test("the runtime writing it is told the thread's files, not what merged since the checkout pulled", async () => {
+    const w = await setup({ git: { generateDraft: undefined } });
+    commitOnOrigin(w.repo.origin, "MERGED.md", "from another thread\n");
+    const thread = await spawnWithWork(w);
+
+    await w.s.services.threads.openPullRequest(thread.id, {});
+
+    const prompt = w.s.runs.at(-1)?.prompt ?? "";
+    expect(prompt).toContain("Changed files:\nnotes.md\n");
+    expect(prompt).not.toContain("MERGED.md");
+  });
+
   test("a thread with nothing to publish is refused before anything is pushed", async () => {
     const w = await setup();
     const spawned = await w.s.services.threads.spawn(w.project.id, {
@@ -197,6 +209,22 @@ describe("opening a thread's pull request", () => {
     expect(opened).toEqual({ success: false, error: { code: "NOTHING_TO_PUBLISH" } });
     expect(w.github.created()).toBe(0);
     expect(git(w.repo.origin, "branch", "--list")).not.toContain("aop/");
+  });
+
+  test("what merged on origin since the checkout last pulled is not the thread's to publish", async () => {
+    const w = await setup();
+    commitOnOrigin(w.repo.origin, "NOTES.md", "merged from another thread\n");
+    const spawned = await w.s.services.threads.spawn(w.project.id, {
+      title: "Idle",
+      prompt: "look around",
+    });
+    if (!spawned.success) throw new Error("thread not spawned");
+    await w.s.settle();
+
+    const opened = await w.s.services.threads.openPullRequest(spawned.thread.id, {});
+
+    expect(opened).toEqual({ success: false, error: { code: "NOTHING_TO_PUBLISH" } });
+    expect(w.github.created()).toBe(0);
   });
 
   test("a thread with no repository has no branch to publish", async () => {

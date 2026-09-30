@@ -25,6 +25,28 @@ describe("BranchOps", () => {
     test("returns false for non-existing branch", async () => {
       expect(await branchOps.exists("nonexistent")).toBe(false);
     });
+
+    test("returns false for a remote-tracking branch", async () => {
+      await Bun.$`git update-ref refs/remotes/origin/main HEAD`.cwd(repoPath).quiet();
+
+      expect(await branchOps.exists("origin/main")).toBe(false);
+    });
+  });
+
+  describe("isStartPoint", () => {
+    test("accepts a local branch and a remote-tracking branch", async () => {
+      await Bun.$`git update-ref refs/remotes/origin/main HEAD`.cwd(repoPath).quiet();
+
+      expect(await branchOps.isStartPoint("main")).toBe(true);
+      expect(await branchOps.isStartPoint("origin/main")).toBe(true);
+    });
+
+    test("refuses a ref that is neither, such as a tag or a missing remote-tracking branch", async () => {
+      await Bun.$`git tag v1`.cwd(repoPath).quiet();
+
+      expect(await branchOps.isStartPoint("v1")).toBe(false);
+      expect(await branchOps.isStartPoint("origin/main")).toBe(false);
+    });
   });
 
   describe("getCommit", () => {

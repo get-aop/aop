@@ -44,6 +44,28 @@ export const attachBareOrigin = (repoPath: string, defaultBranch = "main"): stri
   return bare;
 };
 
+/**
+ * Commits a file to the origin's `branch` from a clone of its own, the way a pull request merged
+ * on GitHub lands: the repo's checkout, and its `origin/<branch>`, know nothing of it until a
+ * fetch. Returns the new commit.
+ */
+export const commitOnOrigin = (
+  origin: string,
+  file: string,
+  text: string,
+  branch = "main",
+): string => {
+  const clone = mkdtempSync(join(tmpdir(), "aop-clone-"));
+  git(clone, "clone", "-q", "-b", branch, origin, ".");
+  git(clone, "config", "user.email", "aop-tests@example.com");
+  git(clone, "config", "user.name", "AOP Tests");
+  writeFileSync(join(clone, file), text);
+  git(clone, "add", file);
+  git(clone, "commit", "-m", `Add ${file} (#1)`);
+  git(clone, "push", "-q", "origin", branch);
+  return git(clone, "rev-parse", "HEAD");
+};
+
 /** Writes a file into a worktree the way an agent's turn would. */
 export const writeWorkFile = (worktree: string, name: string, text: string): void => {
   const path = join(worktree, name);

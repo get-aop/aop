@@ -27,6 +27,16 @@ export type WorktreeResult<T = Record<never, never>> =
 
 const BRANCH_ATTEMPTS = 20;
 
+/** How long a new thread waits for origin's default branch before it starts from what the repo has. */
+const FETCH_TIMEOUT_MS = 20_000;
+
+// Nobody is there to answer a prompt: git asks for no username or password, runs no askpass
+// program, and Git Credential Manager opens no window. An SSH passphrase prompt is left to the time limit.
+const NO_PROMPTS = { GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", GCM_INTERACTIVE: "never" };
+
+/** Fetches under way, by repo and branch, for threads started together to share. */
+const fetching = new Map<string, Promise<void>>();
+
 /**
  * `aop/<title>-<last six of the id>`, or the same with `-2`, `-3`... when a branch of that
  * name already exists and so cannot be this thread's: the name is only chosen once, at spawn.
@@ -47,8 +57,9 @@ export const chooseBranchName = async (
 
 /**
  * Makes the thread's worktree exist on its branch. A worktree already there is left alone; a
- * missing one is created from the repo's default branch, or from the thread's branch when the
- * branch survived (a released worktree, a crash). A directory left half made is replaced.
+ * missing one is created on the thread's branch when the branch survived (a released worktree, a
+ * crash), which is not moved, or else on a new branch cut from origin's default branch, fetched
+ * first. A directory left half made is replaced.
  */
 export const ensureWorktree = async (
   runGit: RunGit,
@@ -70,7 +81,12 @@ export const ensureWorktree = async (
       };
     }
     await clearStaleCheckout(runGit, repo, path);
-    await manager.createWorktree(threadId, await manager.getDefaultBranch(), branch);
+    const defaultBranch = await manager.getDefaultBranch();
+    if (!(await branchExists(runGit, repo.path, branch))) {
+      await refreshRemoteBranch(runGit, repo.path, defaultBranch);
+    }
+    const base = await startPoint(runGit, repo.path, defaultBranch);
+    await manager.createWorktree(threadId, base, branch);
     return { ok: true, path };
   } catch (error) {
     // Another call made it between the check and the create: the end state is the same.
@@ -187,6 +203,64 @@ const clearStaleCheckout = async (
 ): Promise<void> => {
   await rm(path, { recursive: true, force: true });
   await runGit(["worktree", "prune"], repo.path);
+};
+
+/**
+ * Brings `origin/<branch>` up to date, best effort: with no origin, or one that fails or does not
+ * answer in time, what the repo last fetched stands. Threads started together in one repo wait for
+ * the same fetch instead of racing each other for the ref.
+ */
+const refreshRemoteBranch = (runGit: RunGit, repoPath: string, branch: string): Promise<void> => {
+  const key = `${repoPath}\n${branch}`;
+  const running = fetching.get(key);
+  if (running) return running;
+  const fetched = fetchRemoteBranch(runGit, repoPath, branch).finally(() => fetching.delete(key));
+  fetching.set(key, fetched);
+  return fetched;
+};
+
+const fetchRemoteBranch = async (runGit: RunGit, repoPath: string, branch: string) => {
+  try {
+    if ((await runGit(["remote", "get-url", "origin"], repoPath)).exitCode !== 0) return;
+    // One ref moves, origin's copy of the branch: no tags, no submodules, never the checkout.
+    const fetched = await runGit(
+      [
+        "fetch",
+        "--quiet",
+        "--no-tags",
+        "--no-recurse-submodules",
+        "origin",
+        `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+      ],
+      repoPath,
+      { timeoutMs: FETCH_TIMEOUT_MS, env: NO_PROMPTS },
+    );
+    if (fetched.exitCode !== 0) warnNotFetched(repoPath, branch, fetched.stderr.trim());
+  } catch (error) {
+    warnNotFetched(repoPath, branch, error instanceof Error ? error.message : String(error));
+  }
+};
+
+const warnNotFetched = (repoPath: string, branch: string, error: string) =>
+  logger.warn("Could not fetch {branch} into {repoPath}; the new branch starts older: {error}", {
+    branch,
+    repoPath,
+    error,
+  });
+
+/**
+ * Where a new branch starts: origin's copy of the default branch, which is what its pull request
+ * will merge into. The checkout's own copy moves only when the person pulls, so it misses every
+ * pull request merged since, and it may hold commits never pushed, which do not belong in the
+ * thread's pull request. A repo with no copy from origin starts from its own default branch.
+ */
+const startPoint = async (runGit: RunGit, repoPath: string, defaultBranch: string) => {
+  const remote = `origin/${defaultBranch}`;
+  const known = await runGit(
+    ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}`],
+    repoPath,
+  );
+  return known.exitCode === 0 ? remote : defaultBranch;
 };
 
 const removeCheckout = async (runGit: RunGit, repo: WorktreeRepo, path: string): Promise<void> => {

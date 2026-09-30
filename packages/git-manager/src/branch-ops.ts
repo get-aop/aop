@@ -7,12 +7,12 @@ export class BranchOps {
   constructor(private readonly executor: GitExecutor) {}
 
   async exists(branch: string): Promise<boolean> {
-    try {
-      await this.executor.exec(["rev-parse", "--verify", `refs/heads/${branch}`]);
-      return true;
-    } catch {
-      return false;
-    }
+    return this.hasRef(`refs/heads/${branch}`);
+  }
+
+  /** True for a local branch (`main`) or a remote-tracking one (`origin/main`): what a new branch can start from. */
+  async isStartPoint(ref: string): Promise<boolean> {
+    return (await this.exists(ref)) || (await this.hasRef(`refs/remotes/${ref}`));
   }
 
   async getCommit(ref: string): Promise<string> {
@@ -62,5 +62,10 @@ export class BranchOps {
     // Last resort: use current branch
     const currentBranch = await this.executor.exec(["branch", "--show-current"]);
     return currentBranch || "main";
+  }
+
+  private async hasRef(ref: string): Promise<boolean> {
+    const result = await this.executor.execRaw(["rev-parse", "--verify", "--quiet", ref]);
+    return result.exitCode === 0;
   }
 }

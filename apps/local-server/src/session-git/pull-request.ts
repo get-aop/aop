@@ -9,6 +9,7 @@ import {
   repoNameWithOwnerFromUrl,
   viewPullRequest,
 } from "../github-cli/index.ts";
+import { resolveMergeBase } from "./git-helpers.ts";
 import { generatePullRequestDraft, type PullRequestDraft } from "./pr-draft.ts";
 import {
   checkGhAvailable,
@@ -150,12 +151,16 @@ const defaultGenerateSessionPrDraft =
     });
   };
 
+// From where the branch left origin's default branch: the local copy can lag behind it, and the
+// commits it lacks are not this branch's.
 const listChangedFiles = async (
   runGit: RunGit,
   context: ReadySessionPrContext,
 ): Promise<string[]> => {
+  const since = await resolveMergeBase(runGit, context.workspace, context.defaultBranch);
+  if (!since) return [];
   const result = await runGit(
-    ["diff", "--name-only", "--no-color", `${context.defaultBranch}...HEAD`],
+    ["diff", "--name-only", "--no-color", since, "HEAD"],
     context.workspace,
   );
   if (result.exitCode !== 0) return [];

@@ -4,11 +4,13 @@ A thread is one agent session that does one piece of work in one repository. A t
 
 ## Worktree and branch
 
-When a thread starts, AOP creates the worktree `~/.aop/worktrees/<repo-id>/<thread-id>` on a new branch named `aop/<title>-<last six characters of the thread id>`, cut from the repository's default branch (origin's `HEAD`, else `main` or `master`). A name that already exists as a branch gets a counter (`-2`, `-3`). Every turn of the thread runs in that worktree, and the repository's own checkout is never touched.
+When a thread starts, AOP creates the worktree `~/.aop/worktrees/<repo-id>/<thread-id>` on a new branch named `aop/<title>-<last six characters of the thread id>`. A name that already exists as a branch gets a counter (`-2`, `-3`). Every turn of the thread runs in that worktree, and the repository's own checkout is never touched.
+
+The new branch is cut from origin's copy of the default branch (origin's `HEAD`, else `main` or `master`), fetched just before. The fetch updates only `origin/<default>`: never the checkout, its branches or its tags. The thread's pull request merges into origin's default branch, and the checkout's copy moves only when the person pulls, so a branch cut from that copy would miss every pull request merged since and conflict with them. For the same reason, commits on the checkout's default branch that were never pushed are not in the new branch: they do not belong in the thread's pull request. The fetch never prompts for credentials and gives up after 20 seconds. When there is no origin, or it cannot be reached in time, the branch starts from the `origin/<default>` that the repository fetched last, or from the checkout's default branch when it never fetched one. Threads started together in one repository share one fetch. The branch has no upstream until its pull request pushes it, so a `git push` without arguments in the worktree cannot reach the default branch.
 
 The thread records its `branch` and its `target` (`host`, the only kind today), and its session row records the workspace path. A thread in a project with no repositories works in a scratch directory and has no branch.
 
-The thread's row is stored before its worktree exists, so nothing on disk is ever without an owner. The worktree is created again, from the branch when the branch survived, whenever a message reaches a thread that has none: after a resolve, an archive, a restart, or a deletion by hand.
+The thread's row is stored before its worktree exists, so nothing on disk is ever without an owner. The worktree is created again, from the branch when the branch survived, whenever a message reaches a thread that has none: after a resolve, an archive, a restart, or a deletion by hand. A branch that survived is checked out as it is: nothing is fetched and the branch does not move.
 
 ## Pull request
 

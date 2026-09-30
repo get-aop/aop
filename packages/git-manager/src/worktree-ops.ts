@@ -24,10 +24,14 @@ export class WorktreeOps {
     private readonly metadata: MetadataStore,
   ) {}
 
+  /**
+   * A new `branchName` starts at `baseBranch`, a local branch or a remote-tracking one such as
+   * `origin/main`; a `branchName` that exists is checked out as it is.
+   */
   async create(taskId: string, baseBranch: string, branchName = taskId): Promise<WorktreeInfo> {
     validateTaskId(taskId);
 
-    if (!(await this.branchOps.exists(baseBranch))) {
+    if (!(await this.branchOps.isStartPoint(baseBranch))) {
       throw new BranchNotFoundError(baseBranch);
     }
 
@@ -43,7 +47,17 @@ export class WorktreeOps {
       // Worktree path may have been removed manually while the task branch still exists.
       await this.executor.exec(["worktree", "add", worktreePath, branchName]);
     } else {
-      await this.executor.exec(["worktree", "add", "-b", branchName, worktreePath, baseBranch]);
+      // No upstream: git would make a remote-tracking base the new branch's upstream, and a bare
+      // `git push` in the worktree could then publish its work straight to that base.
+      await this.executor.exec([
+        "worktree",
+        "add",
+        "--no-track",
+        "-b",
+        branchName,
+        worktreePath,
+        baseBranch,
+      ]);
     }
     await this.metadata.save(taskId, { branch: branchName, baseBranch, baseCommit });
 

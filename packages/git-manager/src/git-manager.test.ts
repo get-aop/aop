@@ -110,6 +110,30 @@ describe("GitManager", () => {
       await expect(manager.createWorktree("feat-auth", "nonexistent")).rejects.toThrow(
         BranchNotFoundError,
       );
+      await expect(manager.createWorktree("feat-auth", "origin/main")).rejects.toThrow(
+        BranchNotFoundError,
+      );
+    });
+
+    test("starts a new branch at a remote-tracking base, records it, and gives it no upstream", async () => {
+      const origin = `${TEST_BASE_DIR}/origin-${Date.now()}.git`;
+      await Bun.$`git init -q --bare -b main ${origin}`.quiet();
+      await Bun.$`git remote add origin ${origin}`.cwd(repoPath).quiet();
+      await Bun.$`git push -q origin main`.cwd(repoPath).quiet();
+      const published = (await Bun.$`git rev-parse main`.cwd(repoPath).text()).trim();
+      await Bun.$`git commit -q --allow-empty -m unpushed`.cwd(repoPath).quiet();
+      const manager = new GitManager({ repoPath, repoId: TEST_REPO_ID });
+      await manager.init();
+
+      const result = await manager.createWorktree("feat-auth", "origin/main", "feat-auth");
+
+      expect(result).toMatchObject({ baseBranch: "origin/main", baseCommit: published });
+      expect((await Bun.$`git rev-parse HEAD`.cwd(result.path).text()).trim()).toBe(published);
+      const upstream = await Bun.$`git rev-parse --verify feat-auth@{upstream}`
+        .cwd(repoPath)
+        .quiet()
+        .nothrow();
+      expect(upstream.exitCode).not.toBe(0);
     });
 
     test("rejects invalid taskId with path traversal", async () => {

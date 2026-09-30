@@ -3,7 +3,7 @@ import type { PullRequestRef, Thread } from "@aop/common";
 import { aopPaths } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import { defaultRunGh, type RunGh } from "../github-cli/index.ts";
-import { resolveDefaultBranch } from "../session-git/git-helpers.ts";
+import { resolveDefaultBranch, resolveMergeBase } from "../session-git/git-helpers.ts";
 import {
   type CreateSessionPullRequestOptions,
   createSessionPullRequest,
@@ -183,11 +183,14 @@ const givenDraft = (
     : null;
 
 // A pull request needs commits on the branch; gh refuses an empty one with an error that says little.
+// They are counted from where the branch left origin's default branch: the checkout's copy lags
+// behind it, and what it lacks is not the thread's work.
 const hasWorkToPublish = async (runGit: RunGit, workspace: string): Promise<boolean> => {
   const status = await runGit(["status", "--porcelain"], workspace);
   if (status.exitCode !== 0 || status.stdout.trim()) return true;
   const base = await resolveDefaultBranch(runGit, workspace);
-  if (!base) return true;
-  const ahead = await runGit(["rev-list", "--count", `${base}..HEAD`], workspace);
+  const since = base ? await resolveMergeBase(runGit, workspace, base) : null;
+  if (!since) return true;
+  const ahead = await runGit(["rev-list", "--count", `${since}..HEAD`], workspace);
   return ahead.exitCode !== 0 || Number.parseInt(ahead.stdout.trim(), 10) > 0;
 };
