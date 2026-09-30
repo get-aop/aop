@@ -210,7 +210,7 @@ function printHelp(): Promise<number> {
 function buildEnv(home: string, serverPort: number, dashboardPort: number): Record<string, string> {
   return {
     AOP_HOME: home,
-    AOP_DB_PATH: join(home, "aop.sqlite"),
+    AOP_DB_PATH: join(home, "projects.sqlite"),
     AOP_LOG_DIR: join(home, "logs"),
     AOP_LOCAL_SERVER_PORT: String(serverPort),
     AOP_LOCAL_SERVER_URL: `http://127.0.0.1:${serverPort}`,

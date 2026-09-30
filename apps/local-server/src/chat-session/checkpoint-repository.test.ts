@@ -8,7 +8,7 @@ import {
   ChatCheckpointStateError,
   createChatCheckpointRepository,
 } from "./checkpoint-repository.ts";
-import { runCheckpointRef } from "./test-utils.ts";
+import { runCheckpointRef, seedBareChatRuns } from "./test-utils.ts";
 
 const SESSION = "csess_checkpoints";
 
@@ -34,6 +34,7 @@ describe("chat checkpoint repository", () => {
 
   beforeEach(async () => {
     db = await createTestDb();
+    await seedBareChatRuns(db, ["crun_1", "crun_bulk"]);
   });
 
   afterEach(async () => {
@@ -159,6 +160,7 @@ describe("chat checkpoint repository", () => {
       { length: ID_BATCH_SIZE + 25 },
       (_, index) => `crun_${String(index).padStart(4, "0")}`,
     );
+    await seedBareChatRuns(db, runIds, "csess_bulk");
     for (const runId of runIds) {
       await repository.create({
         run_id: runId,

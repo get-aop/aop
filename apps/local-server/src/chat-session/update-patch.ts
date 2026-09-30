@@ -55,23 +55,7 @@ export const buildUpdatePatch = (
   const accessModeResult = applyRuntimeAccessMode(patch, input);
   if (accessModeResult) return accessModeResult;
 
-  applyContextChips(patch, input);
   return { success: true, patch };
-};
-
-const applyContextChips = (patch: Partial<ChatSession>, input: UpdateChatSessionInput): void => {
-  if (input.defaultWorkerId !== undefined) {
-    patch.default_worker_id =
-      input.defaultWorkerId === null || input.defaultWorkerId.trim() === ""
-        ? null
-        : input.defaultWorkerId.trim();
-  }
-  if (input.defaultWorkflowId !== undefined) {
-    patch.default_workflow_id =
-      input.defaultWorkflowId === null || input.defaultWorkflowId.trim() === ""
-        ? null
-        : input.defaultWorkflowId.trim();
-  }
 };
 
 const applyTitle = (

@@ -274,8 +274,6 @@ const setupWithLog = async (events: unknown[]) => {
     runtime_session_id: null,
     workspace_path: "/tmp",
     fast_mode: false,
-    default_worker_id: null,
-    default_workflow_id: null,
     pinned: false,
     settled_override: null,
     settled_at: null,

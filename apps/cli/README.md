@@ -62,14 +62,12 @@ aop config:get [key]
 aop config:set <key> <value>
 ```
 
-Useful keys include:
+Keys:
 
 | Key | Purpose |
 | --- | --- |
-| `budget_wall_clock_secs` | Maximum run wall-clock time |
-| `budget_cost_usd` | Maximum recorded run cost |
-| `budget_total_tokens` | Maximum run tokens |
-| `handoff_requires_approval` | Gate handoff on operator approval |
+| `chat_global_instructions` | Free-text preferences added to every chat turn, outside the visible transcript |
+| `remote_exec_hosts_json` | JSON list of SSH execution hosts |
 
 Runtime providers and models are easier to manage through **Settings → Runtime configuration**.
 

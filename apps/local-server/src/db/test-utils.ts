@@ -27,7 +27,6 @@ export const createTestRepo = async (
   db: Kysely<Database>,
   id: string,
   path: string,
-  options?: { maxConcurrentTasks?: number },
 ): Promise<void> => {
   const repoPath = path.startsWith(`${tmpdir()}/`) ? path : aopPaths.repoDir(id);
   await rm(aopPaths.repoDir(id), { recursive: true, force: true });
@@ -41,7 +40,6 @@ export const createTestRepo = async (
       path: repoPath,
       name: path.split("/").pop() ?? null,
       remote_origin: null,
-      max_concurrent_tasks: options?.maxConcurrentTasks ?? 1,
     })
     .execute();
 };

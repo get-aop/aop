@@ -78,8 +78,6 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
           "chat_sessions.workspace_path",
           "chat_sessions.fast_mode",
           "chat_sessions.runtime_access_mode",
-          "chat_sessions.default_worker_id",
-          "chat_sessions.default_workflow_id",
           "chat_sessions.pinned",
           "chat_sessions.settled_override",
           "chat_sessions.settled_at",

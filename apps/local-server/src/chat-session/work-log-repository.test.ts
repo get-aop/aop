@@ -4,6 +4,7 @@ import { ID_BATCH_SIZE } from "../db/batching.ts";
 import type { NewChatRunEvent } from "../db/chat-history-schema.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
+import { seedBareChatRuns } from "./test-utils.ts";
 import { createChatWorkLogRepository } from "./work-log-repository.ts";
 
 describe("chat work-log repository", () => {
@@ -19,6 +20,7 @@ describe("chat work-log repository", () => {
 
   test("inserts batches idempotently and lists deterministic order", async () => {
     const repository = createChatWorkLogRepository(db);
+    await seedBareChatRuns(db, ["run-1", "run-2"]);
     await repository.insertMany([
       event("event-2", "run-1", 2, 2),
       event("event-1", "run-1", 1, 1),
@@ -33,6 +35,7 @@ describe("chat work-log repository", () => {
 
   test("deletes selected runs and accepts empty batches", async () => {
     const repository = createChatWorkLogRepository(db);
+    await seedBareChatRuns(db, ["run-1", "run-2"]);
     await repository.insertMany([]);
     await repository.insertMany([event("event-1", "run-1", 1, 1), event("event-2", "run-2", 1, 1)]);
 
@@ -46,6 +49,7 @@ describe("chat work-log repository", () => {
   test("inserts, counts, and deletes across multiple batches", async () => {
     const repository = createChatWorkLogRepository(db);
     const runIds = Array.from({ length: ID_BATCH_SIZE + 20 }, (_, index) => `run-${index}`);
+    await seedBareChatRuns(db, runIds);
     await repository.insertMany(
       runIds.map((runId, index) => event(`event-${index}`, runId, index + 1, index + 1)),
     );
@@ -61,6 +65,7 @@ describe("chat work-log repository", () => {
   test("replay deduplication holds across insert batch boundaries", async () => {
     const repository = createChatWorkLogRepository(db);
     const total = 400;
+    await seedBareChatRuns(db, ["run-replay"]);
     const first = Array.from({ length: total }, (_, index) =>
       event(`event-${index}`, "run-replay", index + 1, index + 1),
     );

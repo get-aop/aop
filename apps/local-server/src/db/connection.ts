@@ -15,6 +15,9 @@ export const createDatabase = (dbPath: string): Kysely<Database> => {
   }
   const bunDb = new BunDatabase(dbPath);
 
+  // Per connection and off by default in SQLite. The cascade, restrict, and set-null
+  // actions declared in baseline-v1.ts only take effect with this on.
+  bunDb.run("PRAGMA foreign_keys = ON");
   bunDb.run("PRAGMA journal_mode = WAL");
   bunDb.run("PRAGMA busy_timeout = 5000");
   // WAL is durable across app crashes without a full sync on every commit.

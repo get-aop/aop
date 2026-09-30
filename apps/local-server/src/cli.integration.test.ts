@@ -73,32 +73,32 @@ integrationDescribe("CLI integration tests", () => {
     });
 
     test("PUT /api/settings/:key updates setting", async () => {
-      const response = await fetch(`${TEST_SERVER_URL}/api/settings/max_concurrent_tasks`, {
+      const response = await fetch(`${TEST_SERVER_URL}/api/settings/chat_global_instructions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: "5" }),
+        body: JSON.stringify({ value: "Be concise." }),
       });
       const body: AnyJson = await response.json();
 
       expect(response.ok).toBe(true);
       expect(body.ok).toBe(true);
-      expect(body.key).toBe("max_concurrent_tasks");
-      expect(body.value).toBe("5");
+      expect(body.key).toBe("chat_global_instructions");
+      expect(body.value).toBe("Be concise.");
     });
 
     test("GET /api/settings/:key returns single setting", async () => {
-      await fetch(`${TEST_SERVER_URL}/api/settings/max_concurrent_tasks`, {
+      await fetch(`${TEST_SERVER_URL}/api/settings/chat_global_instructions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: "3" }),
+        body: JSON.stringify({ value: "Be brief." }),
       });
 
-      const response = await fetch(`${TEST_SERVER_URL}/api/settings/max_concurrent_tasks`);
+      const response = await fetch(`${TEST_SERVER_URL}/api/settings/chat_global_instructions`);
       const body: AnyJson = await response.json();
 
       expect(response.ok).toBe(true);
-      expect(body.key).toBe("max_concurrent_tasks");
-      expect(body.value).toBe("3");
+      expect(body.key).toBe("chat_global_instructions");
+      expect(body.value).toBe("Be brief.");
     });
 
     test("PUT /api/settings/:key rejects invalid key", async () => {

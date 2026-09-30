@@ -6,7 +6,7 @@ AOP is a local-first control plane layered on top of external coding-agent CLIs.
 
 ## Local-first boundary
 
-The Bun and Hono server hosts the API, orchestration engine, and dashboard at `http://aop.localhost:25150`. SQLite state lives at `~/.aop/aop.sqlite`. There is no hosted orchestrator, AOP account, product telemetry, or data collection.
+The Bun and Hono server hosts the API, orchestration engine, and dashboard at `http://aop.localhost:25150`. SQLite state lives at `~/.aop/projects.sqlite`. There is no hosted orchestrator, AOP account, product telemetry, or data collection.
 
 AOP owns product state: registered repositories, worker memberships, task packages and assignments, workflow selection, worktrees, logs, runtime-event projections, and operator actions. The selected runtime CLI owns model/provider access, tool execution, conversational context, and any runtime-native subagent behavior.
 
@@ -40,7 +40,7 @@ Task detail streams current logs through SSE and reads historical execution even
 
 | Data | Location |
 | --- | --- |
-| SQLite product state | `~/.aop/aop.sqlite` |
+| SQLite product state | `~/.aop/projects.sqlite` |
 | Task package | `~/.aop/repos/<repo-id>/tasks/<slug>/` |
 | Task worktree | `~/.aop/worktrees/<repo-id>/<task-id>/` |
 | Live step logs | `~/.aop/logs/<step-id>.jsonl` before SQLite flush |

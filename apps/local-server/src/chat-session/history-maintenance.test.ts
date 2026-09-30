@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { sql } from "kysely";
 import type { LocalServerContext } from "../context.ts";
 import { createTestContext } from "../db/test-utils.ts";
 import {
@@ -130,10 +131,14 @@ describe("chat history maintenance", () => {
   test("a reset refuses to run while an orphan checkpoint exists", async () => {
     const repo = await createGitRepository();
     const seeded = await seedSessionInRepository(ctx, repo, SESSION, 1);
+    // Enforced foreign keys make this state unreachable through the app. It is
+    // what a database edited or restored outside the app can hold.
+    await sql`PRAGMA foreign_keys = OFF`.execute(ctx.db);
     await ctx.db
       .deleteFrom("chat_runs")
       .where("id", "=", seeded.runIds[0] as string)
       .execute();
+    await sql`PRAGMA foreign_keys = ON`.execute(ctx.db);
     const before = await countChatRows(ctx.db);
 
     expect((await listOrphanChatHistory(ctx.db)).checkpointRunIds).toEqual([

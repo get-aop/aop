@@ -38,7 +38,7 @@ export const buildIsolatedDesktopDevPlan = ({
     process.env.AOP_DESKTOP_DEV_HOME ?? join(homeDir, ".aop-local-dev", "desktop-app");
   const logDir = join(aopHome, "logs");
   const tmpDir = join(aopHome, "tmp");
-  const dbPath = join(aopHome, "aop.sqlite");
+  const dbPath = join(aopHome, "projects.sqlite");
   const wrapperPath = join(aopHome, "bin", "aop-dev-sidecar");
   const localServerUrl = `http://127.0.0.1:${localServerPort}`;
 

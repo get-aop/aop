@@ -16,8 +16,6 @@ const base: ChatSession = {
   workspace_path: null,
   fast_mode: false,
   runtime_access_mode: "full-access",
-  default_worker_id: null,
-  default_workflow_id: null,
   pinned: false,
   settled_override: null,
   settled_at: null,
@@ -26,29 +24,7 @@ const base: ChatSession = {
   updated_at: "now",
 };
 
-describe("buildUpdatePatch context chips", () => {
-  test("persists default worker and workflow ids", () => {
-    const result = buildUpdatePatch(base, {
-      defaultWorkerId: "w1",
-      defaultWorkflowId: "aop-default-gpt",
-    });
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.patch.default_worker_id).toBe("w1");
-    expect(result.patch.default_workflow_id).toBe("aop-default-gpt");
-  });
-
-  test("clears chips with null or empty string", () => {
-    const result = buildUpdatePatch(
-      { ...base, default_worker_id: "w1", default_workflow_id: "wf" },
-      { defaultWorkerId: null, defaultWorkflowId: "  " },
-    );
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.patch.default_worker_id).toBeNull();
-    expect(result.patch.default_workflow_id).toBeNull();
-  });
-
+describe("buildUpdatePatch", () => {
   test("persists the runtime access mode", () => {
     const result = buildUpdatePatch(base, { runtimeAccessMode: "auto" });
     expect(result.success).toBe(true);

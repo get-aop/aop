@@ -67,7 +67,7 @@ describe("buildLocalAopStartCommand", () => {
     expect(command).toContain('cd "/Users/marcelo/.codex/worktrees/4148/aop-mono"');
     expect(command).toContain('AOP_HOME="/Users/marcelo/.aop-local-dev/aop-mono-25db7b"');
     expect(command).toContain(
-      'AOP_DB_PATH="/Users/marcelo/.aop-local-dev/aop-mono-25db7b/aop.sqlite"',
+      'AOP_DB_PATH="/Users/marcelo/.aop-local-dev/aop-mono-25db7b/projects.sqlite"',
     );
     expect(command).toContain("AOP_LOCAL_SERVER_PORT=25350");
     expect(command).toContain('AOP_LOCAL_SERVER_URL="http://127.0.0.1:25350"');

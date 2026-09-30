@@ -100,7 +100,7 @@ export const buildLocalAopStartCommand = (input: StartCommandInput): string => {
   const dashboardUrl = `http://127.0.0.1:${input.dashboardPort}`;
   const logDir = join(input.aopHome, "logs");
   const tmpDir = join(input.aopHome, "tmp");
-  const dbPath = join(input.aopHome, "aop.sqlite");
+  const dbPath = join(input.aopHome, "projects.sqlite");
   const pathValue = [
     join(input.bunPath, ".."),
     join(input.aopHome, "bin"),

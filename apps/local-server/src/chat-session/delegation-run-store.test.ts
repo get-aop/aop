@@ -9,6 +9,7 @@ import {
   listDelegationRunsByChatRunIds,
   replaceDelegationRuns,
 } from "./delegation-run-store.ts";
+import { seedBareChatRuns } from "./test-utils.ts";
 
 const entry = (id: string, overrides: Partial<ChatDelegationRun> = {}): ChatDelegationRun => ({
   id,
@@ -35,6 +36,7 @@ describe("delegation-run-store", () => {
 
   beforeEach(async () => {
     db = await createTestDb();
+    await seedBareChatRuns(db, ["crun_1", "crun_2"]);
   });
 
   afterEach(async () => {

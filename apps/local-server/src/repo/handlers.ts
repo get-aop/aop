@@ -17,10 +17,6 @@ import { extractRepoName } from "./repository.ts";
 
 const logger = getLogger("repos-handlers");
 
-export const setupOpenspecSymlink = (_repoPath: string, _repoId: string): void => {
-  // Task docs live in ~/.aop/repos/<repoId>/tasks; do not create repo-local docs/tasks.
-};
-
 export type InitRepoResult =
   | { success: true; repoId: string; alreadyExists: boolean }
   | { success: false; error: InitRepoError };
@@ -76,7 +72,6 @@ export const initRepo = async (
     path: repoPath,
     name,
     remote_origin: remoteOrigin,
-    max_concurrent_tasks: 3,
     created_at: now,
     updated_at: now,
   });
@@ -124,8 +119,6 @@ export const removeRepo = async (
     };
   }
   await removeChatSessionArtifacts(chatPurge);
-
-  await deleteRepoOwnedRows(ctx, repo.id);
 
   await pruneWorktrees(repo.id, repo.path);
 
@@ -211,40 +204,6 @@ const pruneWorktrees = async (repoId: string, repoPath: string): Promise<void> =
   }
 };
 
-/**
- * SQLite only enforces foreign keys when `PRAGMA foreign_keys` is enabled and
- * this connection never enables it, so the schema's ON DELETE CASCADE clauses
- * are inert at runtime. Purge every repo-owned row explicitly instead of
- * trusting cascades.
- */
-const deleteRepoOwnedRows = async (ctx: LocalServerContext, repoId: string): Promise<void> => {
-  const taskIds = (
-    await ctx.db.selectFrom("tasks").select("id").where("repo_id", "=", repoId).execute()
-  ).map((row) => row.id);
-  const channelIds = (
-    await ctx.db.selectFrom("channels").select("id").where("repo_id", "=", repoId).execute()
-  ).map((row) => row.id);
-
-  if (taskIds.length > 0) {
-    await ctx.db.deleteFrom("task_dependencies").where("task_id", "in", taskIds).execute();
-    await ctx.db
-      .deleteFrom("task_dependencies")
-      .where("depends_on_task_id", "in", taskIds)
-      .execute();
-  }
-  if (channelIds.length > 0) {
-    await ctx.db.deleteFrom("channel_messages").where("channel_id", "in", channelIds).execute();
-    await ctx.db.deleteFrom("channel_memberships").where("channel_id", "in", channelIds).execute();
-  }
-  await ctx.db.deleteFrom("channels").where("repo_id", "=", repoId).execute();
-  await ctx.db.deleteFrom("scheduler_triggers").where("repo_id", "=", repoId).execute();
-  await ctx.db.deleteFrom("signals").where("repo_id", "=", repoId).execute();
-  await ctx.db.deleteFrom("task_assignments").where("repo_id", "=", repoId).execute();
-  await ctx.db.deleteFrom("task_sources").where("repo_id", "=", repoId).execute();
-  await ctx.db.deleteFrom("agent_repo_memberships").where("repo_id", "=", repoId).execute();
-  await ctx.db.deleteFrom("tasks").where("repo_id", "=", repoId).execute();
-};
-
 /** Main session dir plus delegate/control siblings created by chat runtimes. */
 const chatSessionArtifactDirs = (sessionId: string): string[] => {
   const root = join(aopPaths.logs(), "chat-sessions");
@@ -310,32 +269,10 @@ const removeChatSessionArtifacts = async (
 
 const deleteUserDataRows = async (ctx: LocalServerContext): Promise<void> => {
   // Chat tables are absent here on purpose: the chat domain already removed
-  // every session graph after confirming its refs were deleted.
-  const tables = [
-    "runtime_events",
-    "step_logs",
-    "step_executions",
-    "executions",
-    "channel_messages",
-    "channel_memberships",
-    "channels",
-    "scheduler_triggers",
-    "signals",
-    "task_assignments",
-    "task_sources",
-    "task_dependencies",
-    "tasks",
-    "agent_repo_memberships",
-    "agents",
-    "repos",
-    "workflow_skill_blocks",
-    "workflows",
-    "settings",
-  ] as const;
-
-  for (const table of tables) {
-    await ctx.db.deleteFrom(table).execute();
-  }
+  // every session graph after confirming its refs were deleted. That also
+  // satisfies the RESTRICT foreign key from chat_sessions to repos.
+  await ctx.db.deleteFrom("repos").execute();
+  await ctx.db.deleteFrom("settings").execute();
   // Unfinished jobs must survive a reset; only confirmed deletions are pruned.
   await deleteCompletedCleanupJobs(ctx.db);
 };
@@ -344,7 +281,6 @@ const resetRuntimeDirs = async (): Promise<void> => {
   const dirs = [
     join(aopPaths.home(), "repos"),
     join(aopPaths.home(), "worktrees"),
-    aopPaths.agents(),
     aopPaths.logs(),
   ];
 

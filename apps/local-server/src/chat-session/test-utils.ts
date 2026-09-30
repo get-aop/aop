@@ -1,5 +1,6 @@
 import type { ChatCheckpointCaptureStatus } from "@aop/common";
 import type { Kysely } from "kysely";
+import { chunkRows } from "../db/batching.ts";
 import type { ChatCleanupStatus, ChatRevertOperationStatus } from "../db/chat-history-schema.ts";
 import type { Database } from "../db/schema.ts";
 import {
@@ -48,6 +49,7 @@ export const seedChatSessionGraph = async (
   } = options;
   const worktreeRoot = options.worktreeRoot ?? workspacePath;
 
+  await seedRepoRow(db, repoId);
   await db
     .insertInto("chat_sessions")
     .values({
@@ -61,8 +63,6 @@ export const seedChatSessionGraph = async (
       runtime_alias: null,
       runtime_session_id: null,
       workspace_path: workspacePath,
-      default_worker_id: null,
-      default_workflow_id: null,
       created_at: "2026-07-24T08:00:00.000Z",
       updated_at: updatedAt,
     })
@@ -131,6 +131,56 @@ export const seedChatSessionGraph = async (
   }
 
   return seeded;
+};
+
+/** Foreign keys are enforced, so a session that names a repo needs that repo row. */
+export const seedRepoRow = async (db: Kysely<Database>, repoId: string | null): Promise<void> => {
+  if (repoId === null) return;
+  await db
+    .insertInto("repos")
+    .values({ id: repoId, path: `/repos/${repoId}`, name: repoId, remote_origin: null })
+    .onConflict((oc) => oc.column("id").doNothing())
+    .execute();
+};
+
+/**
+ * Inserts bare completed runs (one user message each, under one session) for
+ * tests of run-owned tables that only need a parent run row to exist.
+ */
+export const seedBareChatRuns = async (
+  db: Kysely<Database>,
+  runIds: readonly string[],
+  sessionId = "csess_bare_runs",
+): Promise<void> => {
+  await db
+    .insertInto("chat_sessions")
+    .values({
+      id: sessionId,
+      repo_id: null,
+      title: sessionId,
+      runtime: "claude-code",
+      runtime_configuration_id: null,
+      model: "test-model",
+      reasoning_effort: "medium",
+      runtime_alias: null,
+      runtime_session_id: null,
+      workspace_path: null,
+    })
+    .onConflict((oc) => oc.column("id").doNothing())
+    .execute();
+
+  const messages = runIds.map((runId, index) =>
+    chatMessage(sessionId, `umsg_${runId}`, "user", index),
+  );
+  for (const batch of chunkRows(messages)) {
+    await db.insertInto("chat_messages").values(batch).execute();
+  }
+  const runs = runIds.map((runId, index) =>
+    chatRun(sessionId, runId, `umsg_${runId}`, `amsg_${runId}`, "/workspace", index),
+  );
+  for (const batch of chunkRows(runs)) {
+    await db.insertInto("chat_runs").values(batch).execute();
+  }
 };
 
 export interface SeedRevertOperationOptions {
@@ -247,7 +297,6 @@ const chatRun = (
   retry_of_run_id: null,
   runtime_session_state: null,
   error_message: null,
-  delegation_runs: null,
   created_at: `2026-07-24T09:${String(turnIndex).padStart(2, "0")}:02.000Z`,
 });
 

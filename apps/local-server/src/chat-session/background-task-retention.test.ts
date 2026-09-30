@@ -91,8 +91,6 @@ const addSession = async (
     runtime_session_id: null,
     workspace_path: "/tmp",
     fast_mode: false,
-    default_worker_id: null,
-    default_workflow_id: null,
     pinned: false,
     settled_override: null,
     settled_at: null,
@@ -141,7 +139,6 @@ const addRun = async (
       retry_of_run_id: null,
       runtime_session_state: null,
       error_message: null,
-      delegation_runs: null,
       created_at: now,
       updated_at: now,
     })

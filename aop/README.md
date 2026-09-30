@@ -66,7 +66,7 @@ Worker seats map to the `agent` domain plus task assignment. Workers are created
 
 ### Data paths
 
-See `packages/infra/src/aop-paths.ts`: `~/.aop/aop.sqlite`, `~/.aop/repos/`, `~/.aop/worktrees/`, `~/.aop/agents/`.
+See `packages/infra/src/aop-paths.ts`: `~/.aop/projects.sqlite`, `~/.aop/repos/`, `~/.aop/worktrees/`, `~/.aop/agents/`.
 
 ## Workspace layout
 

@@ -429,7 +429,6 @@ const runningRun = (logFilePath: string, overrides: Partial<ChatRun> = {}): Chat
     runtime_session_state: null,
     error_message: null,
     pid: null,
-    delegation_runs: null,
     created_at: now,
     updated_at: now,
     ...overrides,

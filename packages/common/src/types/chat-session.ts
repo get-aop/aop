@@ -209,10 +209,6 @@ export interface UpdateChatSessionInput {
   fastMode?: boolean;
   runtimeAccessMode?: ChatRuntimeAccessMode;
   runtimeProfileId?: string;
-  /** Composer context chip: preferred worker for this session. */
-  defaultWorkerId?: string | null;
-  /** Composer context chip: preferred workflow for this session. */
-  defaultWorkflowId?: string | null;
 }
 
 /** Known propose tools that never mutate until a REST confirm. */

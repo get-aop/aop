@@ -30,8 +30,6 @@ export interface ChatSessionSummary {
   branch?: string | null;
   fastMode: boolean;
   runtimeAccessMode: ChatRuntimeAccessMode;
-  defaultWorkerId: string | null;
-  defaultWorkflowId: string | null;
   pinned: boolean;
   settledOverride: ChatSessionSettledOverride | null;
   settledAt: string | null;

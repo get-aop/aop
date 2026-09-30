@@ -57,8 +57,6 @@ export {
   DELEGATION_WAITING_THRESHOLD_MS,
   deriveDelegationViewStatus,
   formatChatDelegationKind,
-  parseChatDelegationRuns,
-  serializeChatDelegationRuns,
 } from "./types/chat-delegation.ts";
 export type {
   AopMcpMutationTool,

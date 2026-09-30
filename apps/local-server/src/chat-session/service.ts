@@ -46,7 +46,6 @@ import {
   createRuntimeProfileRepository,
   type RuntimeProfileRepository,
 } from "../runtime-profile/repository.ts";
-import { isChatMidRunMode } from "../settings/types.ts";
 import { createBackgroundTaskTracker } from "./background-task-tracker.ts";
 import { waitForChatRunTerminal } from "./chat-run-recovery.ts";
 import { processCheckpointCleanupJobs } from "./checkpoint-cleanup-service.ts";
@@ -79,6 +78,7 @@ import {
   validateChatImageAttachments,
   validateChatPastes,
 } from "./message-images.ts";
+import { isChatMidRunMode } from "./mid-run-mode.ts";
 import { type FinalizeChatRunOutcome, persistFinalizedChatRun } from "./run-finalization.ts";
 import {
   isChatRunProcessGone,
@@ -364,8 +364,6 @@ export const createChatSessionService = (
         workspace_path: workspacePath,
         fast_mode: defaults.fastMode,
         runtime_access_mode: "full-access",
-        default_worker_id: null,
-        default_workflow_id: null,
         pinned: false,
         settled_override: null,
         settled_at: null,
@@ -1188,8 +1186,6 @@ const nonRuntimeUpdateInput = (input: UpdateChatSessionInput): UpdateChatSession
   pinned: input.pinned,
   settledOverride: input.settledOverride,
   runtimeAccessMode: input.runtimeAccessMode,
-  defaultWorkerId: input.defaultWorkerId,
-  defaultWorkflowId: input.defaultWorkflowId,
 });
 
 const resolveRuntimeProfilePatch = async (
@@ -3257,8 +3253,6 @@ const toSessionDto = (
   workspacePath: session.workspace_path ?? extras.repo_path ?? aopPaths.generalChatWorkspace(),
   fastMode: toBool(session.fast_mode),
   runtimeAccessMode: session.runtime_access_mode ?? "full-access",
-  defaultWorkerId: session.default_worker_id,
-  defaultWorkflowId: session.default_workflow_id,
   pinned: toBool(session.pinned),
   settledOverride: session.settled_override,
   settledAt: session.settled_at,

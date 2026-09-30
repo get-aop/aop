@@ -5,7 +5,7 @@
  * Print SQLite database stats at a glance.
  *
  * Usage:
- *   bun scripts/db-stats.ts              # uses ~/.aop/aop.sqlite
+ *   bun scripts/db-stats.ts              # uses ~/.aop/projects.sqlite
  *   bun scripts/db-stats.ts /path/to.db  # any SQLite file
  */
 

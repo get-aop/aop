@@ -22,7 +22,7 @@ logger.info("Task {taskId} started", { taskId: "task_abc" });
 import { aopPaths } from "@aop/infra";
 
 aopPaths.home();                    // ~/.aop (or AOP_HOME)
-aopPaths.db();                      // ~/.aop/aop.sqlite
+aopPaths.db();                      // ~/.aop/projects.sqlite
 aopPaths.repoTasks(repoId);         // ~/.aop/repos/<id>/tasks/
 aopPaths.worktree(repoId, taskId);  // ~/.aop/worktrees/<id>/<taskId>/
 aopPaths.agent(agentId);            // ~/.aop/agents/<id>/

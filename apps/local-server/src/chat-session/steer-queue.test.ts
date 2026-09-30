@@ -67,8 +67,6 @@ describe("steer-queue", () => {
       runtime_session_id: null,
       runtime_configuration_id: null,
       fast_mode: false,
-      default_worker_id: null,
-      default_workflow_id: null,
       pinned: false,
       settled_override: "active",
       settled_at: "2026-01-01T00:00:00.000Z",

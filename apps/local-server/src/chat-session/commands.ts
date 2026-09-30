@@ -101,7 +101,6 @@ const handleClear = async (
     runtime_session_id: null,
     workspace_path: session.workspace_path,
     fast_mode: session.fast_mode,
-    default_workflow_id: session.default_workflow_id,
     pinned: false,
     settled_override: null,
     settled_at: null,

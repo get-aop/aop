@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aopPaths, useTestAopHome } from "@aop/infra";
 import { Hono } from "hono";
-import type { Kysely } from "kysely";
+import { type Kysely, sql } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { type AnyJson, createTestDb, createTestRepo } from "../db/test-utils.ts";
@@ -141,31 +141,9 @@ describe("repo/routes", () => {
       expect(body.repoId).toBe("repo-1");
     });
 
-    test("purges repo-owned rows and files without touching other repos", async () => {
+    test("purges repo-owned chat rows and files without touching other repos", async () => {
       await createTestRepo(db, "repo-1", "/path/to/repo-1");
       await createTestRepo(db, "repo-2", "/path/to/repo-2");
-
-      await db
-        .insertInto("channels")
-        .values({
-          id: "channel-1",
-          repo_id: "repo-1",
-          owner_agent_id: null,
-          kind: "group",
-          name: "repo-1 group",
-          artifact_path: "/tmp/channel-1",
-        })
-        .execute();
-      await db
-        .insertInto("channel_messages")
-        .values({
-          id: "message-1",
-          channel_id: "channel-1",
-          author_type: "user",
-          author_agent_id: null,
-          content: "hello",
-        })
-        .execute();
 
       await db
         .insertInto("chat_sessions")
@@ -264,64 +242,6 @@ describe("repo/routes", () => {
           status: "running",
         })
         .execute();
-      await db
-        .insertInto("scheduler_triggers")
-        .values({
-          id: "sched-1",
-          repo_id: "repo-1",
-          name: "reimport",
-          action: "re_import_tracker",
-          cadence_secs: 60,
-          enabled: true,
-          max_items_per_run: 10,
-          require_approval_before_handoff: false,
-        })
-        .execute();
-      await db
-        .insertInto("signals")
-        .values({
-          id: "sig-1",
-          repo_id: "repo-1",
-          source_task_id: null,
-          source_execution_id: null,
-          kind: "follow-up",
-          title: "Follow up",
-          body: "body",
-          provenance: "aop",
-          confidence: "medium",
-          consumed_at: null,
-          consumed_task_id: null,
-        })
-        .execute();
-      await db
-        .insertInto("scheduler_triggers")
-        .values({
-          id: "sched-2",
-          repo_id: "repo-2",
-          name: "keep",
-          action: "re_import_tracker",
-          cadence_secs: 60,
-          enabled: true,
-          max_items_per_run: 10,
-          require_approval_before_handoff: false,
-        })
-        .execute();
-      await db
-        .insertInto("signals")
-        .values({
-          id: "sig-2",
-          repo_id: "repo-2",
-          source_task_id: null,
-          source_execution_id: null,
-          kind: "docs-gap",
-          title: "Keep",
-          body: "body",
-          provenance: "aop",
-          confidence: "low",
-          consumed_at: null,
-          consumed_task_id: null,
-        })
-        .execute();
       mkdirSync(join(aopPaths.logs(), "chat-sessions", "chat-1"), { recursive: true });
       mkdirSync(join(aopPaths.logs(), "chat-sessions", "chat-1-delegate"), { recursive: true });
       mkdirSync(join(aopPaths.logs(), "chat-sessions", "chat-1-control"), { recursive: true });
@@ -343,16 +263,6 @@ describe("repo/routes", () => {
       expect(await db.selectFrom("repos").selectAll().where("id", "=", "repo-1").execute()).toEqual(
         [],
       );
-      expect(
-        await db.selectFrom("channels").selectAll().where("repo_id", "=", "repo-1").execute(),
-      ).toEqual([]);
-      expect(
-        await db
-          .selectFrom("channel_messages")
-          .selectAll()
-          .where("channel_id", "=", "channel-1")
-          .execute(),
-      ).toEqual([]);
       expect(
         await db.selectFrom("chat_sessions").selectAll().where("id", "=", "chat-1").execute(),
       ).toEqual([]);
@@ -388,26 +298,6 @@ describe("repo/routes", () => {
         "refs/aop/chat-checkpoints/chat-1/chat-run-1/after",
         "refs/aop/chat-checkpoints/chat-1/chat-run-1/before",
       ]);
-      expect(
-        await db
-          .selectFrom("scheduler_triggers")
-          .selectAll()
-          .where("repo_id", "=", "repo-1")
-          .execute(),
-      ).toEqual([]);
-      expect(
-        await db.selectFrom("signals").selectAll().where("repo_id", "=", "repo-1").execute(),
-      ).toEqual([]);
-      expect(
-        await db
-          .selectFrom("scheduler_triggers")
-          .selectAll()
-          .where("repo_id", "=", "repo-2")
-          .execute(),
-      ).toHaveLength(1);
-      expect(
-        await db.selectFrom("signals").selectAll().where("repo_id", "=", "repo-2").execute(),
-      ).toHaveLength(1);
       expect(existsSync(join(aopPaths.logs(), "chat-sessions", "chat-1"))).toBe(false);
       expect(existsSync(join(aopPaths.logs(), "chat-sessions", "chat-1-delegate"))).toBe(false);
       expect(existsSync(join(aopPaths.logs(), "chat-sessions", "chat-1-control"))).toBe(false);
@@ -426,54 +316,8 @@ describe("repo/routes", () => {
 
     test("factory-resets runtime data when removing the last repo", async () => {
       await createTestRepo(db, "repo-1", "/path/to/repo-1");
-      await ctx.settingsRepository.set(SettingKey.MAX_CONCURRENT_TASKS, "17");
-      await db
-        .insertInto("agents")
-        .values({
-          id: "agent-1",
-          name: "Demo Agent",
-          role: "developer",
-          runtime_provider: "pi",
-          provider: "pi",
-          model: "test-model",
-          workflow_id: "aop-default-gpt",
-          status: "active",
-          artifact_path: aopPaths.agent("agent-1"),
-          source_kind: "manual",
-        })
-        .execute();
-      await db
-        .insertInto("scheduler_triggers")
-        .values({
-          id: "sched-last",
-          repo_id: "repo-1",
-          name: "reimport",
-          action: "re_import_tracker",
-          cadence_secs: 60,
-          enabled: true,
-          max_items_per_run: 10,
-          require_approval_before_handoff: false,
-        })
-        .execute();
-      await db
-        .insertInto("signals")
-        .values({
-          id: "sig-last",
-          repo_id: "repo-1",
-          source_task_id: null,
-          source_execution_id: null,
-          kind: "follow-up",
-          title: "Last signal",
-          body: "body",
-          provenance: "aop",
-          confidence: "high",
-          consumed_at: null,
-          consumed_task_id: null,
-        })
-        .execute();
-      mkdirSync(aopPaths.agents(), { recursive: true });
+      await ctx.settingsRepository.set(SettingKey.CHAT_GLOBAL_INSTRUCTIONS, "17");
       mkdirSync(aopPaths.logs(), { recursive: true });
-      writeFileSync(join(aopPaths.agents(), "artifact.txt"), "agent");
       writeFileSync(join(aopPaths.logs(), "local-server.log"), "log");
 
       const res = await app.request("/api/repos/repo-1", { method: "DELETE" });
@@ -482,18 +326,17 @@ describe("repo/routes", () => {
       expect(res.status).toBe(200);
       expect(body).toMatchObject({ ok: true, repoId: "repo-1", factoryReset: true });
       expect(await db.selectFrom("repos").selectAll().execute()).toEqual([]);
-      expect(await db.selectFrom("agents").selectAll().execute()).toEqual([]);
-      expect(await db.selectFrom("scheduler_triggers").selectAll().execute()).toEqual([]);
-      expect(await db.selectFrom("signals").selectAll().execute()).toEqual([]);
-      expect(await ctx.settingsRepository.get(SettingKey.MAX_CONCURRENT_TASKS)).toBe(
-        DEFAULT_SETTINGS[SettingKey.MAX_CONCURRENT_TASKS],
+      expect(await ctx.settingsRepository.get(SettingKey.CHAT_GLOBAL_INSTRUCTIONS)).toBe(
+        DEFAULT_SETTINGS[SettingKey.CHAT_GLOBAL_INSTRUCTIONS],
       );
-      expect(existsSync(join(aopPaths.agents(), "artifact.txt"))).toBe(false);
       expect(existsSync(aopPaths.logs())).toBe(true);
     });
 
     test("stops reset when checkpoint refs cannot be durably identified", async () => {
-      await ctx.settingsRepository.set(SettingKey.MAX_CONCURRENT_TASKS, "17");
+      await ctx.settingsRepository.set(SettingKey.CHAT_GLOBAL_INSTRUCTIONS, "17");
+      // A checkpoint with no run can only exist in a database edited or restored
+      // outside the app, so the test has to step around the foreign key.
+      await sql`PRAGMA foreign_keys = OFF`.execute(db);
       await db
         .insertInto("chat_run_checkpoints")
         .values({
@@ -513,11 +356,12 @@ describe("repo/routes", () => {
           after_error: null,
         })
         .execute();
+      await sql`PRAGMA foreign_keys = ON`.execute(db);
 
       const result = await resetAllRuntimeData(ctx);
 
       expect(result).toMatchObject({ success: false, error: { reason: "preflight-failed" } });
-      expect(await ctx.settingsRepository.get(SettingKey.MAX_CONCURRENT_TASKS)).toBe("17");
+      expect(await ctx.settingsRepository.get(SettingKey.CHAT_GLOBAL_INSTRUCTIONS)).toBe("17");
       expect(await db.selectFrom("chat_run_checkpoints").selectAll().execute()).toHaveLength(1);
       expect(await db.selectFrom("chat_checkpoint_cleanup_jobs").selectAll().execute()).toEqual([]);
     });

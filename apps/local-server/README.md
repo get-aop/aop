@@ -24,7 +24,7 @@ Default after install: **`http://aop.localhost:25150`** (serves dashboard static
 ┌──────────────────────────────────────────────────────────────┐
 │                 Local Server (Bun + Hono)                     │
 │  Chat sessions · Repos · Runtime configuration · MCP         │
-│  SQLite: ~/.aop/aop.sqlite                                    │
+│  SQLite: ~/.aop/projects.sqlite                                    │
 └────────────────────────────┬─────────────────────────────────┘
                              │ REST + SSE
                     ┌────────┴────────┐
@@ -63,7 +63,7 @@ Registered in `src/app.ts`:
 | `AOP_LINEAR_CLIENT_ID`, … | Integration fallbacks |
 | `AOP_CHECKOUT_PRO_URL`, `AOP_CHECKOUT_TEAM_URL` | Optional checkout links shown in Settings → License |
 
-Paths: `@aop/infra` `aopPaths` — DB `aop.sqlite`, tasks under `repos/<id>/tasks/`, worktrees under `worktrees/<id>/`.
+Paths: `@aop/infra` `aopPaths` — DB `projects.sqlite`, tasks under `repos/<id>/tasks/`, worktrees under `worktrees/<id>/`.
 
 ## Source layout
 

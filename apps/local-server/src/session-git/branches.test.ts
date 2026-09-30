@@ -121,8 +121,6 @@ const createFixture = async () => {
     pinned: false,
     settled_override: null,
     settled_at: null,
-    default_worker_id: null,
-    default_workflow_id: null,
     workspace_path: null,
     created_at: now,
     updated_at: now,

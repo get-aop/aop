@@ -73,41 +73,6 @@ export const deriveDelegationViewStatus = (
   return run.activity ? "working" : "starting";
 };
 
-export const parseChatDelegationRuns = (raw: string | null): ChatDelegationRun[] => {
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isChatDelegationRun);
-  } catch {
-    return [];
-  }
-};
-
-/** Empty lists serialize to null so the column stays clean for plain turns. */
-export const serializeChatDelegationRuns = (runs: ChatDelegationRun[]): string | null =>
-  runs.length === 0 ? null : JSON.stringify(runs);
-
-const isChatDelegationKind = (value: unknown): value is ChatDelegationKind =>
-  value === "delegation" || value === "quick-action" || value === "background-task";
-
-const isChatDelegationRun = (value: unknown): value is ChatDelegationRun => {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.id === "string" &&
-    isChatDelegationKind(candidate.kind) &&
-    typeof candidate.label === "string" &&
-    typeof candidate.runtime === "string" &&
-    typeof candidate.model === "string" &&
-    typeof candidate.startedAt === "string" &&
-    (candidate.status === "active" ||
-      candidate.status === "completed" ||
-      candidate.status === "failed" ||
-      candidate.status === "cancelled")
-  );
-};
-
 /** Human-facing kind label for cards and detail panels. */
 export const formatChatDelegationKind = (kind: ChatDelegationKind): string => {
   switch (kind) {

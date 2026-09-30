@@ -12,7 +12,7 @@ describe("buildIsolatedDesktopDevPlan", () => {
     expect(plan.localServerPort).toBe(25360);
     expect(plan.dashboardPort).toBe(25370);
     expect(plan.aopHome).toBe(join("/Users/tester", ".aop-local-dev", "desktop-app"));
-    expect(plan.dbPath).toBe(join(plan.aopHome, "aop.sqlite"));
+    expect(plan.dbPath).toBe(join(plan.aopHome, "projects.sqlite"));
     expect(plan.wrapperPath).toBe(join(plan.aopHome, "bin", "aop-dev-sidecar"));
     expect(plan.env.AOP_DESKTOP_SIDECAR_PATH).toBe(plan.wrapperPath);
     expect(plan.env.AOP_DESKTOP_LOCAL_SERVER_PORT).toBe("25360");

@@ -98,11 +98,11 @@ interface HostRunRef {
 }
 
 const lastActivityWriteAt = new Map<string, number>();
-/** Serialize JSON RMW on chat_runs.delegation_runs per host run (single-process). */
+/** Serializes read-modify-write of one host run's delegation rows (single-process). */
 const hostDelegationLocks = new Map<string, Promise<void>>();
 
 /**
- * Mutual exclusion for all writers of one host run's delegation_runs blob.
+ * Mutual exclusion for all writers of one host run's delegation rows.
  * Prevents note/finish/start races from resurrecting terminal entries as active.
  */
 export const withHostDelegationLock = async <T>(

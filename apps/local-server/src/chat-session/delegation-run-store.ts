@@ -8,8 +8,7 @@ import type {
 
 /**
  * Row-level storage for delegation runs (one row per specialist run, owned by
- * a host chat run). Replaces the legacy JSON blob on chat_runs.delegation_runs
- * so progress writes touch one row instead of rewriting the whole array.
+ * a host chat run), so progress writes touch one row instead of rewriting a list.
  */
 export const listDelegationRuns = async (
   db: Kysely<Database>,
