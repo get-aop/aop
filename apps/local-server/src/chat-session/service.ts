@@ -5,8 +5,6 @@ import {
   type ChatAbortDisposition,
   type ChatActionPayload,
   type ChatDocumentAttachment,
-  type ChatRuntimeActionIntent,
-  type ChatRuntimeActionSelection,
   type ChatSessionLifecycle,
   type ChatSessionSettledOverride,
   type ChatSessionSummary,
@@ -87,7 +85,6 @@ import {
   recordChatRunPid,
   stopOrphanedChatRunProcess,
 } from "./run-process.ts";
-import { formatRuntimeActionReports, runRuntimeActionPlan } from "./runtime-action-runner.ts";
 import {
   allocateFreshRuntimeSession,
   persistActiveRuntimeSession,
@@ -282,7 +279,6 @@ export type SendChatMessageResult =
         | { code: "INVALID_IMAGES"; message: string }
         | { code: "INVALID_DOCUMENTS"; message: string }
         | { code: "RUNTIME_CONFIGURATION_NOT_FOUND" }
-        | { code: "INVALID_ORCHESTRATION"; message: string }
         | { code: "TOOL_INTERRUPT_CONFIRMATION_REQUIRED" }
         | { code: "RUN_IN_PROGRESS" };
     };
@@ -295,7 +291,6 @@ export interface SendChatMessageInput {
   pastes?: unknown;
   midRunMode?: unknown;
   confirmToolInterrupt?: unknown;
-  runtimeActions?: unknown;
 }
 
 export interface ChatSessionServiceDeps {
@@ -559,7 +554,7 @@ export const createChatSessionService = (
       ctx.sessionMutationLock.assertAllowed("send", { sessionId });
       // Mid-run: accept the user message now (queue or interrupt+steer per setting).
       if (await isChatSessionBusy(ctx, sessionId, pendingSessionReplies)) {
-        return acceptMidRunMessage(ctx, runtimeConfigurations, sessionId, input, deps);
+        return acceptMidRunMessage(ctx, sessionId, input, deps);
       }
       return acceptIdleSessionMessage(ctx, runtimeConfigurations, sessionId, input, deps);
     },
@@ -914,18 +909,11 @@ const readSessionGitLocation = async (
 
 const acceptMidRunMessage = async (
   ctx: LocalServerContext,
-  runtimeConfigurations: RuntimeConfigurationRepository,
   sessionId: string,
   input: SendChatMessageInput,
   deps: ChatSessionServiceDeps,
 ): Promise<SendChatMessageResult> => {
-  const stored = await storeValidatedMidRunMessage(
-    ctx,
-    runtimeConfigurations,
-    sessionId,
-    input,
-    "queued",
-  );
+  const stored = await storeValidatedMidRunMessage(ctx, sessionId, input, "queued");
   if (!stored.success) return stored;
 
   // Slash commands never wait on an LLM — execute immediately even mid-run.
@@ -955,21 +943,13 @@ const acceptMidRunMessage = async (
 
 const storeValidatedMidRunMessage = async (
   ctx: LocalServerContext,
-  runtimeConfigurations: RuntimeConfigurationRepository,
   sessionId: string,
   input: SendChatMessageInput,
   disposition: "queued" | "steered",
 ) => {
   const session = await ctx.chatSessionRepository.getById(sessionId);
   if (!session) return { success: false as const, error: { code: "SESSION_NOT_FOUND" as const } };
-  const orchestration = await resolveMessageOrchestration(runtimeConfigurations, input);
-  if (!orchestration.success) return orchestration;
-  return storeSteerUserMessage(
-    ctx,
-    sessionId,
-    { ...input, action: orchestration.action },
-    disposition,
-  );
+  return storeSteerUserMessage(ctx, sessionId, { ...input, action: null }, disposition);
 };
 
 /**
@@ -1963,134 +1943,6 @@ const validateSendContent = (
     : { success: false, error: { code: "INVALID_CONTENT" } };
 };
 
-const CHAT_RUNTIME_ACTION_INTENTS = new Set<ChatRuntimeActionIntent>([
-  "implement",
-  "review",
-  "audit",
-  "test",
-  "security",
-]);
-
-const resolveMessageOrchestration = async (
-  configurations: RuntimeConfigurationRepository,
-  input: SendChatMessageInput,
-): Promise<
-  | { success: true; action: ChatActionPayload | null }
-  | Extract<SendChatMessageResult, { success: false }>
-> => {
-  const hasRuntimeActions = Array.isArray(input.runtimeActions) && input.runtimeActions.length > 0;
-  if (!hasRuntimeActions) return { success: true, action: null };
-  const content = typeof input.content === "string" ? input.content : "";
-  if (hasLegacyOrchestrationMarker(content)) {
-    return {
-      success: false,
-      error: { code: "INVALID_ORCHESTRATION", message: "Choose one orchestration mode" },
-    };
-  }
-
-  return resolveRuntimeActions(configurations, input.runtimeActions as unknown[]);
-};
-
-const hasLegacyOrchestrationMarker = (content: string): boolean => {
-  const delegation = parseRuntimeDelegation(content);
-  const control = parseControlCommand(content);
-  return (
-    Boolean(delegation && !("error" in delegation)) || Boolean(control && "command" in control)
-  );
-};
-
-const resolveRuntimeActions = async (
-  configurations: RuntimeConfigurationRepository,
-  rawActions: unknown[],
-): Promise<
-  { success: true; action: ChatActionPayload } | Extract<SendChatMessageResult, { success: false }>
-> => {
-  const providers = await configurations.list();
-  const normalized: ChatRuntimeActionSelection[] = [];
-  const combinations = new Set<string>();
-  for (const raw of rawActions) {
-    const action = normalizeRuntimeAction(raw, providers);
-    if (!action) return invalidRuntimeActions();
-    const key = runtimeActionKey(action);
-    if (combinations.has(key)) return invalidRuntimeActions();
-    combinations.add(key);
-    normalized.push(action);
-  }
-  if (normalized.filter((action) => action.phase === "writer").length > 1) {
-    return invalidRuntimeActions();
-  }
-  normalized.sort((left, right) =>
-    left.phase === right.phase ? 0 : left.phase === "writer" ? -1 : 1,
-  );
-  return {
-    success: true,
-    action: {
-      type: "runtime-actions",
-      label: "Runtime actions",
-      sub: normalized
-        .map((action) => `${action.runtimeConfigurationName ?? action.provider} ${action.intent}`)
-        .join(" · "),
-      meta: `${normalized.length} actions`,
-      status: "live",
-      proposal: { actions: normalized },
-    },
-  };
-};
-
-const normalizeRuntimeAction = (
-  raw: unknown,
-  providers: RuntimeConfigurationProvider[],
-): ChatRuntimeActionSelection | null => {
-  const candidate = runtimeActionCandidate(raw);
-  if (!candidate) return null;
-  const configuration = providers.find(
-    (provider) => provider.id === candidate.runtimeConfigurationId,
-  );
-  if (!configuration || !isWorkflowRuntimeProvider(configuration.driver)) return null;
-  const model =
-    configuration.models.find((item) => item.model === candidate.model) ??
-    getDefaultRuntimeConfigurationModel(configuration.models);
-  if (!model) return null;
-  return {
-    id: runtimeActionId(candidate.id),
-    intent: candidate.intent,
-    runtimeConfigurationId: configuration.id,
-    runtimeConfigurationName: configuration.name,
-    provider: configuration.driver,
-    model: model.model,
-    reasoning: resolveRuntimeConfigurationReasoning(
-      model.thinkingLevels,
-      candidate.reasoning,
-      model.defaultThinkingLevel,
-    ),
-    fastMode:
-      runtimeConfigurationSupportsFastMode(configuration, model.model) &&
-      candidate.fastMode === true,
-    phase: candidate.intent === "implement" ? "writer" : "post-work",
-  };
-};
-
-const runtimeActionCandidate = (
-  raw: unknown,
-): (Partial<ChatRuntimeActionSelection> & { intent: ChatRuntimeActionIntent }) | null => {
-  if (!raw || typeof raw !== "object") return null;
-  const candidate = raw as Partial<ChatRuntimeActionSelection>;
-  return candidate.intent && CHAT_RUNTIME_ACTION_INTENTS.has(candidate.intent)
-    ? (candidate as Partial<ChatRuntimeActionSelection> & { intent: ChatRuntimeActionIntent })
-    : null;
-};
-
-const runtimeActionId = (candidateId: unknown): string =>
-  typeof candidateId === "string" && candidateId ? candidateId : randomUUID();
-
-const runtimeActionKey = (action: ChatRuntimeActionSelection): string =>
-  `${action.intent}:${action.runtimeConfigurationId}:${action.model}:${action.reasoning}:${action.fastMode}`;
-
-const invalidRuntimeActions = (): Extract<SendChatMessageResult, { success: false }> => ({
-  success: false,
-  error: { code: "INVALID_ORCHESTRATION", message: "Runtime actions are invalid" },
-});
-
 type PreparedSendResult =
   | {
       success: true;
@@ -2133,20 +1985,13 @@ const prepareSend = async (
   const sendInput = validatePreparedSendInput(sessionId, input);
   if (!sendInput.success) return sendInput;
 
-  const orchestration = await resolveMessageOrchestration(runtimeConfigurations, input);
-  if (!orchestration.success) return orchestration;
-
-  return prepareRuntimeSend(ctx, session, sendInput, orchestration);
+  return prepareRuntimeSend(ctx, session, sendInput);
 };
 
 const prepareRuntimeSend = async (
   ctx: LocalServerContext,
   session: ChatSession,
   sendInput: Extract<Awaited<ReturnType<typeof validatePreparedSendInput>>, { success: true }>,
-  orchestration: Extract<
-    Awaited<ReturnType<typeof resolveMessageOrchestration>>,
-    { success: true }
-  >,
 ): Promise<PreparedSendResult> => {
   const { text, images, documents, pastes, displayText } = sendInput;
   const sessionId = session.id;
@@ -2196,7 +2041,7 @@ const prepareRuntimeSend = async (
       allocatedSessionId,
       timeoutPolicy: timeoutPolicy.policyName,
       now,
-      action: orchestration.action,
+      action: null,
     });
   } catch (error) {
     if (isActiveChatRunConflict(error)) {
@@ -2559,10 +2404,6 @@ type RuntimeReplyInput = {
 const runRuntimeReply = async (input: RuntimeReplyInput) => {
   const { ctx, session, runtimePrompt } = input;
   const currentUserText = await loadCurrentUserText(ctx, input.userMessageId);
-  const runtimeActions = await loadCurrentRuntimeActions(ctx, input.userMessageId);
-  if (runtimeActions.length > 0) {
-    return runStructuredRuntimeActions(input, currentUserText, runtimeActions);
-  }
   const runtimeDelegation = parseRuntimeDelegation(currentUserText);
   const delegatedResult = await handleRuntimeDelegation(input, runtimeDelegation);
   if (delegatedResult) return delegatedResult;
@@ -2585,53 +2426,6 @@ const runRuntimeReply = async (input: RuntimeReplyInput) => {
   if (controlled) return controlled;
 
   return runMainRuntimeReply(input, repoPath ?? "", allowedDirectories, runtimePrompt);
-};
-
-const runStructuredRuntimeActions = async (
-  input: RuntimeReplyInput,
-  request: string,
-  actions: ChatRuntimeActionSelection[],
-): Promise<RuntimeRunResult> => {
-  const repoPath = (await resolveSessionWorkspace(input.ctx, input.session)) ?? "";
-  const hasWriterAction = actions.some((action) => action.phase === "writer");
-  return runRuntimeActionPlan({
-    ctx: input.ctx,
-    session: input.session,
-    request,
-    repoPath,
-    actions,
-    createProviderFn: input.createProviderFn,
-    chatRun: input.chatRun,
-    registration: input.registration,
-    consolidate: (main, reports) =>
-      runMainRuntimeReply(
-        {
-          ...input,
-          session:
-            main.runtimeSessionId && !hasWriterAction
-              ? { ...input.session, runtime_session_id: main.runtimeSessionId }
-              : input.session,
-        },
-        repoPath,
-        undefined,
-        formatRuntimeActionReports(main, reports, hasWriterAction),
-      ),
-  });
-};
-
-const loadCurrentRuntimeActions = async (
-  ctx: LocalServerContext,
-  userMessageId: string,
-): Promise<ChatRuntimeActionSelection[]> => {
-  const message = await ctx.db
-    .selectFrom("chat_messages")
-    .select("action")
-    .where("id", "=", userMessageId)
-    .executeTakeFirst();
-  const action = parseAction(message?.action ?? null);
-  return action?.type === "runtime-actions"
-    ? ((action.proposal as import("@aop/common").RuntimeActionsFields | undefined)?.actions ?? [])
-    : [];
 };
 
 const runControlRequestIfPresent = async (

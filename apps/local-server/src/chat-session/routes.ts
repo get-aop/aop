@@ -213,7 +213,6 @@ export const createChatSessionRoutes = (
         pastes?: unknown;
         midRunMode?: unknown;
         confirmToolInterrupt?: unknown;
-        runtimeActions?: unknown;
       }>()
       .catch(
         () =>
@@ -224,7 +223,6 @@ export const createChatSessionRoutes = (
             pastes?: unknown;
             midRunMode?: unknown;
             confirmToolInterrupt?: unknown;
-            runtimeActions?: unknown;
           },
       );
     const result = await service.sendMessage(c.req.param("sessionId"), {
@@ -234,7 +232,6 @@ export const createChatSessionRoutes = (
       pastes: body.pastes,
       midRunMode: body.midRunMode,
       confirmToolInterrupt: body.confirmToolInterrupt,
-      runtimeActions: body.runtimeActions,
     });
     if (!result.success) {
       return mapSendError(c, result);
@@ -453,8 +450,6 @@ const mapSendError = (c: Context, result: Extract<SendChatMessageResult, { succe
       return c.json({ error: result.error.message }, 400);
     case "RUNTIME_CONFIGURATION_NOT_FOUND":
       return c.json({ error: "Runtime configuration not found" }, 404);
-    case "INVALID_ORCHESTRATION":
-      return c.json({ error: result.error.message }, 400);
     case "RUN_IN_PROGRESS":
       return c.json({ error: "A run is already in progress for this session" }, 409);
   }

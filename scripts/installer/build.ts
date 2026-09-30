@@ -21,7 +21,6 @@ type Target = (typeof TARGETS)[number];
 const RELEASE_DIR = "./dist/release";
 const ENTRYPOINT = "./scripts/installer/entrypoint.ts";
 const DASHBOARD_DIST = "./apps/dashboard/dist";
-const PROMPTS_DIR = "./apps/local-server/src/prompts";
 const RUNTIME_ASSETS_DIR = join(RELEASE_DIR, "runtime-assets");
 const RUNTIME_ASSETS_ARCHIVE = "runtime-assets.tar.gz";
 
@@ -58,17 +57,6 @@ const archiveRuntimeAssets = async (): Promise<string> => {
   await mkdir(RUNTIME_ASSETS_DIR, { recursive: true });
 
   cpSync(DASHBOARD_DIST, join(RUNTIME_ASSETS_DIR, "dashboard"), { recursive: true });
-  cpSync(join(PROMPTS_DIR, "templates"), join(RUNTIME_ASSETS_DIR, "templates"), {
-    recursive: true,
-  });
-  cpSync(join(PROMPTS_DIR, "methodology"), join(RUNTIME_ASSETS_DIR, "methodology"), {
-    recursive: true,
-  });
-  // Bundled skills were removed; keep copy optional so older trees still package if present.
-  const skillsDir = join(PROMPTS_DIR, "skills");
-  if (existsSync(skillsDir)) {
-    cpSync(skillsDir, join(RUNTIME_ASSETS_DIR, "skills"), { recursive: true });
-  }
 
   const archivePath = join(RELEASE_DIR, RUNTIME_ASSETS_ARCHIVE);
   const result = await Bun.$`tar -czf ${archivePath} -C ${RUNTIME_ASSETS_DIR} .`.quiet();

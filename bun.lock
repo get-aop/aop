@@ -95,7 +95,6 @@
         "@aop/infra": "workspace:*",
         "@aop/llm-provider": "workspace:*",
         "@hono/otel": "^1.1.2",
-        "handlebars": "^4.7.9",
         "hono": "^4.13.0",
         "kysely": "^0.29.4",
         "kysely-bun-sqlite": "^0.4.0",

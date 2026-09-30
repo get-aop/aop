@@ -10,9 +10,9 @@ import {
   imageAttachmentMarker,
 } from "@aop/common";
 import { aopPaths } from "@aop/infra";
-import { AOP_PLATFORM_INSTRUCTIONS } from "../prompts/platform-instructions.ts";
 import { SettingKey } from "../settings/types.ts";
 import { expandStoredPastes, type StoredChatPaste } from "./message-pastes.ts";
+import { AOP_PLATFORM_INSTRUCTIONS } from "./platform-instructions.ts";
 
 export type { StoredChatPaste } from "./message-pastes.ts";
 export { expandStoredPastes, validateChatPastes } from "./message-pastes.ts";

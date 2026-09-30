@@ -4,7 +4,6 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
 import type { LocalServerContext } from "./context.ts";
-import { createCreateTaskRoutes } from "./create-task/routes.ts";
 import { createEventsSSEHandler } from "./events/index.ts";
 import { createExecHostRoutes } from "./exec-hosts/routes.ts";
 import {
@@ -137,7 +136,6 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/exec-hosts", createExecHostRoutes(ctx));
   app.route("/api/runtime-profiles", createRuntimeProfileRoutes(ctx));
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
-  app.route("/api/create-task", createCreateTaskRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/updates", createUpdateRoutes());
 

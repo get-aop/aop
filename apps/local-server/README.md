@@ -23,7 +23,7 @@ Default after install: **`http://aop.localhost:25150`** (serves dashboard static
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                 Local Server (Bun + Hono)                     │
-│  Orchestrator · Executor · Workflow engine · Integrations    │
+│  Chat sessions · Repos · Runtime configuration · MCP         │
 │  SQLite: ~/.aop/aop.sqlite                                    │
 └────────────────────────────┬─────────────────────────────────┘
                              │ REST + SSE
@@ -40,26 +40,17 @@ Registered in `src/app.ts`:
 
 | Prefix | Domain |
 |--------|--------|
-| `/api/health` | Liveness, orchestrator subsystem status |
-| `/api/status`, `/api/refresh` | Capacity, repos, tasks; manual reconcile |
+| `/api/health` | Liveness |
+| `/api/status` | Registered repos and summaries |
+| `/api/chat-sessions` | Chat sessions, messages, runs, session git |
 | `/api/repos` | Register/remove repositories |
-| `/api/tasks/resolve/:identifier` | Resolve task by id, name, or index |
-| `/api/events` | SSE dashboard feed |
-| `/api/executions/:id/logs` | SSE step log stream |
-| `/api/executions/:id/runtime-events` | Sanitized runtime event timeline |
-| `/api/agents` | Worker profiles (`POST /workers`, list, archive; legacy Hermes import under `/hermes/*`) |
-| `/api/agent-memory` | Memory search for workers |
-| `/api/channels` | Private/group worker chat |
-| `/api/workflows` | Workflow + step-block CRUD |
-| `/api/create-task` | Guided task creation |
-| `/api/run-task` | Scaffold task docs by name |
 | `/api/settings` | Key/value settings |
-| `/api/linear`, `/api/jira`, `/api/github` | Integrations |
-| `/api/metrics` | Aggregated task metrics |
-| `/api/sessions` | Interactive session hooks |
+| `/api/runtime-profiles`, `/api/runtime-configuration` | Runtime catalog and per-runtime configuration |
+| `/api/mcp` | MCP server configuration |
+| `/api/exec-hosts` | Exec hosts |
 | `/api/fs` | Directory browse for settings UI |
-
-Task routes are mounted under repo handlers; see `repo/routes` and `task/routes`.
+| `/api/updates` | Self-update |
+| `/api/open-external` | Open a URL or path on the host |
 
 ## Environment
 
@@ -74,46 +65,18 @@ Task routes are mounted under repo handlers; see `repo/routes` and `task/routes`
 
 Paths: `@aop/infra` `aopPaths` — DB `aop.sqlite`, tasks under `repos/<id>/tasks/`, worktrees under `worktrees/<id>/`.
 
-## Task lifecycle
-
-```text
-DRAFT → READY → WORKING → DONE
-              ↓
-    PAUSED / RESUMING / BLOCKED / REMOVED
-```
-
-Task *content* lives under `~/.aop/repos/<repo-id>/tasks/<slug>/`. Legacy repo-local `docs/tasks/` is discovered only when `discover_legacy_repo_tasks` is enabled (default off).
-
-## Workflows
-
-- Catalog: `workflow-engine/built-in-workflows.ts` (`aop-default-gpt`, …)
-- Runtime: `workflow/service.ts`, `workflow-engine/workflow-state-machine.ts`
-- Prompts: `prompts/templates/*.md.hbs`, methodology under `prompts/methodology/`
-- Queue processor: claims Ready tasks, starts worker workflows, and advances transitions without requiring manual CLI skill chaining
-
-### Engine internals
-
-- `workflow-engine/workflow-state-machine.ts` evaluates the next transition for a completed step: failure status first (a failed step's signal is treated as unreliable), then signal match, then `__none__`, then status match; no match resolves to blocked. Loop caps use `maxIterations` with `onMaxIterations` overflow targets.
-- `workflow-engine/built-in-workflows.ts` is the typed catalog, validated at module load and seeded lazily into SQLite (`workflow/sync.ts`); user-edited rows win over built-ins, and `aop-default-gpt` definitions are migrated at read time (`workflow-engine/aop-default-gpt-migrations.ts`). The YAML loader (`workflow-loader.ts`) is legacy import/testing compatibility only.
-- `workflow-engine/step-command-generator.ts` turns a step into the executor command payload, including the per-step `agent` override; `prompts/template-loader.ts` resolves the step's prompt template.
-- Execution flow: the queue processor claims a READY task by setting it WORKING, the executor creates the git worktree and spawns the provider CLI detached (it survives server restarts), the log flusher copies JSONL output into `step_logs` every 10s and triggers runtime-event projection, and on completion the executor detects success/failure plus an optional signal, completes the step through `workflow/service.ts`, and launches the next step in-process.
-- Recovery on startup classifies running steps: reattach to a live agent process (claude/codex command lines), infer the outcome from the JSONL log when the process is gone, or reset the task to READY when neither exists.
-
 ## Source layout
 
 ```text
 src/
-  app.ts, run.ts, context.ts
-  orchestrator/       watcher, queue, capacity
-  executor/           worktrees, agents, logs
-  task/, repo/        backlog
-  agent/, channel/, worker-memory/
-  workflow/, workflow-engine/
-  create-task/, run-task/
-  integrations/       linear, jira, github
+  app.ts, run.ts, server.ts, context.ts, config.ts
+  chat-session/       chat sessions, runs, delegation
+  repo/, session-git/ repo registration, git state
+  process/            process supervision
+  runtime-configuration/, runtime-profile/, providers/
   events/             SSE + log tailing
-  prompts/            templates + methodology
-  settings/, health/, session/
+  exec-hosts/, github-cli/, mcp/, security/, updates/
+  settings/, health/, db/, fs/
 ```
 
 ## Scripts

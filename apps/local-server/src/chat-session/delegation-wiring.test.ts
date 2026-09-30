@@ -199,48 +199,6 @@ describe("delegation wiring", () => {
     await teardown(db);
   });
 
-  test("quick actions record writer and post-work specialists", async () => {
-    const { db, app, session } = await setupScenario(() => fixtureProvider());
-
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: "Implement the parser fix and review it",
-        runtimeActions: [
-          {
-            intent: "implement",
-            runtimeConfigurationId: "codex-cli",
-            model: "gpt-5.5",
-            reasoning: "high",
-            fastMode: false,
-          },
-          {
-            intent: "review",
-            runtimeConfigurationId: "pi",
-            model: "openai-codex/gpt-5.5",
-            reasoning: "medium",
-            fastMode: false,
-          },
-        ],
-      }),
-    });
-    await waitForPendingChatReplies();
-
-    const entries = await delegationEntries(db, session.id);
-    expect(entries).toHaveLength(2);
-    const writer = entries.find(
-      (entry) => entry.kind === "quick-action" && entry.label === "Implement",
-    );
-    const reviewer = entries.find(
-      (entry) => entry.kind === "quick-action" && entry.label === "Review",
-    );
-    expect(writer).toMatchObject({ runtime: "codex-cli", model: "gpt-5.5", status: "completed" });
-    expect(reviewer).toMatchObject({ runtime: "pi", status: "completed" });
-
-    await teardown(db);
-  });
-
   test("progress relay republishes throttled delegation output and records activity", async () => {
     const db = await createTestDb();
     const ctx = createCommandContext(db);
