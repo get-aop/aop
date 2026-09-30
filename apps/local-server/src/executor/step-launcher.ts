@@ -13,18 +13,16 @@ import {
   CodexCliProvider,
   createProvider,
   getOpenClawRawLogPaths,
-  inferRunOutcomeFromRawJsonl,
   type LLMProvider,
-  parseRawJsonlContent,
   type RunIsolation,
   type RunResult,
-  sanitizeSessionId,
 } from "@aop/llm-provider";
 import type { LocalServerContext } from "../context.ts";
 import type { Task } from "../db/schema.ts";
 import { createExecHostsService } from "../exec-hosts/service.ts";
+import { pollForProcessExit } from "../process/liveness.ts";
+import { readRunResultFromLog as readRunResultFromLogFile, runAndReap } from "../process/reaper.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
-import { isAgentRunning } from "./process-utils.ts";
 import type { ExecutorContext, StepWithTask } from "./types.ts";
 
 const logger = getLogger("executor");
@@ -51,59 +49,10 @@ export type HandleAgentCompletionFn = (
   signals: SignalDefinition[],
 ) => Promise<void>;
 
-export const REAPER_POLL_INTERVAL_MS = 2000;
-const PROVIDER_RUN_GRACE_MS = 1500;
-
-/** Reads JSONL log file and infers process outcome from shared log semantics. */
+/** Reads the step's JSONL log (rebuilt from OpenClaw's raw output when needed). */
 export const readRunResultFromLog = (logFile: string): RunResult => {
-  if (!existsSync(logFile) && !recoverOpenClawLog(logFile)) {
-    return { exitCode: 1 };
-  }
-
-  const content = readFileSync(logFile, "utf-8");
-  const inferred = inferRunOutcomeFromRawJsonl(content, { requireCompleteLine: true });
-  const result: RunResult = {
-    exitCode: inferred.outcome === "success" ? 0 : 1,
-  };
-  const sessionId = sanitizeSessionId(readSessionIdFromRawJsonl(content));
-  if (sessionId) {
-    result.sessionId = sessionId;
-  }
-  return result;
-};
-
-const readSessionIdFromRawJsonl = (content: string): string | undefined => {
-  let sessionId: string | undefined;
-
-  for (const entry of parseRawJsonlContent(content).entries) {
-    const nextSessionId = findSessionId(entry.event);
-    if (nextSessionId) {
-      sessionId = nextSessionId;
-    }
-  }
-
-  return sessionId;
-};
-
-const findSessionId = (value: unknown): string | undefined => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-
-  const record = value as Record<string, unknown>;
-  const directSessionId = record.session_id ?? record.sessionId;
-  if (typeof directSessionId === "string" && directSessionId.length > 0) {
-    return directSessionId;
-  }
-
-  for (const nestedValue of Object.values(record)) {
-    const nestedSessionId = findSessionId(nestedValue);
-    if (nestedSessionId) {
-      return nestedSessionId;
-    }
-  }
-
-  return undefined;
+  if (!existsSync(logFile)) recoverOpenClawLog(logFile);
+  return readRunResultFromLogFile(logFile);
 };
 
 const readOptionalTextFile = (path: string): string => {
@@ -302,7 +251,7 @@ export const spawnAgentWithReaper = async (
   // Agents are spawned as detached + unref'd processes so they survive server restarts.
   // provider.run() awaits proc.exited which may never resolve for unref'd processes.
   // We race two completion paths: provider resolution vs PID polling.
-  const runResult = await spawnAndReap(ctx, provider, logFile, {
+  const runResult = await spawnStepAgent(ctx, provider, logFile, {
     prompt,
     cwd: executorCtx.worktreePath,
     logFilePath: logFile,
@@ -322,23 +271,6 @@ export const spawnAgentWithReaper = async (
   });
 
   return onCompletion(opts, logFile, runResult, signals);
-};
-
-/** Polls until the process is no longer running (exited or zombie). */
-export const pollForProcessExit = (pid: number): Promise<void> => {
-  return new Promise((resolve) => {
-    if (!isAgentRunning(pid)) {
-      resolve();
-      return;
-    }
-
-    const interval = setInterval(() => {
-      if (!isAgentRunning(pid)) {
-        clearInterval(interval);
-        resolve();
-      }
-    }, REAPER_POLL_INTERVAL_MS);
-  });
 };
 
 /**
@@ -470,39 +402,16 @@ const preflightExecHost = async (host: ExecHost, config: ExecHostConfig): Promis
   }
 };
 
-/**
- * Spawns the agent and waits for completion via whichever path resolves first:
- * - Path A: provider.run() resolves (proc.exited works, or mock provider)
- * - Path B: PID polling detects process exit/zombie (primary path for detached+unref agents)
- */
-const spawnAndReap = (
+/** Spawns the step's agent and records its pid and session on the step execution. */
+const spawnStepAgent = (
   ctx: LocalServerContext,
   provider: LLMProvider,
   logFile: string,
   opts: SpawnAndReapOptions,
-): Promise<RunResult> => {
-  return new Promise<RunResult>((resolve, reject) => {
-    let settled = false;
-    let reaping = false;
-    let pollInterval: Timer | undefined;
-    let providerRunPromise: Promise<RunResult> | null = null;
-    let spawnedPid: number | null = null;
-
-    const settle = (result: RunResult) => {
-      if (settled) return;
-      settled = true;
-      if (pollInterval) clearInterval(pollInterval);
-      resolve(result);
-    };
-
-    const settleFromPollPath = async () => {
-      if (settled || reaping) return;
-      reaping = true;
-      const providerResult = await waitForProviderRun(providerRunPromise, PROVIDER_RUN_GRACE_MS);
-      settle(providerResult ?? readRunResultFromLog(logFile));
-    };
-
-    providerRunPromise = provider.run({
+): Promise<RunResult> =>
+  runAndReap(
+    provider,
+    {
       prompt: opts.prompt,
       cwd: opts.cwd,
       isolation: opts.isolation ?? "hermetic",
@@ -523,61 +432,14 @@ const spawnAndReap = (
         });
       },
       onSpawn: async (pid) => {
-        spawnedPid = pid;
         await ctx.executionRepository.updateStepExecution(opts.stepId, {
           agent_pid: pid,
         });
         ctx.logFlusher.track(opts.stepId, logFile);
         logger.info("Agent spawned with PID {pid}", { pid, stepId: opts.stepId });
-
-        // Start PID polling — the primary completion mechanism for detached agents
-        if (!isAgentRunning(pid)) {
-          void settleFromPollPath();
-          return;
-        }
-        pollInterval = setInterval(() => {
-          if (!isAgentRunning(pid)) {
-            void settleFromPollPath();
-          }
-        }, REAPER_POLL_INTERVAL_MS);
       },
       inactivityTimeoutMs: opts.inactivityTimeoutMs,
       fastMode: opts.fastMode,
-    });
-
-    providerRunPromise
-      .then((runResult) => {
-        if (!spawnedPid) {
-          settle(runResult);
-          return;
-        }
-
-        // Detached providers can resolve after writing the result line but before the
-        // agent process has actually exited. Wait for PID polling in that case so
-        // completion handlers do not remove an in-use worktree.
-        if (!isAgentRunning(spawnedPid)) {
-          settle(runResult);
-        }
-      })
-      .catch((err) => {
-        if (!settled) reject(err);
-      });
-  });
-};
-
-const waitForProviderRun = async (
-  providerRunPromise: Promise<RunResult> | null,
-  timeoutMs: number,
-): Promise<RunResult | null> => {
-  if (!providerRunPromise) return null;
-
-  const timeout = new Promise<null>((resolve) => {
-    setTimeout(() => resolve(null), timeoutMs);
-  });
-
-  try {
-    return await Promise.race([providerRunPromise, timeout]);
-  } catch {
-    return null;
-  }
-};
+    },
+    { readResultFromLog: readRunResultFromLog },
+  );

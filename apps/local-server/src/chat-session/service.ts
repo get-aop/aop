@@ -82,6 +82,11 @@ import {
   validateChatPastes,
 } from "./message-images.ts";
 import { type FinalizeChatRunOutcome, persistFinalizedChatRun } from "./run-finalization.ts";
+import {
+  isChatRunProcessGone,
+  recordChatRunPid,
+  stopOrphanedChatRunProcess,
+} from "./run-process.ts";
 import { formatRuntimeActionReports, runRuntimeActionPlan } from "./runtime-action-runner.ts";
 import {
   allocateFreshRuntimeSession,
@@ -465,8 +470,9 @@ export const createChatSessionService = (
         .executeTakeFirst();
       if (!orphanedRun) return { success: true, aborted: false, disposition: "none" };
 
-      // Durable-only recovery: do not claim OS-level kill; cancel durable state only.
+      // No live handle (the server restarted): stop the recorded CLI, then cancel the run.
       await cancelChatRunRecovery(orphanedRun.id);
+      await stopOrphanedChatRunProcess(orphanedRun, session.runtime_alias);
       await finalizeChatRunAndPublish(
         ctx,
         orphanedRun,
@@ -1415,8 +1421,10 @@ const cancelOrphanedChatRunsForPurge = async (
     .where("session_id", "=", sessionId)
     .where("status", "=", "running")
     .execute();
+  const executable = (await ctx.chatSessionRepository.getById(sessionId))?.runtime_alias ?? null;
   for (const orphanedRun of orphanedRuns) {
     await cancelChatRunRecovery(orphanedRun.id);
+    await stopOrphanedChatRunProcess(orphanedRun, executable);
     await finalizeChatRunAndPublish(
       ctx,
       orphanedRun,
@@ -1496,10 +1504,13 @@ const recoverChatRun = async (
 ): Promise<void> => {
   let activity: AssistantActivity | null = null;
   let recovered: Awaited<ReturnType<typeof waitForChatRunTerminal>>;
+  const executable =
+    (await ctx.chatSessionRepository.getById(run.session_id))?.runtime_alias ?? null;
   try {
     recovered = await waitForChatRunTerminal({
       run,
       pollIntervalMs: deps.recoveryPollIntervalMs,
+      isProcessGone: () => isChatRunProcessGone(run, executable),
       signal,
       onProgress: (progress) => {
         activity = progress;
@@ -2670,6 +2681,7 @@ const runMainRuntimeReply = async (
     onRuntimeSession: input.chatRun
       ? (sessionId) => persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId)
       : undefined,
+    onSpawn: chatRunPidRecorder(ctx, input.chatRun),
   });
   if (shouldRetrySilentGrokResume(session, run, input.chatRun)) {
     const staleRuntimeSessionId = session.runtime_session_id;
@@ -2696,6 +2708,7 @@ const runMainRuntimeReply = async (
       newSessionId: freshSessionId,
       onRuntimeSession: (sessionId) =>
         persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId),
+      onSpawn: chatRunPidRecorder(ctx, input.chatRun),
     });
   }
   if (!run.staleRuntimeSessionId || !input.chatRun) return run;
@@ -2725,8 +2738,16 @@ const runMainRuntimeReply = async (
     newSessionId: freshSessionId,
     onRuntimeSession: (sessionId) =>
       persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId),
+    onSpawn: chatRunPidRecorder(ctx, input.chatRun),
   });
 };
+
+/** The CLI writing the chat run's own log records its pid on the run. */
+const chatRunPidRecorder = (
+  ctx: LocalServerContext,
+  chatRun: ChatRun | undefined,
+): ((pid: number) => Promise<void>) | undefined =>
+  chatRun ? (pid) => recordChatRunPid(ctx, chatRun.id, pid) : undefined;
 
 const allocateReplacementGrokSession = async (
   ctx: LocalServerContext,
@@ -2861,6 +2882,7 @@ const runRuntimeDelegation = async (input: {
     onRuntimeSession: input.chatRun
       ? (sessionId) => persistActiveRuntimeSession(input.ctx, input.chatRun?.id ?? "", sessionId)
       : undefined,
+    onSpawn: chatRunPidRecorder(input.ctx, input.chatRun),
   });
 };
 

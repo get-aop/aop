@@ -39,7 +39,6 @@ import {
   createExecutionRepository,
   type ExecutionRepository,
 } from "./executor/execution-repository.ts";
-import { createLogFlusher, type LogFlusher } from "./executor/log-flusher.ts";
 import {
   createExternalIssueStore,
   type ExternalIssueStore,
@@ -62,6 +61,7 @@ import { createLinearStore, type LinearStore } from "./integrations/linear/store
 import { refreshLinearTokens } from "./integrations/linear/token-refresh.ts";
 import { createLinearTokenStore } from "./integrations/linear/token-store.ts";
 import type { LinearTokenStore } from "./integrations/linear/types.ts";
+import { createLogFlusher, type LogFlusher } from "./process/log-flusher.ts";
 import { createRepoRepository, type RepoRepository } from "./repo/repository.ts";
 import { projectRuntimeEventsForStep } from "./runtime-events/projector.ts";
 import {
@@ -211,8 +211,18 @@ export const createCommandContext = (
   let context: LocalServerContext;
   const logFlusher =
     options.logFlusher ??
-    createLogFlusher(executionRepository, {
-      afterLogsSaved: (stepExecutionId) => projectRuntimeEventsForStep(context, stepExecutionId),
+    createLogFlusher({
+      saveLines: (stepExecutionId, lines) => {
+        const createdAt = new Date().toISOString();
+        return executionRepository.saveStepLogs(
+          lines.map((content) => ({
+            step_execution_id: stepExecutionId,
+            content,
+            created_at: createdAt,
+          })),
+        );
+      },
+      afterLinesSaved: (stepExecutionId) => projectRuntimeEventsForStep(context, stepExecutionId),
     });
   const externalIssueStore = createExternalIssueStore(db);
   const linearStore = createLinearStore(externalIssueStore);

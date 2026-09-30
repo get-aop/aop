@@ -11,14 +11,14 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { LocalServerContext } from "../context.ts";
 import type { StepLog } from "../db/schema.ts";
-import { isProcessAlive as defaultIsProcessAlive } from "../executor/process-utils.ts";
+import { isProcessAlive as defaultIsProcessAlive } from "../process/liveness.ts";
 import {
   createLogReadState,
   getFileSize,
   type LogReadState,
   readAllLogLines,
   readLogLines,
-} from "./log-file-tailer.ts";
+} from "../process/log-tail.ts";
 import { createSSEStreamHelper, type SSEStreamHelper } from "./sse-stream.ts";
 
 interface StepScopedLogLine extends RenderedLogLine {

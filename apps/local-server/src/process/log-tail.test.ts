@@ -8,9 +8,9 @@ import {
   readAllLogLines,
   readLogLineCount,
   readLogLines,
-} from "./log-file-tailer.ts";
+} from "./log-tail.ts";
 
-describe("log-file-tailer", () => {
+describe("log-tail", () => {
   let testDir: string;
 
   beforeEach(() => {

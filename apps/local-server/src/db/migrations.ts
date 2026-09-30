@@ -1099,6 +1099,7 @@ const ensureChatRunContinuityColumns = async (db: Kysely<Database>): Promise<voi
     ["timeout_policy", "text"],
     ["retry_of_run_id", "text REFERENCES chat_runs(id)"],
     ["runtime_session_state", "text"],
+    ["pid", "integer"],
   ] as const;
   for (const [name, definition] of additions) {
     if (!names.has(name)) {

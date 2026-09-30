@@ -4,7 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { LLMProvider, RunOptions, RunResult } from "@aop/llm-provider";
 import type { ChatSession } from "../db/schema.ts";
-import { isProcessAlive } from "../executor/process-utils.ts";
+import { isProcessAlive } from "../process/liveness.ts";
 import {
   interruptSessionRun,
   isSessionRunActive,
@@ -40,6 +40,16 @@ const session = (overrides: Partial<ChatSession> = {}): ChatSession => ({
   updated_at: new Date().toISOString(),
   ...overrides,
 });
+
+/**
+ * Records signals sent to fake pids, and answers liveness probes (signal 0) as
+ * "no such process" so the run reaper sees the signalled CLI as gone.
+ */
+const mockSignalsToExitedProcess = () =>
+  spyOn(process, "kill").mockImplementation(((_pid: number, signal?: string | number) => {
+    if (signal === 0) throw Object.assign(new Error("kill ESRCH"), { code: "ESRCH" });
+    return true;
+  }) as typeof process.kill);
 
 describe("runSessionPrompt", () => {
   let previousMcpUrl: string | undefined;
@@ -744,7 +754,7 @@ describe("runSessionPrompt", () => {
         return providerFinished;
       },
     } as LLMProvider;
-    const kill = spyOn(process, "kill").mockImplementation(() => true);
+    const kill = mockSignalsToExitedProcess();
     const run = runSessionPrompt({
       session: session({ id: "isess_graceful_grok", runtime: "grok-build" }),
       repoPath: "/tmp/repo",
@@ -1109,7 +1119,7 @@ describe("session run lifecycle registration", () => {
         return providerFinished;
       },
     };
-    const kill = spyOn(process, "kill").mockImplementation(() => true);
+    const kill = mockSignalsToExitedProcess();
     const run = runSessionPrompt({
       session: session({ id: "isess_cancel_while_spawn" }),
       repoPath: "/tmp/repo",
@@ -1154,7 +1164,7 @@ describe("session run lifecycle registration", () => {
         return providerFinished;
       },
     };
-    const kill = spyOn(process, "kill").mockImplementation(() => true);
+    const kill = mockSignalsToExitedProcess();
 
     try {
       const run = runSessionPrompt({

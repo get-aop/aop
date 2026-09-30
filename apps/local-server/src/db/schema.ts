@@ -375,6 +375,8 @@ export interface ChatRunsTable {
   retry_of_run_id: string | null;
   runtime_session_state: ChatRuntimeSessionState | null;
   error_message: string | null;
+  /** OS pid of the detached CLI, recorded at spawn so Stop and recovery work after a server restart. */
+  pid: number | null;
   /** JSON array of ChatDelegationRun: specialists that ran inline in this turn. */
   delegation_runs: Generated<string | null>;
   created_at: Generated<string>;

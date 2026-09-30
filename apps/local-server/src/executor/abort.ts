@@ -1,5 +1,6 @@
 import { getLogger } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
+import * as liveness from "../process/liveness.ts";
 import { ExecutionStatus, StepExecutionStatus } from "./execution-types.ts";
 import * as processUtils from "./process-utils.ts";
 import { cleanupRemoteStepOnConfiguredHosts } from "./remote-workspace.ts";
@@ -103,7 +104,7 @@ const killAgentsByTaskId = async (
 };
 
 const killAgent = async (pid: number, log: ReturnType<typeof logger.with>): Promise<boolean> => {
-  if (!processUtils.isProcessAlive(pid)) {
+  if (!liveness.isProcessAlive(pid)) {
     log.debug("Agent process not alive, skipping kill", { pid });
     return false;
   }
@@ -174,7 +175,7 @@ const waitForProcessExit = (pid: number, timeoutMs: number): Promise<boolean> =>
   return new Promise((resolve) => {
     const startTime = Date.now();
     const checkInterval = setInterval(() => {
-      if (!processUtils.isProcessAlive(pid)) {
+      if (!liveness.isProcessAlive(pid)) {
         clearInterval(checkInterval);
         resolve(true);
         return;

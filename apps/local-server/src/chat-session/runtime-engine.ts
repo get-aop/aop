@@ -22,6 +22,7 @@ import {
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
 import { createAuthenticatedMcpUrl } from "../mcp/auth.ts";
 import { isMcpCapableRuntime } from "../mcp/routes.ts";
+import { runAndReap } from "../process/reaper.ts";
 import { isProviderFailureEvent } from "./provider-event-classifier.ts";
 import {
   createRuntimeSessionLineInspector,
@@ -175,6 +176,8 @@ export const runSessionPrompt = async (input: {
   onProgress?: StreamProgressListener;
   newSessionId?: string;
   onRuntimeSession?: (sessionId: string) => Promise<void> | void;
+  /** Receives the spawned CLI's pid (best effort: a failure does not stop the run). */
+  onSpawn?: (pid: number) => Promise<void> | void;
   /** Test seam; production uses CHAT_MAX_LOG_BYTES. */
   maxLogBytes?: number;
   /** Test seam; production uses CHAT_LOG_SIZE_POLL_MS. */
@@ -221,6 +224,7 @@ export const runSessionPrompt = async (input: {
       input.onProgress,
       input.newSessionId,
       input.onRuntimeSession,
+      input.onSpawn,
       handle,
       input.maxLogBytes,
       input.logSizePollMs,
@@ -389,6 +393,7 @@ const executeProviderRun = async (
   onProgress: StreamProgressListener | undefined,
   newSessionId: string | undefined,
   onRuntimeSession: ((sessionId: string) => Promise<void> | void) | undefined,
+  onSpawn: ((pid: number) => Promise<void> | void) | undefined,
   handle: ActiveRunHandle,
   maxLogBytes = CHAT_MAX_LOG_BYTES,
   logSizePollMs = CHAT_LOG_SIZE_POLL_MS,
@@ -540,6 +545,7 @@ const executeProviderRun = async (
       captureRuntimeSession,
       newSessionId,
       onNativeToolProgress,
+      onSpawn,
       getCapturedSessionId: () => capturedSessionId,
       setProviderSettled: (settled) => {
         providerSettled = settled;
@@ -592,6 +598,7 @@ const raceProviderAgainstInterrupt = async (input: {
   captureRuntimeSession: (id: string) => Promise<void>;
   newSessionId: string | undefined;
   onNativeToolProgress: (event: RunToolProgress) => void;
+  onSpawn: ((pid: number) => Promise<void> | void) | undefined;
   getCapturedSessionId: () => string | null;
   setProviderSettled: (settled: Promise<void>) => void;
   interruptPromise: Promise<RuntimeRunResult>;
@@ -607,10 +614,11 @@ const raceProviderAgainstInterrupt = async (input: {
     input.captureRuntimeSession,
     input.logFilePath,
     input.allowedDirectories,
-    (pid) => {
+    async (pid) => {
       input.handle.pid = pid;
       input.handle.resolvePid(pid);
       input.handle.phase = input.handle.owner.interrupted ? "cancelling" : "running";
+      await reportSpawnedPid(input.onSpawn, pid, input.session.id);
     },
     input.newSessionId,
     input.onNativeToolProgress,
@@ -650,7 +658,7 @@ const completeProviderRun = async (input: {
   // Snapshot while the root is alive so cleanup still finds reparented orphans.
   const controlGuard = beginControlProcessGuard(input.handle, input.options);
   try {
-    const result = await input.provider.run(input.options);
+    const result = await runAndReap(input.provider, input.options);
     return await finalizeCompletedProviderRun({ ...input, result, providerStartedAt });
   } finally {
     await controlGuard.stop();
@@ -719,6 +727,22 @@ const finalizeCompletedProviderRun = async (input: {
     sessionIdKnown: Boolean(capturedSessionId),
   });
   return interpretRunResult(input.runtime, input.result, input.logFilePath, capturedSessionId);
+};
+
+const reportSpawnedPid = async (
+  onSpawn: ((pid: number) => Promise<void> | void) | undefined,
+  pid: number,
+  sessionId: string,
+): Promise<void> => {
+  try {
+    await onSpawn?.(pid);
+  } catch (error) {
+    runtimeLogger.warn("Could not record chat runtime pid {pid} for {sessionId}: {error}", {
+      pid,
+      sessionId,
+      error: String(error),
+    });
+  }
 };
 
 const providerFailureResult = (
@@ -1011,7 +1035,7 @@ const buildRunOptions = (
   onSession: (id: string) => Promise<void> | void,
   logFilePath: string,
   allowedDirectories?: string[],
-  onSpawn?: (pid: number) => void,
+  onSpawn?: (pid: number) => Promise<void>,
   newSessionId?: string,
   onToolProgress?: (event: RunToolProgress) => void,
 ): RunOptions => {

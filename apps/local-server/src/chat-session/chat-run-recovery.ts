@@ -52,6 +52,8 @@ export interface RecoveredChatRun {
 export const waitForChatRunTerminal = async (input: {
   run: ChatRun;
   onProgress?: StreamProgressListener;
+  /** True once the run's recorded CLI process has exited (a log without an ending is final). */
+  isProcessGone?: () => boolean;
   pollIntervalMs?: number;
   startupTimeoutMs?: number;
   getNow?: () => number;
@@ -88,6 +90,7 @@ export const waitForChatRunTerminal = async (input: {
 
 const pollUntilChatRunTerminal = async (input: {
   run: ChatRun;
+  isProcessGone?: () => boolean;
   pollIntervalMs?: number;
   startupTimeoutMs?: number;
   getNow?: () => number;
@@ -106,6 +109,8 @@ const pollUntilChatRunTerminal = async (input: {
 
   while (true) {
     input.signal?.throwIfAborted();
+    // Sample before reading so a CLI that wrote its ending and exited is read in full.
+    const processGone = input.isProcessGone?.() ?? false;
     const poll = await pollRecoveryOnce({
       run: input.run,
       lastLogSignature,
@@ -122,6 +127,7 @@ const pollUntilChatRunTerminal = async (input: {
     sawOutput = poll.sawOutput;
     lastActivityAt = poll.lastActivityAt;
     if (poll.terminal) return poll.terminal;
+    if (processGone) return processExitedResult(input.run, content);
     await waitForRecoveryPoll(pollIntervalMs, input.signal);
   }
 };
@@ -350,6 +356,21 @@ const terminalResult = async (run: ChatRun, content: string): Promise<RecoveredC
 const parseActivityTime = (value: string): number => {
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? Date.now() : parsed;
+};
+
+const processExitedResult = (run: ChatRun, content: string): RecoveredChatRun => {
+  recoveryLogger.warn("Recovered chat runtime {runId} exited without a final response", {
+    runId: run.id,
+    pid: run.pid,
+  });
+  const runtimeSessionId = resolveRecoveredSessionId(run, content);
+  return {
+    status: "failed",
+    text: "The runtime process exited without a final response. Try again, or reset the runtime session.",
+    runtimeSessionId,
+    runtimeSessionState: resolveRecoveredSessionState(run, content, runtimeSessionId),
+    failureKind: null,
+  };
 };
 
 const startupTimeoutResult = (run: ChatRun, content: string): RecoveredChatRun => ({

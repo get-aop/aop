@@ -3,6 +3,7 @@ import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
+import * as liveness from "../process/liveness.ts";
 import { createTestTask } from "../task/test-utils.ts";
 import { abortTask } from "./abort.ts";
 import { ExecutionStatus, StepExecutionStatus } from "./execution-types.ts";
@@ -102,7 +103,7 @@ describe("abortTask", () => {
     const findPidSpy = spyOn(processUtils, "findPidByStepId").mockReturnValue(fakePid);
     const findPidsByTaskSpy = spyOn(processUtils, "findPidsByTaskId").mockReturnValue([]);
     let isAliveCalls = 0;
-    const isAliveSpy = spyOn(processUtils, "isProcessAlive").mockImplementation(() => {
+    const isAliveSpy = spyOn(liveness, "isProcessAlive").mockImplementation(() => {
       isAliveCalls++;
       return isAliveCalls === 1;
     });
@@ -143,7 +144,7 @@ describe("abortTask", () => {
 
     const findPidsByTaskSpy = spyOn(processUtils, "findPidsByTaskId").mockReturnValue([]);
     let isAliveCalls = 0;
-    const isAliveSpy = spyOn(processUtils, "isProcessAlive").mockImplementation(() => {
+    const isAliveSpy = spyOn(liveness, "isProcessAlive").mockImplementation(() => {
       isAliveCalls++;
       return isAliveCalls === 1;
     });
@@ -182,7 +183,7 @@ describe("abortTask", () => {
     });
 
     const findPidsByTaskSpy = spyOn(processUtils, "findPidsByTaskId").mockReturnValue([]);
-    const isAliveSpy = spyOn(processUtils, "isProcessAlive").mockReturnValue(true);
+    const isAliveSpy = spyOn(liveness, "isProcessAlive").mockReturnValue(true);
 
     const signals: string[] = [];
     const killSpy = spyOn(process, "kill").mockImplementation((_pid, signal) => {
@@ -232,7 +233,7 @@ describe("abortTask", () => {
     });
 
     const findPidsByTaskSpy = spyOn(processUtils, "findPidsByTaskId").mockReturnValue([]);
-    const isAliveSpy = spyOn(processUtils, "isProcessAlive").mockReturnValue(true);
+    const isAliveSpy = spyOn(liveness, "isProcessAlive").mockReturnValue(true);
 
     let killCount = 0;
     const killSpy = spyOn(process, "kill").mockImplementation(() => {
@@ -284,7 +285,7 @@ describe("abortTask", () => {
     });
 
     const findPidsByTaskSpy = spyOn(processUtils, "findPidsByTaskId").mockReturnValue([]);
-    const isAliveSpy = spyOn(processUtils, "isProcessAlive").mockReturnValue(true);
+    const isAliveSpy = spyOn(liveness, "isProcessAlive").mockReturnValue(true);
     const killSpy = spyOn(process, "kill").mockImplementation(() => {
       throw new Error("Permission denied");
     });
@@ -320,7 +321,7 @@ describe("abortTask", () => {
     });
 
     const findPidsByTaskSpy = spyOn(processUtils, "findPidsByTaskId").mockReturnValue([]);
-    const isAliveSpy = spyOn(processUtils, "isProcessAlive").mockReturnValue(false);
+    const isAliveSpy = spyOn(liveness, "isProcessAlive").mockReturnValue(false);
     const killSpy = spyOn(process, "kill");
 
     const result = await abortTask(ctx, "task-1");

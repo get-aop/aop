@@ -1,13 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { aopPaths } from "@aop/infra";
 import { ClaudeCodeProvider, type LLMProvider } from "@aop/llm-provider";
 import { FAKE_CLI_PATH } from "@aop/llm-provider/test-fixtures";
 import { Hono } from "hono";
 import { createCommandContext } from "../context.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
+import { isAgentProcess, isProcessAlive } from "../process/liveness.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { createChatSessionRoutes } from "./routes.ts";
 import { waitForPendingChatReplies } from "./service.ts";
@@ -123,6 +124,62 @@ const setup = async () => {
   return { db, app, session, events, detail, send, sendAndSettle, abort };
 };
 
+/** Polls until `predicate` holds; the fake and the reaper settle within a few seconds. */
+const eventually = async (predicate: () => boolean | Promise<boolean>): Promise<boolean> => {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if (await predicate()) return true;
+    await Bun.sleep(25);
+  }
+  return false;
+};
+
+/**
+ * What a server that died mid-turn leaves behind: a running chat_runs row with the
+ * CLI's pid and log, and no in-memory run handle in the server that reads it.
+ */
+const insertOrphanedRun = async (
+  db: Awaited<ReturnType<typeof setup>>["db"],
+  sessionId: string,
+  run: { id: string; pid: number; logFilePath: string },
+): Promise<void> => {
+  await db
+    .insertInto("chat_messages")
+    .values({ id: `${run.id}_user`, session_id: sessionId, role: "user", content: "long job" })
+    .execute();
+  await db
+    .insertInto("chat_runs")
+    .values({
+      id: run.id,
+      session_id: sessionId,
+      user_message_id: `${run.id}_user`,
+      assistant_message_id: `${run.id}_reply`,
+      runtime: "claude-code",
+      log_file_path: run.logFilePath,
+      status: "running",
+      pid: run.pid,
+    })
+    .execute();
+};
+
+/** Starts the fake the way the adapter does (detached, stdout to the run log), outside the engine. */
+const spawnDetachedFake = (prompt: string, logFilePath: string) => {
+  mkdirSync(dirname(logFilePath), { recursive: true });
+  const argv = new ClaudeCodeProvider().buildCommand({
+    prompt,
+    runtimeAlias: FAKE_CLI_PATH,
+    logFilePath,
+  });
+  return Bun.spawn(argv, {
+    stdout: Bun.file(logFilePath),
+    stderr: "ignore",
+    stdin: "ignore",
+    detached: true,
+  });
+};
+
+const runRow = (db: Awaited<ReturnType<typeof setup>>["db"], runId: string) =>
+  db.selectFrom("chat_runs").selectAll().where("id", "=", runId).executeTakeFirstOrThrow();
+
 const lastAssistant = (body: SessionBody): MessageRow | undefined =>
   body.messages.filter((message) => message.role === "assistant").at(-1);
 
@@ -205,6 +262,69 @@ describe("chat engine against the fake CLI", () => {
     expect(crashed.runtimeSessionId).toMatch(/^[0-9a-f-]{36}$/);
     const recovered = await sendAndSettle("try again");
     expect(lastAssistant(recovered)?.content).toContain("(resumed). You said: try again");
+    await db.destroy();
+  });
+
+  test("records the CLI's pid on the running chat run", async () => {
+    const { db, session, send, abort } = await setup();
+
+    await send("long job [fake: delay=30000]");
+    await waitForFakeInit(session.id);
+    const running = await db
+      .selectFrom("chat_runs")
+      .select(["id", "pid"])
+      .where("session_id", "=", session.id)
+      .executeTakeFirstOrThrow();
+
+    expect(running.pid).toBeGreaterThan(0);
+    const pid = running.pid ?? 0;
+    expect(isProcessAlive(pid)).toBe(true);
+    expect(isAgentProcess(pid, { executable: FAKE_CLI_PATH })).toBe(true);
+
+    await abort();
+    await waitForPendingChatReplies();
+    expect(await eventually(() => !isProcessAlive(pid))).toBe(true);
+    await db.destroy();
+  });
+
+  test("Stop after a server restart kills the orphaned CLI and cancels its run", async () => {
+    const { db, session, abort } = await setup();
+    const logFilePath = join(aopPaths.logs(), "chat-sessions", session.id, "orphan.jsonl");
+    const orphan = spawnDetachedFake("long job [fake: delay=30000]", logFilePath);
+    await insertOrphanedRun(db, session.id, { id: "crun_orphan", pid: orphan.pid, logFilePath });
+    await waitForFakeInit(session.id);
+
+    const response = await abort();
+
+    expect(await response.json()).toMatchObject({ disposition: "durable_cancelled" });
+    expect(await eventually(() => !isProcessAlive(orphan.pid))).toBe(true);
+    expect(await runRow(db, "crun_orphan")).toMatchObject({
+      status: "cancelled",
+      interruption_kind: "abort",
+    });
+    await db.destroy();
+  });
+
+  test("a restarted server fails a run whose CLI died mid-turn instead of waiting forever", async () => {
+    const { db, session } = await setup();
+    const logFilePath = join(aopPaths.logs(), "chat-sessions", session.id, "crashed.jsonl");
+    const crashed = spawnDetachedFake("break [fake: steps=2 delay=50 crash=3]", logFilePath);
+    await crashed.exited;
+    await insertOrphanedRun(db, session.id, { id: "crun_crashed", pid: crashed.pid, logFilePath });
+
+    // A new service over the same database is what a restarted server builds.
+    createChatSessionRoutes(createCommandContext(db), {
+      createProviderFn: () => fakeOnlyClaude,
+      recoveryPollIntervalMs: 20,
+    });
+    expect(
+      await eventually(async () => (await runRow(db, "crun_crashed")).status !== "running"),
+    ).toBe(true);
+
+    const run = await runRow(db, "crun_crashed");
+    expect(run.status).toBe("failed");
+    expect(run.error_message).toContain("exited without a final response");
+    await waitForPendingChatReplies();
     await db.destroy();
   });
 });

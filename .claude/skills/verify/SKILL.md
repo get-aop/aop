@@ -82,5 +82,5 @@ Kills only the two PIDs recorded for this run (process groups), deletes `home/` 
 
 | Script | Invocation |
 | --- | --- |
-| `scripts/verify-stack.ts` | `bun $S/verify-stack.ts <start\|doctor\|env\|aop\|stop> [--name run] [-- aop args]` |
+| `scripts/verify-stack.ts` | `bun $S/verify-stack.ts <start\|doctor\|env\|aop\|restart-server\|stop> [--name run] [--crash] [-- aop args]`; `restart-server --crash` SIGKILLs only the server and restarts it on the same port and DB |
 | `scripts/seed.ts` | `bun $S/seed.ts [--name run] [--fake-runtime]` after `start`; idempotent |

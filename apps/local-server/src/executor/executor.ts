@@ -43,12 +43,7 @@ export {
   populateLogBuffer,
   processAgentCompletion,
 } from "./completion-handler.ts";
-export {
-  pollForProcessExit,
-  REAPER_POLL_INTERVAL_MS,
-  readRunResultFromLog,
-  type SpawnAgentOptions,
-} from "./step-launcher.ts";
+export { readRunResultFromLog, type SpawnAgentOptions } from "./step-launcher.ts";
 export { createWorktree } from "./worktree-manager.ts";
 
 export const setupWorktreeOpenspecSymlink = (worktreePath: string, _repoId: string): void => {

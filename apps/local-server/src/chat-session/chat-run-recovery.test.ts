@@ -269,6 +269,77 @@ describe("detectChatRunTerminalState", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  test("fails a run whose recorded CLI exited without a final response", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-exited-"));
+    const logFilePath = join(dir, "exited.jsonl");
+    await writeFile(
+      logFilePath,
+      `${jsonl([
+        { type: "system", subtype: "init", session_id: "sess-exited" },
+        { type: "assistant", message: { content: [{ type: "text", text: "Working..." }] } },
+      ])}\n`,
+    );
+
+    const recovered = await waitForChatRunTerminal({
+      run: runningRun(logFilePath, { runtime: "claude-code", pid: 999_999 }),
+      isProcessGone: () => true,
+      pollIntervalMs: 5,
+      startupTimeoutMs: 10_000,
+    });
+
+    expect(recovered.status).toBe("failed");
+    expect(recovered.text).toContain("exited without a final response");
+    expect(recovered.runtimeSessionId).toBe("sess-exited");
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("still recovers the reply when the CLI wrote its ending before exiting", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-ended-"));
+    const logFilePath = join(dir, "ended.jsonl");
+    await writeFile(
+      logFilePath,
+      `${jsonl([
+        { type: "system", subtype: "init", session_id: "sess-ended" },
+        { type: "assistant", message: { content: [{ type: "text", text: "All done." }] } },
+        { type: "result", subtype: "success", result: "All done." },
+      ])}\n`,
+    );
+
+    const recovered = await waitForChatRunTerminal({
+      run: runningRun(logFilePath, { runtime: "claude-code", pid: 999_999 }),
+      isProcessGone: () => true,
+      pollIntervalMs: 5,
+    });
+
+    expect(recovered.status).toBe("completed");
+    expect(recovered.text).toContain("All done.");
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("keeps waiting while the recorded CLI is alive", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-alive-"));
+    const logFilePath = join(dir, "alive.jsonl");
+    await writeFile(logFilePath, `${jsonl([{ type: "system", session_id: "sess-alive" }])}\n`);
+    let processGone = false;
+
+    const recovery = waitForChatRunTerminal({
+      run: runningRun(logFilePath, { runtime: "claude-code", pid: 4242 }),
+      isProcessGone: () => processGone,
+      pollIntervalMs: 5,
+      startupTimeoutMs: 10_000,
+    });
+    let settled = false;
+    void recovery.then(() => {
+      settled = true;
+    });
+
+    await Bun.sleep(60);
+    expect(settled).toBe(false);
+    processGone = true;
+    expect((await recovery).status).toBe("failed");
+    await rm(dir, { recursive: true, force: true });
+  });
+
   test("recovers when a missing log appears after polling begins", async () => {
     const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-appear-"));
     const logFilePath = join(dir, "later.jsonl");
@@ -357,6 +428,7 @@ const runningRun = (logFilePath: string, overrides: Partial<ChatRun> = {}): Chat
     retry_of_run_id: null,
     runtime_session_state: null,
     error_message: null,
+    pid: null,
     delegation_runs: null,
     created_at: now,
     updated_at: now,

@@ -208,6 +208,7 @@ const setupRun = async (
     retry_of_run_id: null,
     runtime_session_state: null,
     error_message: null,
+    pid: null,
     delegation_runs: null,
     created_at: now,
     updated_at: now,

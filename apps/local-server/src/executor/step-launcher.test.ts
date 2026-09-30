@@ -17,8 +17,6 @@ import { createTestTask } from "../task/test-utils.ts";
 import { StepExecutionStatus } from "./execution-types.ts";
 import {
   type HandleAgentCompletionFn,
-  pollForProcessExit,
-  REAPER_POLL_INTERVAL_MS,
   readRunResultFromLog,
   reattachToRunningAgent,
   spawnAgentWithReaper,
@@ -1554,100 +1552,7 @@ describe("step-launcher", () => {
     });
   });
 
-  describe("pollForProcessExit", () => {
-    test("resolves immediately for non-existent PID", async () => {
-      const start = Date.now();
-      await pollForProcessExit(999999999);
-      expect(Date.now() - start).toBeLessThan(REAPER_POLL_INTERVAL_MS);
-    });
-  });
-
   describe("readRunResultFromLog", () => {
-    test("returns exitCode 1 when log file does not exist", () => {
-      const result = readRunResultFromLog("/nonexistent/path.jsonl");
-      expect(result.exitCode).toBe(1);
-    });
-
-    test("returns exitCode 0 when last result is success", () => {
-      const logFile = join(testLogsDir, "success.jsonl");
-      writeFileSync(logFile, JSON.stringify({ type: "result", subtype: "success" }));
-      const result = readRunResultFromLog(logFile);
-      expect(result.exitCode).toBe(0);
-    });
-
-    test("returns a Pi session id from the log for recovery metadata", () => {
-      const logFile = join(testLogsDir, "pi-session.jsonl");
-      writeFileSync(
-        logFile,
-        [
-          JSON.stringify({ type: "system", session_id: "pi-session-1" }),
-          JSON.stringify({ type: "result", subtype: "success" }),
-        ].join("\n"),
-      );
-      const result = readRunResultFromLog(logFile);
-      expect(result).toEqual({ exitCode: 0, sessionId: "pi-session-1" });
-    });
-
-    test("returns exitCode 1 when last result is failure", () => {
-      const logFile = join(testLogsDir, "failure.jsonl");
-      writeFileSync(logFile, JSON.stringify({ type: "result", subtype: "error" }));
-      const result = readRunResultFromLog(logFile);
-      expect(result.exitCode).toBe(1);
-    });
-
-    test("returns exitCode 0 when result entry is multi-line JSON", () => {
-      const logFile = join(testLogsDir, "multiline-result.jsonl");
-      writeFileSync(
-        logFile,
-        '{\n  "type": "result",\n  "subtype": "success",\n  "result": "done"\n}\n',
-      );
-      const result = readRunResultFromLog(logFile);
-      expect(result.exitCode).toBe(0);
-    });
-
-    test("returns exitCode 0 for OpenCode-style streams without result entry", () => {
-      const logFile = join(testLogsDir, "opencode-success.jsonl");
-      writeFileSync(
-        logFile,
-        [
-          JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { input: {} } } }),
-          JSON.stringify({
-            type: "text",
-            part: { text: "All tasks complete <aop>ALL_TASKS_DONE</aop>" },
-          }),
-        ].join("\n"),
-      );
-      const result = readRunResultFromLog(logFile);
-      expect(result.exitCode).toBe(0);
-    });
-
-    test("returns exitCode 1 when stream contains explicit error marker", () => {
-      const logFile = join(testLogsDir, "opencode-failure.jsonl");
-      writeFileSync(
-        logFile,
-        [
-          JSON.stringify({ type: "tool_use", part: { tool: "bash", state: { input: {} } } }),
-          JSON.stringify({ type: "event", level: "error", error: "tool failed" }),
-        ].join("\n"),
-      );
-      const result = readRunResultFromLog(logFile);
-      expect(result.exitCode).toBe(1);
-    });
-
-    test("returns exitCode 1 when trailing JSON line is partial", () => {
-      const logFile = join(testLogsDir, "partial-tail.jsonl");
-      writeFileSync(
-        logFile,
-        [
-          JSON.stringify({ type: "text", part: { text: "Done <aop>ALL_TASKS_DONE</aop>" } }),
-          '{"type":"result","subtype":"success"',
-        ].join("\n"),
-      );
-
-      const result = readRunResultFromLog(logFile);
-      expect(result.exitCode).toBe(1);
-    });
-
     test("recovers a canonical result from openclaw raw log files", () => {
       const logFile = join(testLogsDir, "openclaw-recovery.jsonl");
       writeFileSync(`${logFile}.openclaw.stdout`, "Recovered <aop>ALL_TASKS_DONE</aop>");

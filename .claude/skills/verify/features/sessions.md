@@ -7,6 +7,7 @@ Sessions is AOP's front door: a chat workbench per repository with a rail of ses
 - `sessions-home` renders the rail, the draft hero, and the composer for a repository session.
 - `sessions-clear` settles the current session and opens a fresh sibling with `/clear`.
 - `sessions-fake-chat` sends a message to the fake CLI runtime and watches a streamed reply. Needs `seed.ts --fake-runtime`.
+- `sessions-restart` crashes the server mid-turn, then stops the orphaned CLI or sees it die. Needs `seed.ts --fake-runtime`.
 
 ## How to get to it (user POV)
 
@@ -36,6 +37,15 @@ Preconditions: `bun $S/seed.ts --name <run> --fake-runtime`, then `curl -s <api>
 - **Question.** Send `pick one [fake: ask="Which one?" options="a|b"]`. The turn ends with `Waiting on your answer.`; the question is a tool call in the run log under `$AOP_HOME/logs/chat-sessions/<id>/`, and the dashboard has no card for it.
 - **More scripts.** `[fake: crash=3]` fails the run with `Runtime exited with code 137. Check that the CLI is installed and authenticated.` `[fake: delay=30000]` then **Stop** cancels the run (`Conversation stopped.`) and the next message resumes the session. Both were checked through the API and `apps/local-server/src/chat-session/fake-cli.test.ts`, not the UI. The full syntax is in `packages/llm-provider/test-fixtures/README.md`.
 - **Proof.** Screenshots mid-stream and after the reply, plus `curl -s <api>/api/chat-sessions/<id>` showing the messages and `runtimeSessionId`. State that the runtime was the fake CLI.
+
+## Server crash during a turn (`sessions-restart`)
+
+A crashed server leaves the detached CLI running. The chat run records the CLI's pid (`chat_runs.pid`), so the restarted server can stop it or notice it died. Preconditions: the fake-runtime recipe above.
+
+- **Crash mid-turn.** Send `long job [fake: steps=3 delay=20000]`. Read the pid with `sqlite3 "$AOP_DB_PATH" 'select id,status,pid from chat_runs'` (paths from `verify-stack.ts env`). Run `bun $S/verify-stack.ts restart-server --name <run> --crash`; it SIGKILLs the server, so no shutdown hook runs, and starts a new one on the same port and DB. `ps -p <pid>` still lists the fake.
+- **Stop after the restart.** Reload `<dashboard>/`. The session reports `assistantLifecycle: "uncontrollable"` in `/api/chat-sessions`, and the composer shows `Stop conversation`. Click it. The thread reads `Stopped after the app restarted.`, the run is `cancelled`, and `ps -p <pid>` finds nothing. Before this existed, Stop only edited the row and the CLI kept running.
+- **CLI dies while the server is down.** Send `carry on [fake: steps=4 delay=3000 crash=6]`, then `restart-server --crash` within a few seconds. About 18 seconds later the fake crashes. The restarted server sees the recorded pid is gone and fails the run with `The runtime process exited without a final response. Try again, or reset the runtime session.` instead of leaving it running forever.
+- **Proof.** The `chat_runs` rows before and after, `ps -p <pid>`, and screenshots of both thread endings.
 
 ## Gotchas
 

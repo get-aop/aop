@@ -6,6 +6,7 @@
  *   bun .claude/skills/verify/scripts/verify-stack.ts doctor [--name <run>]
  *   bun .claude/skills/verify/scripts/verify-stack.ts env    [--name <run>]
  *   bun .claude/skills/verify/scripts/verify-stack.ts aop    [--name <run>] -- <aop args>
+ *   bun .claude/skills/verify/scripts/verify-stack.ts restart-server [--name <run>] [--crash]
  *   bun .claude/skills/verify/scripts/verify-stack.ts stop   [--name <run>]
  *
  * Each run gets its own AOP_HOME, SQLite DB, free ports, and PIDs under
@@ -47,6 +48,7 @@ const commands: Record<string, () => Promise<number>> = {
   doctor: doctorStack,
   env: printEnv,
   aop: runAop,
+  "restart-server": restartServer,
   stop: stopStack,
 };
 
@@ -157,6 +159,34 @@ async function runAop(): Promise<number> {
   return await proc.exited;
 }
 
+/**
+ * Restarts only the local server on the same port, home, and DB. `--crash` sends
+ * SIGKILL so shutdown hooks never run, which is how a crashed server leaves detached
+ * chat CLIs running; the default SIGTERM runs the graceful shutdown path.
+ */
+async function restartServer(): Promise<number> {
+  const state = await loadState();
+  if (!state) return 1;
+  const signal = flagArgs.includes("--crash") ? "SIGKILL" : "SIGTERM";
+  killGroup(state.serverPid, signal);
+  if (!(await waitFor(async () => !isAlive(state.serverPid), 10_000))) {
+    process.stderr.write(`Server ${state.serverPid} did not exit after ${signal}.\n`);
+    return 1;
+  }
+  state.serverPid = spawnDetached(
+    join(ROOT, "apps/local-server/src/run.ts"),
+    join(state.dir, "logs/server.log"),
+    state.env,
+  );
+  await writeFile(join(state.dir, "state.json"), `${JSON.stringify(state, null, 2)}\n`);
+  if (!(await waitFor(() => checkHealth(state.serverPort)))) {
+    process.stderr.write(`Server not healthy in ${READY_TIMEOUT_MS}ms. See ${state.dir}/logs/.\n`);
+    return 1;
+  }
+  process.stdout.write(`restarted server run=${runName} (${signal}), pid ${state.serverPid}\n`);
+  return 0;
+}
+
 async function stopStack(): Promise<number> {
   const state = await loadState();
   if (!state) return 0;
@@ -173,7 +203,7 @@ async function stopStack(): Promise<number> {
 
 function printHelp(): Promise<number> {
   process.stdout.write(
-    "Usage: verify-stack.ts <start|doctor|env|aop|stop> [--name <run>] [-- aop args]\n",
+    "Usage: verify-stack.ts <start|doctor|env|aop|restart-server|stop> [--name <run>] [--crash] [-- aop args]\n",
   );
   return Promise.resolve(command === "help" ? 0 : 1);
 }

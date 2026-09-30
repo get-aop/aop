@@ -1,68 +1,8 @@
 import { execSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { isAgentCommand } from "../process/liveness.ts";
 
-export const isProcessAlive = (pid: number): boolean => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-/** Detects zombie processes (exited but not reaped by parent). */
-export const isZombie = (pid: number, platform: NodeJS.Platform = process.platform): boolean => {
-  // Windows has no zombie concept and no `ps`; process.kill(pid, 0) liveness is
-  // authoritative, so never shell out here (the old code threw on every poll).
-  if (platform === "win32") {
-    return false;
-  }
-  try {
-    if (platform === "linux") {
-      const status = readFileSync(`/proc/${pid}/status`, "utf-8");
-      return /^State:\s+Z/m.test(status);
-    }
-    const state = execSync(`ps -p ${pid} -o state=`, {
-      encoding: "utf-8",
-    }).trim();
-    return state === "Z";
-  } catch {
-    return false;
-  }
-};
-
-/** Returns true only if the process is alive AND not a zombie. */
-export const isAgentRunning = (pid: number): boolean => {
-  return isProcessAlive(pid) && !isZombie(pid);
-};
-
-export const isClaudeProcess = (
-  pid: number,
-  platform: NodeJS.Platform = process.platform,
-): boolean => {
-  try {
-    if (platform === "linux") {
-      const cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf-8");
-      return isAgentCommand(cmdline);
-    }
-    if (platform === "win32") {
-      // WMI exposes the command line (but not the environment block).
-      const cmd = execSync(
-        `powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine"`,
-        { encoding: "utf-8" },
-      );
-      return isAgentCommand(cmd);
-    }
-    const cmd = execSync(`ps -p ${pid} -o command=`, { encoding: "utf-8" });
-    return isAgentCommand(cmd);
-  } catch {
-    return false;
-  }
-};
-
-export const isAgentCommand = (command: string): boolean => {
-  return command.includes("claude") || /(?:^|\/|\s)codex(?:\.js)?(?:\s|$).*?\bexec\b/.test(command);
-};
+// Env-based pid discovery for workflow steps (AOP_STEP_ID / AOP_TASK_ID).
 
 export const findPidByStepId = (
   stepId: string,

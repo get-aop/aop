@@ -6,14 +6,11 @@ import { generateTypeId, getLogger } from "@aop/infra";
 import { inferRunOutcomeFromRawJsonl } from "@aop/llm-provider";
 import type { LocalServerContext } from "../context.ts";
 import type { Task } from "../db/schema.ts";
-import { readAllLogLines } from "../events/log-file-tailer.ts";
+import { isProcessAlive as defaultIsProcessAlive, isAgentProcess } from "../process/liveness.ts";
+import { readAllLogLines } from "../process/log-tail.ts";
 import { projectRuntimeEventsForStep } from "../runtime-events/projector.ts";
 import { ExecutionStatus, StepExecutionStatus } from "./execution-types.ts";
 import { cleanupLogFile, populateLogBuffer } from "./executor.ts";
-import {
-  isClaudeProcess as defaultIsClaudeProcess,
-  isProcessAlive as defaultIsProcessAlive,
-} from "./process-utils.ts";
 import { cleanupRemoteStepOnConfiguredHosts } from "./remote-workspace.ts";
 import type { StepWithTask } from "./types.ts";
 
@@ -42,7 +39,7 @@ export const recoverStaleTasks = async (
   const {
     logsDir,
     isProcessAlive = defaultIsProcessAlive,
-    isClaudeProcess = defaultIsClaudeProcess,
+    isClaudeProcess = (pid: number) => isAgentProcess(pid),
   } = deps;
 
   const runningSteps = await ctx.executionRepository.getRunningStepExecutions();
