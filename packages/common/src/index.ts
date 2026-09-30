@@ -1,4 +1,5 @@
 export { AOP_PORTS, AOP_URLS } from "./env.ts";
+export * from "./projects/index.ts";
 export type {
   AuthRequest,
   AuthResponse,

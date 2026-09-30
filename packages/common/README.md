@@ -12,6 +12,7 @@ These shared contracts keep the workflow engine, Pool UI, CLI, and executor alig
 | **Task** | `Task`, `TaskStatus` (`DRAFT`, `READY`, `WORKING`, `PAUSED`, `RESUMING`, `BLOCKED`, `DONE`, `REMOVED`) |
 | **Protocol** | Workflow step commands, `TaskReadyResponse`, execution statuses |
 | **SSE** | `SSETask`, capacity, repo/task dashboard events |
+| **Projects** | `Project`, `Thread` (a union on `status`), `Message` with `MessageBlock[]`, `EventLogEntry`, `Device`, and the runtime selection types; sources live in `src/projects/` |
 | **Create task** | Brainstorming request/response types for `/api/create-task` |
 | **Workflow runtime** | Provider/model/reasoning options for step agent overrides |
 | **Multi-agent** | Task execution model, repo assignments, coordination phases |
