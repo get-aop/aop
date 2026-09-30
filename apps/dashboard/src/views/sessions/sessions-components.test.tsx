@@ -8,7 +8,6 @@ setupDashboardDom();
 const { act, cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
 const { ChatComposer } = await import("./ChatComposer");
 const { ChatThread } = await import("./ChatThread");
-const { RenameSessionModal, SessionToast } = await import("./SessionModals");
 const { SlashCommandMenu } = await import("./SlashCommandMenu");
 const { resetSessionStreamProgressStore, setSessionStreamProgress } = await import(
   "./session-stream-progress"
@@ -98,46 +97,6 @@ describe("SlashCommandMenu", () => {
     );
     expect(screen.getByTestId("slash-command-menu")).toBeTruthy();
     expect(within(screen.getByTestId("slash-command-menu")).getByText("/skill")).toBeTruthy();
-  });
-});
-
-describe("SessionModals", () => {
-  test("rename focuses input and supports Enter / Escape", () => {
-    const onSave = mock(() => {});
-    const onCancel = mock(() => {});
-    render(
-      <RenameSessionModal
-        open
-        value="Draft"
-        onChange={() => {}}
-        onSave={onSave}
-        onCancel={onCancel}
-      />,
-    );
-    const input = screen.getByPlaceholderText("Session name") as HTMLInputElement;
-    expect(document.activeElement).toBe(input);
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSave).toHaveBeenCalled();
-    fireEvent.keyDown(input, { key: "Escape" });
-    expect(onCancel).toHaveBeenCalled();
-  });
-
-  test("toast renders message", () => {
-    render(<SessionToast toast={{ message: "Settled · Demo" }} />);
-    expect(screen.getByTestId("session-toast").textContent).toContain("Settled · Demo");
-  });
-
-  test("toast renders an optional link", () => {
-    render(
-      <SessionToast
-        toast={{
-          message: "PR #42 created",
-          link: { url: "https://github.com/o/r/pull/42", label: "#42" },
-        }}
-      />,
-    );
-    const link = screen.getByRole("link", { name: "#42" });
-    expect(link.getAttribute("href")).toBe("https://github.com/o/r/pull/42");
   });
 });
 

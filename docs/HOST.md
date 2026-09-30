@@ -39,7 +39,7 @@ Pairing needs the host owner, so run the first command on the host.
    # {"code":"K7QM-4XNP","expiresAt":"..."}
    ```
 
-2. On the new device, trade the code for a token. Use the host's address as the client sees it, such as the `tailscale serve` URL.
+2. On the new device, trade the code for a token. In a browser, open the host's address: the dashboard shows a pairing screen, where you enter the code and a name for the device, and the cookie in the next paragraph is all it needs. From a program, use the host's address as the client sees it, such as the `tailscale serve` URL.
 
    ```bash
    curl -s -X POST https://mac.tail1234.ts.net/api/auth/pair \
@@ -130,4 +130,4 @@ Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over pla
 - Pairing codes and the wrong-code counter live in memory, so a host restart closes an open pairing.
 - Paired devices are trusted equally. There are no per-device permissions.
 - The `aop` CLI sends no token, so it works only on the host. It cannot reach a host across the network yet.
-- The dashboard has no pairing screen yet. Pair with the commands above or from the browser console with `fetch('/api/auth/pair', { method: 'POST', ... })`.
+- The dashboard can pair a browser but cannot show the code: the host owner still asks for it with the command above. Its device list and revoking are also commands only.

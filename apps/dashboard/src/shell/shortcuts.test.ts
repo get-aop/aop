@@ -9,7 +9,7 @@ afterEach(() => {
 
 const actions = (): ShortcutActions => ({
   toggleCommandPalette: mock(() => {}),
-  newSession: mock(() => {}),
+  newProject: mock(() => {}),
   openSettings: mock(() => {}),
 });
 
@@ -55,7 +55,7 @@ describe("handleGlobalShortcut", () => {
   test("⌘N starts a new session", () => {
     const a = actions();
     expect(handleGlobalShortcut(keyEvent("n", document.body, { metaKey: true }), a)).toBe(true);
-    expect(a.newSession).toHaveBeenCalled();
+    expect(a.newProject).toHaveBeenCalled();
   });
 
   test("ctrl variants work on Windows-style keyboards", () => {
@@ -68,7 +68,7 @@ describe("handleGlobalShortcut", () => {
     const el = textarea();
     const a = actions();
     expect(handleGlobalShortcut(keyEvent("n", el, { metaKey: true }), a)).toBe(false);
-    expect(a.newSession).not.toHaveBeenCalled();
+    expect(a.newProject).not.toHaveBeenCalled();
     expect(handleGlobalShortcut(keyEvent("k", el, { metaKey: true }), a)).toBe(true);
     expect(handleGlobalShortcut(keyEvent(",", el, { metaKey: true }), a)).toBe(true);
     cleanup();
@@ -79,6 +79,6 @@ describe("handleGlobalShortcut", () => {
     expect(handleGlobalShortcut(keyEvent("k"), a)).toBe(false);
     expect(handleGlobalShortcut(keyEvent("n"), a)).toBe(false);
     expect(a.toggleCommandPalette).not.toHaveBeenCalled();
-    expect(a.newSession).not.toHaveBeenCalled();
+    expect(a.newProject).not.toHaveBeenCalled();
   });
 });

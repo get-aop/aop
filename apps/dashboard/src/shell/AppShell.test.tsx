@@ -1,124 +1,143 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { ChatSessionSummary } from "../api/client";
+import {
+  makeEntry,
+  makeProject,
+  makeState,
+  makeThread,
+  stubLiveProjects,
+} from "../projects/test-utils";
 import { setupDashboardDom } from "../test/setup-dom";
-import { openSettingsDialog, resetDialogs } from "./dialog-store";
-import { type RailProps, resetRailProps, setRailProps } from "./rail-store";
 
 setupDashboardDom();
 
-const { act, cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, screen, waitFor, within } = await import(
+  "@testing-library/react"
+);
+const { ProjectsProvider } = await import("../projects/ProjectsProvider");
 const { AppShell } = await import("./AppShell");
-
-const summary = (overrides: Partial<ChatSessionSummary>): ChatSessionSummary =>
-  ({
-    id: "s1",
-    scope: "repo",
-    repoId: "repo_1",
-    repoName: "aop-mono",
-    repoPath: "/repos/aop-mono",
-    workspacePath: "/repos/aop-mono",
-    title: "Session",
-    named: false,
-    runtime: "claude-code",
-    model: "opus",
-    reasoningEffort: "high",
-    runtimeAlias: null,
-    runtimeSessionId: null,
-    fastMode: false,
-    pinned: false,
-    settledOverride: null,
-    settledAt: null,
-    lastActivityAt: null,
-    assistantActive: false,
-    snippet: null,
-    unreadCount: 0,
-    updatedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    ...overrides,
-  }) as ChatSessionSummary;
-
-const railProps = (): RailProps =>
-  ({
-    groups: [
-      {
-        repoId: "repo_1",
-        name: "aop-mono",
-        sessions: [summary({ id: "s1", title: "Fix tests" })],
-      },
-    ],
-    tasks: [],
-    settled: [],
-    activeSessionId: null,
-    connected: true,
-    onSelect: mock(() => {}),
-    onNewSession: mock(() => {}),
-    onNewTask: mock(() => {}),
-    onAttachRepo: mock(() => {}),
-    onAction: mock(() => {}),
-  }) as RailProps;
+const { getDialogs, openSettingsDialog, resetDialogs } = await import("./dialog-store");
 
 const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
-  globalThis.fetch = mock(async () => new Response(JSON.stringify({ settings: [] }))) as never;
-  setRailProps(railProps());
+  window.localStorage.clear();
+  window.history.pushState({}, "", "/");
+  globalThis.fetch = mock(async () => Response.json({ settings: [] })) as unknown as typeof fetch;
 });
 
 afterEach(() => {
   cleanup();
-  resetRailProps();
   resetDialogs();
   globalThis.fetch = originalFetch;
 });
 
-/** The rail renders session titles too, so palette assertions must be scoped. */
-const openPalette = async (): Promise<HTMLElement> => {
+const state = () =>
+  makeState([
+    makeEntry(makeProject({ id: "a", name: "Checkout" }), [
+      makeThread({ projectId: "a", status: "waiting-on-you" }),
+    ]),
+    makeEntry(makeProject({ id: "b", name: "Storefront", status: "paused" })),
+  ]);
+
+const renderShell = () => {
+  const stub = stubLiveProjects(state());
   render(
-    <AppShell connected onReposChanged={() => {}}>
-      <div />
-    </AppShell>,
+    <ProjectsProvider live={stub.live}>
+      <AppShell>
+        <div data-testid="screen" />
+      </AppShell>
+    </ProjectsProvider>,
   );
-  fireEvent.click(screen.getByTestId("rail-search"));
-  await screen.findByPlaceholderText("Search sessions");
-  return document.querySelector('[role="dialog"]') as HTMLElement;
+  return stub;
 };
 
-describe("AppShell command palette", () => {
-  test("searches sessions only — no Actions group", async () => {
-    const palette = await openPalette();
+describe("AppShell", () => {
+  test("the sidebar is the only chrome around the screen", () => {
+    renderShell();
 
-    expect(within(palette).getByText("Sessions")).toBeTruthy();
-    expect(within(palette).queryByText("Actions")).toBeNull();
+    expect(screen.getByTestId("projects-sidebar")).toBeTruthy();
+    expect(screen.getByTestId("screen")).toBeTruthy();
+    expect(screen.queryByTestId("app-rail")).toBeNull();
   });
 
-  test("does not offer New session / Workflows / Settings as palette entries", async () => {
-    const palette = await openPalette();
+  test("tells the live state which project is open, so it always has a stream", () => {
+    window.history.pushState({}, "", "/projects/b/chat");
+    const stub = renderShell();
+    expect(stub.calls.setSelected.at(-1)).toBe("b");
 
-    for (const label of ["New session", "Workflows", "Settings"]) {
+    act(() => {
+      window.history.pushState({}, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(stub.calls.setSelected.at(-1)).toBeNull();
+  });
+});
+
+describe("AppShell palette", () => {
+  const openPalette = async (): Promise<HTMLElement> => {
+    renderShell();
+    fireEvent.click(screen.getByTestId("sidebar-search"));
+    await screen.findByPlaceholderText("Find a project");
+    return document.querySelector('[role="dialog"]') as HTMLElement;
+  };
+
+  test("finds projects by name and opens the chosen one", async () => {
+    const palette = await openPalette();
+    const items = within(palette).getAllByTestId("palette-project");
+    expect(items.map((item) => item.textContent)).toEqual(["CCheckout", "SStorefrontpaused"]);
+
+    fireEvent.click(items[1] as HTMLElement);
+    expect(window.location.pathname).toBe("/projects/b");
+    await waitFor(() => expect(screen.queryByPlaceholderText("Find a project")).toBeNull());
+  });
+
+  test("offers projects only: no actions, no sessions", async () => {
+    const palette = await openPalette();
+    expect(within(palette).getByText("Projects")).toBeTruthy();
+    for (const label of ["Actions", "Sessions", "New session", "Workflows"]) {
       expect(within(palette).queryByText(label)).toBeNull();
     }
   });
 
-  test("still lists sessions", async () => {
-    const palette = await openPalette();
-
-    expect(within(palette).getByText("Fix tests")).toBeTruthy();
+  test("⌘K toggles it", async () => {
+    renderShell();
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    await screen.findByPlaceholderText("Find a project");
   });
 });
 
-describe("AppShell settings dialog", () => {
-  test("lists the surviving sections and no Workflows section", async () => {
-    render(
-      <AppShell connected onReposChanged={() => {}}>
-        <div />
-      </AppShell>,
-    );
+describe("AppShell keyboard and dialogs", () => {
+  test("⌘N opens New project, except while typing", async () => {
+    renderShell();
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: "n", metaKey: true });
+    expect(getDialogs().newProject).toBe(false);
+    input.remove();
+
+    fireEvent.keyDown(document.body, { key: "n", metaKey: true });
+    expect(getDialogs().newProject).toBe(true);
+    expect(await screen.findByTestId("new-project-dialog")).toBeTruthy();
+  });
+
+  test("Settings lists the surviving sections and no Workflows section", async () => {
+    renderShell();
     act(() => openSettingsDialog("general"));
 
     const dialog = await screen.findByTestId("settings-dialog");
     for (const section of ["general", "repositories", "runtimes", "exec-hosts", "about"]) {
       expect(within(dialog).getByTestId(`settings-nav-${section}`)).toBeTruthy();
     }
-    expect(within(dialog).queryByTestId("settings-nav-workflows")).toBeNull();
+    expect(within(dialog).queryByText("Workflows")).toBeNull();
+  });
+
+  test("Settings switches sections", async () => {
+    renderShell();
+    act(() => openSettingsDialog("general"));
+    const dialog = await screen.findByTestId("settings-dialog");
+
+    fireEvent.click(within(dialog).getByTestId("settings-nav-about"));
+    expect(getDialogs().settings.section).toBe("about");
   });
 });

@@ -1,20 +1,11 @@
 import type { ChatDocumentAttachment } from "@aop/common";
-import { useEffect } from "react";
-import {
-  type ChatSessionDetail,
-  type ChatSessionMessage,
-  chatSessionStreamUrl,
-  sendChatMessage,
-} from "../../api/client";
+import { type ChatSessionDetail, type ChatSessionMessage, sendChatMessage } from "../../api/client";
 import { requestConfirmation } from "../../components/ConfirmationHost";
 import type { LocalCreateTaskImage } from "../../components/create-task-images";
 import {
   localImageToAttachment,
   revokeLocalCreateTaskImages,
 } from "../../components/create-task-images";
-import type { MenuState } from "./sessions-menu";
-
-import { getEffectiveCmd } from "./sessions-runtime";
 
 export const sendChatWithOptimistic = async (input: {
   sessionId: string;
@@ -121,41 +112,6 @@ const restoreFailedSend = (input: Parameters<typeof sendChatWithOptimistic>[0]):
     documents: input.documentsSnapshot,
   });
 };
-
-export const useSessionVisibilitySync = (
-  activeIdRef: { current: string | null },
-  reloadDetail: (sessionId: string) => Promise<unknown>,
-  refreshList: () => Promise<unknown>,
-): void => {
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      const sessionId = activeIdRef.current;
-      if (sessionId) void reloadDetail(sessionId);
-      void refreshList();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
-  }, [activeIdRef, refreshList, reloadDetail]);
-};
-
-export const sessionStreamUrlFor = (sessionId: string | null): string | null =>
-  sessionId ? chatSessionStreamUrl(sessionId) : null;
-
-export const effectiveCommandFor = (session: ChatSessionDetail | null): string =>
-  session ? getEffectiveCmd(session.runtime, session.runtimeAlias) : "";
-
-export const anchorForMenu = (menu: MenuState): DOMRect | null =>
-  menu.kind === "closed" ? null : menu.anchor;
-
-export const emptySessionMessage = (repoCount: number): string =>
-  repoCount === 0
-    ? "Start a general task, or attach a repository for code work."
-    : "Start a general task, or use + on a repository.";
 
 const mergeSentMessage = (
   current: ChatSessionDetail | null,

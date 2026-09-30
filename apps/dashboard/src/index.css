@@ -41,6 +41,8 @@
   --color-queued: #8a8a92;
   --color-unread: #ececec;
   --color-favorite: #e3b341;
+  --color-waiting: #f2a93b; /* something needs the person: a blocked thread, a question */
+  --color-merged: #a371f7; /* a merged pull request */
   --color-claude: #d97757;
 
   /* Diff line fills */

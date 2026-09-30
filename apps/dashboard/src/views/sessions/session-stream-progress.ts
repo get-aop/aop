@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { AssistantStreamProgress } from "./sessions-page-helpers";
+import type { AssistantStreamProgress } from "./sessions-page-helpers-stream";
 
 type StreamSnapshot = {
   sessionId: string | null;

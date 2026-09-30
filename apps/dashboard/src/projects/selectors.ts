@@ -1,0 +1,128 @@
+import type { Thread, ThreadStatus } from "@aop/common";
+import type { ProjectEntry, ProjectsState } from "./projects-state";
+
+export interface Attention {
+  /** Threads blocked on a question only the person can answer. */
+  waiting: number;
+  /** Threads with an agent turn running. */
+  working: number;
+  /** Threads with something the person has not looked at. */
+  unread: number;
+}
+
+export const attentionOf = (threads: readonly Thread[]): Attention => ({
+  waiting: threads.filter((thread) => thread.status === "waiting-on-you").length,
+  working: threads.filter((thread) => thread.status === "working").length,
+  unread: threads.filter((thread) => thread.unread).length,
+});
+
+export type AttentionKind = "waiting" | "working" | "none";
+
+/** What a project row shows: the most urgent thing first, so a question outranks running work. */
+export const attentionKind = ({ waiting, working }: Attention): AttentionKind =>
+  waiting > 0 ? "waiting" : working > 0 ? "working" : "none";
+
+/** "2 threads are waiting on you" or, when nothing is, the plain reassurance. */
+export const attentionSentence = (waiting: number): string => {
+  if (waiting === 0) return "Nothing is waiting on you.";
+  return waiting === 1 ? "1 thread is waiting on you." : `${waiting} threads are waiting on you.`;
+};
+
+// The order a person should look at threads in: questions first, closed work last.
+const STATUS_RANK: Record<ThreadStatus, number> = {
+  "waiting-on-you": 0,
+  working: 1,
+  "ready-for-review": 2,
+  landing: 3,
+  idle: 4,
+  resolved: 5,
+};
+
+export const sortThreads = (threads: readonly Thread[]): Thread[] =>
+  [...threads].sort(
+    (a, b) =>
+      STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+      Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt),
+  );
+
+export const THREAD_STATUS_LABEL: Record<ThreadStatus, string> = {
+  "waiting-on-you": "Waiting on you",
+  working: "Working",
+  "ready-for-review": "Ready for review",
+  landing: "Landing",
+  idle: "Idle",
+  resolved: "Resolved",
+};
+
+export const matchesThreadSearch = (thread: Thread, query: string): boolean => {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  const haystack = [
+    thread.title,
+    thread.liveStatusLine ?? "",
+    thread.blockedQuestion?.question ?? "",
+    thread.branch ?? "",
+    THREAD_STATUS_LABEL[thread.status],
+  ];
+  return haystack.some((text) => text.toLowerCase().includes(needle));
+};
+
+export interface ProjectGroups {
+  pinned: ProjectEntry[];
+  active: ProjectEntry[];
+  archived: ProjectEntry[];
+}
+
+/**
+ * The sidebar's groups. Pinned projects (a per-device choice) lead; each group is newest
+ * first by last change, which the host bumps on every project update.
+ */
+export const groupProjects = (
+  entries: readonly ProjectEntry[],
+  pinnedIds: readonly string[],
+): ProjectGroups => {
+  const pinnedSet = new Set(pinnedIds);
+  const byRecency = (a: ProjectEntry, b: ProjectEntry) =>
+    Date.parse(b.project.updatedAt) - Date.parse(a.project.updatedAt);
+  const live = entries.filter(({ project }) => project.status !== "archived");
+  return {
+    pinned: live.filter(({ project }) => pinnedSet.has(project.id)).sort(byRecency),
+    active: live.filter(({ project }) => !pinnedSet.has(project.id)).sort(byRecency),
+    archived: entries.filter(({ project }) => project.status === "archived").sort(byRecency),
+  };
+};
+
+export const matchesProjectSearch = (entry: ProjectEntry, query: string): boolean => {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return [entry.project.name, entry.project.goal].some((text) =>
+    text.toLowerCase().includes(needle),
+  );
+};
+
+/** "now", "5m", "3h", "2d", then a date: the terse age the Overview rows use. */
+export const formatAge = (iso: string, now: number = Date.now()): string => {
+  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  if (seconds < 45) return "now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+};
+
+export type HostConnection = "connected" | "reconnecting" | "offline";
+
+/**
+ * How the page is doing with the host, from what it can observe: no fetch has been
+ * answered lately (offline), or a stream is trying to come back (reconnecting).
+ */
+export const hostConnection = (state: ProjectsState): HostConnection => {
+  if (!state.reachable) return "offline";
+  const entries = Object.values(state.byId);
+  return entries.some(({ connection }) => connection === "reconnecting")
+    ? "reconnecting"
+    : "connected";
+};

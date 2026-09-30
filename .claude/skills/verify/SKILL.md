@@ -9,7 +9,7 @@ AOP is a local control plane: `apps/local-server` (Bun + Hono + SQLite) is the s
 
 Read `features/README.md` before driving; the matching feature file is the recipe. A proof that drives one convenient entry point is incomplete when the map lists others.
 
-Surface: the dashboard (`/` Sessions, with Settings as a dialog) and the CLI. The Electron app in `apps/desktop` is not covered.
+Surface: the dashboard (`/` lists projects, a project opens its thread grid, Settings is a dialog) and the CLI. The Electron app in `apps/desktop` is not covered.
 
 All commands run from the repo root. `S=.claude/skills/verify/scripts`.
 
@@ -22,7 +22,7 @@ bun $S/seed.ts --name <run>                      # fixture repo registered as `r
 bun $S/seed.ts --name <run> --fake-runtime       # same, plus the fake CLI as the default chat runtime
 ```
 
-`start` prints the dashboard and API URLs and returns once `/api/health` reports `db.connected` and the dashboard serves HTML (about 1s). It picks two free ports in 25400-25499 and sets `AOP_HOME=.work/verify/<run>/home` and `AOP_DB_PATH`. Names isolate concurrent runs; the default name is `default`. `start` refuses a name that is still running.
+`start` prints the dashboard and API URLs and returns once `/api/health` reports `db.connected` and the dashboard serves HTML (about 1s). It picks two free ports in 25400-25499 and sets `AOP_HOME=.work/verify/<run>/home` and `AOP_DB_PATH`. Names isolate concurrent runs; the default name is `default`. `start` refuses a name that is still running. The variables of your shell pass through to both processes, which is how a run gets stub `claude`, `codex` and `pi` scripts first on `PATH`, or the host bound to the network for a remote-device check (`AOP_BIND_HOST`, `DASHBOARD_STATIC_PATH`; recipe `shell-pairing` in `features/projects-shell.md`). The dev dashboard listens on loopback only, so it never shows the pairing screen.
 
 `seed` prints `{repoId, repoPath}` (plus `fakeRuntime` with `--fake-runtime`) and records them in `.work/verify/<run>/state.json`. Read ids from there.
 
@@ -51,7 +51,7 @@ bun $S/verify-stack.ts env --name <run>          # exports, to run other command
 
 If Chrome shows an error page for a stack that `curl` reaches (`Frame with ID 0 is showing error page`), the tools are almost certainly driving a Chrome on a different computer. Call `list_connected_browsers`. If a browser with `isLocal: false` (for example a Windows Chrome) is `inUse`, ask the user which browser to use with AskUserQuestion, one option per browser, then call `select_browser`. Never pick a browser yourself. Do not work around it with another browser driver.
 
-**Sending chat messages runs the real runtime.** A Sessions message on a `claude-code` session spawns that CLI with the user's own auth, including unknown slash commands like `/status`, which are forwarded to it. Only `/clear` and `/alias` are handled by AOP; `/workflow` now reaches the runtime. Do not send chat text unless the feature file says to, or the user has agreed to that runtime spend.
+**Sending chat messages runs the real runtime.** A chat, coordinator or thread message on a `claude-code` session spawns that CLI with the user's own auth, including unknown slash commands like `/status`, which are forwarded to it. Only `/clear` and `/alias` are handled by AOP; `/workflow` now reaches the runtime. Do not send chat text unless the feature file says to, or the user has agreed to that runtime spend.
 
 The exception is a stack seeded with `--fake-runtime` (`bun $S/seed.ts --name <run> --fake-runtime`). That registers `packages/llm-provider/test-fixtures/fake-cli.ts` as the first runtime configuration, so new sessions spawn it instead of `claude`. It never calls a model, streams Claude-style JSONL, and supports `--resume`, so chat is free to drive. Confirm the session's `runtimeAlias` in `GET /api/chat-sessions` ends in `fake-cli.ts` before typing. Script a turn with a `[fake: ...]` marker in the message; see `features/sessions.md` and `packages/llm-provider/test-fixtures/README.md`.
 

@@ -1,6 +1,6 @@
 export interface ShortcutActions {
   toggleCommandPalette: () => void;
-  newSession: () => void;
+  newProject: () => void;
   openSettings: () => void;
 }
 
@@ -30,7 +30,7 @@ export const handleGlobalShortcut = (event: KeyboardEvent, actions: ShortcutActi
   if (isEditableTarget(event.target)) return false;
   if (event.key === "n") {
     event.preventDefault();
-    actions.newSession();
+    actions.newProject();
     return true;
   }
   return false;

@@ -1,0 +1,63 @@
+# Projects shell (dashboard)
+
+The dashboard's front door: a sidebar of projects with what needs attention in each, the projects screen, a project's home (its threads as cards), the New project dialog, and the pairing screen a browser sees when the host does not know it. The coordinator chat, a thread's transcript and project settings are placeholder panes in this build; drive the coordinator and threads through the API, as [Projects](./projects.md) describes, and watch the cards move.
+
+Everything that starts an agent needs a stack seeded with `--fake-runtime`. Start it with the tripwire stubs first on `PATH` (a directory holding `claude`, `codex` and `pi` scripts that log and exit 99), so a misrouted call cannot reach the real CLIs.
+
+## Sub-features
+
+- `shell-create` creates a project in the New project dialog, attaching the seeded repo.
+- `shell-live` watches thread cards, the sidebar badge and the header sentence change with no reload while the API drives the coordinator.
+- `shell-menu` uses the project menu: Pin, Notifications, Settings, Pause or Resume, Archive or Restore, Delete.
+- `shell-restart` restarts the host and checks the page reconnects and catches up.
+- `shell-pairing` opens the dashboard through the machine's LAN address, sees the pairing screen, pairs, and sees the project.
+- `shell-routes` covers the addresses: `/`, `/projects/:id`, `/projects/:id/chat`, `/projects/:id/threads/:threadId`, `/projects/:id/settings`, and an old address such as `/workflows`.
+
+## How to get to it (user POV)
+
+- Open `/`. The sidebar lists projects; **All projects** and the cards on `/` list them too.
+- Choose **New project** (sidebar, `⌘N`, or the button on `/`), fill in the dialog, choose **Create project**.
+- Choose a project in the sidebar or a card. Its tabs are **Threads**, **Coordinator** and **Settings**.
+- Open a row's `…` menu (visible on hover) or the `…` in a project's header.
+
+## Test handles
+
+| `data-testid` | What it is |
+| --- | --- |
+| `projects-sidebar`, `sidebar-new-project`, `sidebar-all-projects`, `sidebar-search`, `sidebar-settings` | The sidebar and its fixed controls |
+| `sidebar-pinned`, `sidebar-active`, `sidebar-archived` | The three project groups |
+| `project-row` (`data-project-id`, `data-attention` = `waiting`, `working` or `none`, `data-active`, `data-status`) | One project in the sidebar |
+| `project-attention-waiting`, `project-attention-working`, `project-paused` | What a row shows |
+| `project-row-menu`, `project-card-menu`, `project-header-menu`, `project-menu`, `project-menu-{pin,notifications,settings,pause,archive,delete}` | The project menu and its items |
+| `projects-index`, `project-card`, `project-card-link`, `project-search`, `projects-new`, `projects-empty` | The `/` screen |
+| `new-project-dialog`, `new-project-{name,goal,instructions,instructions-count,repos,repo,attach-repo,submit,error}` | The New project dialog |
+| `project-page`, `project-title`, `project-attention`, `project-stream-state` (`data-state`), `project-tab-{threads,coordinator,settings}` | A project's header |
+| `thread-grid`, `thread-card` (`data-thread-id`, `data-status`, `data-unread`), `thread-card-link`, `thread-status-label`, `thread-status-line`, `thread-steps` (`data-done`, `data-total`), `thread-pr-chip`, `thread-search`, `thread-count` | The project home |
+| `coordinator-chat-pane`, `thread-pane`, `project-settings-pane` | The placeholder panes |
+| `connection-status` (`data-state` = `connected`, `reconnecting` or `offline`) | The sidebar footer |
+| `pairing-screen`, `pairing-code-input`, `pairing-device-name`, `pairing-submit`, `pairing-error`, `host-unreachable` | The pairing screen |
+
+## Driving it with verify-stack and drive
+
+Preconditions:
+
+- A run started with the tripwire on `PATH` and seeded with `--fake-runtime`; `<api>` and `<repoId>` from `state.json`. `PATH=<tripwire dir>:$PATH bun $S/verify-stack.ts start --name <run>`.
+- A new tab in Claude in Chrome on `<dashboard>/` (`env.AOP_DASHBOARD_URL`).
+
+- **Create (`shell-create`).** On `/`, click `projects-empty-new`, wait for `new-project-dialog`, type a name in `new-project-name`, tick the `new-project-repo` row for `repo`, click `new-project-submit`. The dialog closes, the address becomes `/projects/<id>`, the sidebar has a `project-row`, and the page shows `threads-empty` with `Nothing is waiting on you.` in `project-attention` and `Live` in `project-stream-state`. Second view: `curl -s <api>/api/projects` lists the project with `repoIds: ["<repoId>"]`.
+- **Watch it move (`shell-live`).** Keep the tab open and do not reload. Send the coordinator a message that starts a thread that asks a question: `POST <api>/api/projects/<id>/messages` with `{"text":"start it [fake: calls='[{\"name\":\"thread_spawn\",\"arguments\":{\"title\":\"Pick a database\",\"prompt\":\"Choose [fake: ask=\\\"Which one?\\\" options=\\\"a|b\\\"]\"}}]']"}`. Within a few seconds a `thread-card` with `data-status=waiting-on-you` and the line `Blocked · Which one?` appears, the header reads `1 thread is waiting on you.`, and the sidebar row gets `project-attention-waiting` with `1`. Start a working thread with `POST <api>/api/projects/<id>/threads` and `{"title":"Fix the login redirect","prompt":"go [fake: calls='[{\"name\":\"aop_report_status\",\"arguments\":{\"line\":\"Bisecting · 7 commits left\",\"steps\":[{\"label\":\"Reproduce\",\"state\":\"done\"},{\"label\":\"Bisect\",\"state\":\"active\"},{\"label\":\"Fix\",\"state\":\"pending\"}]}}]' delay=8000 steps=2]"}`: the card is `working` with a pulsing dot; when the turn ends it is `idle`, shows the status line and a `thread-steps` ring reading `1/3`. Answer the question with `POST <api>/api/threads/<threadId>/reply` `{"text":"b"}`: the card leaves `waiting-on-you`, the badge and the sentence clear.
+- **Menu (`shell-menu`).** Open the header's `…` (`project-header-menu`) and choose Pause: the title gets a `paused` tag (`project-status-tag`) and the sidebar row a pause icon; the menu now offers Resume, which returns `status: "active"` in `GET <api>/api/projects/<id>`. Choose Pin: `project-row` moves under `sidebar-pinned` and `localStorage["aop:pinned-projects:v1"]` holds the id. Archive moves the row into `sidebar-archived` and ends the project's stream; Delete asks first, then leaves no project and returns to `/`.
+- **Restart (`shell-restart`).** With a project open, set `window.__marker` in `javascript_tool`. Stop the host with `kill -TERM -<serverPid>` (from `state.json`), wait about 12 seconds, append an entry while it is down with `bun $S/seed-events.ts --name <run> thread <projectId> thr_down "Added while down"`, then `bun $S/verify-stack.ts restart-server --name <run>`. In the tab, `connection-status` and `project-stream-state` read `Reconnecting…` while the host is down, then return to `connected` and `Live`, the `thread-card` for `thr_down` has appeared, and `window.__marker` is still set: the page did not reload. `performance.getEntriesByType('resource')` lists `…/stream?after=<id>`: the browser gave up on the stream (the dev proxy answers 502 while the host is down) and the page opened a new one from its cursor. A restart that takes under three seconds is resumed by the browser itself, with no new request in that list. `restart-server --crash` (SIGKILL) behaves the same.
+- **Pairing (`shell-pairing`).** The dev dashboard (`apps/dashboard/dev.ts`) listens on loopback only and reaches the API from loopback, so it never shows the pairing screen. To reach the host as a remote device, serve the built dashboard from the host itself and bind it to the network: `bun run build:dashboard`, then `AOP_BIND_HOST=0.0.0.0 DASHBOARD_STATIC_PATH=$PWD/apps/dashboard/dist PATH=<tripwire dir>:$PATH bun $S/verify-stack.ts start --name <run>-lan` and seed it. Read the LAN address with `ipconfig getifaddr en0` and confirm `curl -i http://<lan-ip>:<serverPort>/api/auth/me` answers `401` with `"code":"UNAUTHENTICATED"`. Create a project on the host with `curl <api>/api/projects` (loopback needs no credentials). In Chrome open `http://<lan-ip>:<serverPort>/`: the page is `pairing-screen`, with no sidebar. Enter a wrong code in `pairing-code-input` and click `pairing-submit`: `pairing-error` reads `Wrong or expired pairing code`. Get a real one on the host, `curl -s -X POST <api>/api/auth/pairing-codes`, enter it and submit: the app opens with the project. `fetch('/api/auth/me')` in the tab now answers `{"kind":"device", ...}`, `document.cookie` does not show `aop_device` (it is `HttpOnly`), and `project-stream-state` reads `Live`: the cookie authenticates the stream. Start a thread on the host and its card appears in the tab. Revoke the device with `curl -X DELETE <api>/api/auth/devices/<id>` (ids from `GET <api>/api/auth/devices`): within about five seconds the tab shows the pairing screen again.
+- **Routes (`shell-routes`).** `/projects/<id>/chat`, `/projects/<id>/settings` and `/projects/<id>/threads/<threadId>` show `coordinator-chat-pane`, `project-settings-pane` and `thread-pane` under the same header; the tab for the current screen has `aria-current=page`. `/workflows` or `/tasks/x` is rewritten to `/`. `/projects/nope` shows `project-not-found`.
+- **Proof.** Screenshots of the empty project, the cards mid-flow (blocked card with the amber sentence, a working card, an idle card with the ring), the sidebar badge, the `Reconnecting…` state, the pairing screen and the paired app; the API responses for each step; `read_console_messages` with `onlyErrors: true` after every flow. State that the runtime was the fake CLI.
+
+## Gotchas
+
+- Screenshots from the Claude in Chrome tab can crop the right edge of a wide window, and pointer coordinates are the screenshot's divided by the page's device pixel ratio (1.1 in the run this was written in). Prefer `find` refs and `data-testid` handles; to see the whole layout in a screenshot, scale `#root` with a CSS transform in `javascript_tool`.
+- A row's `…` button is `display: none` until the row is hovered, so a click on its `find` ref does nothing. Use the header's `…`, or hover the row first. The menus are Radix menus: a `find` ref click on the header's `…` sometimes needs a second click to open it, and a ref click on an item does not always select it. What worked in the run this was written in: open the menu, `focus()` the item through `javascript_tool` (`[data-testid=project-menu-archive]`, `-delete`, `-notifications`), press `Return` (or `ArrowRight` then `ArrowDown` and `Return` in the Notifications submenu). Delete then shows a confirmation dialog whose `Delete project` button a `find` ref click does press.
+- The stream cap is four: with more projects, the ones without a stream are refetched every 30 seconds, so a change to one shows up within that time rather than at once. Opening a project moves a stream to it.
+- The pin is a per-browser choice in local storage. It is not on the host and does not follow a project to another device.
+- In development React mounts effects twice, so the first load shows two `GET /api/projects` and two `GET /api/auth/me` in the network log. The production bundle does not.
+- Threads created with `seed-events.ts` never finish: they are `working` rows with no run behind them. Use them for a card, not for a flow.
+- Chromium keeps at most six HTTP/1.1 connections to a host. If the tab hangs on API calls, count the open streams (`performance.getEntriesByType('resource')` lists them) before suspecting the host.

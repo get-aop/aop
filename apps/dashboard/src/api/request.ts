@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+import { apiUrl, authHeaders, isRemoteHost } from "./host";
 
 export class ApiError extends Error {
   constructor(
@@ -12,23 +12,47 @@ export class ApiError extends Error {
   }
 }
 
+const UNAUTHENTICATED = "UNAUTHENTICATED";
+
+type UnauthenticatedListener = () => void;
+const unauthenticatedListeners = new Set<UnauthenticatedListener>();
+
+/**
+ * Called when the host answers 401 `UNAUTHENTICATED`: this client has no valid device token
+ * (never paired, or revoked). The app answers by showing the pairing screen.
+ */
+export const onUnauthenticated = (listener: UnauthenticatedListener): (() => void) => {
+  unauthenticatedListeners.add(listener);
+  return () => unauthenticatedListeners.delete(listener);
+};
+
 export const request = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
-  const response = await fetch(`${API_BASE}${path}`, {
-    // Session chat and other local APIs must never serve a stale browser cache after
-    // navigating away and back (or after background assistant writes).
+  const response = await fetch(apiUrl(path), {
+    // Every API answer can change between two visits, so a stale browser cache must never serve one.
     cache: "no-store",
+    credentials: isRemoteHost() ? "include" : "same-origin",
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
       ...options.headers,
     },
   });
 
   const data = await readResponseJson(response);
-  if (!response.ok) throw apiErrorFromResponse(response, data);
+  if (!response.ok) {
+    const error = apiErrorFromResponse(response, data);
+    if (error.status === 401 && error.code === UNAUTHENTICATED) {
+      for (const listener of unauthenticatedListeners) listener();
+    }
+    throw error;
+  }
 
   return data as T;
 };
+
+export const isUnauthenticated = (error: unknown): boolean =>
+  error instanceof ApiError && error.status === 401 && error.code === UNAUTHENTICATED;
 
 const readResponseJson = async (response: Response): Promise<Record<string, unknown>> => {
   try {

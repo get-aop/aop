@@ -1,43 +1,24 @@
-import { useEffect } from "react";
 import { ErrorBoundary } from "@/ui/error-boundary";
 import { useAppZoom } from "./app-zoom";
-import { useHostEvents } from "./hooks/useHostEvents";
+import { AuthGate } from "./auth/AuthGate";
+import { RuntimeConfigurationProvider } from "./hooks/runtime-configuration";
+import { ProjectPage } from "./projects/ProjectPage";
+import { ProjectsIndex } from "./projects/ProjectsIndex";
+import { ProjectsProvider } from "./projects/ProjectsProvider";
 import { AppShell } from "./shell/AppShell";
-import { openAttachRepoDialog } from "./shell/dialog-store";
+import { useRoute } from "./shell/router";
 import { KitPage } from "./ui/kit-page";
-import { SessionsPage } from "./views/sessions/SessionsPage";
-
-/**
- * One page: Sessions is the app. Every legacy route redirects to "/" with
- * history.replaceState (PLAN §3).
- */
-const LEGACY_REDIRECTS = new Set([
-  "/chat",
-  "/pool",
-  "/workers",
-  "/metrics",
-  "/workflows",
-  "/settings",
-]);
-
-const LEGACY_PREFIXES = ["/workflows/", "/tasks/"];
-
-const redirectLegacyRoute = (): void => {
-  const path = window.location.pathname;
-  if (LEGACY_REDIRECTS.has(path) || LEGACY_PREFIXES.some((prefix) => path.startsWith(prefix))) {
-    window.history.replaceState({}, "", "/");
-  }
-};
 
 /** Dev-only kitchen sink for the Graphite kit (PLAN phase 2). */
 const isKitRoute = (): boolean =>
   window.location.pathname === "/__kit" && process.env.NODE_ENV !== "production";
 
+/**
+ * Projects are the app: `/` lists them, `/projects/:id` is a project's home, and the
+ * coordinator chat, a thread and the project settings are screens of that project.
+ */
 export const App = () => {
-  const host = useHostEvents();
   useAppZoom();
-
-  useEffect(redirectLegacyRoute, []);
 
   if (isKitRoute()) {
     // Dev-only kitchen sink renders chromeless, outside the app shell.
@@ -49,10 +30,21 @@ export const App = () => {
   }
 
   return (
-    <AppShell connected={host.connected} onReposChanged={() => void host.refresh()}>
-      <ErrorBoundary>
-        <SessionsPage repos={host.repos} onAttachRepo={openAttachRepoDialog} />
-      </ErrorBoundary>
-    </AppShell>
+    <AuthGate>
+      <RuntimeConfigurationProvider>
+        <ProjectsProvider>
+          <AppShell>
+            <ErrorBoundary>
+              <RouteView />
+            </ErrorBoundary>
+          </AppShell>
+        </ProjectsProvider>
+      </RuntimeConfigurationProvider>
+    </AuthGate>
   );
+};
+
+const RouteView = () => {
+  const route = useRoute();
+  return route.name === "projects" ? <ProjectsIndex /> : <ProjectPage route={route} />;
 };

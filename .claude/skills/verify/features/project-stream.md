@@ -1,6 +1,6 @@
 # Project event stream
 
-One SSE connection per project, `GET /api/projects/:projectId/stream`, carries project, thread and message changes and can be resumed from any point. There is no Projects UI yet, so this map drives the stream from a browser tab with an `EventSource`. The protocol is in `docs/architecture/project-event-stream.md`.
+One SSE connection per project, `GET /api/projects/:projectId/stream`, carries project, thread and message changes and can be resumed from any point. The dashboard opens one `EventSource` per project it watches (at most four at once); this map drives the stream itself from a browser tab, and [Projects shell](./projects-shell.md) covers the dashboard using it. The protocol is in `docs/architecture/project-event-stream.md`.
 
 ## Sub-features
 
@@ -11,7 +11,7 @@ One SSE connection per project, `GET /api/projects/:projectId/stream`, carries p
 
 ## How to get to it (user POV)
 
-Nothing in the dashboard opens it yet. The Projects dashboard will open one `EventSource` per project.
+The dashboard opens a project's stream when it lists the project, and reopens it with `?after=` after the host restarts (see `shell-restart` in [Projects shell](./projects-shell.md)). This map opens its own `EventSource` in the tab's console.
 
 ## Driving it with verify-stack and drive
 
@@ -30,6 +30,6 @@ Preconditions:
 
 ## Gotchas
 
-- The seeded `thread` is a real `chat_sessions` row with a project id. The Sessions dashboard lists it and its runtime is `claude-code`: never type into it. Use a stack of its own for chat checks.
+- The seeded `thread` is a real `chat_sessions` row with a project id. It has no run behind it and its runtime is `claude-code`: never send it a message. Use a stack of its own, seeded with `--fake-runtime`, for chat checks.
 - A seed runs in another process, so the server has no in-memory notification for it; entries arrive on the next heartbeat. That is the fallback path, not the fast one, which the tests cover.
 - The dashboard dev server proxies `/api` with Bun's default 10 second idle timeout. The stream's 5 second heartbeat keeps it open; a longer interval would drop the connection every 10 seconds (it would reconnect and resume).

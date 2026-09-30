@@ -6,7 +6,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 - Start a stack: `bun $S/verify-stack.ts start --name <run>`, then `bun $S/seed.ts --name <run>`.
 - Run `bun $S/verify-stack.ts doctor --name <run>` and require every line to be `PASS`.
-- Read `repoId` and `repoPath` from `.work/verify/<run>/state.json` under `seed`. The seeded state is the repo `repo` registered, with no sessions.
+- Read `repoId` and `repoPath` from `.work/verify/<run>/state.json` under `seed`. The seeded state is the repo `repo` registered, with no projects and no sessions.
 - `<api>` is `env.AOP_LOCAL_SERVER_URL` in `.work/verify/<run>/state.json` (for example `http://127.0.0.1:25486`); the dashboard URL is `env.AOP_DASHBOARD_URL` in the same file.
 - Never drive an instance that was not started by this verification run.
 
@@ -16,7 +16,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Prefer `data-testid` handles; they are the stable handles in the dashboard. Role and text selectors work too.
 - Run CLI actions through `bun $S/verify-stack.ts aop --name <run> -- <aop args>`.
 - Run dashboard actions in a new Claude in Chrome tab on `<dashboard>` (the URL in `env.AOP_DASHBOARD_URL`). Wait for elements with `find` by `data-testid`, batch steps with `browser_batch`, and read the console after each flow.
-- Do not type into the Sessions composer unless the recipe says to. Chat messages reach the real `claude-code` runtime with the user's auth, unless the stack was seeded with `--fake-runtime` (see the Sessions recipe).
+- Do not send a chat or coordinator message unless the recipe says to. A message reaches the real `claude-code` runtime with the user's auth, unless the stack was seeded with `--fake-runtime` (see the Sessions and Projects recipes). Put stub `claude`, `codex` and `pi` scripts that log and exit non-zero first on `PATH` when starting the stack, so a misrouted call cannot reach a real CLI.
 - Stop with `bun $S/verify-stack.ts stop --name <run>`; it keeps evidence.
 
 ## Proof and skip reporting
@@ -32,8 +32,9 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Features
 
+- [Projects shell](./projects-shell.md) covers the dashboard: the projects sidebar, the New project dialog, a project's thread grid updating live, reconnecting after a host restart, and the pairing screen.
+- [Projects](./projects.md) covers the project, coordinator and thread API, driven with the fake runtime; the shell shows the result.
 - [Project event stream](./project-stream.md) covers `GET /api/projects/:id/stream`: live entries, resume, restart, removal.
-- [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the dashboard attach dialog.
-- [Sessions](./sessions.md) covers the chat workbench, the composer, runtime-free commands, and settling.
+- [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the attach dialog.
+- [Sessions](./sessions.md) covers plain chat sessions through the API (no page in the dashboard): fake chat, usage, a server crash mid-turn.
 - [Settings](./settings.md) covers the Settings dialog and its sections.
-- [Projects](./projects.md) covers the project, coordinator and thread API (no UI yet), driven with the fake runtime.

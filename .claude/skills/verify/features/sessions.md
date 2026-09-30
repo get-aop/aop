@@ -1,66 +1,51 @@
-# Sessions
+# Sessions (API only)
 
-Sessions is AOP's front door: a chat workbench per repository with a rail of sessions, a thread, and a composer with model, effort, and access controls. This map covers what renders and the commands AOP handles itself. Anything that reaches the agent runtime is out of scope unless the user has agreed to that spend.
+A plain chat session is one conversation with an agent runtime in a repository. The dashboard no longer has a page for them: its front door is [Projects](./projects-shell.md), and the coordinator and thread sessions of a project never appear in `GET /api/chat-sessions`. The server side is intact, so this map drives it with the HTTP API and the fake runtime. The composer, the transcript and the diff components are still in `apps/dashboard/src/views/sessions`, waiting to be mounted by the coordinator chat and the thread pane.
+
+Every recipe needs a stack seeded with `--fake-runtime`, started with stub `claude`, `codex` and `pi` scripts first on `PATH`. Never send a message on a stack without the fake: it reaches the real CLI with the user's auth.
 
 ## Sub-features
 
-- `sessions-home` renders the rail, the draft hero, and the composer for a repository session.
-- `sessions-clear` settles the current session and opens a fresh sibling with `/clear`.
-- `sessions-fake-chat` sends a message to the fake CLI runtime and watches a streamed reply. Needs `seed.ts --fake-runtime`.
-- `sessions-restart` crashes the server mid-turn, then stops the orphaned CLI or sees it die. Needs `seed.ts --fake-runtime`.
-- `sessions-usage` sends fake turns that report known token counts and reads them back through `/api/usage`. Needs `seed.ts --fake-runtime`. There is no usage UI yet; that is the Usage tab of the Projects revamp.
+- `sessions-fake-chat` sends scripted messages to the fake CLI and reads the replies back.
+- `sessions-usage` sends turns that report known token counts and reads them back through `/api/usage`.
+- `sessions-restart` crashes the server mid-turn, then stops the orphaned CLI.
 
-## How to get to it (user POV)
-
-- Open `/` in the dashboard; the rail lists sessions grouped by repository.
-- Choose **New session** in the rail (`data-testid=rail-new-session`).
-- Type `/clear` in the composer of an open session.
-
-## Driving it with verify-stack and drive
+## Driving it with verify-stack and curl
 
 Preconditions:
 
-- A started and seeded run.
-- One session exists for the seeded repo. Create it through the API the dashboard uses: `curl -s -X POST <api>/api/chat-sessions -H 'content-type: application/json' -d '{"repoId":"<repoId>"}'`. The response holds `session.id`.
+- A started and seeded run (`seed.ts --name <run> --fake-runtime`); `<api>`, `<repoId>` and the run's database `$AOP_DB_PATH` (`bun $S/verify-stack.ts env --name <run>`).
+- Write each request body to a file and send it with `--data @file`, so the `[fake: ...]` marker needs no shell quoting.
 
-- **Open Sessions.** In Chrome, navigate to `<dashboard>/`, find `data-testid=app-rail` and `data-testid=chat-composer-input`, and take a screenshot. The screenshot shows the rail with a `New session` row under `repo`, the `aop` wordmark, the composer (placeholder `Ask anything, ~ to mention a repository, or / for commands`), the suggestion chips (Implement a feature, Review a pull request, Debug failing tests), and a footer reading `Connected · v0.9.51+dev` (the version matches `package.json`).
-- **Run `/clear`.** In Chrome, on `<dashboard>/`, click `data-testid=chat-composer-input`, type `/clear`, press Enter, and take a screenshot. AOP handles this command itself; no runtime starts.
-- **Confirm the state change.** Run `curl -s <api>/api/chat-sessions`. The original session has `settledOverride: "settled"` and a `settledAt`, and a second session exists with `settledOverride: null`.
-- **Proof.** Keep both screenshots and the two `/api/chat-sessions` responses (before and after), with the feature ID `sessions` and the entry point `composer /clear`.
+## Fake chat (`sessions-fake-chat`)
 
-## Driving chat with the fake runtime (`sessions-fake-chat`)
-
-Preconditions: `bun $S/seed.ts --name <run> --fake-runtime`, then `curl -s <api>/api/runtime-configuration` lists a `Fake CLI` provider first. This is the only recipe that types into the composer, because the fake never calls a model.
-
-- **Open a session.** In Chrome, on `<dashboard>/`, choose **New session** (`data-testid=rail-new-session`). The composer's runtime chip reads `Fake CLI fake-model`. If `curl -s <api>/api/chat-sessions` shows a `runtimeAlias` that does not end in `fake-cli.ts` for a session that has messages, stop: the message reached the real CLI.
-- **Send a scripted message.** Click `data-testid=chat-composer-input`, type `hello [fake: steps=3 delay=1200]`, press Enter, and take a screenshot after about 3 seconds. The thread shows a `Working` block with `Bash echo step 1` rows and narration (`Working on step 1 of 3.`). After about 13 seconds it collapses to `Worked for 13s` and the reply `Fake reply for turn 1 of session <id>. You said: hello`.
-- **Resume.** Send `and again`. The reply reads `Fake reply for turn 2 of session <id> (resumed). You said: and again`, with the same session id.
-- **Question.** Send `pick one [fake: ask="Which one?" options="a|b"]`. The turn ends with `Waiting on your answer.`; the question is a tool call in the run log under `$AOP_HOME/logs/chat-sessions/<id>/`, and the dashboard has no card for it. A plain chat is not offered `aop_ask_user` (only project threads are), so the fake's real MCP call is answered with an error result in that log. For a working question flow see [Projects](./projects.md).
-- **More scripts.** `[fake: crash=3]` fails the run with `Runtime exited with code 137. Check that the CLI is installed and authenticated.` `[fake: delay=30000]` then **Stop** cancels the run (`Conversation stopped.`) and the next message resumes the session. Both were checked through the API and `apps/local-server/src/chat-session/fake-cli.test.ts`, not the UI. The full syntax is in `packages/llm-provider/test-fixtures/README.md`.
-- **Proof.** Screenshots mid-stream and after the reply, plus `curl -s <api>/api/chat-sessions/<id>` showing the messages and `runtimeSessionId`. State that the runtime was the fake CLI.
+- **Create a session.** `curl -s -X POST <api>/api/chat-sessions -H 'content-type: application/json' -d '{"repoId":"<repoId>"}'`. The reply holds `session.id`; its `runtimeAlias` ends in `fake-cli.ts`. If it does not, stop: a message would reach the real CLI.
+- **Send a scripted message.** `POST <api>/api/chat-sessions/<id>/messages` with `{"content":"hello [fake: steps=2 delay=300]"}`. After a few seconds `GET <api>/api/chat-sessions/<id>` lists the user message and the assistant's reply, `Fake reply for turn 1 of session <runtime session id>.`, and `runtimeSessionId` is set.
+- **Resume.** Send `and again`. The reply reads `Fake reply for turn 2 of session <same runtime session id> (resumed). You said: and again`.
+- **More scripts.** `[fake: crash=3]` fails the run with `Runtime exited with code 137. Check that the CLI is installed and authenticated.` `[fake: delay=30000]` then `POST <api>/api/chat-sessions/<id>/abort` cancels the run and the next message resumes the session. `[fake: ask="Which one?" options="a|b"]` ends the turn on a question; a plain chat is not offered `aop_ask_user` (only project threads are), so it gets an error result in the run log under `$AOP_HOME/logs/chat-sessions/<id>/`. For a working question flow see [Projects](./projects.md). The full syntax is in `packages/llm-provider/test-fixtures/README.md`.
+- **Proof.** The requests, `GET <api>/api/chat-sessions/<id>` before and after, and the note that the runtime was the fake CLI.
 
 ## Usage accounting (`sessions-usage`)
 
-Every finished chat run stores what its log reported in `run_usage` (one row per run and model). Preconditions: the fake-runtime recipe above, a session open on the fake runtime.
+Every finished chat run stores what its log reported in `run_usage` (one row per run and model).
 
-- **Send turns with known numbers.** In the composer send `first [fake: usage=1200,340,5000,61000]`, then `second [fake: usage=100,50,0,2000]` (the four numbers are input, output, cache write, cache read). Click the composer through `find` and `scroll_to` once the thread is taller than the viewport.
-- **Read them back.** `curl -s <api>/api/usage/threads/<session id>` returns totals `1300, 390, 5000, 63000`, cost `0.237` and `runs: 2`, and one `byModel` entry for `fake-model`. `curl -s <api>/api/usage/runs/<run id>` returns one turn (run ids: `sqlite3 "$AOP_DB_PATH" 'select id from chat_runs'`). `sqlite3 "$AOP_DB_PATH" 'select * from run_usage'` shows the rows. The fake prices a turn at Opus list prices, so the first turn costs `0.22875`.
-- **Restart.** `bun $S/verify-stack.ts restart-server --name <run>`, then read the thread again: same totals.
-- **A killed turn.** Send `break [fake: steps=2 crash=3 usage=700,80,0,9000]`. The run fails (`Runtime exited with code 137`) and the thread totals grow by 700, 80, 0, 9000 with no cost: the CLI died before its result, so the assistant messages it streamed are counted.
-- **A project.** No API creates projects yet. To exercise `/api/usage/projects/<id>`, insert a `projects` row and set `project_id`, `kind` (`thread` or `coordinator`), `state` (`idle`, threads only) and `last_activity_at` on the session rows with `sqlite3`; `since` and `until` narrow the window.
+- **Send turns with known numbers.** `{"content":"first [fake: usage=1200,340,5000,61000]"}`, then `{"content":"second [fake: usage=100,50,0,2000]"}` (the four numbers are input, output, cache write, cache read).
+- **Read them back.** `curl -s <api>/api/usage/threads/<id>` returns totals `1300, 390, 5000, 63000`, cost `0.237` and `runs: 2`, and one `byModel` entry for `fake-model` (after the first turn alone: `1200, 340, 5000, 61000` at `0.22875`). `curl -s <api>/api/usage/runs/<run id>` returns one turn (run ids: `sqlite3 "$AOP_DB_PATH" 'select id from chat_runs'`), and `sqlite3 "$AOP_DB_PATH" 'select * from run_usage'` shows the rows. The fake prices a turn at Opus list prices.
+- **Restart.** `bun $S/verify-stack.ts restart-server --name <run>`, then read the session again: same totals.
+- **A killed turn.** `{"content":"break [fake: steps=2 crash=3 usage=700,80,0,9000]"}`. The run fails (`Runtime exited with code 137. ...`) and the totals grow by 700, 80, 0, 9000 (to `2000, 470, 5000, 72000` and `runs: 3`) while the cost stays `0.237`: the CLI died before its result, so the assistant messages it streamed are counted and nothing is priced.
+- **A project.** `GET <api>/api/usage/projects/<id>` reports a project's totals, its `byModel` and one entry per thread; `since` and `until` narrow the window. There is no usage screen yet: it is the Usage tab of project settings.
 
 ## Server crash during a turn (`sessions-restart`)
 
-A crashed server leaves the detached CLI running. The chat run records the CLI's pid (`chat_runs.pid`), so the restarted server can stop it or notice it died. Preconditions: the fake-runtime recipe above.
+A crashed server leaves the detached CLI running. The chat run records the CLI's pid (`chat_runs.pid`), so the restarted server can stop it or notice it died.
 
-- **Crash mid-turn.** Send `long job [fake: steps=3 delay=20000]`. Read the pid with `sqlite3 "$AOP_DB_PATH" 'select id,status,pid from chat_runs'` (paths from `verify-stack.ts env`). Run `bun $S/verify-stack.ts restart-server --name <run> --crash`; it SIGKILLs the server, so no shutdown hook runs, and starts a new one on the same port and DB. `ps -p <pid>` still lists the fake.
-- **Stop after the restart.** Reload `<dashboard>/`. The session reports `assistantLifecycle: "uncontrollable"` in `/api/chat-sessions`, and the composer shows `Stop conversation`. Click it. The thread reads `Stopped after the app restarted.`, the run is `cancelled`, and `ps -p <pid>` finds nothing. Before this existed, Stop only edited the row and the CLI kept running.
-- **CLI dies while the server is down.** Send `carry on [fake: steps=4 delay=3000 crash=6]`, then `restart-server --crash` within a few seconds. About 18 seconds later the fake crashes. The restarted server sees the recorded pid is gone and fails the run with `The runtime process exited without a final response. Try again, or reset the runtime session.` instead of leaving it running forever.
-- **Proof.** The `chat_runs` rows before and after, `ps -p <pid>`, and screenshots of both thread endings.
+- **Crash mid-turn.** Send `{"content":"long job [fake: steps=3 delay=20000]"}`. Read the pid with `sqlite3 "$AOP_DB_PATH" 'select id,status,pid from chat_runs order by rowid desc limit 1'`. Run `bun $S/verify-stack.ts restart-server --name <run> --crash`; it SIGKILLs the server, so no shutdown hook runs, and starts a new one on the same port and DB. `ps -p <pid>` still lists the fake.
+- **Stop after the restart.** `GET <api>/api/chat-sessions` reports `assistantLifecycle: "uncontrollable"` for the session. `POST <api>/api/chat-sessions/<id>/abort` with `{}` answers `{"aborted":true,"disposition":"durable_cancelled"}`, the last message reads `Stopped after the app restarted.`, the run is `cancelled`, and `ps -p <pid>` finds nothing. Before this existed, Stop only edited the row and the CLI kept running.
+- **CLI dies while the server is down.** Send `carry on [fake: steps=4 delay=3000 crash=6]`, then `restart-server --crash` within a few seconds. About 18 seconds later the fake crashes. The restarted server sees the recorded pid is gone and fails the run with `The runtime process exited without a final response. Try again, or reset the runtime session.` instead of leaving it running forever. This variant was checked through the composer before the page was removed and has not been re-driven through the API.
+- **Proof.** The `chat_runs` rows before and after, `ps -p <pid>`, and the two session reads.
 
 ## Gotchas
 
-- Only `/clear` and `/alias` are handled by AOP. Any other text, including `/status` and `/workflow`, is forwarded to the session's runtime (default `claude-code`), which runs the real CLI with the user's auth. Observed: `/status` returned `/status isn't available in this environment.` from Claude Code. The AOP-handled commands are defined in `apps/local-server/src/chat-session/commands.ts`.
-- The thread can list `N changed files` for the session's repo (seen when stray files sat in `repoPath`). The seed leaves the fixture repo clean; changed files you did not create mean something wrote there.
-- The composer's `/` and `~` menus are typeahead only until a message is sent; opening them is safe, sending is not.
-- A new session defaults to `Claude Code`, the user's real CLI. Seed with `--fake-runtime` to get a model-free chat runtime.
+- Only `/clear` and `/alias` are handled by AOP as chat commands (`apps/local-server/src/chat-session/commands.ts`); any other text, including `/status` and `/workflow`, is forwarded to the session's runtime, which is the real CLI unless the session is on the fake. Whether `/clear` works through the messages route was not re-driven after the composer was removed.
+- A new session defaults to `Claude Code`, the user's real CLI, unless the stack was seeded with `--fake-runtime`.
+- Bodies with `[fake: ...]` markers: the marker's quoting is JSON-in-shell-in-JSON. A file per request avoids it.

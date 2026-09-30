@@ -13,7 +13,7 @@ import { closeAttachRepoDialog, useDialogs } from "../shell/dialog-store";
  * ⎇ git badge; plain folders descend; footer shows the selected path and
  * enables “Attach repository” only on a git repo.
  */
-export const AttachRepoDialog = ({ onAttached }: { onAttached?: () => void }) => {
+export const AttachRepoDialog = ({ onAttached }: { onAttached?: (repoId: string) => void }) => {
   const { attachRepo } = useDialogs();
   const requestIdRef = useRef(0);
 
@@ -60,7 +60,7 @@ export const AttachRepoDialog = ({ onAttached }: { onAttached?: () => void }) =>
     try {
       const result = await registerRepo(currentPath);
       toast.success(result.alreadyExists ? "Repository already attached" : "Repository attached");
-      onAttached?.();
+      onAttached?.(result.repoId);
       closeAttachRepoDialog();
     } catch (cause) {
       toast.error(cause instanceof ApiError ? cause.message : "Failed to attach repository");

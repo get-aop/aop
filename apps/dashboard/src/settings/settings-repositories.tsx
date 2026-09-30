@@ -20,7 +20,7 @@ import {
 } from "@/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/ui/empty";
 import { getRepos, type RegisteredRepo, unregisterRepo } from "../api/client";
-import { openAttachRepoDialog } from "../shell/dialog-store";
+import { onRepoAttached, openAttachRepoDialog } from "../shell/dialog-store";
 
 export const buildUnregisterRepoWarning = (repoName: string, isLastRepo: boolean): string =>
   `This removes ${repoName} from AOP and deletes its data${
@@ -45,6 +45,7 @@ export const SettingsRepositories = () => {
 
   useEffect(() => {
     void reload();
+    return onRepoAttached(() => void reload());
   }, [reload]);
 
   const runUnregister = async (repo: RegisteredRepo) => {

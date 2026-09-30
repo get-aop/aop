@@ -4,15 +4,17 @@ export type SettingsSection = "general" | "repositories" | "runtimes" | "exec-ho
 
 interface DialogState {
   settings: { open: boolean; section: SettingsSection };
-  newSession: boolean;
+  newProject: boolean;
   attachRepo: boolean;
 }
 
-let current: DialogState = {
+const CLOSED: DialogState = {
   settings: { open: false, section: "general" },
-  newSession: false,
+  newProject: false,
   attachRepo: false,
 };
+
+let current: DialogState = CLOSED;
 
 const listeners = new Set<() => void>();
 
@@ -41,14 +43,26 @@ export const openSettingsDialog = (section: SettingsSection = "general"): void =
 export const closeSettingsDialog = (): void =>
   setState({ settings: { ...current.settings, open: false } });
 
-export const openNewSessionDialog = (): void => setState({ newSession: true });
-export const closeNewSessionDialog = (): void => setState({ newSession: false });
+export const openNewProjectDialog = (): void => setState({ newProject: true });
+export const closeNewProjectDialog = (): void => setState({ newProject: false });
 
 export const openAttachRepoDialog = (): void => setState({ attachRepo: true });
 export const closeAttachRepoDialog = (): void => setState({ attachRepo: false });
 
+const attachedListeners = new Set<(repoId: string) => void>();
+
+/** Hears every repository the attach dialog registers, so a list on screen can reload and pick it. */
+export const onRepoAttached = (listener: (repoId: string) => void): (() => void) => {
+  attachedListeners.add(listener);
+  return () => attachedListeners.delete(listener);
+};
+
+export const announceRepoAttached = (repoId: string): void => {
+  for (const listener of attachedListeners) listener(repoId);
+};
+
 /** Test hook: reset between tests. */
 export const resetDialogs = (): void => {
-  current = { settings: { open: false, section: "general" }, newSession: false, attachRepo: false };
+  current = CLOSED;
   emit();
 };

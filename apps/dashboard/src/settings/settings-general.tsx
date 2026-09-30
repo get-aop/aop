@@ -26,7 +26,6 @@ interface SettingsGeneralProps {
   editedValues: Record<string, string>;
   onChange: (key: string, value: string) => void;
   onSaved: (settings: SettingEntry[]) => void;
-  onSettingsSaved?: () => Promise<void> | void;
   runtimeConfigurations?: RuntimeConfigurationProvider[];
   afterSections?: ReactNode;
 }
@@ -37,7 +36,6 @@ export const SettingsGeneral = ({
   editedValues,
   onChange,
   onSaved,
-  onSettingsSaved,
   runtimeConfigurations = [],
   afterSections,
 }: SettingsGeneralProps) => {
@@ -63,7 +61,6 @@ export const SettingsGeneral = ({
     try {
       await updateSettings(entries);
       onSaved(entries);
-      await onSettingsSaved?.();
       toast.success("Settings saved");
     } catch {
       toast.error("Save failed");
@@ -75,7 +72,7 @@ export const SettingsGeneral = ({
         void persistSettings();
       }
     }
-  }, [editedValues, onSaved, onSettingsSaved, savedValues]);
+  }, [editedValues, onSaved, savedValues]);
 
   useEffect(() => {
     if (dirtyEntries.length === 0) return;

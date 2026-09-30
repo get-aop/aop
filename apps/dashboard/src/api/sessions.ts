@@ -262,6 +262,3 @@ export const retryChatRunFresh = async (
     method: "POST",
     body: JSON.stringify({ confirmed: true }),
   });
-
-export const chatSessionStreamUrl = (sessionId: string): string =>
-  `/api/chat-sessions/${sessionId}/stream`;

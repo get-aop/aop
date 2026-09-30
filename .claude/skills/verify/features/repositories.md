@@ -1,19 +1,19 @@
 # Repositories
 
-Repositories lets a user register a local git repository with AOP, see it in the dashboard rail and status, and remove it together with its AOP data.
+Repositories lets a user register a local git repository with AOP, choose it when creating a project, see it in status, and remove it together with its AOP data.
 
 ## Sub-features
 
 - `repo-init-cli` registers a path with `aop repo:init`.
-- `repo-attach-ui` opens the attach dialog from the rail's Projects `+`.
+- `repo-attach-ui` opens the attach dialog from the New project dialog or from Settings, Repositories.
 - `repo-status` lists registered repositories.
 - `repo-remove-cli` removes one after the user types its name.
 
 ## How to get to it (user POV)
 
 - Run `aop repo:init [path]` in a terminal (defaults to the current directory).
-- Choose the `+` next to **Projects** in the dashboard rail (`data-testid=rail-attach-repo`).
-- Open **Settings → Repositories**.
+- In the New project dialog choose **Attach a repository** (`data-testid=new-project-attach-repo`); the attached repository appears in the dialog's list, already ticked.
+- Open **Settings → Repositories** and choose **Attach repository**.
 - Run `aop repo:remove [path]`.
 
 ## Driving it with verify-stack and drive
@@ -25,7 +25,7 @@ Preconditions:
 
 - **Register.** Run `bun $S/verify-stack.ts aop --name <run> -- repo:init $R2`. Exit code `0`, and the log line reads `Repository registered` with `repo_…` and the path.
 - **Confirm in status.** Run `curl -s <api>/api/status`. `repos` contains names `repo` and `second`.
-- **Open the attach dialog.** In Chrome, navigate to `<dashboard>/`, click `data-testid=rail-attach-repo`, find `data-testid=attach-repo-dir`, and take a screenshot. A directory browser opens listing the entries of `$HOME` (the first is `Applications`).
+- **Open the attach dialog.** In Chrome, navigate to `<dashboard>/`, click `data-testid=sidebar-new-project`, then `data-testid=new-project-attach-repo`, find `data-testid=attach-repo-dir`, and take a screenshot. A directory browser opens on top of the New project dialog, listing the entries of `$HOME` (the first is `Applications`). Escape closes the attach dialog first, then the New project dialog.
 - **Attach through the dialog.** Click a directory entry with `click:[data-testid=attach-repo-dir]` (entries are relative to `$HOME`); a git repository shows `data-testid=attach-repo-git-badge` and enables `data-testid=attach-repo-confirm`. A plain folder shows no badge and leaves confirm disabled. This flow comes from the deleted Playwright dashboard suite; it has not been re-driven for this map because scratch repos live deep under the checkout.
 - **Remove.** Run `printf 'second\n' | bun $S/verify-stack.ts aop --name <run> -- repo:remove $R2`. The prompt reads `This permanently deletes all AOP data for second. Type second to continue:`, then `Repository removed`.
 - **Confirm removal.** Run `curl -s <api>/api/status` again. `repos` holds only `repo`.

@@ -2,7 +2,7 @@
 
 React operational UI for AOP. Built with Bun (no Vite); static assets are produced by `build.ts` and served by `@aop/local-server` in production.
 
-The dashboard is Sessions-first: a chat workbench per repository, a composer with model, effort, and access controls, and a right panel (Diff · Checks). Settings covers repositories, runtimes, execution hosts, and about.
+The dashboard is Projects-first. A project is one coordinator chat plus the threads the coordinator starts. The sidebar lists projects with what needs attention in each (threads waiting on you, threads working), `/` shows them as cards, and a project's home is a grid of its threads that changes live as the host's event stream delivers entries. Settings is a dialog over the app for host-level settings (repositories, runtimes, execution hosts, about).
 
 ## Run
 
@@ -21,37 +21,57 @@ Dev expects `AOP_LOCAL_SERVER_URL` pointing at the API (local-server sets CORS f
 
 ## Routes
 
-| Path | View | Purpose |
-|------|------|---------|
-| `/` | `SessionsPage` | Sessions — rail, thread, composer, right panel |
-| `/chat`, `/pool`, `/workers`, `/metrics`, `/settings`, `/workflows/:id`, `/tasks/:id` | — | Legacy redirects to `/` |
+| Path | Screen | Purpose |
+| --- | --- | --- |
+| `/` | `ProjectsIndex` | Every project as a card, search, New project |
+| `/projects/:id` | `ThreadGrid` | The project home: its threads as cards, questions first, search |
+| `/projects/:id/chat` | `CoordinatorChatPane` | The coordinator chat (placeholder, see [Extension points](#extension-points)) |
+| `/projects/:id/threads/:threadId` | `ThreadPane` | One thread (placeholder) |
+| `/projects/:id/settings` | `ProjectSettingsPane` | Project settings, memory, usage (placeholder) |
+| any other path | none | Rewritten to `/` |
 
-## Major UI features
+There is no router library: `src/shell/router.tsx` parses the path and `navigate()` uses the History API.
 
-### Sessions
+## How the page stays current
 
-- Rail: scope chips (multi-repo tag awareness), thread list, settled collapsible, footer with update pill and settings deep link
-- Draft hero: **aop** wordmark + suggestion chips that prefill the composer
-- Composer: runtime/model/effort chip, access mode, Fast chip, attachments, paste collapse, `/` slash commands, `~repo` typeahead
-- Thread: day separators (Today / Yesterday / dated), `session` action cards, work-log markers, session git/PR flows
-- Right panel: **Diff** (diff viewer) · **Checks** (PR checks)
+`src/projects/live-projects.ts` owns the page's view of every project. It fetches the project list, then opens one `EventSource` per project on `GET /api/projects/:id/stream` (`project-stream.ts`). Each entry is applied by id to a pure state (`projects-state.ts`), so a repeated entry changes nothing.
 
-### Settings
+- **Reconnect.** A dropped connection is resumed by the browser with `Last-Event-ID`. When the browser gives up (any HTTP error, as while the host restarts), a fresh source opens with `?after=` set to the newest entry seen, after a growing delay.
+- **Resync.** A `resync` event means the log cannot catch the page up. The page refetches the project and its threads and replaces its state, and replays the entries that arrived while it fetched.
+- **Stream cap.** A browser allows six HTTP/1.1 connections to a host, and a stream holds one. At most four projects have a stream (`watch-set.ts`): the open project, then the most recently changed. The rest are refetched every 30 seconds, so their sidebar attention stays roughly current.
+- **Pin, icon, colour.** Pinning is a per-device choice kept in local storage. A project's icon is its first letter on a colour taken from its id.
 
-- Repositories (attach dialog with git badges), Runtimes (add/clone/remove custom), Execution hosts, General + License, About (version/update)
-- Kit chrome only: one chip, one menu, one badge — no ad-hoc controls outside `src/ui`
+## Pairing
+
+The host answers `401 UNAUTHENTICATED` to a browser it does not know. `src/auth/AuthGate.tsx` asks `GET /api/auth/me` first: the host owner's own dashboard is recognized and goes straight in; any other browser gets the pairing screen (`PairingScreen.tsx`), which trades the one-time code for a device with `POST /api/auth/pair`. The host sets the `aop_device` cookie, which authenticates every request and the event streams. A later 401 (a revoked device) brings the pairing screen back. See `docs/HOST.md`.
+
+`src/api/host.ts` also lets a client served from another origin point at a host and send its device token as a bearer header. Nothing sets it yet: the desktop app will.
+
+## Extension points
+
+The three placeholder screens live in `src/projects/panes.tsx` and already receive the data they need, typed. Replacing a body changes nothing in the shell.
+
+- `CoordinatorChatPane({ project, threads })`: read messages from `GET /api/projects/:id/messages` and live text and new messages from `useLiveProjects().subscribeEvents(project.id, listener)`, which hears every entry, live-text delta and resync of the project's stream.
+- `ThreadPane({ project, thread })`: the thread's transcript and its own composer.
+- `ProjectSettingsPane({ project })`: the tab already links here; the project menu's Settings item does too.
 
 ## Layout
 
 ```text
 src/
-  views/              page-level routes (Sessions)
-  shell/              rail, shortcuts, dialog store, repo scope
-  workspace/          right panel (Diff and Checks tabs)
-  ui/                 the one component kit (shadcn + custom)
-  api/                typed fetch wrapper (request/domain modules), re-export hub
-  components/         dialogs, confirmation host
+  projects/     the domain: live state, stream, sidebar rows, project home, New project dialog
+  auth/         the authentication gate and the pairing screen
+  shell/        the sidebar, router, dialog store, settings dialog, shortcuts
+  api/          typed fetch wrapper (request/domain modules), host config, re-export hub
+  views/sessions/  chat transcript, composer and diff components kept for the coordinator chat and the thread pane; not mounted yet
+  ui/           the one component kit (shadcn + custom)
+  components/   dialogs, confirmation host
 ```
+
+## Settings
+
+- Repositories (attach dialog with git badges), Runtimes (add/clone/remove custom), Execution hosts, General, About (version/update)
+- Kit chrome only: one chip, one menu, one badge. No ad-hoc controls outside `src/ui`
 
 ## Scripts
 
@@ -64,5 +84,5 @@ bun run typecheck
 
 ## Tests
 
-- Unit: `*.test.tsx` next to components
+- Unit: `*.test.tsx` next to components. Fixtures and a hand-driven `EventSource` live in `src/projects/test-utils.ts`
 - End to end: none in the repository. Drive the dashboard in Chrome against an isolated stack (`.claude/skills/verify`).
