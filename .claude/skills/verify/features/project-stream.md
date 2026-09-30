@@ -19,7 +19,7 @@ Preconditions:
 
 - A started run (no fake runtime needed; this recipe sends no chat).
 - `S=.claude/skills/verify/scripts`. Events come from `bun $S/seed-events.ts --name <run> <command>`, which writes through the same publisher the server uses. It opens the run's database directly, so the running server delivers the entry on its next heartbeat read of the log, at most 5 seconds later. Live reply text cannot be seeded this way; the tests cover it.
-- Seed: `project demo` (creates the project and its `project.upserted`), `thread demo t1 "A title"`, `status t1 idle`, `message demo m1 "text" [threadId]`, `remove demo` (only for a project with no threads).
+- Seed: `project demo` (creates the project and its `project.upserted`), `thread demo t1 "A title"`, `status t1 idle`, `message demo m1 "text" [threadId] [--blocks '<json array>']`, `remove demo` (only for a project with no threads).
 
 - **Connect.** In Chrome, open a new tab on `<dashboard>/` and run in `javascript_tool`: create `new EventSource('/api/projects/demo/stream')` and add listeners for `entry`, `resync`, `delta` and `heartbeat`. It opens with a `heartbeat`, then `resync` `{"cursor":<newest id>,"reason":"start"}` because there is no cursor.
 - **Receive (`stream-live`).** Run `seed-events.ts --name <run> message demo m1 hi`. Within 5 seconds the tab logs `entry` with `id` and `lastEventId` equal to the entry id.

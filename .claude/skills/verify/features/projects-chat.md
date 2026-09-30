@@ -1,0 +1,69 @@
+# Projects chat (dashboard)
+
+The Coordinator tab of a project: the conversation with its coordinator. It loads the messages from the API, follows the project's event stream for new messages and live text, and draws what a reply is made of: prose with thread and pull request chips, a routing receipt, thread cards that follow their thread, suggested threads with Start and Skip, and thread reports as event lines. How it stays correct across reconnects is in `docs/architecture/coordinator-chat.md`.
+
+Everything here starts an agent, so it needs a stack seeded with `--fake-runtime`, started with the tripwire stubs first on `PATH` (a directory holding `claude`, `codex` and `pi` scripts that log and exit 99). Never send a coordinator message on any other stack.
+
+## Sub-features
+
+- `chat-empty` shows the empty conversation with its starters, then sends one.
+- `chat-stream` types a message and watches the reply's live text, then the reply, with no reload.
+- `chat-blocks` shows the routing receipt, thread cards (live, needs-call, done), inline thread chips with their hover card, and pull request chips.
+- `chat-card-update` answers a blocked thread from the API and watches its card change in place.
+- `chat-suggestions` starts one suggested thread and skips another, and reloads to see both kept.
+- `chat-reload` reloads mid-turn and after the turn: no message twice, none lost, the live text back.
+- `chat-restart` stops the host, appends a message while it is down, restarts it, and sees the message once.
+- `chat-unseen` shows the count on the Coordinator tab for a reply that came while another tab was open, and the "New" line.
+- `chat-paused` pauses the project and sees the disabled box and the way back.
+- `chat-model` changes the coordinator's model and effort from the composer.
+
+## How to get to it (user POV)
+
+Open a project, choose the **Coordinator** tab (`/projects/:id/chat`), type in the box at the bottom, press Enter. A card in the conversation opens its thread; the chips in the footer set the coordinator's model and effort.
+
+## Test handles
+
+| `data-testid` | What it is |
+| --- | --- |
+| `coordinator-chat-pane` (`data-phase` = `loading` or `ready`, `data-working`, `data-project-id`) | The pane |
+| `chat-loading`, `chat-error`, `chat-retry`, `chat-refresh-error`, `chat-empty`, `chat-starter` | Loading, a first fetch that failed, the notice for one that cannot refresh, the empty conversation and its starters |
+| `chat-closed-notice` (`data-status` = `paused` or `archived`), `chat-closed-action` | The notice for a project that is not active, and Resume or Restore |
+| `chat-scroll`, `chat-show-earlier`, `chat-scroll-to-end`, `day-separator`, `new-messages-marker` | The list, older messages, the jump to the newest, the day lines and the New line |
+| `user-message` (`data-message-id`), `user-message-text`, `user-message-fold`, `assistant-message`, `message-meta`, `message-copy` | A message, its text, the fold of a long one, and the hover meta |
+| `thread-report` (`data-outcome`), `thread-report-toggle`, `thread-report-text` | A thread's report to the coordinator |
+| `coordinator-activity`, `coordinator-live-text`, `coordinator-working` | The coordinator at work, what it has written so far, and how long |
+| `message-blocks`, `routing-receipt` (`data-thread-count`), `quote-forwarded`, `quote-forwarded-text` | The blocks of a reply |
+| `thread-chip` (`data-thread-id`, `data-status`), `thread-chip-missing`, `thread-chip-popover`, `thread-chip-status`, `thread-chip-title`, `thread-chip-activity`, `pr-chip` (`data-state`) | Chips in prose, and the hover card of a thread chip |
+| `chat-thread-card` (`data-thread-id`, `data-variant` = `live`, `needs-call` or `done`, `data-status`), `chat-thread-card-link`, `-status`, `-question`, `-options`, `-view`, `-pr`, `-icon`, `chat-thread-card-unavailable` | A thread card and its parts |
+| `suggested-threads`, `suggestion` (`data-suggestion-id`, `data-state` = `pending`, `starting`, `started` or `skipped`), `suggestion-title`, `suggestion-start`, `suggestion-skip`, `suggestion-undo`, `suggestion-started`, `suggestion-error`, `suggestions-start-all` | Proposals |
+| `composer` (`data-disabled`), `composer-input`, `composer-send`, `composer-error` | The box |
+| `coordinator-model`, `coordinator-model-menu`, `coordinator-model-default`, `coordinator-model-<model id>`, `coordinator-effort`, `coordinator-effort-menu`, `coordinator-effort-default`, `coordinator-effort-<level>` | The chips and their menus |
+| `project-tab-coordinator-unseen` | The count of replies not yet looked at, on the Coordinator tab |
+
+## Driving it with verify-stack and drive
+
+Preconditions:
+
+- `S=.claude/skills/verify/scripts`. A run started with the tripwire on `PATH` and seeded with `--fake-runtime`: `PATH=<tripwire dir>:$PATH bun $S/verify-stack.ts start --name <run>`, then `bun $S/seed.ts --name <run> --fake-runtime`. `<api>`, `<repoId>` and the dashboard URL are in `state.json`.
+- A new tab in Claude in Chrome on `<dashboard>/`. Create the project in the dialog (`sidebar-new-project`, a name, a goal, tick the repo, `new-project-submit`), then choose `project-tab-coordinator`.
+- Markers go in the message text. `[fake: steps=1 delay=700 say="..."]` makes the reply take a few seconds and say `...`. `calls='[{"name":"thread_spawn","arguments":{"title":"T","prompt":"P"}}]'` makes the coordinator call a tool. A thread's brief may carry its own marker, as in `"prompt":"Choose [fake: ask=\"Which one?\" options=\"Postgres|SQLite\"]"`. `packages/llm-provider/test-fixtures/README.md` lists them all.
+
+- **Empty and first message (`chat-empty`).** The new project's Coordinator tab shows `chat-empty` and three `chat-starter` buttons, and the box has focus. Type `Hello [fake: steps=2 delay=1200 say="I see no threads yet."]` and press Enter: the bubble shows at once, `coordinator-working` reads `Coordinator is working · 0s`, then `coordinator-live-text` fills in ("Working…" narration), then it is replaced by an `assistant-message` reading `I see no threads yet.`. The address never changes and the page does not reload (`window.__marker` set beforehand is still there).
+- **Blocks (`chat-blocks`).** Send `Two things. [fake: steps=1 delay=700 calls='[{"name":"thread_spawn","arguments":{"title":"Pick a database","prompt":"Choose [fake: ask=\"Which one?\" options=\"Postgres|SQLite\"]"}},{"name":"thread_spawn","arguments":{"title":"Fix the login redirect","prompt":"go [fake: steps=2 delay=20000]"}}]' say="On it. Two threads."]`. The reply shows `routing-receipt` (`data-thread-count=2`, "Sent to 2 threads"), the text, and two `chat-thread-card`s: `needs-call` (amber hand, the question `Which one?`, `Reply with: Postgres, or SQLite`, `chat-thread-card-view`) and `live` (`Working…`). A `thread-report` line follows ("needs your call") and the coordinator's answer with a `needs-call` card. To see chips, send `Hand it on. [fake: calls='[{"name":"thread_steer","arguments":{"threadId":"<thread id>","message":"Release moved to Monday","quote":"release moved to Monday"}}]' say="Passed that to [Fix login](thread:<thread id>)."]` with a thread id from `GET <api>/api/projects/<id>/threads`: the receipt reads "Sent to one thread" with a `thread-chip` naming it, and the sentence holds a second `thread-chip` inside its paragraph. Hover a chip (`find` its ref, then `hover`): `thread-chip-popover` shows the status, the title and `N replies · age`. Click a card's title or `chat-thread-card-view`: the address becomes `/projects/<id>/threads/<threadId>` and `thread-pane` shows that thread.
+- **A card changes in place (`chat-card-update`).** Scroll the list up so the `needs-call` card is on screen, then `curl -X POST <api>/api/threads/<threadId>/reply -H 'content-type: application/json' -d '{"text":"Postgres"}'`. Within seconds the same card (same element) becomes `data-variant=done` with a check and the thread's closing line, the header sentence `1 thread is waiting on you.` clears, the list does not jump, and a new `thread-report` ("finished a turn") arrives below.
+- **Suggestions (`chat-suggestions`).** Send `Suggest two. [fake: steps=1 delay=5000 calls='[{"name":"propose_threads","arguments":{"threads":[{"title":"Add retry metrics","prompt":"Add a metric to every retry."},{"title":"Load test checkout","prompt":"Load test it.","repoId":"<repoId>"}]}}]' say="Two options."]`. The reply ends with `suggested-threads`: two `suggestion` rows (`data-state=pending`) with `Skip` and `Start`, and `Start all`. Click `Skip` on the first (`skipped`, with `Undo`) and `Start` on the second: it becomes `started` with a `thread-chip` for the new thread, a `thread-card` for it appears in the Threads tab, and `GET <api>/api/projects/<id>/threads` lists it. Reload: the first is still `skipped`, the second `started`, and no second thread exists.
+- **Reload (`chat-reload`).** Send `Think. [fake: steps=3 delay=3000 say="Done thinking."]` and reload after about 4 seconds. The bubble is there once, `coordinator-working` is there with a time counted from the message, and `coordinator-live-text` shows the narration so far (the host sends the baseline). When the turn ends the reply replaces it. Count the ids: `[...document.querySelectorAll('[data-message-id]')].map(e => e.dataset.messageId)` has no repeat, and it matches `GET <api>/api/projects/<id>/messages` (up to the latest 200).
+- **Restart (`chat-restart`).** Set `window.__marker`. `kill -TERM -<serverPid>` (from `state.json`). `project-stream-state` reads `Reconnecting…` and the conversation stays on screen. While it is down: `bun $S/seed-events.ts --name <run> message <projectId> m_down "Posted while the host was down"`. Then `bun $S/verify-stack.ts restart-server --name <run>`. Within about 10 seconds the header reads `Live`, `m_down` shows once at the end, `window.__marker` is still set, and `performance.getEntriesByType('resource')` lists `…/stream?after=<id>`. A message seeded this way exists only on the stream; it is gone after a reload.
+- **Unseen (`chat-unseen`).** Choose the Threads tab. From a shell: `curl -X POST <api>/api/projects/<id>/messages -H 'content-type: application/json' -d '{"text":"Anything new? [fake: say=\"All quiet.\"]"}'`. Within seconds `project-tab-coordinator-unseen` reads `1`. Choose Coordinator: a `new-messages-marker` ("New") sits above the reply, the count is gone, and `localStorage['aop:coordinator-seen:v1']` holds the newest message's time. Going back to Threads shows no count.
+- **Paused (`chat-paused`).** Header `…` then Pause. The title gets a `paused` tag, `chat-closed-notice` (`data-status=paused`) shows above the box, `composer-input` is disabled with the placeholder `Paused. Resume the project to talk to the coordinator.`, and a message sent from a shell answers 409. Choose `chat-closed-action` ("Resume project"): the notice goes, the box works again, and `GET <api>/api/projects` shows `status: "active"`.
+- **Model and effort (`chat-model`).** Click `coordinator-model`, choose an option (the seeded fake runtime offers `Fake model`), and `GET <api>/api/projects` shows the new `coordinator.model`. `coordinator-effort` does the same for effort; `Default effort` stores `null`. The change applies from the coordinator's next turn.
+- **Proof.** Screenshots of the empty state, the live text, the blocks (receipt and cards), a card before and after its thread was answered, the hover card, the suggestions before and after, the paused box and the Coordinator tab count; the `messageId` list before and after each reload; `read_console_messages` with `onlyErrors: true` after every flow. State that the runtime was the fake CLI.
+
+## Gotchas
+
+- Screenshots from the Claude in Chrome tab can crop the right and bottom edges of the window, which hides the composer. Scale the page in the tab before taking them: `document.getElementById('root').style.transform = 'scale(0.9)'; document.getElementById('root').style.transformOrigin = 'top left'`. Do that again after every reload. Prefer `find` refs to coordinates for clicks.
+- A tab that is not in front reports `document.visibilityState` as `hidden`. The chat counts nothing as looked at while the page is hidden, and browsers slow smooth scrolling and animation frames there, so the list can lag behind the live text. To check the unseen count in such a tab, `Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true })` and dispatch a `visibilitychange` event.
+- A fake reply echoes the prompt it was given (`Fake reply for turn 3 of session …`) unless `say=` is set. A coordinator woken by a thread report has no marker to read, so it answers with that echo.
+- The host lists at most the latest 200 messages, so a long conversation shows its newest 200 after a reload, and the page draws the newest 60 until "Show earlier messages" is chosen (`chat-show-earlier`).
+- The answer to a suggestion is kept in this browser's local storage. Open the same project in a second browser profile and the proposal is waiting again.
+- Pull request chips inside a sentence have no producer on the host yet. To see them, append a message with blocks to the stream: `bun $S/seed-events.ts --name <run> message <projectId> m_pr x --blocks '[{"type":"text","text":"Up as "},{"type":"pr-chip","number":4821,"url":"https://github.com/acme/app/pull/4821","state":"open"}]'`. The card of a finished thread shows its pull request chip only once a thread has a `pr` artifact, which comes with thread git work.

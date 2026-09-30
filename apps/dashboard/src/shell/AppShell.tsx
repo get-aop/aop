@@ -40,12 +40,12 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <SidebarProvider data-testid="app-shell">
+    <SidebarProvider data-testid="app-shell" className="h-svh min-h-0">
       <ProjectsSidebar
         onOpenCommand={() => setPaletteOpen(true)}
         onNewProject={openNewProjectDialog}
       />
-      <SidebarInset className="min-w-0">{children}</SidebarInset>
+      <SidebarInset className="min-h-0 min-w-0">{children}</SidebarInset>
       <ProjectPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <SettingsDialog />
       <NewProjectDialog />

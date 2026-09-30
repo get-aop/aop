@@ -1,7 +1,12 @@
 export type { Artifact, PullRequestRef, PullRequestState } from "./artifact.ts";
 export { ArtifactSchema, PullRequestRefSchema } from "./artifact.ts";
 export type { MessageBlock, SuggestedThread, ThreadCardVariant } from "./blocks.ts";
-export { MessageBlockSchema, SUGGESTED_THREADS_MAX, SuggestedThreadSchema } from "./blocks.ts";
+export {
+  MessageBlockSchema,
+  SUGGESTED_THREADS_MAX,
+  SuggestedThreadSchema,
+  threadCardVariant,
+} from "./blocks.ts";
 export type { Device } from "./device.ts";
 export { DeviceSchema } from "./device.ts";
 export type {

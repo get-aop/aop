@@ -1,6 +1,6 @@
 # Sessions (API only)
 
-A plain chat session is one conversation with an agent runtime in a repository. The dashboard no longer has a page for them: its front door is [Projects](./projects-shell.md), and the coordinator and thread sessions of a project never appear in `GET /api/chat-sessions`. The server side is intact, so this map drives it with the HTTP API and the fake runtime. The composer, the transcript and the diff components are still in `apps/dashboard/src/views/sessions`, waiting to be mounted by the coordinator chat and the thread pane.
+A plain chat session is one conversation with an agent runtime in a repository. The dashboard no longer has a page for them: its front door is [Projects](./projects-shell.md), and the coordinator and thread sessions of a project never appear in `GET /api/chat-sessions`. The server side is intact, so this map drives it with the HTTP API and the fake runtime. The git, pull request, diff and markdown panel components are still in `apps/dashboard/src/views/sessions`, waiting to be mounted by the thread pane; the coordinator chat has its own composer and transcript in `apps/dashboard/src/projects/chat`.
 
 Every recipe needs a stack seeded with `--fake-runtime`, started with stub `claude`, `codex` and `pi` scripts first on `PATH`. Never send a message on a stack without the fake: it reaches the real CLI with the user's auth.
 

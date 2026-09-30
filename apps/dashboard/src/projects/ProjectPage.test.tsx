@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
+import { at, reply } from "./chat/test-utils";
 import type { ProjectsState } from "./projects-state";
 import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "./test-utils";
 
@@ -8,7 +9,17 @@ setupDashboardDom();
 const { act, cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
 const { ProjectsProvider } = await import("./ProjectsProvider");
 const { ProjectPage } = await import("./ProjectPage");
+const { ChatApiProvider } = await import("./chat/chat-api");
 type Route = import("../shell/router").Route;
+type ChatApi = import("./chat/chat-api").ChatApi;
+
+// The chat asks the host for its messages when a project opens; these tests are about the
+// page, so the host never answers and the chat stays loading.
+const silentHost: ChatApi = {
+  listMessages: () => new Promise(() => {}),
+  sendMessage: () => new Promise(() => {}),
+  startThread: () => new Promise(() => {}),
+};
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
 
 beforeEach(() => {
@@ -20,9 +31,11 @@ afterEach(cleanup);
 const renderPage = (state: ProjectsState, route: ProjectRoute) => {
   const stub = stubLiveProjects(state);
   render(
-    <ProjectsProvider live={stub.live}>
-      <ProjectPage route={route} />
-    </ProjectsProvider>,
+    <ChatApiProvider value={silentHost}>
+      <ProjectsProvider live={stub.live}>
+        <ProjectPage route={route} />
+      </ProjectsProvider>
+    </ChatApiProvider>,
   );
   return stub;
 };
@@ -187,6 +200,46 @@ describe("project screens", () => {
     expect(screen.getByTestId("project-settings-nav-general").getAttribute("aria-current")).toBe(
       "page",
     );
+  });
+});
+
+describe("the coordinator tab", () => {
+  const answered: ChatApi = {
+    ...silentHost,
+    listMessages: async () => [
+      { id: "u1", projectId: "p1", threadId: null, createdAt: at(1), role: "user", text: "Hi" },
+      reply("a1", 2),
+      reply("a2", 10),
+    ],
+  };
+
+  const renderWith = async (route: ProjectRoute, seenAt: string) => {
+    window.localStorage.setItem("aop:coordinator-seen:v1", JSON.stringify({ p1: seenAt }));
+    const stub = stubLiveProjects(makeState([makeEntry(project, threads)]));
+    await act(async () => {
+      render(
+        <ChatApiProvider value={answered}>
+          <ProjectsProvider live={stub.live}>
+            <ProjectPage route={route} />
+          </ProjectsProvider>
+        </ChatApiProvider>,
+      );
+    });
+  };
+
+  test("counts the replies this device has not looked at, while another tab is open", async () => {
+    await renderWith(home, at(2));
+
+    expect(screen.getByTestId("project-tab-coordinator-unseen").textContent).toBe("1");
+  });
+
+  test("shows no count on the tab that is open, and none when everything was seen", async () => {
+    await renderWith({ name: "coordinator", projectId: "p1" }, at(2));
+    expect(screen.queryByTestId("project-tab-coordinator-unseen")).toBeNull();
+    cleanup();
+
+    await renderWith(home, at(10));
+    expect(screen.queryByTestId("project-tab-coordinator-unseen")).toBeNull();
   });
 });
 

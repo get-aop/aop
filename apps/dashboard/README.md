@@ -25,7 +25,7 @@ Dev expects `AOP_LOCAL_SERVER_URL` pointing at the API (local-server sets CORS f
 | --- | --- | --- |
 | `/` | `ProjectsIndex` | Every project as a card, search, New project |
 | `/projects/:id` | `ThreadGrid` | The project home: its threads as cards, questions first, search |
-| `/projects/:id/chat` | `CoordinatorChatPane` | The coordinator chat (placeholder, see [Extension points](#extension-points)) |
+| `/projects/:id/chat` | `CoordinatorChatPane` | The coordinator chat (see [The coordinator chat](#the-coordinator-chat)) |
 | `/projects/:id/threads/:threadId` | `ThreadPane` | One thread (placeholder) |
 | `/projects/:id/settings` | `ProjectSettingsPane` | Project settings, memory, usage (placeholder) |
 | any other path | none | Rewritten to `/` |
@@ -47,11 +47,14 @@ The host answers `401 UNAUTHENTICATED` to a browser it does not know. `src/auth/
 
 `src/api/host.ts` also lets a client served from another origin point at a host and send its device token as a bearer header. A browser keeps that pair in local storage. The desktop app's bundled dashboard is such a client: `src/api/desktop-host.ts` asks the app's main process which host to use before the first request and holds the pair in memory only, so the token never reaches a file the page owns. Such a client reads project streams with `fetch` (`src/api/host-event-source.ts`), because an `EventSource` cannot send the header and the session cookie does not cross origins.
 
+## The coordinator chat
+
+`src/projects/chat/` is the conversation with a project's coordinator. `docs/architecture/coordinator-chat.md` describes how it stays correct across reconnects, resyncs and reloads; in short, `useProjectChat` runs for as long as a project is open, keeps the messages in a pure state applied by message id (`chat-state.ts`), and gets them from a fetch of `GET /api/projects/:id/messages`, from the stream's entries and live-text deltas (`useLiveProjects().subscribeEvents`), and from the message a send returns. Whatever a reply is made of is drawn by `MessageBlocks`: prose with thread and pull request chips, the routing receipt, thread cards that follow their thread, suggested threads, and forwarded quotes. `Composer` and `MessageBlocks` do not know the coordinator, so the thread pane reuses them.
+
 ## Extension points
 
-The three placeholder screens live in `src/projects/panes.tsx` and already receive the data they need, typed. Replacing a body changes nothing in the shell.
+Two placeholder screens live in `src/projects/panes.tsx` and already receive the data they need, typed. Replacing a body changes nothing in the shell.
 
-- `CoordinatorChatPane({ project, threads })`: read messages from `GET /api/projects/:id/messages` and live text and new messages from `useLiveProjects().subscribeEvents(project.id, listener)`, which hears every entry, live-text delta and resync of the project's stream.
 - `ThreadPane({ project, thread })`: the thread's transcript and its own composer.
 - `ProjectSettingsPane({ project })`: the tab already links here; the project menu's Settings item does too.
 
@@ -60,10 +63,11 @@ The three placeholder screens live in `src/projects/panes.tsx` and already recei
 ```text
 src/
   projects/     the domain: live state, stream, sidebar rows, project home, New project dialog
+  projects/chat/  the coordinator chat: state, messages and blocks, composer
   auth/         the authentication gate and the pairing screen
   shell/        the sidebar, router, dialog store, settings dialog, shortcuts
   api/          typed fetch wrapper (request/domain modules), host config, re-export hub
-  views/sessions/  chat transcript, composer and diff components kept for the coordinator chat and the thread pane; not mounted yet
+  views/sessions/  git, pull request, diff and markdown panel components kept for the thread pane; not mounted yet
   ui/           the one component kit (shadcn + custom)
   components/   dialogs, confirmation host
 ```

@@ -1,0 +1,193 @@
+import { describe, expect, test } from "bun:test";
+import {
+  applyDelta,
+  applyMessage,
+  applySnapshot,
+  dropLiveText,
+  initialChatState,
+  setLoadError,
+  unansweredMessages,
+} from "./chat-state";
+import { delta, ids, reply, report, userMessage } from "./test-utils";
+
+const ready = (...messages: Parameters<typeof applySnapshot>[1]) =>
+  applySnapshot(initialChatState, messages);
+
+describe("applySnapshot", () => {
+  test("holds the fetched messages in the host's order and marks the chat ready", () => {
+    const state = ready(userMessage("u1", 1), reply("a1", 2));
+
+    expect(state.phase).toBe("ready");
+    expect(ids(state.messages)).toEqual(["u1", "a1"]);
+  });
+
+  test("replaces what was held, so a message the host no longer has disappears", () => {
+    const before = ready(userMessage("u1", 1), reply("ghost", 2));
+
+    expect(ids(applySnapshot(before, [userMessage("u1", 1)]).messages)).toEqual(["u1"]);
+  });
+
+  test("clears a failed fetch and drops the live text of a message the snapshot holds", () => {
+    let state = setLoadError(initialChatState, "host down");
+    state = applyDelta(state, delta("a1", "Working on"));
+
+    const next = applySnapshot(state, [userMessage("u1", 1), reply("a1", 2)]);
+
+    expect(next.loadError).toBeNull();
+    expect(next.live).toEqual({});
+  });
+
+  test("keeps the live text of a reply the snapshot does not hold yet", () => {
+    const state = applyDelta(initialChatState, delta("a1", "Working"));
+
+    expect(applySnapshot(state, [userMessage("u1", 1)]).live).toEqual({ a1: "Working" });
+  });
+
+  test("leaves out messages of a thread", () => {
+    const state = ready(userMessage("u1", 1), reply("t1", 2, undefined, { threadId: "thr_1" }));
+
+    expect(ids(state.messages)).toEqual(["u1"]);
+  });
+});
+
+describe("applyMessage", () => {
+  test("applying the same message twice leaves the same chat", () => {
+    const once = applyMessage(ready(), userMessage("u1", 1));
+    const twice = applyMessage(once, userMessage("u1", 1));
+
+    expect(ids(twice.messages)).toEqual(["u1"]);
+  });
+
+  test("a message that is already held is replaced in place", () => {
+    const state = ready(userMessage("u1", 1), reply("a1", 2), userMessage("u2", 3));
+
+    const next = applyMessage(state, reply("a1", 2, [{ type: "text", text: "edited" }]));
+
+    expect(ids(next.messages)).toEqual(["u1", "a1", "u2"]);
+    expect(next.messages[1]).toMatchObject({ blocks: [{ type: "text", text: "edited" }] });
+  });
+
+  test("a reply is placed after the message it answers, before one sent while the coordinator worked", () => {
+    let state = ready(userMessage("u1", 1));
+    state = applyMessage(state, userMessage("u2", 2));
+    state = applyMessage(state, report("r1", 3));
+
+    state = applyMessage(state, reply("a1", 4));
+    expect(ids(state.messages)).toEqual(["u1", "a1", "u2", "r1"]);
+
+    state = applyMessage(state, reply("a2", 5));
+    expect(ids(state.messages)).toEqual(["u1", "a1", "u2", "a2", "r1"]);
+
+    state = applyMessage(state, reply("a3", 6));
+    expect(ids(state.messages)).toEqual(["u1", "a1", "u2", "a2", "r1", "a3"]);
+  });
+
+  test("arriving one by one gives the order a fetch of the same messages gives", () => {
+    const stored = [
+      userMessage("u1", 1),
+      reply("a1", 4),
+      userMessage("u2", 2),
+      reply("a2", 5),
+      report("r1", 3),
+      reply("a3", 6),
+    ];
+    const inArrivalOrder = [...stored].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+    const live = inArrivalOrder.reduce(applyMessage, ready());
+
+    expect(ids(live.messages)).toEqual(ids(stored));
+  });
+
+  test("a reply nobody asked for goes to the end", () => {
+    const state = applyMessage(ready(userMessage("u1", 1), reply("a1", 2)), reply("a2", 3));
+
+    expect(ids(state.messages)).toEqual(["u1", "a1", "a2"]);
+  });
+
+  test("a message sent by this page that arrives behind one stored after it goes before it", () => {
+    const state = applyMessage(ready(userMessage("u0", 0), report("r1", 5)), userMessage("u1", 3));
+
+    expect(ids(state.messages)).toEqual(["u0", "u1", "r1"]);
+  });
+
+  test("the finished message replaces its live text", () => {
+    const state = applyMessage(
+      applyDelta(ready(userMessage("u1", 1)), delta("a1", "Working on it")),
+      reply("a1", 2),
+    );
+
+    expect(state.live).toEqual({});
+    expect(ids(state.messages)).toEqual(["u1", "a1"]);
+  });
+
+  test("ignores a message of a thread", () => {
+    const state = ready(userMessage("u1", 1));
+
+    expect(applyMessage(state, reply("t1", 2, undefined, { threadId: "thr_1" }))).toBe(state);
+  });
+});
+
+describe("applyDelta", () => {
+  test("appended slices build the live text of one reply", () => {
+    let state = applyDelta(initialChatState, delta("a1", "On it. "));
+    state = applyDelta(state, delta("a1", "Three threads."));
+
+    expect(state.live).toEqual({ a1: "On it. Three threads." });
+  });
+
+  test("a replace frame is the baseline: it sets the text instead of extending it", () => {
+    let state = applyDelta(initialChatState, delta("a1", "stale"));
+    state = applyDelta(state, delta("a1", "On it. Three", { replace: true }));
+    state = applyDelta(state, delta("a1", " threads."));
+
+    expect(state.live).toEqual({ a1: "On it. Three threads." });
+  });
+
+  test("an empty replace drops the live text of a turn that ended without a message", () => {
+    const state = applyDelta(
+      applyDelta(initialChatState, delta("a1", "Working")),
+      delta("a1", "", { replace: true }),
+    );
+
+    expect(state.live).toEqual({});
+  });
+
+  test("a delta that arrives after its message is not shown", () => {
+    const state = applyDelta(
+      applyMessage(ready(userMessage("u1", 1)), reply("a1", 2)),
+      delta("a1", "late"),
+    );
+
+    expect(state.live).toEqual({});
+  });
+
+  test("live text of a thread is not the coordinator's", () => {
+    const state = applyDelta(initialChatState, delta("a1", "x", { threadId: "thr_1" }));
+
+    expect(state.live).toEqual({});
+  });
+});
+
+describe("dropLiveText", () => {
+  test("forgets live text held across a lost connection, and leaves the messages", () => {
+    const state = applyDelta(ready(userMessage("u1", 1)), delta("a1", "Working"));
+
+    const next = dropLiveText(state);
+
+    expect(next.live).toEqual({});
+    expect(ids(next.messages)).toEqual(["u1"]);
+  });
+});
+
+describe("unansweredMessages", () => {
+  test("are the person's messages and thread reports after the last reply", () => {
+    const messages = [userMessage("u1", 1), reply("a1", 2), userMessage("u2", 3), report("r1", 4)];
+
+    expect(ids(unansweredMessages(messages))).toEqual(["u2", "r1"]);
+  });
+
+  test("are all of them before the first reply, and none once every one is answered", () => {
+    expect(ids(unansweredMessages([userMessage("u1", 1)]))).toEqual(["u1"]);
+    expect(unansweredMessages([userMessage("u1", 1), reply("a1", 2)])).toEqual([]);
+  });
+});

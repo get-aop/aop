@@ -11,7 +11,9 @@
  *   project <projectId>                       creates the project, appends project.upserted
  *   thread <projectId> <threadId> [title]     creates a working thread, appends thread.upserted
  *   status <threadId> <status>                changes a thread's status, appends thread.upserted
- *   message <projectId> <id> <text> [threadId]  appends an assistant message.created
+ *   message <projectId> <id> <text> [threadId]  appends an assistant message.created; with
+ *                                             --blocks '<json array>' the blocks replace the text
+ *                                             (the entry validates on the client, so use real block shapes)
  *   remove <projectId>                        deletes the project, appends project.removed
  *
  * Prints the appended entry as JSON.
@@ -36,10 +38,16 @@ import { THREAD_STATUSES, type ThreadStatus } from "../../../../packages/common/
 
 const ROOT = resolve(import.meta.dir, "../../../..");
 const args = process.argv.slice(2);
-const nameFlag = args.indexOf("--name");
-const runName = nameFlag === -1 ? "default" : (args[nameFlag + 1] ?? "default");
-const positional =
-  nameFlag === -1 ? args : args.filter((_, i) => i !== nameFlag && i !== nameFlag + 1);
+const flagValue = (flag: string): string | undefined => {
+  const at = args.indexOf(flag);
+  return at === -1 ? undefined : args[at + 1];
+};
+const runName = flagValue("--name") ?? "default";
+const blocksJson = flagValue("--blocks");
+const positional = args.filter(
+  (arg, i) =>
+    !["--name", "--blocks"].includes(arg) && !["--name", "--blocks"].includes(args[i - 1] ?? ""),
+);
 const [command, ...rest] = positional;
 
 const state = JSON.parse(
@@ -123,7 +131,7 @@ function postMessage(projectId: string, id: string, text: string, threadId: stri
         threadId,
         createdAt: new Date().toISOString(),
         role: "assistant",
-        blocks: [{ type: "text", text }],
+        blocks: blocksJson ? JSON.parse(blocksJson) : [{ type: "text", text }],
       },
     },
   });

@@ -1,18 +1,13 @@
 import { type Artifact, getThreadProgress, type Thread } from "@aop/common";
-import { FileTextIcon, GitBranchIcon, GitPullRequestIcon } from "lucide-react";
+import { FileTextIcon, GitBranchIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Link, threadPath } from "../shell/router";
+import { PullRequestChip } from "./PullRequestChip";
 import { StepsRing } from "./StepsRing";
 import { formatAge, THREAD_STATUS_LABEL } from "./selectors";
 import { ThreadStatusDot } from "./ThreadStatusDot";
 
 type PullRequest = Extract<Artifact, { type: "pr" }>;
-
-const PR_TONE: Record<PullRequest["state"], string> = {
-  open: "border-ok/30 bg-ok/10 text-ok",
-  merged: "border-merged/30 bg-merged/10 text-merged",
-  closed: "border-border-strong bg-raised text-text-muted",
-};
 
 /**
  * One thread on the project home. The whole card opens the thread (a stretched link on the
@@ -93,7 +88,13 @@ const CardFooter = ({ thread }: { thread: Thread }) => {
   const docCount = thread.artifacts.filter((artifact) => artifact.type === "doc").length;
   return (
     <footer className="mt-auto flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-[11.5px] text-text-subtle">
-      {pullRequest ? <PullRequestChip pullRequest={pullRequest} /> : null}
+      {pullRequest ? (
+        <PullRequestChip
+          pullRequest={pullRequest}
+          testId="thread-pr-chip"
+          className="relative z-10"
+        />
+      ) : null}
       {docCount > 0 ? (
         <span className="inline-flex items-center gap-1" data-testid="thread-docs">
           <FileTextIcon className="size-3" />
@@ -127,19 +128,3 @@ const StatusLine = ({ thread }: { thread: Thread }) => {
     </p>
   );
 };
-
-const PullRequestChip = ({ pullRequest }: { pullRequest: PullRequest }) => (
-  <a
-    href={pullRequest.url}
-    target="_blank"
-    rel="noreferrer noopener"
-    data-testid="thread-pr-chip"
-    data-state={pullRequest.state}
-    className={cn(
-      "relative z-10 inline-flex h-5 items-center gap-1 rounded-md border px-1.5 text-[11.5px] font-medium",
-      PR_TONE[pullRequest.state],
-    )}
-  >
-    <GitPullRequestIcon className="size-3" />#{pullRequest.number}
-  </a>
-);

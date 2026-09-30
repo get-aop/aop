@@ -1,9 +1,4 @@
-import {
-  type MessageBlock,
-  MessageBlockSchema,
-  type ThreadCardVariant,
-  type ThreadStatus,
-} from "@aop/common";
+import { type MessageBlock, MessageBlockSchema, threadCardVariant } from "@aop/common";
 import { z } from "zod";
 import { parseMessageOrigin } from "../chat-session/message-origin.ts";
 import type {
@@ -199,7 +194,7 @@ const runBlocks = async (
 
   const withCard: MessageBlock[] = [
     ...blocks,
-    { type: "thread-card", threadId: thread.id, variant: cardVariant(thread.status) },
+    { type: "thread-card", threadId: thread.id, variant: threadCardVariant(thread.status) },
   ];
   await tx.db
     .updateTable("chat_runs")
@@ -207,19 +202,6 @@ const runBlocks = async (
     .where("id", "=", turn.run.id)
     .execute();
   return withCard;
-};
-
-// A thread that will run again is still live, whether it waits for a slot or for a rate limit.
-const IN_FLIGHT: ReadonlySet<ThreadStatus> = new Set([
-  "working",
-  "queued",
-  "rate-limited",
-  "landing",
-]);
-
-const cardVariant = (status: ThreadStatus): ThreadCardVariant => {
-  if (status === "waiting-on-you") return "needs-call";
-  return IN_FLIGHT.has(status) ? "live" : "done";
 };
 
 const turnEnd = (status: FinalizedTurn["outcome"]["status"]): TurnEnd => status;

@@ -25,7 +25,16 @@ const STREAM_LABEL: Record<StreamConnection, string | null> = {
  * What every screen of a project shares: who it is, what is waiting on the person, whether
  * its stream is live, and the tabs between its screens. The screen itself renders below it.
  */
-export const ProjectHeader = ({ entry, route }: { entry: ProjectEntry; route: ProjectRoute }) => {
+export const ProjectHeader = ({
+  entry,
+  route,
+  coordinatorUnseen = 0,
+}: {
+  entry: ProjectEntry;
+  route: ProjectRoute;
+  /** Replies from the coordinator this device has not looked at. */
+  coordinatorUnseen?: number;
+}) => {
   const { project, threads, threadsLoaded, connection } = entry;
   const attention = attentionOf(threads);
   const streamLabel = STREAM_LABEL[connection];
@@ -103,14 +112,11 @@ export const ProjectHeader = ({ entry, route }: { entry: ProjectEntry; route: Pr
           active={route.name === "project" || route.name === "thread"}
         >
           Threads
-          {attention.waiting > 0 ? (
-            <span
-              data-testid="project-tab-waiting"
-              className="ml-1.5 rounded-md bg-waiting/15 px-1.5 text-[11px] font-semibold tabular-nums text-waiting"
-            >
-              {attention.waiting}
-            </span>
-          ) : null}
+          <TabCount
+            count={attention.waiting}
+            testId="project-tab-waiting"
+            className="bg-waiting/15 text-waiting"
+          />
         </Tab>
         <Tab
           to={coordinatorPath(project.id)}
@@ -118,6 +124,11 @@ export const ProjectHeader = ({ entry, route }: { entry: ProjectEntry; route: Pr
           active={route.name === "coordinator"}
         >
           Coordinator
+          <TabCount
+            count={coordinatorUnseen}
+            testId="project-tab-coordinator-unseen"
+            className="bg-running/15 text-running"
+          />
         </Tab>
         <span className="flex-1" />
         <Tab
@@ -131,6 +142,25 @@ export const ProjectHeader = ({ entry, route }: { entry: ProjectEntry; route: Pr
     </header>
   );
 };
+
+/** How many things on a tab need a look; nothing is drawn for none. */
+const TabCount = ({
+  count,
+  testId,
+  className,
+}: {
+  count: number;
+  testId: string;
+  className: string;
+}) =>
+  count > 0 ? (
+    <span
+      data-testid={testId}
+      className={cn("ml-1.5 rounded-md px-1.5 text-[11px] font-semibold tabular-nums", className)}
+    >
+      {count}
+    </span>
+  ) : null;
 
 const Tab = ({
   to,

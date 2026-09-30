@@ -54,6 +54,24 @@ describe("coordinator and threads against the fake CLI", () => {
       return thread?.status === "waiting-on-you" ? thread : undefined;
     }, "the thread to ask its question");
     expect(waiting.title).toBe("Pick a database");
+    const started = await eventually(async () => {
+      const messages = await messagesOf(
+        stack as ProjectStack,
+        `/api/projects/${project.id}/messages`,
+      );
+      return messages.find(
+        (message) =>
+          message.role === "assistant" &&
+          message.blocks.some((block) => block.type === "thread-card"),
+      );
+    }, "the coordinator's reply with the thread's card");
+    const startedBlocks = started.role === "assistant" ? started.blocks : [];
+    expect(startedBlocks.map((block) => block.type)).toEqual([
+      "text",
+      "thread-card",
+      "routing-receipt",
+    ]);
+    expect(startedBlocks.at(-1)).toEqual({ type: "routing-receipt", threadIds: [waiting.id] });
     expect(waiting.status === "waiting-on-you" && waiting.blockedQuestion).toEqual({
       question: "Which one?",
       options: [
@@ -172,7 +190,7 @@ describe("coordinator and threads against the fake CLI", () => {
       "suggested-threads",
     ]);
     const blocks = reply?.role === "assistant" ? reply.blocks : [];
-    expect(blocks[1]).toEqual({ type: "routing-receipt", count: 1 });
+    expect(blocks[1]).toEqual({ type: "routing-receipt", threadIds: [spawned.thread.id] });
     const suggestions = blocks[2]?.type === "suggested-threads" ? blocks[2].suggestions : [];
     expect(suggestions.map((suggestion) => suggestion.title)).toEqual([
       "Add retry metrics",

@@ -77,11 +77,13 @@ export const threadSpawnTool = defineTool({
   }),
   handler: async (args, call) => {
     const { thread } = unwrap(await call.services.threads.spawn(projectIdOf(call), args));
-    await createRunBlocks(call.ctx.db).append(call.session.id, {
+    const blocks = createRunBlocks(call.ctx.db);
+    await blocks.append(call.session.id, {
       type: "thread-card",
       threadId: thread.id,
       variant: "live",
     });
+    await blocks.routedTo(call.session.id, thread.id);
     return textResult(summarize(thread));
   },
 });
@@ -106,7 +108,7 @@ export const threadSteerTool = defineTool({
         quote: args.quote?.trim() || null,
       }),
     );
-    await createRunBlocks(call.ctx.db).countRouted(call.session.id);
+    await createRunBlocks(call.ctx.db).routedTo(call.session.id, thread.id);
     return textResult(summarize(thread));
   },
 });

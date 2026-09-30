@@ -4,6 +4,7 @@ import { z } from "zod";
 import { decodeMessageContent, expandStoredPastes } from "../chat-session/message-images.ts";
 import { type MessageOrigin, parseMessageOrigin } from "../chat-session/message-origin.ts";
 import type { ChatMessage, ChatSession, Database } from "../db/schema.ts";
+import { textToBlocks } from "./text-blocks.ts";
 
 export const DEFAULT_MESSAGE_PAGE_SIZE = 200;
 
@@ -12,8 +13,6 @@ export interface MessageScope {
   projectId: string;
   threadId: string | null;
 }
-
-const BlocksSchema = z.array(MessageBlockSchema);
 
 /**
  * A project session's messages as clients see them, oldest first, at most the latest `limit`.
@@ -57,7 +56,10 @@ export const toWireMessage = (
   };
   const text = displayText(row);
   if (row.role === "assistant") {
-    const blocks = [...(text ? [{ type: "text" as const, text }] : []), ...runBlocks];
+    // Only the coordinator refers to threads by link; a thread's own text is shown as written.
+    const written =
+      scope.threadId === null ? textToBlocks(text) : text ? [{ type: "text", text }] : [];
+    const blocks = [...written, ...runBlocks];
     return blocks.length === 0 ? null : MessageSchema.parse({ ...base, role: "assistant", blocks });
   }
   if (!text) return null;
@@ -111,5 +113,15 @@ const displayText = (row: ChatMessage): string => {
   return expandStoredPastes(decoded.text, decoded.pastes).trim();
 };
 
+// A block an earlier build stored in a shape this one no longer reads (a receipt that only
+// counted threads, say) is left out, so one old block cannot make the whole conversation unreadable.
 const parseBlocks = (raw: string | null): MessageBlock[] =>
-  raw === null ? [] : BlocksSchema.parse(JSON.parse(raw));
+  raw === null
+    ? []
+    : z
+        .array(z.unknown())
+        .parse(JSON.parse(raw))
+        .flatMap((block) => {
+          const parsed = MessageBlockSchema.safeParse(block);
+          return parsed.success ? [parsed.data] : [];
+        });

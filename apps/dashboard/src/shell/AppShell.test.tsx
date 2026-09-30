@@ -60,6 +60,14 @@ describe("AppShell", () => {
     expect(screen.queryByTestId("app-rail")).toBeNull();
   });
 
+  test("is one screen tall, so a long screen scrolls inside it instead of growing the page", () => {
+    renderShell();
+
+    expect(screen.getByTestId("app-shell").classList.contains("h-svh")).toBe(true);
+    const inset = screen.getByTestId("screen").parentElement;
+    expect(inset?.classList.contains("min-h-0")).toBe(true);
+  });
+
   test("tells the live state which project is open, so it always has a stream", () => {
     window.history.pushState({}, "", "/projects/b/chat");
     const stub = renderShell();

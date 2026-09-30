@@ -21,7 +21,7 @@ import {
 } from "@/ui/alert-dialog";
 import { Button } from "@/ui/button";
 import { getMarkdownFile, saveMarkdownFile } from "../../api/client";
-import { ChatMarkdown } from "./ChatMarkdown";
+import { ChatMarkdown } from "../../projects/chat/ChatMarkdown";
 import { RightPanelTabs } from "./right-panel-tabs";
 
 interface SessionMarkdownPanelProps {

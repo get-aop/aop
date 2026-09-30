@@ -1,7 +1,10 @@
 import { Link, projectsPath, type Route } from "../shell/router";
+import { CoordinatorChatPane } from "./chat/CoordinatorChatPane";
+import { unseenCount } from "./chat/project-chat";
+import { useProjectChat } from "./chat/use-project-chat";
 import { ProjectHeader } from "./ProjectHeader";
 import { useProjectEntry, useProjectsState } from "./ProjectsProvider";
-import { CoordinatorChatPane, ThreadPane } from "./panes";
+import { ThreadPane } from "./panes";
 import { ProjectSettingsPane } from "./settings/ProjectSettingsPane";
 import { ThreadGrid } from "./ThreadGrid";
 
@@ -11,19 +14,30 @@ type ProjectRoute = Exclude<Route, { name: "projects" }>;
 export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
   const entry = useProjectEntry(route.projectId);
   const { phase } = useProjectsState();
+  const { chat, model } = useProjectChat(route.projectId, entry !== undefined);
 
   if (!entry) {
     return phase === "ready" ? <ProjectNotFound /> : <ProjectLoading />;
   }
 
-  const { project, threads } = entry;
+  const { project, threads, threadsLoaded } = entry;
   return (
     <div data-testid="project-page" data-project-id={project.id} className="flex h-full flex-col">
-      <ProjectHeader entry={entry} route={route} />
+      <ProjectHeader
+        entry={entry}
+        route={route}
+        coordinatorUnseen={route.name === "coordinator" ? 0 : unseenCount(model)}
+      />
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {route.name === "project" ? <ThreadGrid entry={entry} /> : null}
         {route.name === "coordinator" ? (
-          <CoordinatorChatPane project={project} threads={threads} />
+          <CoordinatorChatPane
+            project={project}
+            threads={threads}
+            threadsLoaded={threadsLoaded}
+            chat={chat}
+            model={model}
+          />
         ) : null}
         {route.name === "thread" ? (
           <ThreadPane

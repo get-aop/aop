@@ -4,24 +4,10 @@ import { THREAD_STATUS_LABEL } from "./selectors";
 /**
  * The screens of a project that later work fills in. Each one already receives the data it
  * will need, typed, so replacing a body changes nothing in the shell:
- * - `CoordinatorChatPane`: the chat with the project's coordinator. Its messages and live
- *   text come from `useLiveProjects().subscribeEvents(project.id, ...)` and the project's REST routes.
  * - `ThreadPane`: one thread's transcript and its own composer.
- * The project's settings are built: see `settings/ProjectSettingsPane.tsx`.
+ * The project's settings are built: see `settings/ProjectSettingsPane.tsx`. The coordinator
+ * chat is built too: see `chat/CoordinatorChatPane.tsx`.
  */
-
-export const CoordinatorChatPane = ({
-  project,
-}: {
-  project: Project;
-  threads: readonly Thread[];
-}) => (
-  <PanePlaceholder
-    testId="coordinator-chat-pane"
-    title="Coordinator chat"
-    detail={`The conversation with ${project.name}'s coordinator will open here.`}
-  />
-);
 
 export const ThreadPane = ({ thread }: { project: Project; thread: Thread | undefined }) =>
   thread ? (

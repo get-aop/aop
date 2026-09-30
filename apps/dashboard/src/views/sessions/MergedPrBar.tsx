@@ -2,8 +2,8 @@ import { GitMergeIcon, XIcon } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { Badge } from "@/ui/badge";
 import { openExternalUrl, type SessionMergedPullRequest } from "../../api/client";
+import { formatAge } from "../../projects/selectors";
 import { isDesktopApp } from "../../utils/desktop-runtime";
-import { formatRelativeTime } from "./sessions-runtime";
 
 interface MergedPrBarProps {
   merged: SessionMergedPullRequest;
@@ -153,6 +153,6 @@ export const PrHoverCard = ({
 );
 
 const relativeTimeLabel = (timestamp: string): string => {
-  const relative = formatRelativeTime(timestamp);
+  const relative = formatAge(timestamp);
   return relative === "now" ? relative : `${relative} ago`;
 };

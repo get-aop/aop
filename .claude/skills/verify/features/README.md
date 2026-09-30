@@ -33,6 +33,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Features
 
 - [Projects shell](./projects-shell.md) covers the dashboard: the projects sidebar, the New project dialog, a project's thread grid updating live, reconnecting after a host restart, and the pairing screen.
+- [Projects chat](./projects-chat.md) covers the Coordinator tab: typing to the coordinator, live text, thread cards and chips, suggested threads, reload and restart catch-up, unseen replies, and a paused project.
 - [Projects](./projects.md) covers the project, coordinator and thread API, driven with the fake runtime; the shell shows the result.
 - [Project event stream](./project-stream.md) covers `GET /api/projects/:id/stream`: live entries, resume, restart, removal.
 - [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the attach dialog.

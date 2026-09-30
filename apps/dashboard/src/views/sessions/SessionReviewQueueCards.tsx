@@ -1,22 +1,8 @@
 import { XIcon } from "lucide-react";
 import { useState } from "react";
-import type { ChatComposerProps } from "./composer-types";
 import { DiffLineCommentEditor } from "./session-diff-comment";
 import type { SessionReviewComment } from "./session-review-queue";
 import { reviewCommentLineLabel } from "./session-review-serializer";
-
-/** ChatComposer slot: renders the queue only when fully wired and non-empty. */
-export const ComposerReviewQueueSlot = ({ props }: { props: ChatComposerProps }) => {
-  if (!props.reviewComments?.length || !props.onUpdateReviewComment || !props.onRemoveReviewComment)
-    return null;
-  return (
-    <SessionReviewQueueCards
-      comments={props.reviewComments}
-      onUpdate={props.onUpdateReviewComment}
-      onRemove={props.onRemoveReviewComment}
-    />
-  );
-};
 
 /** Compact queued-review cards rendered above the composer input. */
 export const SessionReviewQueueCards = ({

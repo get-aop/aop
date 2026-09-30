@@ -13,8 +13,8 @@ const BlocksSchema = z.array(MessageBlockSchema);
 export interface RunBlocks {
   /** Adds a block to the run executing in the session; false when nothing is running. */
   append: (sessionId: string, block: MessageBlock) => Promise<boolean>;
-  /** Counts one more thread the run routed a message to ("Sent to 3 threads"). */
-  countRouted: (sessionId: string) => Promise<boolean>;
+  /** Notes that the reply routed a message to a thread ("Sent to 3 threads"); a thread counts once. */
+  routedTo: (sessionId: string, threadId: string) => Promise<boolean>;
 }
 
 export const createRunBlocks = (db: Kysely<Database>): RunBlocks => {
@@ -39,14 +39,14 @@ export const createRunBlocks = (db: Kysely<Database>): RunBlocks => {
   return {
     append: (sessionId, block) => change(sessionId, (blocks) => [...blocks, block]),
 
-    countRouted: (sessionId) =>
+    routedTo: (sessionId, threadId) =>
       change(sessionId, (blocks) => {
         const receipt = blocks.find((block) => block.type === "routing-receipt");
-        return receipt
-          ? blocks.map((block) =>
-              block === receipt ? { ...receipt, count: receipt.count + 1 } : block,
-            )
-          : [...blocks, { type: "routing-receipt", count: 1 }];
+        if (!receipt) return [...blocks, { type: "routing-receipt", threadIds: [threadId] }];
+        if (receipt.threadIds.includes(threadId)) return blocks;
+        return blocks.map((block) =>
+          block === receipt ? { ...receipt, threadIds: [...receipt.threadIds, threadId] } : block,
+        );
       }),
   };
 };

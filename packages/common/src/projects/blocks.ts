@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PullRequestRefSchema } from "./artifact.ts";
 import { IdSchema } from "./primitives.ts";
+import type { ThreadStatus } from "./thread.ts";
 
 /**
  * How a thread card looks in the conversation. Live data (title, status line, question, PR)
@@ -10,6 +11,21 @@ import { IdSchema } from "./primitives.ts";
  */
 const ThreadCardVariantSchema = z.enum(["live", "needs-call", "done"]);
 export type ThreadCardVariant = z.infer<typeof ThreadCardVariantSchema>;
+
+// A thread that will run again is still live, whether it works, waits for a run slot, waits out
+// a rate limit, or is being landed.
+const LIVE_STATUSES: ReadonlySet<ThreadStatus> = new Set([
+  "working",
+  "queued",
+  "rate-limited",
+  "landing",
+]);
+
+/** The look a card has for a thread in this status: the server posts it, a client renders it live. */
+export const threadCardVariant = (status: ThreadStatus): ThreadCardVariant => {
+  if (status === "waiting-on-you") return "needs-call";
+  return LIVE_STATUSES.has(status) ? "live" : "done";
+};
 
 /** Markdown prose. Adjacent inline blocks (text, thread-chip, pr-chip) flow into one paragraph. */
 const TextBlockSchema = z.object({ type: z.literal("text"), text: z.string().min(1) });
@@ -30,10 +46,19 @@ const ThreadCardBlockSchema = z.object({
   variant: ThreadCardVariantSchema,
 });
 
-/** "Sent to 3 threads" / "Sent to one thread": how the coordinator routed the user's message. */
+/**
+ * "Sent to 3 threads" / "Sent to one thread": which threads the coordinator routed the person's
+ * message to, by starting them or by steering them. Each thread is listed once, in the order it
+ * was reached, and the count in the label is their number.
+ */
 const RoutingReceiptBlockSchema = z.object({
   type: z.literal("routing-receipt"),
-  count: z.number().int().positive(),
+  threadIds: z
+    .array(IdSchema)
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      error: "A thread can appear once in a receipt",
+    }),
 });
 
 /** The collapsible "Message forwarded from project chat" quote at the top of a thread. */

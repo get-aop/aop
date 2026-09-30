@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { MessageBlockSchema, SUGGESTED_THREADS_MAX } from "./blocks.ts";
+import { MessageBlockSchema, SUGGESTED_THREADS_MAX, threadCardVariant } from "./blocks.ts";
 import { makePrArtifact, parsed, rejectedPaths } from "./test-utils.ts";
+import { THREAD_STATUSES } from "./thread.ts";
 
 const prChip = () => {
   const { type: _artifactType, ...pullRequest } = makePrArtifact();
@@ -13,7 +14,7 @@ describe("MessageBlockSchema", () => {
     ["thread-chip", { type: "thread-chip", threadId: "thr_1" }],
     ["pr-chip", prChip()],
     ["thread-card", { type: "thread-card", threadId: "thr_1", variant: "live" }],
-    ["routing-receipt", { type: "routing-receipt", count: 3 }],
+    ["routing-receipt", { type: "routing-receipt", threadIds: ["thr_1", "thr_2", "thr_3"] }],
     ["quote-forwarded", { type: "quote-forwarded", text: "release moved to Monday" }],
   ])("accepts a %s block", (_type, block) => {
     expect(parsed(MessageBlockSchema, block)).toEqual(block);
@@ -74,12 +75,13 @@ describe("MessageBlockSchema", () => {
     ]);
   });
 
-  test("rejects a routing receipt for zero, negative, or fractional thread counts", () => {
-    for (const count of [0, -1, 1.5]) {
-      expect(rejectedPaths(MessageBlockSchema, { type: "routing-receipt", count })).toEqual([
-        "count",
-      ]);
-    }
+  test("rejects a routing receipt that names no thread or names one twice", () => {
+    expect(rejectedPaths(MessageBlockSchema, { type: "routing-receipt", threadIds: [] })).toEqual([
+      "threadIds",
+    ]);
+    expect(
+      rejectedPaths(MessageBlockSchema, { type: "routing-receipt", threadIds: ["thr_1", "thr_1"] }),
+    ).toEqual(["threadIds"]);
   });
 
   test("rejects empty text and an empty forwarded quote", () => {
@@ -91,5 +93,23 @@ describe("MessageBlockSchema", () => {
 
   test("rejects a pr chip whose pull request number is not positive", () => {
     expect(rejectedPaths(MessageBlockSchema, { ...prChip(), number: 0 })).toEqual(["number"]);
+  });
+});
+
+describe("threadCardVariant", () => {
+  test("a thread waiting on the person is a needs-call card, work that will run is live, the rest is done", () => {
+    const variants = Object.fromEntries(
+      THREAD_STATUSES.map((status) => [status, threadCardVariant(status)]),
+    );
+    expect(variants).toEqual({
+      "waiting-on-you": "needs-call",
+      working: "live",
+      queued: "live",
+      "rate-limited": "live",
+      landing: "live",
+      "ready-for-review": "done",
+      idle: "done",
+      resolved: "done",
+    });
   });
 });

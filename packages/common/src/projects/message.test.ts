@@ -16,7 +16,7 @@ describe("MessageSchema", () => {
   test("accepts the coordinator's reply: routing receipt, prose with an inline chip, and cards", () => {
     const message = makeAssistantMessage({
       blocks: [
-        { type: "routing-receipt", count: 2 },
+        { type: "routing-receipt", threadIds: ["thr_1", "thr_2"] },
         { type: "text", text: "Sent your note to " },
         { type: "thread-chip", threadId: "thr_1" },
         { type: "text", text: ". Two threads now:" },

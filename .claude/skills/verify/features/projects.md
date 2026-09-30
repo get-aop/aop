@@ -1,6 +1,6 @@
 # Projects and threads (API)
 
-A project is one coordinator chat plus the threads it starts. This map covers the HTTP API. The dashboard shows the result as projects in the sidebar and threads as cards on the project home, and [Projects shell](./projects-shell.md) is the recipe for watching that; the coordinator chat and thread transcript panes are placeholders, so the chat itself is only readable through the API. Coordinator and thread sessions never appear in `GET /api/chat-sessions`.
+A project is one coordinator chat plus the threads it starts. This map covers the HTTP API. The dashboard shows the result as projects in the sidebar and threads as cards on the project home, and [Projects shell](./projects-shell.md) is the recipe for watching that; the coordinator chat is drawn by the Coordinator tab ([Projects chat](./projects-chat.md)), while the thread transcript pane is still a placeholder. Coordinator and thread sessions never appear in `GET /api/chat-sessions`.
 
 Everything here needs a stack seeded with `--fake-runtime`: projects resolve their coordinator and thread runtime from the first runtime configuration, which then is the fake CLI, so no model is called. Confirm before sending anything: `sqlite3 "$AOP_DB_PATH" "select kind, runtime_alias from chat_sessions"` shows the path of `fake-cli.ts` for the coordinator and every thread.
 
@@ -53,4 +53,4 @@ Preconditions:
 - `gh` availability is cached for a minute per process, so make the fake unavailable (remove it from `PATH`) before the first call of a test that wants that failure.
 - A `[fake: ...]` marker inside a thread's title or brief is replayed on every turn, because both go into the brief: give a thread with a marker in its prompt an explicit `title`.
 - Two markers in one message do not add up: the last one wins.
-- The chat and the thread transcript have no dashboard screen yet (placeholder panes). `apps/local-server/src/project/coordinator.fake-cli.test.ts` runs the same flows against the engine.
+- The thread transcript has no dashboard screen yet (a placeholder pane); the chat has one, the Coordinator tab. `apps/local-server/src/project/coordinator.fake-cli.test.ts` runs the same flows against the engine.

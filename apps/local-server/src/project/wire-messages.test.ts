@@ -135,7 +135,7 @@ describe("listWireMessages", () => {
         status: "completed",
         blocks_json: JSON.stringify([
           { type: "thread-card", threadId: "isess_thread", variant: "live" },
-          { type: "routing-receipt", count: 2 },
+          { type: "routing-receipt", threadIds: ["isess_thread", "isess_other"] },
         ]),
       })
       .execute();
@@ -147,8 +147,61 @@ describe("listWireMessages", () => {
       blocks: [
         { type: "text", text: "Started." },
         { type: "thread-card", threadId: "isess_thread", variant: "live" },
-        { type: "routing-receipt", count: 2 },
+        { type: "routing-receipt", threadIds: ["isess_thread", "isess_other"] },
       ],
+    });
+  });
+
+  test("a block stored in a shape this build no longer reads is left out, and the rest of the conversation still loads", async () => {
+    await addMessage(coordinator.id, { id: "u1", role: "user", content: "Start it", turn: 1 });
+    await addMessage(coordinator.id, { id: "a1", role: "assistant", content: "Started.", turn: 1 });
+    await db
+      .insertInto("chat_runs")
+      .values({
+        id: "crun_old",
+        session_id: coordinator.id,
+        user_message_id: "u1",
+        assistant_message_id: "a1",
+        runtime: "claude-code",
+        log_file_path: "/tmp/x.jsonl",
+        status: "completed",
+        blocks_json: JSON.stringify([
+          { type: "routing-receipt", count: 2 },
+          { type: "thread-card", threadId: "isess_thread", variant: "live" },
+        ]),
+      })
+      .execute();
+
+    const [, reply] = await listWireMessages(db, coordinator);
+
+    expect(reply).toMatchObject({
+      role: "assistant",
+      blocks: [
+        { type: "text", text: "Started." },
+        { type: "thread-card", threadId: "isess_thread", variant: "live" },
+      ],
+    });
+  });
+
+  test("the coordinator's thread links become chips inside its reply; a thread's own text is left as written", async () => {
+    const link = "Passed it to [Fix login](thread:isess_thread) now.";
+    await addMessage(coordinator.id, { id: "c1", role: "assistant", content: link, turn: 1 });
+    await addMessage(thread.id, { id: "t1", role: "assistant", content: link, turn: 1 });
+
+    const [coordinatorReply] = await listWireMessages(db, coordinator);
+    const [threadReply] = await listWireMessages(db, thread);
+
+    expect(coordinatorReply).toMatchObject({
+      role: "assistant",
+      blocks: [
+        { type: "text", text: "Passed it to " },
+        { type: "thread-chip", threadId: "isess_thread" },
+        { type: "text", text: " now." },
+      ],
+    });
+    expect(threadReply).toMatchObject({
+      role: "assistant",
+      blocks: [{ type: "text", text: link }],
     });
   });
 

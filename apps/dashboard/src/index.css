@@ -2,7 +2,7 @@
 @import "@fontsource/geist-mono/400.css";
 @import "@fontsource/geist-mono/500.css";
 @import "tailwindcss";
-@import "./views/sessions/chat-timeline.css";
+@import "./projects/chat/chat-markdown.css";
 
 @custom-variant dark (&:is([data-theme="dark"], [data-theme="dark"] *));
 
@@ -116,10 +116,6 @@
   --z-menu: 60;
   --z-toast: 70;
 
-  /* Composer mention highlights. */
-  --mention-bg: rgb(91 157 255 / 16%);
-  --mention-fg: var(--color-running);
-
   /* Chrome dimensions. */
   --sidebar-width: 16rem;
   --sidebar-width-icon: 3rem;
@@ -202,139 +198,6 @@
   }
   50% {
     opacity: 0.35;
-  }
-}
-
-/* =========================================================================
-   Composer caret-stack — textarea (caret) + highlight div must share identical
-   text metrics or the caret drifts away from the visible glyphs.
-   ========================================================================= */
-.composer-input-stack {
-  position: relative;
-  display: grid;
-  width: 100%;
-}
-
-.composer-input-stack > .composer-highlight-layer,
-.composer-input-stack > .composer-input {
-  grid-area: 1 / 1;
-}
-
-.chat-text-surface {
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  word-break: normal;
-  tab-size: 4;
-}
-
-.composer-text-surface {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  box-sizing: border-box;
-  font-family: var(--font-sans);
-  font-weight: 400;
-  font-size: 14px;
-  line-height: 20px;
-  letter-spacing: normal;
-  font-variant-ligatures: none;
-  font-feature-settings: "liga" 0, "clig" 0;
-}
-
-.composer-input {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-height: 70px;
-  background: transparent;
-  outline: none;
-  resize: none;
-  color: transparent;
-  caret-color: var(--color-text);
-  overflow-x: hidden;
-  overflow-y: hidden;
-  /* Transparent fill keeps caret paint while glyphs come from the highlight layer. */
-  -webkit-text-fill-color: transparent;
-}
-
-.composer-input::placeholder {
-  color: var(--color-text-subtle);
-  -webkit-text-fill-color: var(--color-text-subtle);
-}
-
-.composer-highlight-layer {
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  min-height: 70px;
-  pointer-events: none;
-  overflow: hidden;
-  color: var(--color-text);
-}
-
-/* Shared chat column (thread + composer). */
-.chat-column,
-.chat-thread-content {
-  --chat-column-max: 720px;
-  max-width: var(--chat-column-max);
-  width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-  box-sizing: border-box;
-}
-
-/* Draft session layout: centered hero; the thread hugs its content. */
-.session-conversation-body {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-}
-.session-conversation-body--draft {
-  justify-content: center;
-  padding-bottom: clamp(48px, 10vh, 110px);
-}
-.session-conversation-body--draft .session-chat-thread-shell,
-.session-conversation-body--draft [data-testid="chat-thread"] {
-  /* Height hugs the hero in draft mode; width must still span the shell so the
-     centered chat column (and the hero inside it) lines up with the composer. */
-  flex: 0 0 auto !important;
-  width: 100%;
-  overflow: visible !important;
-}
-.session-conversation-body--draft [data-testid="chat-thread"] > .chat-column {
-  min-height: 0 !important;
-  padding-top: 0 !important;
-  padding-bottom: 18px !important;
-}
-
-/* The concept's draft view replaces the empty-state prompt with the hero + suggestions. */
-.session-conversation-body--draft [data-testid="chat-empty-state"] {
-  display: none !important;
-}
-.session-conversation-body--draft [data-testid="chat-empty-state"] {
-  margin: 0 !important;
-  padding: 0 !important;
-}
-.sessions-t3-shell [data-testid="chat-composer"] {
-  background: transparent !important;
-}
-.session-conversation-body--draft [data-testid="chat-composer"] {
-  padding-top: 0 !important;
-}
-
-.chat-thread-content {
-  display: flex;
-  min-height: 100%;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: 16px 28px;
-}
-
-@media (max-width: 639px) {
-  .chat-thread-content {
-    padding-inline: 12px;
   }
 }
 

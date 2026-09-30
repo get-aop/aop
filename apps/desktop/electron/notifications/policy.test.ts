@@ -107,7 +107,7 @@ describe("the coordinator", () => {
 
   test("says something even when its reply has no prose", () => {
     const cardsOnly = coordinatorPost("x", {
-      blocks: [{ type: "routing-receipt", count: 2 }],
+      blocks: [{ type: "routing-receipt", threadIds: ["thread-1", "thread-2"] }],
     });
 
     expect(decide(entryFor({ message: cardsOnly }))?.body).toBe(
