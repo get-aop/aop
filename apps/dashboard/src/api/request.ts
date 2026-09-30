@@ -51,6 +51,10 @@ export const request = async <T>(path: string, options: RequestInit = {}): Promi
   return data as T;
 };
 
+/** The query of a messages list that asks for the page before message `before`; none is the latest page. */
+export const beforeQuery = (before: string | undefined): string =>
+  before === undefined ? "" : `?before=${encodeURIComponent(before)}`;
+
 export const isUnauthenticated = (error: unknown): boolean =>
   error instanceof ApiError && error.status === 401 && error.code === UNAUTHENTICATED;
 

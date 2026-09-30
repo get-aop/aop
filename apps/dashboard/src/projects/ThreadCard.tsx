@@ -5,7 +5,7 @@ import { Link, threadPath } from "../shell/router";
 import { PullRequestChip } from "./PullRequestChip";
 import { ResumeThreadButton } from "./ResumeThreadButton";
 import { StepsRing } from "./StepsRing";
-import { formatAge, THREAD_STATUS_LABEL } from "./selectors";
+import { formatAge, hasFailingChecks, THREAD_STATUS_LABEL } from "./selectors";
 import { ThreadStatusDot } from "./ThreadStatusDot";
 
 type PullRequest = Extract<Artifact, { type: "pr" }>;
@@ -16,6 +16,7 @@ type PullRequest = Extract<Artifact, { type: "pr" }>;
  */
 export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => {
   const blocked = thread.status === "waiting-on-you";
+  const failing = hasFailingChecks(thread);
 
   return (
     <article
@@ -23,9 +24,10 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
       data-thread-id={thread.id}
       data-status={thread.status}
       data-unread={thread.unread}
+      data-checks-failing={failing ? "true" : undefined}
       className={cn(
         "group/card relative flex min-h-[132px] flex-col gap-2 rounded-card border bg-raised p-3.5 transition-colors duration-[120ms] hover:bg-hover",
-        blocked ? "border-waiting/40" : "border-border",
+        blocked ? "border-waiting/40" : failing ? "border-blocked/30" : "border-border",
         thread.status === "resolved" && "opacity-70",
       )}
     >
@@ -62,11 +64,15 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
 const CardHeader = ({ thread, now }: { thread: Thread; now: number }) => {
   const progress = getThreadProgress(thread);
   const blocked = thread.status === "waiting-on-you";
+  const failing = hasFailingChecks(thread);
   return (
     <header className="flex items-center gap-2 text-[12px] text-text-muted">
-      <ThreadStatusDot status={thread.status} />
-      <span data-testid="thread-status-label" className={cn(blocked && "text-waiting")}>
-        {THREAD_STATUS_LABEL[thread.status]}
+      <ThreadStatusDot status={thread.status} className={cn(failing && "bg-blocked")} />
+      <span
+        data-testid="thread-status-label"
+        className={cn(blocked && "text-waiting", failing && "text-blocked")}
+      >
+        {failing ? "Checks failing" : THREAD_STATUS_LABEL[thread.status]}
       </span>
       <span className="flex-1" />
       {progress && !blocked ? <StepsRing done={progress.done} total={progress.total} /> : null}

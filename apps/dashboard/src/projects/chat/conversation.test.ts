@@ -8,6 +8,7 @@ import {
   delta,
   ids,
   messageEntry,
+  pageFrom,
   reply,
   userMessage,
 } from "./test-utils";
@@ -32,7 +33,7 @@ const setup = (options: { fetches?: Promise<Message[]>[]; scope?: string | null 
     scope: options.scope === undefined ? THREAD : options.scope,
     listMessages: () => {
       fetchCount += 1;
-      return pending.shift() ?? Promise.resolve([]);
+      return pageFrom(pending);
     },
     events: fake.events,
     schedule: (run, delayMs) => {

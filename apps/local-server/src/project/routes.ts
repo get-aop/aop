@@ -1,7 +1,7 @@
 import { CreateProjectInputSchema, MemoryFileInputSchema, ProjectPatchSchema } from "@aop/common";
 import { Hono } from "hono";
 import { z } from "zod";
-import { errorResponse, readBody } from "./http.ts";
+import { errorResponse, readBody, readPageQuery } from "./http.ts";
 import type { ProjectAction } from "./service.ts";
 import type { ProjectServices } from "./services.ts";
 
@@ -55,8 +55,12 @@ export const createProjectRoutes = ({ projects, memory }: ProjectServices) => {
   });
 
   routes.get("/:projectId/messages", async (c) => {
-    const result = await projects.listMessages(c.req.param("projectId"));
-    return result.success ? c.json({ messages: result.messages }) : errorResponse(c, result.error);
+    const query = readPageQuery(c);
+    if ("response" in query) return query.response;
+    const result = await projects.listMessages(c.req.param("projectId"), query.page);
+    return result.success
+      ? c.json({ messages: result.messages, hasMore: result.hasMore })
+      : errorResponse(c, result.error);
   });
 
   routes.post("/:projectId/messages", async (c) => {

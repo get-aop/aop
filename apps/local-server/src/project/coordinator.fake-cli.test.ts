@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { Message, Project, Thread } from "@aop/common";
 import { ClaudeCodeProvider } from "@aop/llm-provider";
+import { createEventLogRepository } from "../event-log/repository.ts";
 import { createProjectStack, eventually, type ProjectStack, useTempAopHome } from "./test-utils.ts";
 
 // Drives the whole backend the way a person would, with the fake CLI standing in for Claude: a
@@ -293,6 +294,35 @@ describe("coordinator and threads against the fake CLI", () => {
     const log = readFileSync(run?.logFilePath ?? "", "utf8");
     expect(log).toContain("No such tool available: mcp__aop__thread_spawn");
     expect(await threadsOf(s, project.id)).toHaveLength(1);
+  }, 60_000);
+
+  test("a coordinator turn whose runtime fails is a failed reply, live and after a reload, and a good reply is not", async () => {
+    stack = await createProjectStack(home.path());
+    const s = stack;
+    const project = await createProject(s);
+
+    await s.api("POST", `/api/projects/${project.id}/messages`, { text: "first" });
+    await s.settle();
+    await s.api("POST", `/api/projects/${project.id}/messages`, {
+      text: `second [fake: fail="the runtime blew up"]`,
+    });
+    await s.settle();
+
+    const listed = await messagesOf(s, `/api/projects/${project.id}/messages`);
+    const replies = listed.filter((message) => message.role === "assistant");
+    expect(replies).toHaveLength(2);
+    expect(replies[0]).not.toHaveProperty("failed");
+    expect(replies[1]).toMatchObject({ failed: true });
+    const live = await createEventLogRepository(s.db).listAfter(project.id, 0);
+    const announced = live.flatMap((entry) =>
+      entry.type === "message.created" && entry.payload.message.role === "assistant"
+        ? [entry.payload.message]
+        : [],
+    );
+    expect(announced.map((message) => "failed" in message && message.failed)).toEqual([
+      false,
+      true,
+    ]);
   }, 60_000);
 
   test("the coordinator run is hermetic with the AOP tools only, and a thread's run is open with its own", async () => {

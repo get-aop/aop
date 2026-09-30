@@ -4,7 +4,7 @@ A project's Threads tab is its Overview: every thread grouped by what it needs f
 
 ## The Overview
 
-`ThreadOverview` draws one group per thread status, in the order a person should look at them: waiting on you, working, queued, rate limited, ready for review, landing, idle, resolved. A status with no thread has no group, and Resolved starts folded. Above the groups five counters give the project at a glance: threads waiting on you, running (working, queued and rate limited), ready for review, open pull requests and resolved. Searching opens every group and filters the cards. A card changes in place as `thread.upserted` entries arrive on the project's stream, and a rate-limited card carries a Resume button.
+`ThreadOverview` draws one group per thread status, in the order a person should look at them: waiting on you, working, queued, rate limited, ready for review, landing, idle, resolved. A status with no thread has no group, and Resolved starts folded. Above the groups five counters give the project at a glance: threads waiting on you, running (working only: a queued or rate-limited thread has no turn running and shows in its own group), ready for review, open pull requests and resolved. Searching opens every group and filters the cards. A stopped thread whose open pull request fails its checks (where auto-fix ends at its cap) is drawn as an alert on its card and in the chat, not as ready or done. A card changes in place as `thread.upserted` entries arrive on the project's stream, and a rate-limited card carries a Resume button.
 
 ## What the pane holds
 

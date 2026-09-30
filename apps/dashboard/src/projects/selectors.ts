@@ -73,7 +73,7 @@ export const groupThreads = (threads: readonly Thread[]): ThreadGroup[] => {
 
 export interface OverviewCounters {
   waiting: number;
-  /** Threads with a turn running, or lined up to run: working, queued and rate-limited. */
+  /** Threads with a turn running now; queued and rate-limited threads are waiting, not running. */
   running: number;
   readyForReview: number;
   openPullRequests: number;
@@ -82,15 +82,13 @@ export interface OverviewCounters {
 
 export const overviewCounters = (threads: readonly Thread[]): OverviewCounters => ({
   waiting: threads.filter((thread) => thread.status === "waiting-on-you").length,
-  running: threads.filter((thread) => RUNNING_STATUSES.has(thread.status)).length,
+  running: threads.filter((thread) => thread.status === "working").length,
   readyForReview: threads.filter((thread) => thread.status === "ready-for-review").length,
   openPullRequests: threads.filter((thread) =>
     thread.artifacts.some((artifact) => artifact.type === "pr" && artifact.state === "open"),
   ).length,
   resolved: threads.filter((thread) => thread.status === "resolved").length,
 });
-
-const RUNNING_STATUSES: ReadonlySet<ThreadStatus> = new Set(["working", "queued", "rate-limited"]);
 
 export const THREAD_STATUS_LABEL: Record<ThreadStatus, string> = {
   "waiting-on-you": "Waiting on you",
@@ -108,6 +106,17 @@ export const pullRequestOf = (thread: Thread): PullRequestRef | null =>
   thread.artifacts.find(
     (artifact): artifact is Artifact & { type: "pr" } => artifact.type === "pr",
   ) ?? null;
+
+/**
+ * A thread that has stopped, with an open pull request whose checks fail: nothing is ready for
+ * anyone until they are fixed, which the person has to do or ask for once auto-fix has stopped at
+ * its cap. A working thread may be fixing them, and a resolved one is closed out.
+ */
+export const hasFailingChecks = (thread: Thread): boolean => {
+  if (thread.status !== "ready-for-review" && thread.status !== "idle") return false;
+  const pullRequest = pullRequestOf(thread);
+  return pullRequest?.state === "open" && pullRequest.checks?.state === "failure";
+};
 
 export const matchesThreadSearch = (thread: Thread, query: string): boolean => {
   const needle = query.trim().toLowerCase();

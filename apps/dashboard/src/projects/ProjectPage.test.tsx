@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
-import { at, reply } from "./chat/test-utils";
+import { at, page, reply } from "./chat/test-utils";
 import type { ProjectsState } from "./projects-state";
 import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "./test-utils";
 import { hostError, json, mockHost } from "./thread/test-utils";
@@ -238,11 +238,12 @@ describe("project screens", () => {
 describe("the coordinator tab", () => {
   const answered: ChatApi = {
     ...silentHost,
-    listMessages: async () => [
-      { id: "u1", projectId: "p1", threadId: null, createdAt: at(1), role: "user", text: "Hi" },
-      reply("a1", 2),
-      reply("a2", 10),
-    ],
+    listMessages: async () =>
+      page([
+        { id: "u1", projectId: "p1", threadId: null, createdAt: at(1), role: "user", text: "Hi" },
+        reply("a1", 2),
+        reply("a2", 10),
+      ]),
   };
 
   const renderWith = async (route: ProjectRoute, seenAt: string) => {

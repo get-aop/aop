@@ -48,6 +48,8 @@ export const describeServiceError = (error: ServiceError): string => {
       return "The thread has no repository, so it has no branch to publish";
     case "WORKTREE_FAILED":
       return `The thread's git worktree failed: ${error.message}`;
+    case "NO_WORKTREE":
+      return "The thread has no checkout on disk right now, so there are no changes to show. Its work is kept on its branch.";
     case "NOTHING_TO_PUBLISH":
       return "The thread has no changes to open a pull request for";
     case "NO_PULL_REQUEST":

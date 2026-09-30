@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/ui/textarea";
 import { requestConfirmation } from "../../components/ConfirmationHost";
 import { NOTIFICATION_LEVELS } from "../notification-levels";
+import { projectNameProblem } from "../project-fields";
 import { AutoFixSetting } from "./AutoFixSetting";
 import { SaveBar, SettingsBlock } from "./blocks";
 import { ModelSettings } from "./ModelSettings";
@@ -15,10 +16,12 @@ import { type SettingsDraft, useSettingsDraft } from "./use-settings-draft";
 /** Name, goal, models, thread access and notifications in one form, then the actions that are not edits. */
 export const GeneralSection = ({ project }: { project: Project }) => {
   const draft = useSettingsDraft(project);
-  const nameMissing = draft.value("name").trim() === "";
+  const name = draft.value("name");
+  const nameMissing = name.trim() === "";
+  const nameProblem = nameMissing ? "A project needs a name." : projectNameProblem(name);
 
   const save = async () => {
-    if (nameMissing) return;
+    if (nameProblem) return;
     // Full access is the one setting that lowers a guard, so saving it asks once more.
     if (draft.patch.threadAccess === "full-access") {
       const confirmed = await requestConfirmation({
@@ -49,14 +52,13 @@ export const GeneralSection = ({ project }: { project: Project }) => {
                 id="settings-name"
                 data-testid="settings-name"
                 autoComplete="off"
-                maxLength={100}
-                value={draft.value("name")}
-                aria-invalid={nameMissing}
+                value={name}
+                aria-invalid={nameProblem !== null}
                 onChange={(event) => draft.set("name", event.target.value)}
               />
-              {nameMissing ? (
+              {nameProblem ? (
                 <p data-testid="settings-name-error" className="text-[12px] text-blocked">
-                  A project needs a name.
+                  {nameProblem}
                 </p>
               ) : null}
             </div>
@@ -108,7 +110,7 @@ export const GeneralSection = ({ project }: { project: Project }) => {
           <NotificationSetting draft={draft} />
         </SettingsBlock>
 
-        <SaveBar draft={draft} blocked={nameMissing} />
+        <SaveBar draft={draft} blocked={nameProblem !== null} />
       </form>
 
       <CoordinatorRestart project={project} />

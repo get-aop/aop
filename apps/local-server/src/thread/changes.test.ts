@@ -123,9 +123,24 @@ describe("what a thread changed", () => {
     const file = await w.s.services.threads.changedFile(thread.id, "notes.md");
 
     for (const result of [summary, file]) {
-      expect(result).toMatchObject({ success: false, error: { code: "WORKTREE_FAILED" } });
+      expect(result).toEqual({ success: false, error: { code: "NO_WORKTREE" } });
     }
     expect(await Bun.file(`${worktreeOf(w, thread)}/notes.md`).exists()).toBe(false);
+  });
+
+  test("an idle thread whose checkout was parked with its archived project says so once the project is restored", async () => {
+    const w = await setup();
+    const thread = await spawnWithWork(w);
+    await w.s.services.projects.transition(w.project.id, "archive");
+    await w.s.services.projects.transition(w.project.id, "restore");
+
+    const summary = await w.s.services.threads.changes(thread.id);
+    const file = await w.s.services.threads.changedFile(thread.id, "notes.md");
+
+    expect(await Bun.file(`${worktreeOf(w, thread)}/notes.md`).exists()).toBe(false);
+    for (const result of [summary, file]) {
+      expect(result).toEqual({ success: false, error: { code: "NO_WORKTREE" } });
+    }
   });
 
   test("a thread with no repository has no branch to compare", async () => {

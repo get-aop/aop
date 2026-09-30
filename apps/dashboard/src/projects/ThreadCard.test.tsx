@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { Artifact } from "@aop/common";
 import { setupDashboardDom } from "../test/setup-dom";
 import { AT, makeThread } from "./test-utils";
 import { json, mockHost } from "./thread/test-utils";
@@ -16,6 +17,64 @@ afterEach(cleanup);
 beforeEach(() => window.history.pushState({}, "", "/"));
 
 const card = () => screen.getByTestId("thread-card");
+
+type PullRequest = Extract<Artifact, { type: "pr" }>;
+
+const openPr = (checks?: {
+  state: "failure" | "pending" | "success";
+  failing: number;
+}): PullRequest => ({
+  type: "pr",
+  number: 7,
+  url: "https://github.com/acme/app/pull/7",
+  state: "open",
+  ...(checks && { checks: { successful: 1, pending: 0, ...checks } }),
+});
+
+describe("a stopped thread whose pull request fails its checks", () => {
+  const dot = () => screen.getByTestId("thread-status-dot");
+
+  test("is not drawn as ready: an alert label and dot, whether it is ready for review or idle", () => {
+    for (const status of ["ready-for-review", "idle"] as const) {
+      render(
+        <ThreadCard
+          now={NOW}
+          thread={makeThread({ status, artifacts: [openPr({ state: "failure", failing: 2 })] })}
+        />,
+      );
+
+      expect(card().getAttribute("data-checks-failing")).toBe("true");
+      expect(screen.getByTestId("thread-status-label").textContent).toBe("Checks failing");
+      expect(screen.getByTestId("thread-status-label").className).toContain("text-blocked");
+      expect(dot().className).toContain("bg-blocked");
+      expect(dot().className).not.toContain("bg-ok");
+      expect(card().className).toContain("border-blocked");
+      cleanup();
+    }
+  });
+
+  test("keeps its own look when the checks pass, are running, or are not known, and when it is working, merged or resolved", () => {
+    const cases: Parameters<typeof makeThread>[0][] = [
+      { status: "ready-for-review", artifacts: [openPr({ state: "success", failing: 0 })] },
+      { status: "ready-for-review", artifacts: [openPr({ state: "pending", failing: 0 })] },
+      { status: "ready-for-review", artifacts: [openPr()] },
+      { status: "working", artifacts: [openPr({ state: "failure", failing: 1 })] },
+      { status: "resolved", artifacts: [openPr({ state: "failure", failing: 1 })] },
+      {
+        status: "ready-for-review",
+        artifacts: [{ ...openPr({ state: "failure", failing: 1 }), state: "merged" }],
+      },
+    ];
+    for (const overrides of cases) {
+      render(<ThreadCard now={NOW} thread={makeThread(overrides)} />);
+
+      expect(card().getAttribute("data-checks-failing")).toBeNull();
+      expect(screen.getByTestId("thread-status-label").textContent).not.toBe("Checks failing");
+      expect(dot().className).not.toContain("bg-blocked");
+      cleanup();
+    }
+  });
+});
 
 describe("ThreadCard", () => {
   test("a working thread shows its status, steps ring, live line and age", () => {

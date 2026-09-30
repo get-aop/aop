@@ -37,12 +37,25 @@ afterEach(() => {
 const thread = { id: "thr 1", title: "Fix login" };
 
 describe("reading", () => {
-  test("lists a thread's messages, with its id encoded in the path", async () => {
-    host.respondWith(() => json({ messages: [{ id: "m1" }] }));
+  test("lists a page of a thread's messages, with its id encoded in the path", async () => {
+    host.respondWith(() => json({ messages: [{ id: "m1" }], hasMore: false }));
 
-    expect(await listThreadMessages("thr 1")).toEqual([{ id: "m1" }] as never);
+    expect(await listThreadMessages("thr 1")).toEqual({
+      messages: [{ id: "m1" }],
+      hasMore: false,
+    } as never);
     expect(host.requests).toEqual([
       { method: "GET", url: "/api/threads/thr%201/messages", body: undefined },
+    ]);
+  });
+
+  test("asks for the page before a message by its id", async () => {
+    host.respondWith(() => json({ messages: [], hasMore: false }));
+
+    await listThreadMessages("thr_1", "msg_5");
+
+    expect(host.requests).toEqual([
+      { method: "GET", url: "/api/threads/thr_1/messages?before=msg_5", body: undefined },
     ]);
   });
 

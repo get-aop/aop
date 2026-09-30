@@ -7,6 +7,8 @@ export {
   HostHealthSchema,
   MIN_CLIENT_API_VERSION,
 } from "./host-api.ts";
+export type { FieldLabels, ValidationIssue } from "./issues.ts";
+export { describeFirstIssue, describeIssue, describeIssuesByField } from "./issues.ts";
 export * from "./projects/index.ts";
 export { suggestSessionBranchName } from "./session-branch.ts";
 export type { SseMessage } from "./sse.ts";

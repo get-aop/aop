@@ -63,6 +63,7 @@ export {
 export type {
   AssistantMessage,
   Message,
+  MessagePage,
   ThreadReportMessage,
   ThreadReportOutcome,
   UserMessage,

@@ -208,6 +208,47 @@ describe("thread card", () => {
     expect(screen.getByTestId("chat-thread-card-pr").textContent).toBe("#4821");
   });
 
+  test("a finished thread whose pull request still fails its checks is drawn as an alert, not a done card", () => {
+    const pr = { type: "pr" as const, number: 7, url: "https://github.com/acme/app/pull/7" };
+    const stopped = makeThread({
+      id: "thr_1",
+      status: "ready-for-review",
+      liveStatusLine: "Auto-fix stopped after 3 attempts: 2 checks failing",
+      artifacts: [
+        {
+          ...pr,
+          state: "open",
+          checks: { state: "failure", successful: 1, failing: 2, pending: 0 },
+        },
+      ],
+    });
+    const { rerender } = render(
+      tree([{ type: "thread-card", threadId: "thr_1", variant: "done" }], [stopped]),
+    );
+
+    const card = screen.getByTestId("chat-thread-card");
+    expect(card.getAttribute("data-checks-failing")).toBe("true");
+    expect(card.className).toContain("border-blocked");
+    expect(screen.getByTestId("chat-thread-card-icon").getAttribute("class")).toContain(
+      "text-blocked",
+    );
+    expect(screen.getByTestId("chat-thread-card-icon").getAttribute("class")).not.toContain(
+      "text-ok",
+    );
+    expect(screen.getByTestId("chat-thread-card-status").textContent).toContain(
+      "Auto-fix stopped after 3 attempts",
+    );
+
+    rerender(
+      tree(
+        [{ type: "thread-card", threadId: "thr_1", variant: "done" }],
+        [{ ...stopped, artifacts: [{ ...pr, state: "open" }] } as Thread],
+      ),
+    );
+    expect(card.getAttribute("data-checks-failing")).toBeNull();
+    expect(screen.getByTestId("chat-thread-card-icon").getAttribute("class")).toContain("text-ok");
+  });
+
   test("updates in place: the card the coordinator posted as a call turns live when the person answers, then done", () => {
     const blocks: MessageBlock[] = [
       { type: "thread-card", threadId: "thr_1", variant: "needs-call" },

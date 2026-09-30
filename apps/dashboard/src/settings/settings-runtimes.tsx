@@ -1,5 +1,6 @@
 import type { RuntimeConfigurationModelInput } from "@aop/common";
 import {
+  describeFirstIssue,
   type RuntimeConfigurationProvider,
   RuntimeConfigurationProviderInputSchema,
   type RuntimeDriver,
@@ -127,7 +128,7 @@ export const SettingsRuntimes = () => {
       driver: draftToSave.driver,
     });
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Invalid runtime");
+      toast.error(describeFirstIssue(parsed.error.issues, "Invalid runtime"));
       return null;
     }
     return parsed.data;

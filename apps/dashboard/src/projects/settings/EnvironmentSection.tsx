@@ -168,16 +168,28 @@ const RepoRow = ({
   </div>
 );
 
-// The host refuses to detach a repository a thread works in (409 REPO_IN_USE); its message
-// names only the repository's id, so say which threads hold it.
+// The host refuses to detach a repository any thread of the project has (409 REPO_IN_USE), whatever
+// its status; its message names only the repository's id, so say which threads hold it. Only an
+// unresolved thread "still works" in it: a resolved one has given up its checkout, but it still
+// belongs to the repository and blocks the detach until it is deleted, and the row says so.
 const explain = (cause: unknown, repo: RegisteredRepoRef, threads: readonly Thread[]): string => {
   if (!(cause instanceof ApiError)) return "Could not change the repositories";
   if (cause.code !== "REPO_IN_USE") return cause.message;
   const holders = threads.filter((thread) => thread.repoId === repo.id);
-  const [first] = holders;
-  if (!first) return cause.message;
-  const where = repo.name ?? repo.path ?? repo.id;
-  return holders.length === 1
-    ? `“${first.title}” still works in ${where}. Stop and delete it first, then detach the repository.`
-    : `${holders.length} threads still work in ${where}. Stop and delete them first, then detach the repository.`;
+  if (holders.length === 0) return cause.message;
+  const live = holders.filter((thread) => thread.status !== "resolved");
+  return explainHolders(repo.name ?? repo.path ?? repo.id, live, holders.length - live.length);
+};
+
+const explainHolders = (where: string, live: readonly Thread[], resolved: number): string => {
+  const working =
+    live.length === 1 ? `“${live[0]?.title}” still works` : `${live.length} threads still work`;
+  const done = resolved === 1 ? "1 resolved thread belongs" : `${resolved} resolved threads belong`;
+  if (resolved === 0) {
+    return `${working} in ${where}. Stop and delete ${live.length === 1 ? "it" : "them"} first, then detach the repository.`;
+  }
+  if (live.length === 0) {
+    return `${done} to ${where}. Delete ${resolved === 1 ? "it" : "them"}, then detach the repository.`;
+  }
+  return `${working} in ${where}, and ${done} to it. Stop and delete them, then detach the repository.`;
 };

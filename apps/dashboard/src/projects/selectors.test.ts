@@ -254,10 +254,11 @@ describe("overviewCounters", () => {
     makeThread({ id: "d", status: "resolved", artifacts: [pr("merged", 4)] }),
   ];
 
-  test("counts what waits on the person, what runs or is lined up to, what waits for review and what is done", () => {
+  test("counts what waits on the person, what runs now, what waits for review and what is done", () => {
+    // Queued and rate-limited threads have no turn running, so they are not "running".
     expect(overviewCounters(threads)).toEqual({
       waiting: 1,
-      running: 3,
+      running: 1,
       readyForReview: 1,
       openPullRequests: 2,
       resolved: 1,

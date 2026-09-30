@@ -18,6 +18,8 @@ export type ThreadError =
   /** The thread has no repository, so there is no branch to publish. */
   | { code: "NO_REPOSITORY" }
   | { code: "WORKTREE_FAILED"; message: string }
+  /** The thread's checkout is not on disk (resolved, or parked when its project was archived): nothing to compare. */
+  | { code: "NO_WORKTREE" }
   | { code: "NOTHING_TO_PUBLISH" }
   | { code: "NO_PULL_REQUEST" }
   /** `reason` is the session-git code (GH_UNAVAILABLE, PUSH_FAILED, CHECKS_FAILING, ...). */

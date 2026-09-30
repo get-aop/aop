@@ -3,6 +3,7 @@ import type { SuggestedThread, SuggestionAnswer, Thread } from "@aop/common";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { makeThread } from "../test-utils";
 import type { ChatApi } from "./chat-api";
+import { page } from "./test-utils";
 
 setupDashboardDom();
 
@@ -49,7 +50,7 @@ const setup = (
     if (failure) throw new Error(failure);
   };
   const api: ChatApi = {
-    listMessages: async () => [],
+    listMessages: async () => page([]),
     sendMessage: async () => {
       throw new Error("not used");
     },

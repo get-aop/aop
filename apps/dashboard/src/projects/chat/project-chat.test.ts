@@ -9,6 +9,8 @@ import {
   deferred,
   ids,
   memorySeenStore,
+  page,
+  pageFrom,
   reply,
   report,
   userMessage,
@@ -23,7 +25,7 @@ const setup = (options: { seen?: Record<string, string>; fetches?: Promise<Messa
   const pending = [...(options.fetches ?? [])];
   const sent: string[] = [];
   const api: Pick<ChatApi, "listMessages" | "sendMessage"> = {
-    listMessages: () => pending.shift() ?? Promise.resolve([]),
+    listMessages: () => pageFrom(pending),
     sendMessage: async (_projectId, text) => {
       sent.push(text);
       return userMessage("sent", 9, { text });
@@ -95,7 +97,7 @@ describe("loading", () => {
     api.listMessages = async () => {
       attempts += 1;
       if (attempts === 1) throw new Error("Host unreachable");
-      return [userMessage("u1", 1)];
+      return page([userMessage("u1", 1)]);
     };
     chat.start();
     await flush();

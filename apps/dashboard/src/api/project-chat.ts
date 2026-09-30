@@ -1,10 +1,9 @@
-import type { Message, Thread, UserMessage } from "@aop/common";
-import { request } from "./request";
+import type { MessagePage, Thread, UserMessage } from "@aop/common";
+import { beforeQuery, request } from "./request";
 
-/** The latest messages of a project's coordinator chat, oldest first. */
-export const listCoordinatorMessages = async (projectId: string): Promise<Message[]> =>
-  (await request<{ messages: Message[] }>(`/projects/${encodeURIComponent(projectId)}/messages`))
-    .messages;
+/** A page of a project's coordinator chat, oldest first: the latest, or the one before message `before`. */
+export const listCoordinatorMessages = (projectId: string, before?: string): Promise<MessagePage> =>
+  request<MessagePage>(`/projects/${encodeURIComponent(projectId)}/messages${beforeQuery(before)}`);
 
 /** Says something to the coordinator; the answer is the message as stored, not the coordinator's reply. */
 export const sendCoordinatorMessage = async (

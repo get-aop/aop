@@ -1,11 +1,14 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { Message } from "@aop/common";
 import { setupDashboardDom } from "../../test/setup-dom";
+import type { EarlierMessages } from "./chat-state";
 import { reply, userMessage } from "./test-utils";
 
 setupDashboardDom();
 
-const { cleanup, render, screen, waitFor, within } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, screen, waitFor, within } = await import(
+  "@testing-library/react"
+);
 const { COORDINATOR_WORKER, MessageList } = await import("./MessageList");
 
 afterEach(cleanup);
@@ -63,6 +66,32 @@ describe("who is working", () => {
     renderList({ messages: [userMessage("u1", 1), reply("a1", 2)], worker: THREAD_WORKER });
 
     expect(screen.queryByTestId("thread-activity")).toBeNull();
+  });
+});
+
+describe("a reply whose run failed", () => {
+  test("is drawn as an error with the runtime's words under a heading, and a good reply is not", () => {
+    renderList({
+      messages: [
+        userMessage("u1", 1),
+        reply("good", 2),
+        userMessage("u2", 3),
+        reply("bad", 4, [{ type: "text", text: "Runtime error: spawn claude ENOENT" }], {
+          failed: true,
+        }),
+      ],
+    });
+
+    const bad = assistantOf("bad");
+    expect(bad.getAttribute("data-failed")).toBe("true");
+    expect(within(bad).getByTestId("assistant-message-failed").textContent).toBe(
+      "This turn failed",
+    );
+    expect(bad.textContent).toContain("Runtime error: spawn claude ENOENT");
+    expect(bad.querySelector(".text-blocked")).not.toBeNull();
+    const good = assistantOf("good");
+    expect(good.getAttribute("data-failed")).toBeNull();
+    expect(within(good).queryByTestId("assistant-message-failed")).toBeNull();
   });
 });
 
@@ -168,5 +197,75 @@ describe("how long the agent has been working", () => {
     });
 
     expect(elapsed().trim()).toBe("Claude Code is working");
+  });
+});
+
+describe("older messages the host still holds", () => {
+  const thread = (count: number) =>
+    Array.from({ length: count }, (_, index) => userMessage(`m${index + 1}`, index + 1));
+  const earlierOf = (overrides: Partial<EarlierMessages> = {}): EarlierMessages => ({
+    available: true,
+    loading: false,
+    error: null,
+    load: async () => {},
+    ...overrides,
+  });
+  const drawn = () => screen.getAllByTestId("user-message").map((row) => row.dataset.messageId);
+
+  test("offers to load them once everything held is drawn, and not before", () => {
+    renderList({ messages: thread(70), earlier: earlierOf() });
+
+    expect(screen.getByTestId("chat-show-earlier")).toBeTruthy();
+    expect(screen.queryByTestId("chat-load-earlier")).toBeNull();
+    fireEvent.click(screen.getByTestId("chat-show-earlier"));
+    expect(screen.queryByTestId("chat-show-earlier")).toBeNull();
+    expect(screen.getByTestId("chat-load-earlier").textContent).toBe("Load earlier messages");
+  });
+
+  test("offers nothing when the host holds nothing older", () => {
+    renderList({ messages: thread(3), earlier: earlierOf({ available: false }) });
+
+    expect(screen.queryByTestId("chat-load-earlier")).toBeNull();
+  });
+
+  test("asks for them on click and draws a step of what came, at the top", async () => {
+    const all = thread(200);
+    const load = mock(async () => {});
+    const { rerender } = renderList({ messages: all.slice(150), earlier: earlierOf({ load }) });
+    expect(drawn()).toHaveLength(50);
+
+    fireEvent.click(screen.getByTestId("chat-load-earlier"));
+    expect(load).toHaveBeenCalledTimes(1);
+    rerender(
+      <MessageList
+        live={{}}
+        working={false}
+        firstNewId={null}
+        scrollToEndKey={0}
+        messages={all}
+        earlier={earlierOf({ load })}
+      />,
+    );
+
+    await waitFor(() => expect(drawn()).toHaveLength(120));
+    expect(drawn()[0]).toBe("m81");
+    expect(screen.getByTestId("chat-show-earlier").textContent).toContain("earlier messages");
+  });
+
+  test("says it is loading and cannot be asked again meanwhile", () => {
+    renderList({ messages: thread(3), earlier: earlierOf({ loading: true }) });
+
+    const button = screen.getByTestId("chat-load-earlier") as HTMLButtonElement;
+    expect(button.textContent).toBe("Loading earlier messages…");
+    expect(button.disabled).toBe(true);
+  });
+
+  test("says why a fetch failed, and the button asks again", () => {
+    renderList({ messages: thread(3), earlier: earlierOf({ error: "Host unreachable" }) });
+
+    expect(screen.getByTestId("chat-load-earlier-error").textContent).toBe(
+      "Could not load earlier messages (Host unreachable).",
+    );
+    expect((screen.getByTestId("chat-load-earlier") as HTMLButtonElement).disabled).toBe(false);
   });
 });

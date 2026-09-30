@@ -1,6 +1,6 @@
 import type {
   BlockedQuestion,
-  Message,
+  MessagePage,
   Project,
   Thread,
   ThreadActivity,
@@ -16,7 +16,11 @@ import type { ChatEngine } from "../project/engine.ts";
 import { recordThreadRemoved, recordThreadUpserted } from "../project/events.ts";
 import { resolveSessionRuntime } from "../project/runtime.ts";
 import { stopProjectSession } from "../project/session-control.ts";
-import { listWireMessages } from "../project/wire-messages.ts";
+import {
+  listWireMessages,
+  type MessagePageRequest,
+  UNKNOWN_PAGE_ANCHOR,
+} from "../project/wire-messages.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { recordSuggestionsChanged } from "../suggestion/events.ts";
 import { createSuggestionRepository } from "../suggestion/repository.ts";
@@ -51,7 +55,8 @@ export interface ThreadService {
   spawn: (projectId: string, input: SpawnThreadInput) => Promise<ThreadResult<{ thread: Thread }>>;
   list: (projectId: string) => Promise<ThreadResult<{ threads: Thread[] }>>;
   get: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
-  listMessages: (threadId: string) => Promise<ThreadResult<{ messages: Message[] }>>;
+  /** The latest page of a thread's transcript, or the one before message `page.before`. */
+  listMessages: (threadId: string, page?: MessagePageRequest) => Promise<ThreadResult<MessagePage>>;
   /**
    * Steers a thread: queued while it works, a new turn while it is idle, a reopen once resolved.
    * With `onlyIn`, the message is sent only if the thread is in one of those statuses when it is
@@ -279,11 +284,13 @@ export const createThreadService = (
 
     get: reload,
 
-    listMessages: async (threadId) => {
+    listMessages: async (threadId, page) => {
       const session = await threadSession(ctx, threadId);
-      return session
-        ? { success: true, messages: await listWireMessages(ctx.db, session) }
-        : { success: false, error: { code: "THREAD_NOT_FOUND" } };
+      if (!session) return { success: false, error: { code: "THREAD_NOT_FOUND" } };
+      const listed = await listWireMessages(ctx.db, session, page);
+      return listed
+        ? { success: true, ...listed }
+        : { success: false, error: { code: "INVALID_MESSAGE", message: UNKNOWN_PAGE_ANCHOR } };
     },
 
     send: async (threadId, text, origin, options) => {

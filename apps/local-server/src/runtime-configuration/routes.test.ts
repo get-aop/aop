@@ -227,6 +227,13 @@ describe("runtime configuration routes", () => {
     });
   });
 
+  test("a refused provider says which field is wrong, in plain words", async () => {
+    const tooLong = await send("POST", "/providers", { name: "n".repeat(61), command: "other" });
+
+    expect(tooLong.status).toBe(400);
+    expect(await tooLong.json()).toEqual({ error: "Name can be at most 60 characters." });
+  });
+
   test.each(["codex-cli", "pi", "grok-build", "opencode", "custom"])(
     "rejects a provider with the %s driver",
     async (driver) => {

@@ -4,6 +4,7 @@ import type {
   Message,
   MessageBlock,
   MessageDelta,
+  MessagePage,
   ThreadReportMessage,
   UserMessage,
 } from "@aop/common";
@@ -73,6 +74,16 @@ export const delta = (
   replace: false,
   ...overrides,
 });
+
+/** A page of messages as the host answers a fetch of them. */
+export const page = (messages: readonly Message[], hasMore = false): MessagePage => ({
+  messages: [...messages],
+  hasMore,
+});
+
+/** Answers a fetch from a queue of message lists, in order: the empty page once the queue is used up. */
+export const pageFrom = (queue: Promise<Message[]>[]): Promise<MessagePage> =>
+  queue.shift()?.then((messages) => page(messages)) ?? Promise.resolve(page([]));
 
 /** The ids of the messages in order, for asserting an order without the noise of the rest. */
 export const ids = (messages: readonly Message[]): string[] => messages.map(({ id }) => id);

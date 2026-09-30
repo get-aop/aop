@@ -109,6 +109,17 @@ describe("GeneralSection form", () => {
     expect(api.calls).toHaveLength(0);
   });
 
+  test("a name past the limit is refused under the name field in plain words, and cannot be saved", () => {
+    renderGeneral();
+    type("settings-name", "x".repeat(101));
+
+    expect(screen.getByTestId("settings-name-error").textContent).toBe(
+      "Name can be at most 100 characters.",
+    );
+    expect((screen.getByTestId("settings-save") as HTMLButtonElement).disabled).toBe(true);
+    expect(api.calls).toHaveLength(0);
+  });
+
   test("the host's refusal is shown and the edits stay", async () => {
     respond = () => Response.json({ error: "Project name already exists" }, { status: 409 });
     const stub = renderGeneral();

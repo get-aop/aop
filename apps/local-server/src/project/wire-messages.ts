@@ -1,4 +1,10 @@
-import { type Message, type MessageBlock, MessageBlockSchema, MessageSchema } from "@aop/common";
+import {
+  type Message,
+  type MessageBlock,
+  MessageBlockSchema,
+  type MessagePage,
+  MessageSchema,
+} from "@aop/common";
 import type { Kysely } from "kysely";
 import { z } from "zod";
 import { decodeMessageContent, expandStoredPastes } from "../chat-session/message-images.ts";
@@ -8,6 +14,16 @@ import { createSuggestionRepository, type MessageAnswers } from "../suggestion/r
 import { textToBlocks } from "./text-blocks.ts";
 
 export const DEFAULT_MESSAGE_PAGE_SIZE = 200;
+export const MAX_MESSAGE_PAGE_SIZE = 500;
+export const UNKNOWN_PAGE_ANCHOR =
+  "There is no such message in this conversation to list the ones before";
+
+/** Which page of a session's messages a client asks for; none is the latest page. */
+export interface MessagePageRequest {
+  /** The oldest message the client holds: the page is what came before it. */
+  before?: string;
+  limit?: number;
+}
 
 /** Where a session's messages sit on the wire: the coordinator chat has no thread id. */
 export interface MessageScope {
@@ -15,30 +31,95 @@ export interface MessageScope {
   threadId: string | null;
 }
 
+/** What a message needs beyond its row: the answers to its suggested threads, and whether its run failed. */
+export interface MessageExtras {
+  answers?: MessageAnswers;
+  failed?: boolean;
+}
+
 /**
- * A project session's messages as clients see them, oldest first, at most the latest `limit`.
- * An assistant message is its text followed by the blocks its run's tools produced, with the
- * answers to its suggested threads filled in. A message with nothing to show (an image-only
- * prompt) is left out, since the wire types need content.
+ * A page of a project session's messages as clients see them, oldest first: the latest `limit`,
+ * or the `limit` before message `before`, and whether older ones remain. Null when `before` is
+ * not a message of the session. An assistant message is its text followed by the blocks its
+ * run's tools produced, with the answers to its suggested threads filled in. A message with
+ * nothing to show (an image-only prompt) is left out, since the wire types need content.
  */
 export const listWireMessages = async (
   db: Kysely<Database>,
   session: ChatSession,
-  limit = DEFAULT_MESSAGE_PAGE_SIZE,
-): Promise<Message[]> => {
-  const rows = await messagesWithRunBlocks(db, session)
+  request: MessagePageRequest = {},
+): Promise<MessagePage | null> => {
+  const anchor = request.before ? await findAnchor(db, session.id, request.before) : undefined;
+  return anchor === null
+    ? null
+    : readPage(db, session, request.limit ?? DEFAULT_MESSAGE_PAGE_SIZE, anchor);
+};
+
+interface Anchor {
+  id: string;
+  turn_index: number;
+  created_at: string;
+}
+
+const readPage = async (
+  db: Kysely<Database>,
+  session: ChatSession,
+  limit: number,
+  anchor: Anchor | undefined,
+): Promise<MessagePage> => {
+  const inSession = messagesWithRunBlocks(db, session);
+  // Strictly before the anchor in the order below, which is the order of the whole conversation.
+  const rows = await (anchor
+    ? inSession.where((eb) =>
+        eb.or([
+          eb("chat_messages.turn_index", "<", anchor.turn_index),
+          eb.and([
+            eb("chat_messages.turn_index", "=", anchor.turn_index),
+            eb("chat_messages.created_at", "<", anchor.created_at),
+          ]),
+          eb.and([
+            eb("chat_messages.turn_index", "=", anchor.turn_index),
+            eb("chat_messages.created_at", "=", anchor.created_at),
+            eb("chat_messages.id", "<", anchor.id),
+          ]),
+        ]),
+      )
+    : inSession
+  )
     .orderBy("chat_messages.turn_index", "desc")
     .orderBy("chat_messages.created_at", "desc")
     .orderBy("chat_messages.id", "desc")
-    .limit(limit)
+    .limit(limit + 1)
     .execute();
-  const answers = await createSuggestionRepository(db).listForMessages(rows.map(({ id }) => id));
+  const page = rows.slice(0, limit);
+  const oldest = page.at(-1);
+  const answers = await createSuggestionRepository(db).listForMessages(page.map(({ id }) => id));
   const scope = scopeOf(session);
-  return rows.reverse().flatMap((row) => {
-    const message = toWireMessage(scope, row, parseBlocks(row.run_blocks), answers.get(row.id));
+  const messages = page.reverse().flatMap((row) => {
+    const message = toWireMessage(scope, row, parseBlocks(row.run_blocks), {
+      answers: answers.get(row.id),
+      failed: isFailedRun(row.run_status, row.run_failure_kind),
+    });
     return message ? [message] : [];
   });
+  const hasMore = rows.length > limit;
+  // A page of rows with nothing to show gives the client no message to page back from: go on past it.
+  return messages.length === 0 && hasMore && oldest
+    ? readPage(db, session, limit, oldest)
+    : { messages, hasMore };
 };
+
+/** A run that ended in failure. One a usage limit refused is a wait, not a fault, and reads as a reply. */
+export const isFailedRun = (status: string | null, failureKind: string | null | undefined) =>
+  status === "failed" && failureKind !== "rate_limit";
+
+const findAnchor = async (db: Kysely<Database>, sessionId: string, messageId: string) =>
+  (await db
+    .selectFrom("chat_messages")
+    .select(["id", "turn_index", "created_at"])
+    .where("session_id", "=", sessionId)
+    .where("id", "=", messageId)
+    .executeTakeFirst()) ?? null;
 
 /** One message of a project session as clients see it now; null when it is gone or has nothing to show. */
 export const getWireMessage = async (
@@ -51,7 +132,10 @@ export const getWireMessage = async (
     .executeTakeFirst();
   if (!row) return null;
   const answers = await createSuggestionRepository(db).listForMessages([row.id]);
-  return toWireMessage(scopeOf(session), row, parseBlocks(row.run_blocks), answers.get(row.id));
+  return toWireMessage(scopeOf(session), row, parseBlocks(row.run_blocks), {
+    answers: answers.get(row.id),
+    failed: isFailedRun(row.run_status, row.run_failure_kind),
+  });
 };
 
 /** Null when the message has no text or blocks to show. */
@@ -59,7 +143,7 @@ export const toWireMessage = (
   scope: MessageScope,
   row: ChatMessage,
   runBlocks: readonly MessageBlock[] = [],
-  answers?: MessageAnswers,
+  extras: MessageExtras = {},
 ): Message | null => {
   const base = {
     id: row.id,
@@ -69,11 +153,7 @@ export const toWireMessage = (
   };
   const text = displayText(row);
   if (row.role === "assistant") {
-    // Only the coordinator refers to threads by link; a thread's own text is shown as written.
-    const written =
-      scope.threadId === null ? textToBlocks(text) : text ? [{ type: "text", text }] : [];
-    const blocks = [...written, ...withAnswers(runBlocks, answers)];
-    return blocks.length === 0 ? null : MessageSchema.parse({ ...base, role: "assistant", blocks });
+    return assistantMessage(base, scope, text, withAnswers(runBlocks, extras.answers), extras);
   }
   if (!text) return null;
   const origin = parseMessageOrigin(row.origin_json);
@@ -81,6 +161,22 @@ export const toWireMessage = (
   // wait is already in the transcript.
   if (origin?.type === "rate-limit-resume") return null;
   return MessageSchema.parse(userSideMessage(base, text, origin));
+};
+
+const assistantMessage = (
+  base: { id: string; projectId: string; threadId: string | null; createdAt: string },
+  scope: MessageScope,
+  text: string,
+  runBlocks: readonly MessageBlock[],
+  { failed = false }: MessageExtras,
+): Message | null => {
+  // Only the coordinator refers to threads by link; a thread's own text is shown as written.
+  const written =
+    scope.threadId === null ? textToBlocks(text) : text ? [{ type: "text", text }] : [];
+  const blocks = [...written, ...runBlocks];
+  return blocks.length === 0
+    ? null
+    : MessageSchema.parse({ ...base, role: "assistant", blocks, ...(failed && { failed }) });
 };
 
 export const scopeOf = (session: ChatSession): MessageScope => {
@@ -127,13 +223,17 @@ export const displayText = (row: Pick<ChatMessage, "content" | "session_id">): s
   return expandStoredPastes(decoded.text, decoded.pastes).trim();
 };
 
-// A session's messages, each with the blocks of the run that wrote it.
+// A session's messages, each with the blocks of the run that wrote it and how that run ended.
 const messagesWithRunBlocks = (db: Kysely<Database>, session: ChatSession) =>
   db
     .selectFrom("chat_messages")
     .leftJoin("chat_runs", "chat_runs.assistant_message_id", "chat_messages.id")
     .selectAll("chat_messages")
-    .select("chat_runs.blocks_json as run_blocks")
+    .select([
+      "chat_runs.blocks_json as run_blocks",
+      "chat_runs.status as run_status",
+      "chat_runs.failure_kind as run_failure_kind",
+    ])
     .where("chat_messages.session_id", "=", session.id);
 
 // A run stores its proposals as the coordinator made them. The answers live in their own table

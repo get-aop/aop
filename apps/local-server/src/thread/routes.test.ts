@@ -115,6 +115,29 @@ describe("a thread's transcript, steering and reply", () => {
     ]);
   });
 
+  test("GET messages pages back with before and limit, like the coordinator chat", async () => {
+    const { s, project } = await setup();
+    const { body } = await spawn(s, project.id, { prompt: "Audit" });
+    const path = `/api/threads/${body.thread.id}/messages`;
+
+    const newest = await s.api<{ messages: Message[]; hasMore: boolean }>("GET", `${path}?limit=1`);
+    const older = await s.api<{ messages: Message[]; hasMore: boolean }>(
+      "GET",
+      `${path}?limit=1&before=${newest.body.messages[0]?.id}`,
+    );
+    const unknown = await s.api("GET", `${path}?before=msg_nope`);
+
+    expect(newest.body.messages).toMatchObject([
+      { role: "assistant", blocks: [{ text: expect.stringContaining("Fake reply") }] },
+    ]);
+    expect(newest.body.hasMore).toBe(true);
+    expect(older.body.messages).toMatchObject([
+      { role: "assistant", blocks: [{ type: "text", text: "Audit" }] },
+    ]);
+    expect(older.body.hasMore).toBe(false);
+    expect(unknown).toMatchObject({ status: 400, body: { code: "INVALID_MESSAGE" } });
+  });
+
   test("POST messages steers the thread (201); blank text is 400", async () => {
     const { s, project } = await setup();
     const { body } = await spawn(s, project.id, { prompt: "Audit" });
@@ -236,9 +259,11 @@ describe("what a thread did: its changed files and its activity", () => {
     const summary = await s.api<{ error: string }>("GET", `/api/threads/${id}/diff`);
     const file = await s.api("GET", `/api/threads/${id}/diff/file?path=notes.md`);
 
-    expect(summary).toMatchObject({ status: 409, body: { code: "WORKTREE_FAILED" } });
-    expect(summary.body.error).toContain("does not exist");
-    expect(file).toMatchObject({ status: 409, body: { code: "WORKTREE_FAILED" } });
+    expect(summary).toMatchObject({ status: 409, body: { code: "NO_WORKTREE" } });
+    expect(summary.body.error).toBe(
+      "The thread has no checkout on disk right now, so there are no changes to show. Its work is kept on its branch.",
+    );
+    expect(file).toMatchObject({ status: 409, body: { code: "NO_WORKTREE" } });
   });
 
   test("GET activity lists the turn's tool calls without their output", async () => {

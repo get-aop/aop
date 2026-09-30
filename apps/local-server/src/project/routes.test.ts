@@ -54,9 +54,12 @@ describe("POST /api/projects", () => {
       "/api/projects",
       {},
     );
-    const tooLong = await s.api("POST", "/api/projects", {
+    const tooLong = await s.api<{ error: string }>("POST", "/api/projects", {
       name: "x",
       instructions: "i".repeat(16_001),
+    });
+    const longName = await s.api<{ error: string }>("POST", "/api/projects", {
+      name: "n".repeat(101),
     });
     const provider = await s.api("POST", "/api/projects", {
       name: "x",
@@ -67,6 +70,10 @@ describe("POST /api/projects", () => {
     expect(noName.body.details[0]?.path).toEqual(["name"]);
     expect(tooLong.status).toBe(400);
     expect(provider.status).toBe(400);
+    // The message says which field and what is wrong, not zod's own wording.
+    expect(noName.body.error).toBe("Name is required.");
+    expect(tooLong.body.error).toBe("Instructions can be at most 16000 characters.");
+    expect(longName.body.error).toBe("Name can be at most 100 characters.");
   });
 
   test("answers 404 for a repo that is not registered, and creates nothing", async () => {
@@ -180,6 +187,51 @@ describe("the coordinator chat", () => {
     expect(sent.status).toBe(201);
     expect(sent.body.message).toMatchObject({ role: "user", text: "hello", threadId: null });
     expect(listed.body.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+  });
+
+  test("the messages list pages back from the oldest one held, and says whether older ones remain", async () => {
+    const { s, project } = await setup();
+    for (const text of ["one", "two", "three"]) {
+      await s.api("POST", `/api/projects/${project.id}/messages`, { text });
+      await s.settle();
+    }
+    const list = (query: string) =>
+      s.api<{ messages: Message[]; hasMore: boolean }>(
+        "GET",
+        `/api/projects/${project.id}/messages${query}`,
+      );
+
+    const all = await list("");
+    const newest = await list("?limit=2");
+    const before = await list(`?limit=2&before=${newest.body.messages[0]?.id}`);
+    const earliest = await list(`?before=${before.body.messages[0]?.id}`);
+
+    expect(all.body.messages).toHaveLength(6);
+    expect(all.body.hasMore).toBe(false);
+    expect(newest.body.messages).toEqual(all.body.messages.slice(4));
+    expect(newest.body.hasMore).toBe(true);
+    expect(before.body.messages).toEqual(all.body.messages.slice(2, 4));
+    expect(before.body.hasMore).toBe(true);
+    expect(earliest.body.messages).toEqual(all.body.messages.slice(0, 2));
+    expect(earliest.body.hasMore).toBe(false);
+  });
+
+  test("a page asked for badly is 400 in plain words: an unknown message to page from, or a limit that is not one", async () => {
+    const { s, project } = await setup();
+    const base = `/api/projects/${project.id}/messages`;
+
+    const unknown = await s.api("GET", `${base}?before=msg_nope`);
+    const zero = await s.api<{ error: string }>("GET", `${base}?limit=0`);
+    const words = await s.api<{ error: string }>("GET", `${base}?limit=many`);
+    const huge = await s.api<{ error: string }>("GET", `${base}?limit=100000`);
+
+    expect(unknown).toMatchObject({ status: 400, body: { code: "INVALID_MESSAGE" } });
+    expect(zero).toMatchObject({ status: 400, body: { error: "Limit must be at least 1." } });
+    expect(words).toMatchObject({
+      status: 400,
+      body: { error: "Limit is not the kind of value expected." },
+    });
+    expect(huge).toMatchObject({ status: 400, body: { error: "Limit can be at most 500." } });
   });
 
   test("blank text is 400, a paused project is 409, an unknown project is 404", async () => {

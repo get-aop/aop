@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { RuntimeConfigurationProvider } from "@aop/common";
+import { toast } from "sonner";
 import { setupDashboardDom } from "../test/setup-dom";
 
 setupDashboardDom();
@@ -11,7 +12,7 @@ mock.module("../api/client", () => ({
   getRuntimeConfiguration: mockGetRuntimeConfiguration,
 }));
 
-const { render, screen, cleanup, waitFor } = await import("@testing-library/react");
+const { render, screen, cleanup, fireEvent, waitFor } = await import("@testing-library/react");
 const { SettingsRuntimes } = await import("./settings-runtimes.tsx");
 
 afterEach(() => {
@@ -83,5 +84,19 @@ describe("SettingsRuntimes", () => {
 
     await waitFor(() => expect(screen.getByText("No custom runtimes")).toBeTruthy());
     expect(screen.queryByTestId("runtime-row")).toBeNull();
+  });
+
+  test("a runtime name past the limit is refused with a sentence naming the field", async () => {
+    mockGetRuntimeConfiguration.mockResolvedValue([builtInClaudeCode]);
+    const failure = spyOn(toast, "error").mockImplementation(() => "");
+    render(<SettingsRuntimes />);
+    fireEvent.click(await screen.findByText("Add custom runtime"));
+
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "n".repeat(61) } });
+    fireEvent.change(screen.getByLabelText("Command"), { target: { value: "claude" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(failure).toHaveBeenCalledWith("Name can be at most 60 characters."));
+    failure.mockRestore();
   });
 });

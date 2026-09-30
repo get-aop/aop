@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import type { SessionDiffFile, SessionGitDiff } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import { getSessionGitDiffFile, getSessionGitDiffSummary } from "../session-git/diff.ts";
@@ -8,8 +9,8 @@ import type { ThreadError, ThreadResult } from "./types.ts";
  * What a thread changed in its worktree, against where its branch left the default branch:
  * committed, uncommitted and untracked files alike, so it reads the same before and after the
  * thread opened its pull request. Read-only: it never creates or removes a worktree, so a thread
- * whose worktree was released (resolved, or merged) answers `WORKTREE_FAILED` instead of getting
- * an empty checkout made for it.
+ * whose worktree was released (resolved, merged, or parked with its archived project) answers
+ * `NO_WORKTREE` instead of getting an empty checkout made for it.
  */
 export interface ThreadChanges {
   /** The changed files and their line counts, without hunks: cheap however large the change. */
@@ -46,12 +47,22 @@ export const createThreadChanges = (
 };
 
 // A coordinator or plain session shares an id space with threads and is not one; a thread with no
-// repository has no branch to compare.
+// repository has no branch to compare, and one whose checkout is gone has no files to compare.
 const refusal = async (ctx: LocalServerContext, threadId: string): Promise<ThreadError | null> => {
   const thread = await ctx.threadRepository.getById(threadId);
   if (!thread) return { code: "THREAD_NOT_FOUND" };
-  return thread.repoId ? null : { code: "NO_REPOSITORY" };
+  if (!thread.repoId) return { code: "NO_REPOSITORY" };
+  const session = await ctx.chatSessionRepository.getById(threadId);
+  return session?.workspace_path && !(await isDirectory(session.workspace_path))
+    ? { code: "NO_WORKTREE" }
+    : null;
 };
+
+const isDirectory = (path: string): Promise<boolean> =>
+  stat(path).then(
+    (entry) => entry.isDirectory(),
+    () => false,
+  );
 
 const diffError = (
   error:

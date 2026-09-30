@@ -126,6 +126,86 @@ describe("EnvironmentSection", () => {
     expect(rowFor("repo_1").getAttribute("data-attached")).toBe("true");
   });
 
+  describe("the refusal names what holds the repository, and only an unresolved thread still works in it", () => {
+    const refuse = () =>
+      Response.json(
+        {
+          error: "A thread still works in repository repo_1; stop and delete it first",
+          code: "REPO_IN_USE",
+        },
+        { status: 409 },
+      );
+    const thread = (id: string, title: string, status: Thread["status"], repoId = "repo_1") =>
+      makeThread({ id, projectId: "p1", title, repoId, status });
+    const detachMessage = async (threads: Thread[]) => {
+      respond = refuse;
+      renderEnvironment(makeProject({ id: "p1", repoIds: ["repo_1"] }), threads);
+      await screen.findAllByTestId("settings-repo");
+      fireEvent.click(within(rowFor("repo_1")).getByTestId("settings-repo-detach"));
+      return (await screen.findByTestId("settings-repo-error")).textContent;
+    };
+
+    test("unresolved threads alone: they still work there, and are stopped and deleted", async () => {
+      expect(await detachMessage([thread("t1", "Live work", "idle")])).toBe(
+        "“Live work” still works in checkout. Stop and delete it first, then detach the repository.",
+      );
+      cleanup();
+      expect(await detachMessage([thread("t1", "A", "working"), thread("t2", "B", "idle")])).toBe(
+        "2 threads still work in checkout. Stop and delete them first, then detach the repository.",
+      );
+    });
+
+    test("unresolved and resolved threads: the resolved ones are counted apart, as belonging to it", async () => {
+      expect(
+        await detachMessage([
+          thread("t1", "Live work", "idle"),
+          thread("t2", "Old fix", "resolved"),
+          thread("t3", "Older fix", "resolved"),
+        ]),
+      ).toBe(
+        "“Live work” still works in checkout, and 2 resolved threads belong to it. Stop and delete them, then detach the repository.",
+      );
+      cleanup();
+      expect(
+        await detachMessage([
+          thread("t1", "A", "working"),
+          thread("t2", "B", "queued"),
+          thread("t3", "Old fix", "resolved"),
+        ]),
+      ).toBe(
+        "2 threads still work in checkout, and 1 resolved thread belongs to it. Stop and delete them, then detach the repository.",
+      );
+    });
+
+    test("resolved threads alone: they are never said to work there, and deleting them lets the repository go", async () => {
+      const resolved = await detachMessage([
+        thread("t1", "Old fix", "resolved"),
+        thread("t2", "Older fix", "resolved"),
+      ]);
+
+      expect(resolved).toBe(
+        "2 resolved threads belong to checkout. Delete them, then detach the repository.",
+      );
+      expect(resolved).not.toContain("still work");
+      cleanup();
+      expect(await detachMessage([thread("t1", "Old fix", "resolved")])).toBe(
+        "1 resolved thread belongs to checkout. Delete it, then detach the repository.",
+      );
+    });
+
+    test("threads of another repository are not named", async () => {
+      expect(
+        await detachMessage([
+          thread("t1", "Live work", "idle"),
+          thread("t2", "Elsewhere", "working", "repo_2"),
+          thread("t3", "Old elsewhere", "resolved", "repo_2"),
+        ]),
+      ).toBe(
+        "“Live work” still works in checkout. Stop and delete it first, then detach the repository.",
+      );
+    });
+  });
+
   test("with no thread known to hold it, the host's own message is shown", async () => {
     respond = () =>
       Response.json(

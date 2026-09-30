@@ -6,11 +6,11 @@ The Coordinator tab of a project is the conversation with its coordinator: what 
 
 The page learns about messages from three places that overlap and can arrive in any order:
 
-1. A fetch of `GET /api/projects/:id/messages`, which returns the latest 200 messages, oldest first.
+1. A fetch of `GET /api/projects/:id/messages`, which answers `{ messages, hasMore }`: the latest 200 messages, oldest first, and whether older ones exist. `?before=<message id>&limit=<n>` (limit 1 to 500) answers the page before that message, so the page keeps paging back by the oldest message it holds (`loadEarlier`). A newest-page fetch after a resync keeps the older pages already loaded when it joins them. A reply whose run failed (not a usage-limit wait) carries `failed: true`, in the fetch and in its `message.created` entry alike, and is drawn as an error.
 2. The project's stream: a `message.created` entry for every message (the person's, the coordinator's, and the reports threads send it), a `message.updated` entry when the host changes a message after it was created (an answered proposal, see [Suggested threads](#suggested-threads)), and `delta` frames with the text of a reply being written.
 3. The message a send returns: `POST /api/projects/:id/messages` answers with the stored message, not with the coordinator's reply.
 
-Every message is applied by its id (`chat-state.ts`). Applying one the page already holds replaces it in place, so a fetch, a replayed entry and a send that return the same message leave one copy. A `message.updated` entry replaces the copy held too, but is never the way a message gets in: one the page does not hold is ignored, because the page holds only the latest 200 and an old message would be put at the end.
+Every message is applied by its id (`chat-state.ts`). Applying one the page already holds replaces it in place, so a fetch, a replayed entry and a send that return the same message leave one copy. A `message.updated` entry replaces the copy held too, but is never the way a message gets in: one the page does not hold is ignored, because the page holds only a window of the conversation (the latest page, and the older pages it loaded) and an old message would be put at the end.
 
 ## Staying complete
 

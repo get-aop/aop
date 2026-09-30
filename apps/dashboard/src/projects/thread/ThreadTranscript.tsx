@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ChatError, ChatLoading, ChatRefreshNotice, ProjectClosedNotice } from "../chat/ChatStates";
 import { Composer } from "../chat/Composer";
 import { ChatProvider } from "../chat/chat-context";
-import type { ChatState } from "../chat/chat-state";
+import { type ChatState, earlierOf } from "../chat/chat-state";
 import { MessageList, type Worker } from "../chat/MessageList";
 import type { SendResult } from "../chat/project-chat";
 import { type ThreadActions, threadActions } from "../thread-actions";
@@ -83,6 +83,7 @@ export const ThreadTranscript = ({
           }}
           liveWorkLog={activity.running ? <WorkLog turn={activity.running} /> : null}
           onReload={conversation.reload}
+          onLoadEarlier={conversation.loadEarlier}
         />
       </ChatProvider>
       <footer className="mx-auto w-full max-w-3xl shrink-0 px-6 pb-4 pt-2">
@@ -119,6 +120,7 @@ const Body = ({
   workLogOf,
   liveWorkLog,
   onReload,
+  onLoadEarlier,
 }: {
   state: ChatState;
   working: boolean;
@@ -127,6 +129,7 @@ const Body = ({
   workLogOf: (messageId: string) => React.ReactNode;
   liveWorkLog: React.ReactNode;
   onReload: () => void;
+  onLoadEarlier: () => Promise<void>;
 }) => {
   if (state.phase === "loading") {
     return state.loadError ? (
@@ -156,6 +159,7 @@ const Body = ({
       workLogOf={workLogOf}
       liveWorkLog={liveWorkLog}
       workingSince={firstTurnStart(state)}
+      earlier={earlierOf(state, onLoadEarlier)}
     />
   );
 };

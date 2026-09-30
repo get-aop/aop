@@ -1,4 +1,4 @@
-import type { Message, Thread, UserMessage } from "@aop/common";
+import type { MessagePage, Thread, UserMessage } from "@aop/common";
 import { createContext, useContext } from "react";
 import {
   listCoordinatorMessages,
@@ -10,7 +10,8 @@ import {
 
 /** What the chat asks of the host. A test brings its own through `ChatApiProvider`. */
 export interface ChatApi {
-  listMessages: (projectId: string) => Promise<Message[]>;
+  /** The latest page of the coordinator chat, or the one before message `before`. */
+  listMessages: (projectId: string, before?: string) => Promise<MessagePage>;
   sendMessage: (projectId: string, text: string) => Promise<UserMessage>;
   /**
    * The answers to a proposal of the coordinator, given by the message and the suggestion. The

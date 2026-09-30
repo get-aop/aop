@@ -1,5 +1,6 @@
 import {
   CreateProjectInputSchema,
+  describeIssuesByField,
   PROJECT_GOAL_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
 } from "@aop/common";
@@ -21,6 +22,7 @@ import { Textarea } from "@/ui/textarea";
 import type { RegisteredRepo } from "../api/client";
 import { closeNewProjectDialog, openAttachRepoDialog, useDialogs } from "../shell/dialog-store";
 import { navigate, projectPath } from "../shell/router";
+import { PROJECT_FIELD_LABELS, projectNameProblem } from "./project-fields";
 import { useProjectActions } from "./use-project-actions";
 import { useRegisteredRepos } from "./use-registered-repos";
 
@@ -59,18 +61,26 @@ const NewProjectForm = () => {
     setSelected((ids) => (ids.includes(repoId) ? ids : [...ids, repoId])),
   );
 
+  const parsed = CreateProjectInputSchema.safeParse({
+    name,
+    goal: goal.trim(),
+    instructions,
+    repoIds: selected,
+  });
+  // The name is the one box a person can type past its limit, so its problem shows under it as
+  // they type. Anything else the schema refuses (the other boxes stop at their limits, so it is
+  // not expected) is said in plain words above the buttons, never as zod's own text.
+  const nameProblem = projectNameProblem(name);
+  const otherProblem = parsed.success
+    ? undefined
+    : Object.entries(describeIssuesByField(parsed.error.issues, PROJECT_FIELD_LABELS)).find(
+        ([field]) => field !== "name",
+      )?.[1];
+  const formProblem = error ?? otherProblem;
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const parsed = CreateProjectInputSchema.safeParse({
-      name,
-      goal: goal.trim(),
-      instructions,
-      repoIds: selected,
-    });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Check the fields and try again");
-      return;
-    }
+    if (!parsed.success) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -97,11 +107,21 @@ const NewProjectForm = () => {
           data-testid="new-project-name"
           autoFocus
           autoComplete="off"
-          maxLength={100}
           placeholder="Checkout service"
           value={name}
+          aria-invalid={nameProblem !== null}
+          aria-describedby={nameProblem ? "new-project-name-error" : undefined}
           onChange={(event) => setName(event.target.value)}
         />
+        {nameProblem ? (
+          <p
+            id="new-project-name-error"
+            data-testid="new-project-name-error"
+            className="text-[12px] text-blocked"
+          >
+            {nameProblem}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -150,9 +170,9 @@ const NewProjectForm = () => {
         }
       />
 
-      {error ? (
+      {formProblem ? (
         <p data-testid="new-project-error" role="alert" className="text-[12.5px] text-blocked">
-          {error}
+          {formProblem}
         </p>
       ) : null}
 
@@ -164,7 +184,7 @@ const NewProjectForm = () => {
           type="submit"
           size="sm"
           data-testid="new-project-submit"
-          disabled={name.trim() === "" || submitting}
+          disabled={!parsed.success || submitting}
         >
           {submitting ? "Creating…" : "Create project"}
         </Button>

@@ -215,10 +215,11 @@ describe("counters", () => {
         counter(name).getAttribute("data-value"),
       ]),
     );
-    // Running is working, queued and rate-limited; only open pull requests count as open.
+    // Running is the working thread alone (queued and rate-limited are not running); only open
+    // pull requests count as open.
     expect(values).toEqual({
       waiting: "2",
-      running: "3",
+      running: "1",
       readyForReview: "1",
       openPullRequests: "2",
       resolved: "1",
@@ -242,7 +243,7 @@ describe("counters", () => {
     );
 
     expect(counter("waiting").getAttribute("data-value")).toBe("1");
-    expect(counter("running").getAttribute("data-value")).toBe("4");
+    expect(counter("running").getAttribute("data-value")).toBe("2");
   });
 
   test("count the project's threads, not only the ones a search shows", () => {

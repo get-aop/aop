@@ -1,19 +1,23 @@
 import { describe, expect, test } from "bun:test";
+import type { Message } from "@aop/common";
 import {
   applyDelta,
+  applyEarlier,
   applyMessage,
   applyMessageUpdate,
   applySnapshot,
   createChatState,
   dropLiveText,
   initialChatState,
+  setEarlierError,
   setLoadError,
+  startLoadingEarlier,
+  stopLoadingEarlier,
   unansweredMessages,
 } from "./chat-state";
-import { delta, ids, reply, report, userMessage } from "./test-utils";
+import { delta, ids, page, reply, report, userMessage } from "./test-utils";
 
-const ready = (...messages: Parameters<typeof applySnapshot>[1]) =>
-  applySnapshot(initialChatState, messages);
+const ready = (...messages: Message[]) => applySnapshot(initialChatState, page(messages));
 
 describe("applySnapshot", () => {
   test("holds the fetched messages in the host's order and marks the chat ready", () => {
@@ -26,14 +30,14 @@ describe("applySnapshot", () => {
   test("replaces what was held, so a message the host no longer has disappears", () => {
     const before = ready(userMessage("u1", 1), reply("ghost", 2));
 
-    expect(ids(applySnapshot(before, [userMessage("u1", 1)]).messages)).toEqual(["u1"]);
+    expect(ids(applySnapshot(before, page([userMessage("u1", 1)])).messages)).toEqual(["u1"]);
   });
 
   test("clears a failed fetch and drops the live text of a message the snapshot holds", () => {
     let state = setLoadError(initialChatState, "host down");
     state = applyDelta(state, delta("a1", "Working on"));
 
-    const next = applySnapshot(state, [userMessage("u1", 1), reply("a1", 2)]);
+    const next = applySnapshot(state, page([userMessage("u1", 1), reply("a1", 2)]));
 
     expect(next.loadError).toBeNull();
     expect(next.live).toEqual({});
@@ -42,7 +46,7 @@ describe("applySnapshot", () => {
   test("keeps the live text of a reply the snapshot does not hold yet", () => {
     const state = applyDelta(initialChatState, delta("a1", "Working"));
 
-    expect(applySnapshot(state, [userMessage("u1", 1)]).live).toEqual({ a1: "Working" });
+    expect(applySnapshot(state, page([userMessage("u1", 1)])).live).toEqual({ a1: "Working" });
   });
 
   test("leaves out messages of a thread", () => {
@@ -244,8 +248,8 @@ describe("a thread's conversation", () => {
     reply(id, seconds, undefined, { threadId });
   const userIn = (id: string, seconds: number, threadId = "thr_1") =>
     userMessage(id, seconds, { threadId });
-  const threadReady = (...messages: Parameters<typeof applySnapshot>[1]) =>
-    applySnapshot(createChatState("thr_1"), messages);
+  const threadReady = (...messages: Message[]) =>
+    applySnapshot(createChatState("thr_1"), page(messages));
 
   test("starts loading, knows which thread it holds, and the coordinator's state holds none", () => {
     expect(createChatState("thr_1")).toMatchObject({
@@ -309,9 +313,80 @@ describe("a thread's conversation", () => {
     let state = applyDelta(createChatState("thr_1"), delta("a1", "One", { threadId: "thr_1" }));
     state = applyDelta(state, delta("a2", "Two", { threadId: "thr_1" }));
 
-    const next = applySnapshot(state, [inThread("a1", 1)]);
+    const next = applySnapshot(state, page([inThread("a1", 1)]));
 
     expect(next.live).toEqual({ a2: "Two" });
     expect(next.scope).toBe("thr_1");
+  });
+});
+
+describe("older pages of the conversation", () => {
+  const latest = (hasMore: boolean) =>
+    applySnapshot(
+      initialChatState,
+      page([userMessage("u3", 3), reply("a3", 4), userMessage("u4", 5)], hasMore),
+    );
+
+  test("a fetch of the newest page says whether the host holds older messages", () => {
+    expect(latest(true).hasEarlier).toBe(true);
+    expect(latest(false).hasEarlier).toBe(false);
+  });
+
+  test("an older page goes before the messages held, once each, and the host says whether more remain", () => {
+    const next = applyEarlier(
+      latest(true),
+      page([userMessage("u1", 1), reply("a1", 2), userMessage("u3", 3)], true),
+    );
+
+    expect(ids(next.messages)).toEqual(["u1", "a1", "u3", "a3", "u4"]);
+    expect(next.hasEarlier).toBe(true);
+    expect(applyEarlier(next, page([userMessage("u0", 0)], false)).hasEarlier).toBe(false);
+  });
+
+  test("an older page holds only this conversation's messages", () => {
+    const thread = applySnapshot(
+      createChatState("thr_1"),
+      page([reply("a3", 3, undefined, { threadId: "thr_1" })], true),
+    );
+
+    const next = applyEarlier(
+      thread,
+      page([reply("a1", 1, undefined, { threadId: "thr_1" }), userMessage("elsewhere", 2)]),
+    );
+
+    expect(ids(next.messages)).toEqual(["a1", "a3"]);
+  });
+
+  test("the newest page fetched again keeps the older messages that join it, and their say on what remains", () => {
+    const loaded = applyEarlier(latest(true), page([userMessage("u1", 1), reply("a1", 2)], false));
+
+    const next = applySnapshot(
+      loaded,
+      page([userMessage("u3", 3), reply("a3", 4), userMessage("u4", 5), reply("a4", 6)], true),
+    );
+
+    expect(ids(next.messages)).toEqual(["u1", "a1", "u3", "a3", "u4", "a4"]);
+    expect(next.hasEarlier).toBe(false);
+  });
+
+  test("a newest page that does not join what is held replaces it, and its say on what remains stands", () => {
+    const loaded = applyEarlier(latest(true), page([userMessage("u1", 1)], false));
+
+    const next = applySnapshot(loaded, page([reply("a9", 90), userMessage("u10", 91)], true));
+
+    expect(ids(next.messages)).toEqual(["a9", "u10"]);
+    expect(next.hasEarlier).toBe(true);
+  });
+
+  test("tracks the fetch: loading, then done or failed", () => {
+    const loading = startLoadingEarlier(setEarlierError(latest(true), "old failure"));
+    expect(loading).toMatchObject({ loadingEarlier: true, earlierError: null });
+
+    expect(setEarlierError(loading, "Host unreachable")).toMatchObject({
+      loadingEarlier: false,
+      earlierError: "Host unreachable",
+    });
+    expect(stopLoadingEarlier(loading).loadingEarlier).toBe(false);
+    expect(applyEarlier(loading, page([], false)).loadingEarlier).toBe(false);
   });
 });

@@ -14,7 +14,7 @@ import { createThreadRepository } from "../thread/repository.ts";
 import { statusAfterSchedule, type TurnEnd } from "../thread/state.ts";
 import { settleThreadTurn } from "../thread/turn-outcome.ts";
 import { recordMessageCreated, recordThreadUpserted } from "./events.ts";
-import { scopeOf, toWireMessage } from "./wire-messages.ts";
+import { isFailedRun, scopeOf, toWireMessage } from "./wire-messages.ts";
 
 /**
  * The project domain's side of the engine's session hooks (see chat-session/session-hooks.ts):
@@ -134,7 +134,9 @@ const finishThreadRun = async (
   session: ChatSession,
   turn: FinalizedTurn,
 ): Promise<Finished> => {
-  const wire = toWireMessage(scopeOf(session), turn.assistantMessage);
+  const wire = toWireMessage(scopeOf(session), turn.assistantMessage, [], {
+    failed: failedTurn(turn),
+  });
   if (wire) await recordMessageCreated(tx, wire);
   const { rateLimit } = turn.outcome;
   const wakeSessionIds = await settleThreadTurn(tx, session, {
@@ -155,7 +157,9 @@ const finishCoordinatorRun = async (
   turn: FinalizedTurn,
 ): Promise<Finished> => {
   const blocks = await runBlocks(tx, turn);
-  const wire = toWireMessage(scopeOf(session), turn.assistantMessage, blocks);
+  const wire = toWireMessage(scopeOf(session), turn.assistantMessage, blocks, {
+    failed: failedTurn(turn),
+  });
   if (wire) await recordMessageCreated(tx, wire);
   // A coordinator has no status to show the wait in; its reply says it, and the hold makes its
   // inbox wait too, so reports that arrive meanwhile are not spent on runs the limit would refuse.
@@ -164,6 +168,10 @@ const finishCoordinatorRun = async (
   const resume = rateLimit ? { sessionId: session.id, at: rateLimit.resumesAt } : null;
   return { followUp: { wakeSessionIds: [], resume }, replied: wire !== null };
 };
+
+// The same reading of the run as a later fetch of the messages makes, so a reply looks the same live and after a reload.
+const failedTurn = ({ outcome }: FinalizedTurn): boolean =>
+  isFailedRun(outcome.status, outcome.failureKind);
 
 // Blocks the run's tools recorded, plus the card of the thread a report woke the coordinator
 // about: the person sees the coordinator's reply next to the thread it is about.

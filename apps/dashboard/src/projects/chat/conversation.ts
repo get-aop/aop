@@ -1,21 +1,26 @@
-import type { Message } from "@aop/common";
+import type { Message, MessagePage } from "@aop/common";
 import type { LiveProjects } from "../live-projects";
 import {
   applyDelta,
+  applyEarlier,
   applyMessage,
   applyMessageUpdate,
   applySnapshot,
   type ChatState,
   createChatState,
   dropLiveText,
+  setEarlierError,
   setLoadError,
+  startLoadingEarlier,
+  stopLoadingEarlier,
 } from "./chat-state";
 
 export interface ConversationDeps {
   projectId: string;
   /** The conversation to follow: a thread's id, or null for the coordinator chat. */
   scope: string | null;
-  listMessages: () => Promise<Message[]>;
+  /** The latest page of messages, or the one before message `before`. */
+  listMessages: (before?: string) => Promise<MessagePage>;
   events: Pick<LiveProjects, "subscribeEvents" | "subscribe" | "getState">;
   /** Runs `run` after `delayMs`; returns what cancels it. */
   schedule?: (run: () => void, delayMs: number) => () => void;
@@ -31,6 +36,8 @@ export interface Conversation {
   stop: () => void;
   /** Fetches the conversation again: the retry after a failed fetch. */
   reload: () => void;
+  /** Fetches the page of messages before the oldest one held; resolves once it is in or has failed. */
+  loadEarlier: () => Promise<void>;
   /** A message this page just caused (the answer to a send); the stream repeats it harmlessly. */
   receive: (message: Message) => void;
 }
@@ -48,6 +55,9 @@ const browserSchedule = (run: () => void, delayMs: number): (() => void) => {
  * stream's entries and live text, and the message a send returns. Each is applied by message
  * id, so overlap changes nothing. A message the host publishes again (`message.updated`)
  * replaces the copy held.
+ *
+ * The host answers a fetch with a page of the newest messages; older ones are fetched on
+ * request, by the oldest message held, and stay when the newest page is fetched again.
  *
  * A fetch that starts after a `resync` (and the first one, which starts after the stream is
  * being heard) can only be missing what the stream then delivers; messages that arrive while
@@ -110,14 +120,12 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
     cancelRetry?.();
     cancelRetry = null;
     try {
-      const messages = await deps.listMessages();
+      const page = await deps.listMessages();
       if (mine !== generation) return;
       const late = arrivedWhileFetching;
       fetching = false;
       arrivedWhileFetching = [];
-      update((current) =>
-        late.reduce((next, step) => step(next), applySnapshot(current, messages)),
-      );
+      update((current) => late.reduce((next, step) => step(next), applySnapshot(current, page)));
       deps.onLoaded?.(state);
     } catch (error) {
       if (mine !== generation) return;
@@ -125,6 +133,24 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
       arrivedWhileFetching = [];
       update((current) => setLoadError(current, describe(error)));
       cancelRetry = schedule(() => void load(), FETCH_RETRY_MS);
+    }
+  };
+
+  const loadEarlier = async (): Promise<void> => {
+    const oldest = state.messages[0];
+    if (!oldest || !state.hasEarlier || state.loadingEarlier) return;
+    update(startLoadingEarlier);
+    try {
+      const page = await deps.listMessages(oldest.id);
+      // The messages are append-only, so the page stays right unless the newest page was fetched
+      // again meanwhile and left a different oldest message: then it would not join them.
+      update((current) =>
+        current.messages[0]?.id === oldest.id
+          ? applyEarlier(current, page)
+          : stopLoadingEarlier(current),
+      );
+    } catch (error) {
+      update((current) => setEarlierError(current, describe(error)));
     }
   };
 
@@ -154,6 +180,7 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
     reload: () => {
       if (running) void load();
     },
+    loadEarlier,
     receive,
   };
 };

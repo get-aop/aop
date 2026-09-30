@@ -12,7 +12,7 @@ import {
 import { Composer } from "./Composer";
 import { CoordinatorChips } from "./CoordinatorChips";
 import { ChatProvider } from "./chat-context";
-import { isWorking } from "./chat-state";
+import { earlierOf, isWorking } from "./chat-state";
 import { MessageList } from "./MessageList";
 import type { ChatModel, ProjectChat } from "./project-chat";
 
@@ -143,6 +143,7 @@ const Body = ({
       working={working}
       firstNewId={firstNewId}
       scrollToEndKey={sentCount}
+      earlier={earlierOf(model, chat.loadEarlier)}
     />
   );
 };

@@ -1,5 +1,5 @@
 import type {
-  Message,
+  MessagePage,
   PullRequestRef,
   SessionDiffFile,
   SessionDiffHunk,
@@ -8,7 +8,7 @@ import type {
   ThreadActivity,
   ThreadUsage,
 } from "@aop/common";
-import { request } from "./request";
+import { beforeQuery, request } from "./request";
 
 const threadUrl = (threadId: string, suffix = ""): string =>
   `/threads/${encodeURIComponent(threadId)}${suffix}`;
@@ -19,9 +19,9 @@ const post = <T>(path: string, body?: unknown): Promise<T> =>
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 
-/** The latest messages of one thread, oldest first: the brief, the agent's replies and the person's answers. */
-export const listThreadMessages = async (threadId: string): Promise<Message[]> =>
-  (await request<{ messages: Message[] }>(threadUrl(threadId, "/messages"))).messages;
+/** A page of one thread's messages, oldest first: the latest, or the one before message `before`. */
+export const listThreadMessages = (threadId: string, before?: string): Promise<MessagePage> =>
+  request<MessagePage>(threadUrl(threadId, `/messages${beforeQuery(before)}`));
 
 /** Steers a thread: it is queued while the thread works, a new turn while it is idle. */
 export const steerThread = async (threadId: string, text: string): Promise<Thread> =>

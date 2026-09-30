@@ -1,6 +1,7 @@
 import { rm } from "node:fs/promises";
 import {
   type Message,
+  type MessagePage,
   type Project,
   type ProjectPatch,
   type ProjectSettings,
@@ -23,7 +24,7 @@ import type { ChatEngine } from "./engine.ts";
 import { recordProjectRemoved, recordProjectUpserted } from "./events.ts";
 import { createProjectRepository } from "./repository.ts";
 import { createProjectTeardown } from "./teardown.ts";
-import { listWireMessages } from "./wire-messages.ts";
+import { listWireMessages, type MessagePageRequest, UNKNOWN_PAGE_ANCHOR } from "./wire-messages.ts";
 
 export type ProjectAction = "pause" | "resume" | "archive" | "restore";
 
@@ -60,7 +61,11 @@ export interface ProjectService {
     projectId: string,
     text: string,
   ) => Promise<ProjectResult<{ message: Message }>>;
-  listMessages: (projectId: string) => Promise<ProjectResult<{ messages: Message[] }>>;
+  /** The latest page of the coordinator chat, or the one before message `page.before`. */
+  listMessages: (
+    projectId: string,
+    page?: MessagePageRequest,
+  ) => Promise<ProjectResult<MessagePage>>;
 }
 
 const TRANSITIONS: Record<ProjectAction, { from: ProjectStatus[]; to: ProjectStatus }> = {
@@ -245,11 +250,13 @@ export const createProjectService = (
       return { success: true, message };
     },
 
-    listMessages: async (projectId) => {
+    listMessages: async (projectId, page) => {
       const coordinator = await ctx.chatSessionRepository.getCoordinator(projectId);
-      return coordinator
-        ? { success: true, messages: await listWireMessages(ctx.db, coordinator) }
-        : notFound;
+      if (!coordinator) return notFound;
+      const listed = await listWireMessages(ctx.db, coordinator, page);
+      return listed
+        ? { success: true, ...listed }
+        : { success: false, error: { code: "INVALID_MESSAGE", message: UNKNOWN_PAGE_ANCHOR } };
     },
   };
 };

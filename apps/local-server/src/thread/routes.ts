@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { errorResponse, readBody, readOptionalBody } from "../project/http.ts";
+import { errorResponse, readBody, readOptionalBody, readPageQuery } from "../project/http.ts";
 import type { ProjectServices } from "../project/services.ts";
 
 const SpawnBodySchema = z.object({
@@ -41,8 +41,12 @@ export const createThreadRoutes = ({ threads }: ProjectServices) => {
   });
 
   routes.get("/threads/:threadId/messages", async (c) => {
-    const result = await threads.listMessages(c.req.param("threadId"));
-    return result.success ? c.json({ messages: result.messages }) : errorResponse(c, result.error);
+    const query = readPageQuery(c);
+    if ("response" in query) return query.response;
+    const result = await threads.listMessages(c.req.param("threadId"), query.page);
+    return result.success
+      ? c.json({ messages: result.messages, hasMore: result.hasMore })
+      : errorResponse(c, result.error);
   });
 
   routes.get("/threads/:threadId/activity", async (c) => {

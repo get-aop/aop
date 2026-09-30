@@ -67,6 +67,28 @@ describe("NewProjectDialog", () => {
     expect(submit.disabled).toBe(false);
   });
 
+  test("a name past the limit is refused under the name field, in plain words, and Create waits", async () => {
+    renderDialog();
+    const submit = (await screen.findByTestId("new-project-submit")) as HTMLButtonElement;
+    expect(screen.queryByTestId("new-project-name-error")).toBeNull();
+
+    type("new-project-name", "x".repeat(101));
+
+    expect(screen.getByTestId("new-project-name-error").textContent).toBe(
+      "Name can be at most 100 characters.",
+    );
+    expect(screen.getByTestId("new-project-name").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.queryByTestId("new-project-error")).toBeNull();
+    expect(screen.getByTestId("new-project-dialog").textContent).not.toContain("Too big");
+    expect(submit.disabled).toBe(true);
+    fireEvent.submit(screen.getByTestId("new-project-name").closest("form") as HTMLFormElement);
+    expect(created).toEqual([]);
+
+    type("new-project-name", "x".repeat(100));
+    expect(screen.queryByTestId("new-project-name-error")).toBeNull();
+    expect(submit.disabled).toBe(false);
+  });
+
   test("lists the attached repositories and creates the project with what was filled in", async () => {
     const stub = renderDialog();
     const repoRow = await screen.findByTestId("new-project-repo");

@@ -19,7 +19,7 @@ export const useThreadConversation = (
       createConversation({
         projectId,
         scope: threadId,
-        listMessages: () => listThreadMessages(threadId),
+        listMessages: (before) => listThreadMessages(threadId, before),
         events: live,
       }),
     [projectId, threadId, live],

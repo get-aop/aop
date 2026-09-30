@@ -28,12 +28,25 @@ afterEach(() => {
 });
 
 describe("project chat api", () => {
-  test("lists the coordinator's messages of a project", async () => {
-    answer = Response.json({ messages: [{ id: "m1" }] });
+  test("lists the latest page of the coordinator's messages of a project", async () => {
+    answer = Response.json({ messages: [{ id: "m1" }], hasMore: true });
 
-    expect(await listCoordinatorMessages("prj 1")).toEqual([{ id: "m1" }] as never);
+    expect(await listCoordinatorMessages("prj 1")).toEqual({
+      messages: [{ id: "m1" }],
+      hasMore: true,
+    } as never);
     expect(requests).toEqual([
       { method: "GET", path: "/api/projects/prj%201/messages", body: undefined },
+    ]);
+  });
+
+  test("asks for the page before a message by its id", async () => {
+    answer = Response.json({ messages: [], hasMore: false });
+
+    await listCoordinatorMessages("prj_1", "msg 5&x");
+
+    expect(requests).toEqual([
+      { method: "GET", path: "/api/projects/prj_1/messages?before=msg%205%26x", body: undefined },
     ]);
   });
 

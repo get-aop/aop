@@ -23,6 +23,8 @@ export const UserMessageSchema = MessageBaseSchema.extend({
 export const AssistantMessageSchema = MessageBaseSchema.extend({
   role: z.literal("assistant"),
   blocks: z.array(MessageBlockSchema).min(1),
+  /** The run that wrote this reply failed and the text says why. A usage-limit wait is not a failure. */
+  failed: z.literal(true).optional(),
 });
 
 /** What a thread told the coordinator. */
@@ -51,3 +53,9 @@ export type UserMessage = z.infer<typeof UserMessageSchema>;
 export type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
 export type ThreadReportMessage = z.infer<typeof ThreadReportMessageSchema>;
 export type Message = z.infer<typeof MessageSchema>;
+
+/** One page of a conversation, oldest first; `hasMore` says older messages exist before the first. */
+export interface MessagePage {
+  messages: Message[];
+  hasMore: boolean;
+}

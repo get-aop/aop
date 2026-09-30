@@ -1,4 +1,5 @@
 import {
+  describeFirstIssue,
   MEMORY_INDEX_NAME,
   type MemoryFile,
   type MemoryFileInput,
@@ -63,7 +64,9 @@ export const refusalOf = (
   existingNames: readonly string[],
 ): string | null => {
   const parsed = MemoryFileInputSchema.safeParse(input);
-  if (!parsed.success) return parsed.error.issues[0]?.message ?? "Check the fields and try again";
+  if (!parsed.success) {
+    return describeFirstIssue(parsed.error.issues, "Check the fields and try again");
+  }
   return creating && existingNames.includes(input.name)
     ? `${input.name} already exists. Pick another name, or open it from the list.`
     : null;

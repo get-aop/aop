@@ -1,10 +1,12 @@
 import {
+  describeFirstIssue,
   type Project,
   type ProjectPatch,
   ProjectPatchSchema,
   type ProjectSettings,
 } from "@aop/common";
 import { useCallback, useState } from "react";
+import { PROJECT_FIELD_LABELS } from "../project-fields";
 import { useProjectActions } from "../use-project-actions";
 import { messageOf } from "./errors";
 
@@ -58,7 +60,13 @@ export const useSettingsDraft = (project: Project): SettingsDraft => {
     if (!dirty) return false;
     const parsed = ProjectPatchSchema.safeParse(patch);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Check the fields and try again");
+      setError(
+        describeFirstIssue(
+          parsed.error.issues,
+          "Check the fields and try again",
+          PROJECT_FIELD_LABELS,
+        ),
+      );
       return false;
     }
     setSaving(true);

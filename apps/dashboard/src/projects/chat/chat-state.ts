@@ -1,4 +1,4 @@
-import type { Message, MessageDelta } from "@aop/common";
+import type { Message, MessageDelta, MessagePage } from "@aop/common";
 
 /**
  * One conversation of a project as the page holds it, the coordinator chat or a thread's own:
@@ -15,6 +15,12 @@ export interface ChatState {
   /** Why the last fetch failed; the messages held may be behind the host until one succeeds. */
   loadError: string | null;
   messages: readonly Message[];
+  /** Whether the host holds messages older than the first one here: the fetch was a page, not the whole. */
+  hasEarlier: boolean;
+  /** An older page is being fetched. */
+  loadingEarlier: boolean;
+  /** Why the last fetch of an older page failed. */
+  earlierError: string | null;
   /** Live text of the reply being written, by the id the finished message will have. */
   live: Readonly<Record<string, string>>;
 }
@@ -24,22 +30,82 @@ export const createChatState = (scope: string | null): ChatState => ({
   phase: "loading",
   loadError: null,
   messages: [],
+  hasEarlier: false,
+  loadingEarlier: false,
+  earlierError: null,
   live: {},
 });
 
 export const initialChatState: ChatState = createChatState(null);
 
-/** The result of a fetch of the whole conversation: it replaces the messages, and a live text whose message it holds is done. */
-export const applySnapshot = (state: ChatState, messages: readonly Message[]): ChatState => {
-  const own = messages.filter((message) => message.threadId === state.scope);
+/**
+ * The result of a fetch of the latest page: it replaces the newest messages, and a live text whose
+ * message it holds is done. Older pages the person already loaded stay, when the page joins them.
+ */
+export const applySnapshot = (state: ChatState, page: MessagePage): ChatState => {
+  const own = page.messages.filter((message) => message.threadId === state.scope);
+  const joinsAt = own[0] ? state.messages.findIndex(({ id }) => id === own[0]?.id) : -1;
+  const older = joinsAt > 0 ? state.messages.slice(0, joinsAt) : [];
   return {
     ...state,
     phase: "ready",
     loadError: null,
-    messages: own,
+    messages: older.length > 0 ? [...older, ...own] : own,
+    hasEarlier: older.length > 0 ? state.hasEarlier : page.hasMore,
     live: withoutHeld(state.live, own),
   };
 };
+
+/** Older messages the host still holds, past the ones fetched: what "Load earlier messages" is about. */
+export interface EarlierMessages {
+  /** The host holds messages older than the first one held. */
+  available: boolean;
+  loading: boolean;
+  /** Why the last attempt to fetch them failed. */
+  error: string | null;
+  /** Fetches the next page; resolves once it is in or has failed. */
+  load: () => Promise<void>;
+}
+
+export const earlierOf = (state: ChatState, load: () => Promise<void>): EarlierMessages => ({
+  available: state.hasEarlier,
+  loading: state.loadingEarlier,
+  error: state.earlierError,
+  load,
+});
+
+export const startLoadingEarlier = (state: ChatState): ChatState => ({
+  ...state,
+  loadingEarlier: true,
+  earlierError: null,
+});
+
+/** An older page goes before the messages held, without repeating any the page and the state share. */
+export const applyEarlier = (state: ChatState, page: MessagePage): ChatState => {
+  const held = new Set(state.messages.map(({ id }) => id));
+  const own = page.messages.filter(
+    (message) => message.threadId === state.scope && !held.has(message.id),
+  );
+  return {
+    ...state,
+    messages: [...own, ...state.messages],
+    hasEarlier: page.hasMore,
+    loadingEarlier: false,
+    earlierError: null,
+  };
+};
+
+export const setEarlierError = (state: ChatState, earlierError: string): ChatState => ({
+  ...state,
+  loadingEarlier: false,
+  earlierError,
+});
+
+/** An older page that no longer fits (the newest page was fetched again meanwhile) is dropped. */
+export const stopLoadingEarlier = (state: ChatState): ChatState => ({
+  ...state,
+  loadingEarlier: false,
+});
 
 export const setLoadError = (state: ChatState, loadError: string): ChatState => ({
   ...state,

@@ -5,13 +5,14 @@ import {
   type ThreadCardVariant,
   threadCardVariant,
 } from "@aop/common";
-import { CircleCheckIcon, HandIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon, HandIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Link, threadPath } from "../../shell/router";
 import { PullRequestChip } from "../PullRequestChip";
 import { ResumeThreadButton } from "../ResumeThreadButton";
 import { StepsRing } from "../StepsRing";
+import { hasFailingChecks } from "../selectors";
 import { ThreadStatusDot } from "../ThreadStatusDot";
 import { ThreadsLoadError } from "../ThreadsLoadError";
 import { useChatThread } from "./chat-context";
@@ -45,19 +46,25 @@ export const ChatThreadCard = ({
   }
 
   const shown = threadCardVariant(thread.status);
+  const failing = hasFailingChecks(thread);
   return (
     <article
       data-testid="chat-thread-card"
       data-thread-id={thread.id}
       data-variant={shown}
       data-status={thread.status}
+      data-checks-failing={failing ? "true" : undefined}
       className={cn(
         "relative my-2 flex max-w-xl flex-col gap-1.5 rounded-card border bg-raised p-3 transition-colors duration-[120ms] hover:bg-hover",
-        shown === "needs-call" ? "border-waiting/40" : "border-border",
+        shown === "needs-call"
+          ? "border-waiting/40"
+          : failing
+            ? "border-blocked/30"
+            : "border-border",
       )}
     >
       <header className="flex items-center gap-2">
-        <VariantIcon variant={shown} thread={thread} />
+        <VariantIcon variant={shown} thread={thread} failing={failing} />
         <h4 className="min-w-0 flex-1 text-[13.5px] font-medium leading-snug text-text">
           <Link
             to={threadPath(projectId, thread.id)}
@@ -74,10 +81,27 @@ export const ChatThreadCard = ({
   );
 };
 
-const VariantIcon = ({ variant, thread }: { variant: ThreadCardVariant; thread: Thread }) => {
+// A finished thread whose pull request still fails its checks is not done: the alert icon says so.
+const VariantIcon = ({
+  variant,
+  thread,
+  failing,
+}: {
+  variant: ThreadCardVariant;
+  thread: Thread;
+  failing: boolean;
+}) => {
   if (variant === "needs-call") {
     return (
       <HandIcon data-testid="chat-thread-card-icon" className="size-4 shrink-0 text-waiting" />
+    );
+  }
+  if (variant === "done" && failing) {
+    return (
+      <CircleAlertIcon
+        data-testid="chat-thread-card-icon"
+        className="size-4 shrink-0 text-blocked"
+      />
     );
   }
   if (variant === "done") {

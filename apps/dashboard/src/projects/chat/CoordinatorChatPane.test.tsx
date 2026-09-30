@@ -8,6 +8,8 @@ import {
   createFakeEvents,
   deferred,
   memorySeenStore,
+  page,
+  pageFrom,
   reply,
   report,
   userMessage,
@@ -76,6 +78,7 @@ interface Options {
   project?: Project;
   threads?: Thread[];
   fetches?: Promise<Message[]>[];
+  listMessages?: ChatApi["listMessages"];
   seen?: Record<string, string>;
   sendMessage?: ChatApi["sendMessage"];
 }
@@ -89,7 +92,7 @@ const setup = (options: Options = {}) => {
   const chat = createProjectChat({
     projectId: "prj_1",
     api: {
-      listMessages: () => pending.shift() ?? Promise.resolve([]),
+      listMessages: options.listMessages ?? (() => pageFrom(pending)),
       sendMessage:
         options.sendMessage ??
         (async (_id, text) => {
@@ -114,6 +117,41 @@ const settled = () => act(async () => {});
 const type = (text: string) =>
   fireEvent.change(screen.getByTestId("composer-input"), { target: { value: text } });
 const pressEnter = () => fireEvent.keyDown(screen.getByTestId("composer-input"), { key: "Enter" });
+
+describe("a conversation longer than the host sends at once", () => {
+  const host: ChatApi["listMessages"] = async (_projectId, before) =>
+    before === undefined
+      ? page([userMessage("u3", 3, { text: "Newest question" }), reply("a3", 4)], true)
+      : page([userMessage("u1", 1, { text: "Oldest question" }), reply("a1", 2)]);
+
+  test("offers to load the earlier messages, asks the host for the page before the oldest one shown, and shows them above", async () => {
+    const asked: (string | undefined)[] = [];
+    setup({
+      listMessages: (projectId, before) => {
+        asked.push(before);
+        return host(projectId, before);
+      },
+    });
+    await settled();
+    expect(screen.getByTestId("chat-load-earlier").textContent).toBe("Load earlier messages");
+
+    fireEvent.click(screen.getByTestId("chat-load-earlier"));
+    await settled();
+
+    expect(asked).toEqual([undefined, "u3"]);
+    expect(
+      screen.getAllByTestId("user-message").map((row) => row.textContent?.includes("question")),
+    ).toEqual([true, true]);
+    const rows = screen.getAllByTestId("chat-scroll")[0]?.querySelectorAll("[data-message-id]");
+    expect([...(rows ?? [])].map((row) => row.getAttribute("data-message-id"))).toEqual([
+      "u1",
+      "a1",
+      "u3",
+      "a3",
+    ]);
+    expect(screen.queryByTestId("chat-load-earlier")).toBeNull();
+  });
+});
 
 describe("loading", () => {
   test("shows that it is loading, then the conversation", async () => {

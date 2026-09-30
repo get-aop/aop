@@ -6,7 +6,7 @@ import { serializeMessageOrigin } from "../chat-session/message-origin.ts";
 import type { ChatSession, Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import { insertProjectRow, insertProjectSession } from "./test-utils.ts";
-import { getWireMessage, listWireMessages } from "./wire-messages.ts";
+import { getWireMessage, listWireMessages, type MessagePageRequest } from "./wire-messages.ts";
 
 describe("listWireMessages", () => {
   let db: Kysely<Database>;
@@ -33,6 +33,12 @@ describe("listWireMessages", () => {
   afterEach(async () => {
     await db.destroy();
   });
+
+  const list = async (session: ChatSession, request?: MessagePageRequest) => {
+    const page = await listWireMessages(db, session, request);
+    if (!page) throw new Error("the page was refused");
+    return page;
+  };
 
   let clock = 0;
   const at = (): string => new Date(Date.UTC(2026, 8, 30, 10, 0, clock++)).toISOString();
@@ -71,7 +77,7 @@ describe("listWireMessages", () => {
       turn: 2,
     });
 
-    const messages = await listWireMessages(db, coordinator);
+    const { messages } = await list(coordinator);
 
     expect(messages).toMatchObject([
       { id: "m1", role: "user", text: "Fix checkout", threadId: null, projectId: "proj_1" },
@@ -104,7 +110,7 @@ describe("listWireMessages", () => {
     });
     await addMessage(thread.id, { id: "m3", role: "user", content: "b", turn: 3 });
 
-    const messages = await listWireMessages(db, thread);
+    const { messages } = await list(thread);
 
     expect(messages).toMatchObject([
       {
@@ -140,7 +146,7 @@ describe("listWireMessages", () => {
       })
       .execute();
 
-    const [, reply] = await listWireMessages(db, coordinator);
+    const [, reply] = (await list(coordinator)).messages;
 
     expect(reply).toMatchObject({
       role: "assistant",
@@ -172,7 +178,7 @@ describe("listWireMessages", () => {
       })
       .execute();
 
-    const [, reply] = await listWireMessages(db, coordinator);
+    const [, reply] = (await list(coordinator)).messages;
 
     expect(reply).toMatchObject({
       role: "assistant",
@@ -236,7 +242,7 @@ describe("listWireMessages", () => {
         ])
         .execute();
 
-      const messages = await listWireMessages(db, coordinator);
+      const { messages } = await list(coordinator);
       const one = await getWireMessage(db, coordinator, "a1");
       const two = await getWireMessage(db, coordinator, "a2");
 
@@ -285,8 +291,8 @@ describe("listWireMessages", () => {
     await addMessage(coordinator.id, { id: "c1", role: "assistant", content: link, turn: 1 });
     await addMessage(thread.id, { id: "t1", role: "assistant", content: link, turn: 1 });
 
-    const [coordinatorReply] = await listWireMessages(db, coordinator);
-    const [threadReply] = await listWireMessages(db, thread);
+    const [coordinatorReply] = (await list(coordinator)).messages;
+    const [threadReply] = (await list(thread)).messages;
 
     expect(coordinatorReply).toMatchObject({
       role: "assistant",
@@ -319,7 +325,7 @@ describe("listWireMessages", () => {
     });
     await addMessage(coordinator.id, { id: "real", role: "user", content: "hello", turn: 2 });
 
-    const messages = await listWireMessages(db, coordinator);
+    const { messages } = await list(coordinator);
 
     expect(messages.map((message) => message.id)).toEqual(["real"]);
   });
@@ -334,7 +340,7 @@ describe("listWireMessages", () => {
       });
     }
 
-    const messages = await listWireMessages(db, coordinator, 3);
+    const { messages } = await list(coordinator, { limit: 3 });
 
     expect(messages.map((message) => message.id)).toEqual(["m3", "m4", "m5"]);
   });

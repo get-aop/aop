@@ -1,4 +1,5 @@
 import {
+  describeFirstIssue,
   type RuntimeConfigurationModelInput,
   RuntimeConfigurationModelInputSchema,
   type RuntimeConfigurationProviderInput,
@@ -18,7 +19,7 @@ export const createRuntimeConfigurationRoutes = (ctx: LocalServerContext) => {
   app.post("/providers", async (c) => {
     const input = RuntimeConfigurationProviderInputSchema.safeParse(await readBody(c));
     if (!input.success)
-      return c.json({ error: input.error.issues[0]?.message ?? "Invalid provider" }, 400);
+      return c.json({ error: describeFirstIssue(input.error.issues, "Invalid provider") }, 400);
     try {
       return c.json({ provider: await repository.createProvider(input.data) }, 201);
     } catch (error) {
@@ -31,13 +32,13 @@ export const createRuntimeConfigurationRoutes = (ctx: LocalServerContext) => {
   app.patch("/providers/:id", async (c) => {
     const input = RuntimeConfigurationProviderInputSchema.safeParse(await readBody(c));
     if (!input.success)
-      return c.json({ error: input.error.issues[0]?.message ?? "Invalid provider" }, 400);
+      return c.json({ error: describeFirstIssue(input.error.issues, "Invalid provider") }, 400);
     return patchProvider(c, repository, c.req.param("id"), input.data);
   });
   app.post("/providers/:id/clone", async (c) => {
     const input = RuntimeConfigurationProviderInputSchema.safeParse(await readBody(c));
     if (!input.success)
-      return c.json({ error: input.error.issues[0]?.message ?? "Invalid provider" }, 400);
+      return c.json({ error: describeFirstIssue(input.error.issues, "Invalid provider") }, 400);
     try {
       const provider = await repository.cloneProvider(c.req.param("id"), input.data);
       return provider ? c.json({ provider }, 201) : c.json({ error: "Provider not found" }, 404);
@@ -56,13 +57,13 @@ export const createRuntimeConfigurationRoutes = (ctx: LocalServerContext) => {
   app.post("/providers/:id/models", async (c) => {
     const input = RuntimeConfigurationModelInputSchema.safeParse(await readBody(c));
     if (!input.success)
-      return c.json({ error: input.error.issues[0]?.message ?? "Invalid model" }, 400);
+      return c.json({ error: describeFirstIssue(input.error.issues, "Invalid model") }, 400);
     return createProviderModel(c, repository, c.req.param("id"), input.data);
   });
   app.patch("/models/:id", async (c) => {
     const input = RuntimeConfigurationModelInputSchema.safeParse(await readBody(c));
     if (!input.success)
-      return c.json({ error: input.error.issues[0]?.message ?? "Invalid model" }, 400);
+      return c.json({ error: describeFirstIssue(input.error.issues, "Invalid model") }, 400);
     return updateProviderModel(c, repository, c.req.param("id"), input.data);
   });
   app.delete("/models/:id", async (c) =>

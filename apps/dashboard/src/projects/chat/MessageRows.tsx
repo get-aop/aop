@@ -38,7 +38,8 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
 
 /**
  * An agent's reply, or a message the coordinator relayed: blocks on the left, no bubble.
- * `workLog` is what the agent did to write it, shown above the words.
+ * `workLog` is what the agent did to write it, shown above the words. A reply whose run failed
+ * is drawn as an error, so what the runtime said is not read as the agent's answer.
  */
 export const AssistantRow = memo(function AssistantRow({
   message,
@@ -53,9 +54,24 @@ export const AssistantRow = memo(function AssistantRow({
       data-testid="assistant-message"
       data-message-id={message.id}
       data-message-role="assistant"
+      data-failed={message.failed ? "true" : undefined}
     >
-      <div className="relative min-w-0 px-1 py-0.5">
+      <div
+        className={cn(
+          "relative min-w-0 px-1 py-0.5",
+          message.failed && "rounded-card border border-blocked/30 bg-blocked/5 px-3 py-2",
+        )}
+      >
         {workLog}
+        {message.failed ? (
+          <p
+            data-testid="assistant-message-failed"
+            className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-blocked"
+          >
+            <CircleAlertIcon aria-hidden="true" className="size-3.5" />
+            This turn failed
+          </p>
+        ) : null}
         <MessageBlocks messageId={message.id} blocks={message.blocks} />
         <div className="mt-1.5">
           <MessageMeta timestamp={message.createdAt} copyText={textOf(message)} />

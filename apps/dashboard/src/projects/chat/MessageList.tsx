@@ -7,6 +7,7 @@ import { Spinner } from "@/ui/spinner";
 import { useNow } from "../use-now";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { buildRows, type ChatRow } from "./chat-rows";
+import type { EarlierMessages } from "./chat-state";
 import { formatElapsed } from "./chat-time";
 import { AssistantRow, ThreadReportRow, UserRow } from "./MessageRows";
 import { useStreamingReveal } from "./use-streaming-reveal";
@@ -25,7 +26,7 @@ export const COORDINATOR_WORKER: Worker = { name: "Coordinator", testIdPrefix: "
 /**
  * The conversation, oldest first, following the newest message while the person is at the
  * bottom and staying put once they scroll up. Only the latest messages are drawn until more
- * are asked for.
+ * are asked for; once every one held is drawn, older ones are fetched from the host on request.
  */
 export const MessageList = ({
   messages,
@@ -37,6 +38,7 @@ export const MessageList = ({
   workLogOf,
   liveWorkLog,
   workingSince,
+  earlier,
 }: {
   messages: readonly Message[];
   live: Readonly<Record<string, string>>;
@@ -51,6 +53,7 @@ export const MessageList = ({
   liveWorkLog?: ReactNode;
   /** When the turn started, for a turn no message on screen started (a thread's first). */
   workingSince?: string | null;
+  earlier?: EarlierMessages;
 }) => {
   const [window, setWindow] = useState(INITIAL_WINDOW);
   const [atEnd, setAtEnd] = useState(true);
@@ -66,6 +69,12 @@ export const MessageList = ({
 
   const scrollToEnd = () =>
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
+
+  // What was fetched is drawn a step at a time like the rest, so the first step is shown at once.
+  const loadEarlier = async () => {
+    await earlier?.load();
+    setWindow((current) => current + WINDOW_STEP);
+  };
 
   return (
     <div className="relative flex min-h-0 flex-1">
@@ -87,6 +96,9 @@ export const MessageList = ({
             >
               Show {Math.min(WINDOW_STEP, hidden)} earlier messages
             </button>
+          ) : null}
+          {hidden === 0 && earlier?.available ? (
+            <LoadEarlier earlier={earlier} onLoad={() => void loadEarlier()} />
           ) : null}
           {rows.map((row) => (
             <RowView
@@ -114,6 +126,25 @@ export const MessageList = ({
     </div>
   );
 };
+
+const LoadEarlier = ({ earlier, onLoad }: { earlier: EarlierMessages; onLoad: () => void }) => (
+  <div className="mb-3 flex flex-col items-center gap-1">
+    <button
+      type="button"
+      data-testid="chat-load-earlier"
+      disabled={earlier.loading}
+      onClick={onLoad}
+      className="rounded-md border border-border px-3 py-1 text-xs text-text-muted hover:bg-hover hover:text-text disabled:opacity-60"
+    >
+      {earlier.loading ? "Loading earlier messages…" : "Load earlier messages"}
+    </button>
+    {earlier.error ? (
+      <p data-testid="chat-load-earlier-error" role="alert" className="text-[12px] text-blocked">
+        Could not load earlier messages ({earlier.error}).
+      </p>
+    ) : null}
+  </div>
+);
 
 const RowView = ({
   row,

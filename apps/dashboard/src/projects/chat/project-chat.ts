@@ -32,6 +32,8 @@ export interface ProjectChat {
   stop: () => void;
   /** Fetches the chat again: the retry after a failed fetch. */
   reload: () => void;
+  /** Fetches the page of messages before the oldest one held. */
+  loadEarlier: () => Promise<void>;
   send: (text: string) => Promise<SendResult>;
   /** The person is looking at the chat: everything in it counts as seen. */
   markSeen: () => void;
@@ -52,7 +54,7 @@ export const createProjectChat = (deps: ProjectChatDeps): ProjectChat => {
   const conversation = createConversation({
     projectId,
     scope: null,
-    listMessages: () => api.listMessages(projectId),
+    listMessages: (before) => api.listMessages(projectId, before),
     events: deps.events,
     schedule: deps.schedule,
     onLoaded: () => settleBaseline(),
@@ -95,6 +97,7 @@ export const createProjectChat = (deps: ProjectChatDeps): ProjectChat => {
     start: conversation.start,
     stop: conversation.stop,
     reload: conversation.reload,
+    loadEarlier: conversation.loadEarlier,
     send: async (text) => {
       try {
         conversation.receive(await api.sendMessage(projectId, text));
