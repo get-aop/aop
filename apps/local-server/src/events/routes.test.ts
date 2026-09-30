@@ -4,7 +4,6 @@ import { createApp } from "../app.ts";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
-import { createTestTask } from "../task/test-utils.ts";
 import { createTaskEventEmitter, type TaskEventEmitter } from "./task-events.ts";
 
 interface SSEParsedEvent {
@@ -63,11 +62,7 @@ describe("events/routes", () => {
     db = await createTestDb();
     emitter = createTaskEventEmitter();
     ctx = createCommandContext(db, { taskEventEmitter: emitter });
-    app = createApp({
-      ctx,
-      startTimeMs: Date.now(),
-      isReady: () => true,
-    });
+    app = createApp({ ctx, startTimeMs: Date.now() });
   });
 
   afterEach(async () => {
@@ -86,12 +81,8 @@ describe("events/routes", () => {
       controller.abort();
     });
 
-    test("sends init event with current state on connection", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo", {
-        maxConcurrentTasks: 2,
-      });
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DRAFT");
-      await createTestTask(db, "task-2", "repo-1", "changes/feat-2", "READY");
+    test("sends the registered repos in the init event", async () => {
+      await createTestRepo(db, "repo-1", "/path/to/repo");
 
       const controller = new AbortController();
       const res = await app.request("/api/events", {
@@ -103,22 +94,17 @@ describe("events/routes", () => {
       const text = await collectChunks(reader, 3);
       controller.abort();
 
-      const events = parseSSEEvents(text);
-      expect(events.length).toBeGreaterThanOrEqual(1);
-
-      const initEvent = events.find((e) => e.event === "init");
+      const initEvent = parseSSEEvents(text).find((e) => e.event === "init");
       expect(initEvent).toBeDefined();
-
       // biome-ignore lint/style/noNonNullAssertion: already checked via expect
       const initData = JSON.parse(initEvent!.data);
       expect(initData.type).toBe("init");
-      expect(initData.status.repos).toHaveLength(1);
-      expect(initData.status.repos[0].tasks).toHaveLength(2);
+      expect(initData.status.repos).toEqual([
+        expect.objectContaining({ id: "repo-1", name: "repo" }),
+      ]);
     });
 
-    test("broadcasts task-created event when task is created", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo");
-
+    test("broadcasts host events emitted after the connection opened", async () => {
       const controller = new AbortController();
       const res = await app.request("/api/events", {
         signal: controller.signal,
@@ -127,105 +113,21 @@ describe("events/routes", () => {
       // biome-ignore lint/style/noNonNullAssertion: test code, body always exists
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
-
       const { value: initValue } = await reader.read();
       let text = decoder.decode(initValue);
 
-      const now = new Date().toISOString();
-      await ctx.taskRepository.create({
-        id: "task-new",
-        repo_id: "repo-1",
-        change_path: "changes/new-feat",
-        status: "DRAFT",
-        created_at: now,
-        updated_at: now,
-      });
-
+      emitter.emit({ type: "repo-removed", repoId: "repo-1" });
       await new Promise((resolve) => setTimeout(resolve, 50));
       text += await collectChunks(reader, 3);
       controller.abort();
 
-      const events = parseSSEEvents(text);
-      const createdEvent = events.find((e) => e.event === "task-created");
-      expect(createdEvent).toBeDefined();
-
+      const removed = parseSSEEvents(text).find((e) => e.event === "repo-removed");
+      expect(removed).toBeDefined();
       // biome-ignore lint/style/noNonNullAssertion: already checked via expect
-      const eventData = JSON.parse(createdEvent!.data);
-      expect(eventData.type).toBe("task-created");
-      expect(eventData.task.id).toBe("task-new");
-    });
-
-    test("broadcasts task-status-changed event when task status changes", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DRAFT");
-
-      const controller = new AbortController();
-      const res = await app.request("/api/events", {
-        signal: controller.signal,
-      });
-
-      // biome-ignore lint/style/noNonNullAssertion: test code, body always exists
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-
-      const { value: initValue } = await reader.read();
-      let text = decoder.decode(initValue);
-
-      await ctx.taskRepository.update("task-1", { status: "READY" });
-
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      text += await collectChunks(reader, 3);
-      controller.abort();
-
-      const events = parseSSEEvents(text);
-      const statusEvent = events.find((e) => e.event === "task-status-changed");
-      expect(statusEvent).toBeDefined();
-
-      // biome-ignore lint/style/noNonNullAssertion: already checked via expect
-      const eventData = JSON.parse(statusEvent!.data);
-      expect(eventData.type).toBe("task-status-changed");
-      expect(eventData.taskId).toBe("task-1");
-      expect(eventData.previousStatus).toBe("DRAFT");
-      expect(eventData.newStatus).toBe("READY");
-    });
-
-    test("broadcasts REMOVED status change when task is removed", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DRAFT");
-
-      const controller = new AbortController();
-      const res = await app.request("/api/events", {
-        signal: controller.signal,
-      });
-
-      // biome-ignore lint/style/noNonNullAssertion: test code, body always exists
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-
-      const { value: initValue } = await reader.read();
-      let text = decoder.decode(initValue);
-
-      await ctx.taskRepository.markRemoved("task-1");
-      await new Promise((resolve) => setTimeout(resolve, 150));
-
-      // markRemoved updates the task status to REMOVED and broadcasts that status change
-      text += await collectChunks(reader, 6);
-      controller.abort();
-
-      const events = parseSSEEvents(text);
-      const removedEvent = events.find((e) => e.event === "task-status-changed");
-      expect(removedEvent).toBeDefined();
-
-      // biome-ignore lint/style/noNonNullAssertion: already checked via expect
-      const eventData = JSON.parse(removedEvent!.data);
-      expect(eventData.type).toBe("task-status-changed");
-      expect(eventData.taskId).toBe("task-1");
-      expect(eventData.newStatus).toBe("REMOVED");
+      expect(JSON.parse(removed!.data)).toEqual({ type: "repo-removed", repoId: "repo-1" });
     });
 
     test("increments event IDs for each event", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo");
-
       const controller = new AbortController();
       const res = await app.request("/api/events", {
         signal: controller.signal,
@@ -234,31 +136,17 @@ describe("events/routes", () => {
       // biome-ignore lint/style/noNonNullAssertion: test code, body always exists
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
-      let text = "";
-
       const { value: initValue } = await reader.read();
-      text += decoder.decode(initValue);
+      let text = decoder.decode(initValue);
 
-      const now = new Date().toISOString();
-      await ctx.taskRepository.create({
-        id: "task-1",
-        repo_id: "repo-1",
-        change_path: "changes/feat-1",
-        status: "DRAFT",
-        created_at: now,
-        updated_at: now,
-      });
-
+      emitter.emit({ type: "data-reset" });
       await new Promise((resolve) => setTimeout(resolve, 50));
-
-      const { value: eventValue } = await reader.read();
-      text += decoder.decode(eventValue);
+      text += await collectChunks(reader, 3);
       controller.abort();
 
       const events = parseSSEEvents(text);
       expect(events.length).toBeGreaterThanOrEqual(2);
-      expect(events[0]?.id).toBe("0");
-      expect(events[1]?.id).toBe("1");
+      expect(events.map((event) => Number(event.id))).toEqual(events.map((_, index) => index));
     });
 
     test("subscribes to event emitter on connection", async () => {
@@ -336,7 +224,6 @@ describe("events/routes", () => {
       heartbeatApp = createApp({
         ctx,
         startTimeMs: Date.now(),
-        isReady: () => true,
         eventsSSEOptions: { heartbeatIntervalMs: 50 },
       });
     });

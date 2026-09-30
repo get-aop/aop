@@ -1,42 +1,8 @@
 import { EventEmitter } from "node:events";
-import type {
-  SSEChatUnreadEvent,
-  SSEDataResetEvent,
-  SSERepoRemovedEvent,
-  SSETask,
-  SSETaskCreatedEvent,
-  SSETaskRemovedEvent,
-  SSETaskStatusChangedEvent,
-  SSETaskUpdatedEvent,
-} from "@aop/common";
+import type { SSEChatUnreadEvent, SSEDataResetEvent, SSERepoRemovedEvent } from "@aop/common";
 
-export type TaskEventType =
-  | "task-created"
-  | "task-status-changed"
-  | "task-updated"
-  | "task-removed"
-  | "repo-removed"
-  | "data-reset"
-  | "chat-unread";
-
-export type TaskCreatedEvent = SSETaskCreatedEvent;
-export type TaskStatusChangedEvent = SSETaskStatusChangedEvent;
-export type TaskUpdatedEvent = SSETaskUpdatedEvent;
-export type TaskRemovedEvent = SSETaskRemovedEvent;
-export type RepoRemovedEvent = SSERepoRemovedEvent;
-export type DataResetEvent = SSEDataResetEvent;
-export type ChatUnreadEvent = SSEChatUnreadEvent;
-
-export type TaskEvent =
-  | TaskCreatedEvent
-  | TaskStatusChangedEvent
-  | TaskUpdatedEvent
-  | TaskRemovedEvent
-  | RepoRemovedEvent
-  | DataResetEvent
-  | ChatUnreadEvent;
-
-export type { SSETask };
+/** Host-wide events fanned out to every dashboard SSE connection. */
+export type TaskEvent = SSERepoRemovedEvent | SSEDataResetEvent | SSEChatUnreadEvent;
 
 export interface TaskEventEmitter {
   emit: (event: TaskEvent) => void;

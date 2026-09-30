@@ -184,6 +184,13 @@ export const getRepoById = async (ctx: LocalServerContext, repoId: string) => {
   return ctx.repoRepository.getById(repoId);
 };
 
+/** Registered repositories as the dashboard lists them (GET /api/status and the SSE init frame). */
+export const listRepoSummaries = async (
+  ctx: LocalServerContext,
+): Promise<{ repos: Array<{ id: string; name: string | null; path: string }> }> => ({
+  repos: (await ctx.repoRepository.getAll()).map(({ id, name, path }) => ({ id, name, path })),
+});
+
 const pruneWorktrees = async (repoId: string, repoPath: string): Promise<void> => {
   try {
     const proc = resolveExecHost().spawn({

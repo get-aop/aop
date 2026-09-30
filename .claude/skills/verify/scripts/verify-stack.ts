@@ -128,7 +128,6 @@ async function doctorStack(): Promise<number> {
     ],
     ["dashboard proxies /api", await checkProxy(state.dashboardPort), "/api/health via dashboard"],
     ["home isolated", isIsolated(state.home), state.home],
-    ["test mode (fixture agent)", state.env.AOP_TEST_MODE === "true", "AOP_TEST_MODE"],
   ];
   for (const [label, ok, detail] of checks) {
     process.stdout.write(`${ok ? "PASS" : "FAIL"}  ${label}  (${detail})\n`);
@@ -217,8 +216,6 @@ function buildEnv(home: string, serverPort: number, dashboardPort: number): Reco
     AOP_LOCAL_SERVER_URL: `http://127.0.0.1:${serverPort}`,
     AOP_DASHBOARD_PORT: String(dashboardPort),
     AOP_DASHBOARD_URL: `http://127.0.0.1:${dashboardPort}`,
-    // Routes task steps to the deterministic e2e-fixture agent: no API spend.
-    AOP_TEST_MODE: "true",
   };
 }
 

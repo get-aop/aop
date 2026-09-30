@@ -5,10 +5,7 @@ import { join } from "node:path";
 import type { ChatDelegationRun } from "@aop/common";
 import { createCommandContext } from "../context.ts";
 import { createTestDb } from "../db/test-utils.ts";
-import {
-  BACKGROUND_TASK_CLEANUP_INTERVAL_MS,
-  pruneOldBackgroundTasks,
-} from "./background-task-retention.ts";
+import { pruneOldBackgroundTasks } from "./background-task-retention.ts";
 import { listDelegationRunsByChatRunIds, replaceDelegationRuns } from "./delegation-run-store.ts";
 
 const databases: Array<Awaited<ReturnType<typeof createTestDb>>> = [];
@@ -18,10 +15,6 @@ afterEach(async () => {
 });
 
 describe("background task retention", () => {
-  test("uses a five-minute cleanup interval", () => {
-    expect(BACKGROUND_TASK_CLEANUP_INTERVAL_MS).toBe(300_000);
-  });
-
   test("keeps the five newest background tasks per session", async () => {
     const db = await createTestDb();
     databases.push(db);

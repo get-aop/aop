@@ -2,13 +2,10 @@ import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { createAgentRoutes } from "./agent/routes.ts";
-import { createChannelRoutes } from "./channel/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
 import type { LocalServerContext } from "./context.ts";
 import { createCreateTaskRoutes } from "./create-task/routes.ts";
 import { createEventsSSEHandler } from "./events/index.ts";
-import { createLogStreamHandler } from "./events/log-routes.ts";
 import { createExecHostRoutes } from "./exec-hosts/routes.ts";
 import {
   isAllowedExternalUrl,
@@ -19,32 +16,16 @@ import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
 import { createProviderRoutes } from "./providers/routes.ts";
+import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
-import { createRuntimeEventRoutes } from "./runtime-events/routes.ts";
 import { createRuntimeProfileRoutes } from "./runtime-profile/routes.ts";
-import { createSchedulerRoutes } from "./scheduler/routes.ts";
 import { createOriginGuard } from "./security/origin-guard.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
-import { createSignalRoutes } from "./signals/routes.ts";
-import { getServerStatus } from "./status/handlers.ts";
-import { resolveTaskByIdentifier } from "./task/handlers.ts";
-import { createTaskRoutes } from "./task/routes.ts";
 import { createUpdateRoutes } from "./updates/routes.ts";
-import { createAgentMemoryRoutes } from "./worker-memory/routes.ts";
-import { createWorkflowRoutes } from "./workflow/routes.ts";
 
 const logger = getLogger("api");
-
-export type ServiceStatus = "running" | "stopped" | "disabled";
-
-export interface OrchestratorStatus {
-  watcher: ServiceStatus;
-  ticker: ServiceStatus;
-  processor: ServiceStatus;
-  scheduler: ServiceStatus;
-}
 
 export interface EventsSSEOptions {
   heartbeatIntervalMs?: number;
@@ -53,9 +34,6 @@ export interface EventsSSEOptions {
 export interface AppDependencies {
   ctx: LocalServerContext;
   startTimeMs: number;
-  orchestratorStatus?: () => OrchestratorStatus;
-  isReady?: () => boolean;
-  triggerRefresh?: () => boolean;
   dashboardStaticPath?: string;
   dashboardDevOrigin?: string;
   eventsSSEOptions?: EventsSSEOptions;
@@ -97,7 +75,7 @@ export const createApp = (deps: AppDependencies) => {
   // Request logging middleware — skip noisy endpoints (SSE, health)
   app.use("/api/*", async (c, next) => {
     const path = new URL(c.req.url).pathname;
-    if (path.startsWith("/api/health") || path === "/api/events" || path.endsWith("/logs")) {
+    if (path.startsWith("/api/health") || path === "/api/events") {
       return next();
     }
 
@@ -126,30 +104,9 @@ export const createApp = (deps: AppDependencies) => {
     }
   });
 
-  app.route(
-    "/api/health",
-    createHealthRoutes({
-      ctx,
-      startTimeMs: deps.startTimeMs,
-      orchestratorStatus: deps.orchestratorStatus,
-    }),
-  );
+  app.route("/api/health", createHealthRoutes({ ctx, startTimeMs: deps.startTimeMs }));
 
-  app.get("/api/status", async (c) => {
-    const status = await getServerStatus(ctx);
-    return c.json({
-      ready: deps.isReady?.() ?? false,
-      ...status,
-    });
-  });
-
-  app.post("/api/refresh", async (c) => {
-    const triggered = deps.triggerRefresh?.() ?? false;
-    if (!triggered) {
-      return c.json({ error: "Orchestrator not ready" }, 503);
-    }
-    return c.json({ ok: true, message: "Refresh triggered" });
-  });
+  app.get("/api/status", async (c) => c.json(await listRepoSummaries(ctx)));
 
   app.post("/api/open-external", async (c) => {
     const body = await c.req.json<{ url?: unknown }>().catch(() => null);
@@ -167,91 +124,22 @@ export const createApp = (deps: AppDependencies) => {
     }
   });
 
-  app.get("/api/tasks/resolve/:identifier", async (c) => {
-    const identifier = c.req.param("identifier");
-    const task = await resolveTaskByIdentifier(ctx, identifier);
-
-    if (!task) {
-      return c.json({ error: "Task not found" }, 404);
-    }
-
-    return c.json({ task });
-  });
-
   app.get(
     "/api/events",
-    createEventsSSEHandler(ctx, () => getServerStatus(ctx), deps.eventsSSEOptions),
+    createEventsSSEHandler(ctx, () => listRepoSummaries(ctx), deps.eventsSSEOptions),
   );
-  app.get("/api/executions/:executionId/logs", createLogStreamHandler(ctx));
-  app.route("/api", createRuntimeEventRoutes(ctx));
-
-  app.route("/api/agents", createAgentRoutes(ctx));
   app.route("/api", createProviderRoutes());
-  app.route("/api", createSignalRoutes(ctx));
-  app.route("/api/agent-memory", createAgentMemoryRoutes(ctx));
-  app.route("/api/channels", createChannelRoutes(ctx));
   app.route("/api/chat-sessions", createChatSessionRoutes(ctx));
   app.route("/api/chat-sessions", createSessionGitRoutes(ctx));
   app.route("/api/mcp", createMcpRoutes(ctx));
-  app.route("/api/workflows", createWorkflowRoutes(ctx));
-
-  app.get("/api/metrics", async (c) => {
-    const repoId = c.req.query("repoId");
-    const metrics = await ctx.taskRepository.getMetrics(repoId);
-    return c.json(metrics);
-  });
-
-  app.route("/api/agents", createAgentRoutes(ctx));
   app.route("/api/repos", createRepoRoutes(ctx));
-  app.route("/api/repos/:repoId/tasks", createTaskRoutes(ctx));
   app.route("/api/settings", createSettingsRoutes(ctx));
   app.route("/api/exec-hosts", createExecHostRoutes(ctx));
   app.route("/api/runtime-profiles", createRuntimeProfileRoutes(ctx));
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/create-task", createCreateTaskRoutes(ctx));
-  app.route("/api/scheduler", createSchedulerRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/updates", createUpdateRoutes());
-
-  // Test-only endpoint to directly set task status (for E2E testing)
-  if (process.env.AOP_TEST_MODE === "true") {
-    app.patch("/api/tasks/:taskId/status", async (c) => {
-      const taskId = c.req.param("taskId");
-      const body = await c.req.json<{ status: string }>();
-
-      const validStatuses = [
-        "DRAFT",
-        "READY",
-        "RESUMING",
-        "WORKING",
-        "PAUSED",
-        "BLOCKED",
-        "DONE",
-        "REMOVED",
-      ];
-      if (!validStatuses.includes(body.status)) {
-        return c.json({ error: "Invalid status" }, 400);
-      }
-
-      const task = await ctx.taskRepository.get(taskId);
-      if (!task) {
-        return c.json({ error: "Task not found" }, 404);
-      }
-
-      const updated = await ctx.taskRepository.update(taskId, {
-        status: body.status as
-          | "DRAFT"
-          | "READY"
-          | "WORKING"
-          | "PAUSED"
-          | "BLOCKED"
-          | "DONE"
-          | "REMOVED",
-      });
-
-      return c.json({ ok: true, task: updated });
-    });
-  }
 
   if (dashboardStaticPath) {
     app.get("*", async (c) => {

@@ -6,7 +6,6 @@ import { getDashboardDevOrigin, getDashboardStaticPath, getPort } from "./config
 import { createCommandContext } from "./context.ts";
 import { createDatabase, getDefaultDbPath } from "./db/connection.ts";
 import { runMigrations } from "./db/migrations.ts";
-import { createOrchestrator } from "./orchestrator/index.ts";
 import { cleanupOrphanRepoDirs } from "./repo/orphan-dirs.ts";
 
 const logger = getLogger("local-server");
@@ -29,7 +28,6 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   const db = createDatabase(dbPath);
   await runMigrations(db);
   const ctx = createCommandContext(db);
-  ctx.logFlusher.start();
 
   // Retry hidden-ref cleanup before serving so a crash never leaves orphan refs.
   await runStartupCheckpointCleanup(ctx.chatCheckpointCleanupRepository);
@@ -38,14 +36,9 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     logger.warn("Failed to clean orphan repo directories: {error}", { error: String(error) });
   });
 
-  const orchestrator = createOrchestrator(ctx);
-
   const app = createApp({
     ctx,
     startTimeMs,
-    orchestratorStatus: () => orchestrator.getStatus(),
-    isReady: () => orchestrator.isReady(),
-    triggerRefresh: () => orchestrator.triggerRefresh(),
     dashboardStaticPath: options?.dashboardStaticPath ?? getDashboardStaticPath(),
     dashboardDevOrigin: getDashboardDevOrigin(),
   });
@@ -71,15 +64,11 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
 
   logger.info("Local server listening on http://127.0.0.1:{port}", { port });
 
-  await orchestrator.start();
-
   return {
     shutdown: async () => {
       logger.info("Shutting down...");
       server.stop();
-      await orchestrator.stop();
       await shutdownChatSessions(ctx);
-      ctx.logFlusher.stop();
       await db.destroy();
       logger.info("Shutdown complete");
     },

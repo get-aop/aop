@@ -18,13 +18,13 @@ All commands run from the repo root. `S=.claude/skills/verify/scripts`.
 ```bash
 bun install                                      # once per checkout; the first run needs it
 bun $S/verify-stack.ts start --name <run>        # server + dashboard dev server, detached
-bun $S/seed.ts --name <run>                      # fixture repo, workflow, worker, one assigned DRAFT task
+bun $S/seed.ts --name <run>                      # fixture repo registered as `repo`
 bun $S/seed.ts --name <run> --fake-runtime       # same, plus the fake CLI as the default chat runtime
 ```
 
-`start` prints the dashboard and API URLs and returns once `/api/health` reports `db.connected` and the dashboard serves HTML (about 1s). It picks two free ports in 25400-25499 and sets `AOP_HOME=.work/verify/<run>/home`, `AOP_DB_PATH`, and `AOP_TEST_MODE=true`. Test mode routes task steps to the deterministic `e2e-fixture` agent, so task runs cost nothing and finish in about a second. Names isolate concurrent runs; the default name is `default`. `start` refuses a name that is still running.
+`start` prints the dashboard and API URLs and returns once `/api/health` reports `db.connected` and the dashboard serves HTML (about 1s). It picks two free ports in 25400-25499 and sets `AOP_HOME=.work/verify/<run>/home` and `AOP_DB_PATH`. Names isolate concurrent runs; the default name is `default`. `start` refuses a name that is still running.
 
-`seed` prints `{repoId, repoPath, taskId, agentId, workflow}` and records them in `.work/verify/<run>/state.json`. Read ids from there.
+`seed` prints `{repoId, repoPath}` (plus `fakeRuntime` with `--fake-runtime`) and records them in `.work/verify/<run>/state.json`. Read ids from there.
 
 ## Doctor
 
@@ -34,7 +34,7 @@ Run first, and whenever anything looks off:
 bun $S/verify-stack.ts doctor --name <run>       # read-only; exit 0 only if every line is PASS
 ```
 
-It checks that both processes are this worktree's entry points, both ports are owned by this run's PIDs, `/api/health` is ok with a connected DB, the dashboard serves `/` and proxies `/api`, the home is not `~/.aop` or `~/.aop-dev`, and test mode is on. It does not check code freshness: the server is not started with `--watch`, so after editing `apps/local-server` run `stop` then `start` again. Dashboard changes hot-reload.
+It checks that both processes are this worktree's entry points, both ports are owned by this run's PIDs, `/api/health` is ok with a connected DB, the dashboard serves `/` and proxies `/api`, and the home is not `~/.aop` or `~/.aop-dev`. It does not check code freshness: the server is not started with `--watch`, so after editing `apps/local-server` run `stop` then `start` again. Dashboard changes hot-reload.
 
 Never drive an instance this run did not start. If `doctor` fails, `stop` and start over.
 
@@ -43,8 +43,7 @@ Never drive an instance this run did not start. If `doctor` fails, `stop` and st
 **CLI.** Use the wrapper so the CLI targets this run's server and home:
 
 ```bash
-bun $S/verify-stack.ts aop --name <run> -- status --json
-bun $S/verify-stack.ts aop --name <run> -- task:ready <taskId>
+bun $S/verify-stack.ts aop --name <run> -- repo:init <path>
 bun $S/verify-stack.ts env --name <run>          # exports, to run other commands against the stack
 ```
 
@@ -64,9 +63,9 @@ Proof standards:
 
 - Drive the real user path: the dashboard control, or the `aop` command a user types. Do not use test-only endpoints as the proof. The seed script uses HTTP and disk writes only to build baseline state.
 - Capture the action and the resulting state, not only the final screen: the command and its exit code, then a second view of the result.
-- Verify side effects next to what is visible: task status through `aop status <taskId> --json`, branches and files in the fixture repo with `git -C <repoPath>`, rows through the API.
+- Verify side effects next to what is visible: rows through the API (`/api/status` lists repos, `/api/chat-sessions` lists sessions), branches and files in the fixture repo with `git -C <repoPath>`.
 - A screenshot is not proof until you have looked at it. Read the browser console after every flow and report new errors.
-- Test mode fakes the agent only. Task steps, git, SQLite, SSE, and the dashboard are real. Say so in the report; it does not verify a real runtime.
+- `--fake-runtime` fakes the CLI only. The adapter, spawn, logs, git, SQLite, SSE, and the dashboard are real. Say so in the report; it does not verify a real model.
 
 ## Cleanup
 

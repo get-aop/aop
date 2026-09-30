@@ -5,7 +5,6 @@ import { type AppDependencies, createApp } from "./app.ts";
 import { createCommandContext, type LocalServerContext } from "./context.ts";
 import type { Database } from "./db/schema.ts";
 import { type AnyJson, createTestDb, createTestRepo } from "./db/test-utils.ts";
-import { createTestTask } from "./task/test-utils.ts";
 
 describe("app", () => {
   let db: Kysely<Database>;
@@ -18,18 +17,7 @@ describe("app", () => {
     cleanupAopHome = useTestAopHome();
     db = await createTestDb();
     ctx = createCommandContext(db);
-    deps = {
-      ctx,
-      startTimeMs: Date.now() - 5000,
-      orchestratorStatus: () => ({
-        watcher: "running",
-        ticker: "running",
-        processor: "running",
-        scheduler: "stopped",
-      }),
-      isReady: () => true,
-      triggerRefresh: () => true,
-    };
+    deps = { ctx, startTimeMs: Date.now() - 5000 };
     app = createApp(deps);
   });
 
@@ -48,129 +36,39 @@ describe("app", () => {
       expect(body.service).toBe("aop");
       expect(body.uptime).toBeGreaterThanOrEqual(0);
       expect(body.db.connected).toBe(true);
-      expect(body.orchestrator).toEqual({
-        watcher: "running",
-        ticker: "running",
-        processor: "running",
-        scheduler: "stopped",
-      });
-    });
-
-    test("returns default orchestrator status when not provided", async () => {
-      const appWithoutOrchestrator = createApp({
-        ctx,
-        startTimeMs: Date.now(),
-      });
-
-      const res = await appWithoutOrchestrator.request("/api/health");
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(body.orchestrator).toEqual({
-        watcher: "stopped",
-        ticker: "stopped",
-        processor: "stopped",
-      });
     });
   });
 
   describe("GET /api/status", () => {
-    test("returns empty status when no repos", async () => {
+    test("returns no repos before any is registered", async () => {
       const res = await app.request("/api/status");
       const body: AnyJson = await res.json();
 
       expect(res.status).toBe(200);
-      expect(body.ready).toBe(true);
-      expect(body.repos).toEqual([]);
+      expect(body).toEqual({ repos: [] });
     });
 
-    test("returns repos with their tasks", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo1", {
-        maxConcurrentTasks: 2,
-      });
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DRAFT");
-      await createTestTask(db, "task-2", "repo-1", "changes/feat-2", "READY");
-
-      const res = await app.request("/api/status");
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(body.repos).toHaveLength(1);
-      expect(body.repos[0].id).toBe("repo-1");
-      expect(body.repos[0].path).toBe(aopPaths.repoDir("repo-1"));
-      expect(body.repos[0].max).toBe(2);
-      expect(body.repos[0].tasks).toHaveLength(2);
-    });
-
-    test("excludes REMOVED tasks from repo tasks", async () => {
+    test("lists the registered repos", async () => {
       await createTestRepo(db, "repo-1", "/path/to/repo1");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DRAFT");
-      await createTestTask(db, "task-2", "repo-1", "changes/feat-2", "REMOVED");
 
       const res = await app.request("/api/status");
       const body: AnyJson = await res.json();
 
-      expect(body.repos[0].tasks).toHaveLength(1);
-      expect(body.repos[0].tasks[0].id).toBe("task-1");
-    });
-
-    test("returns ready=false when orchestrator not ready", async () => {
-      const appNotReady = createApp({
-        ctx,
-        startTimeMs: Date.now(),
-        isReady: () => false,
-      });
-
-      const res = await appNotReady.request("/api/status");
-      const body: AnyJson = await res.json();
-
-      expect(body.ready).toBe(false);
+      expect(res.status).toBe(200);
+      expect(body.repos).toEqual([
+        { id: "repo-1", name: "repo1", path: aopPaths.repoDir("repo-1") },
+      ]);
     });
   });
 
-  describe("removed ticket integrations", () => {
-    test("does not mount Linear, Jira, or GitHub App routes", async () => {
+  describe("removed task-era routes", () => {
+    test("does not mount Linear, Jira, GitHub App, task, or workflow routes", async () => {
       expect((await app.request("/api/linear/status")).status).toBe(404);
       expect((await app.request("/api/jira/status")).status).toBe(404);
       expect((await app.request("/api/github/status")).status).toBe(404);
-    });
-  });
-
-  describe("POST /api/refresh", () => {
-    test("triggers refresh successfully", async () => {
-      const res = await app.request("/api/refresh", { method: "POST" });
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(body.ok).toBe(true);
-      expect(body.message).toBe("Refresh triggered");
-    });
-
-    test("returns 503 when orchestrator not ready", async () => {
-      const appNotReady = createApp({
-        ctx,
-        startTimeMs: Date.now(),
-        triggerRefresh: () => false,
-      });
-
-      const res = await appNotReady.request("/api/refresh", { method: "POST" });
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(503);
-      expect(body.error).toBe("Orchestrator not ready");
-    });
-
-    test("returns 503 when triggerRefresh not provided", async () => {
-      const appNoRefresh = createApp({
-        ctx,
-        startTimeMs: Date.now(),
-      });
-
-      const res = await appNoRefresh.request("/api/refresh", {
-        method: "POST",
-      });
-
-      expect(res.status).toBe(503);
+      expect((await app.request("/api/workflows")).status).toBe(404);
+      expect((await app.request("/api/repos/repo-1/tasks/task-1/executions")).status).toBe(404);
+      expect((await app.request("/api/refresh", { method: "POST" })).status).toBe(404);
     });
   });
 
@@ -214,34 +112,6 @@ describe("app", () => {
     });
   });
 
-  describe("GET /api/metrics", () => {
-    test("returns metrics without repoId filter", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo1");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DRAFT");
-      await createTestTask(db, "task-2", "repo-1", "changes/feat-2", "DONE");
-
-      const res = await app.request("/api/metrics");
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(body).toHaveProperty("total");
-      expect(body).toHaveProperty("byStatus");
-    });
-
-    test("returns metrics filtered by repoId", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo1");
-      await createTestRepo(db, "repo-2", "/path/to/repo2");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DONE");
-      await createTestTask(db, "task-2", "repo-2", "changes/feat-2", "DONE");
-
-      const res = await app.request("/api/metrics?repoId=repo-1");
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(body.total).toBe(1);
-    });
-  });
-
   describe("loop engineering API routes", () => {
     test("mounts provider capabilities with readiness probes", async () => {
       const res = await app.request("/api/providers/capabilities");
@@ -259,135 +129,6 @@ describe("app", () => {
       expect(body.providers[0].readinessProbe).toHaveProperty("versionDetected");
       expect(body.providers[0].readinessProbe).toHaveProperty("canWriteLogs");
     });
-
-    test("creates, lists, and consumes signals through API routes", async () => {
-      await createTestRepo(db, "repo-signals", "/tmp/repo-signals");
-
-      const createRes = await app.request("/api/signals", {
-        method: "POST",
-        body: JSON.stringify({
-          repoId: "repo-signals",
-          kind: "docs-gap",
-          title: "Document the runtime check",
-          body: "The provider doctor needs operator-facing docs.",
-          provenance: "human",
-          confidence: "medium",
-        }),
-      });
-      const createBody: AnyJson = await createRes.json();
-
-      const listRes = await app.request("/api/signals?repoId=repo-signals");
-      const listBody: AnyJson = await listRes.json();
-
-      const consumeRes = await app.request(`/api/signals/${createBody.signal.id}/consume`, {
-        method: "POST",
-      });
-      const consumeBody: AnyJson = await consumeRes.json();
-
-      const consumedAgain = await app.request(`/api/signals/${createBody.signal.id}/consume`, {
-        method: "POST",
-      });
-
-      expect(createRes.status).toBe(201);
-      expect(listRes.status).toBe(200);
-      expect(listBody.signals).toHaveLength(1);
-      expect(consumeRes.status).toBe(200);
-      expect(consumeBody.task.status).toBe("DRAFT");
-      expect(consumedAgain.status).toBe(409);
-    });
-
-    test("rejects invalid signal payloads", async () => {
-      const res = await app.request("/api/signals", {
-        method: "POST",
-        body: JSON.stringify({
-          repoId: "",
-          kind: "not-a-kind",
-          title: "Bad signal",
-        }),
-      });
-
-      expect(res.status).toBe(400);
-    });
-  });
-});
-
-describe("app - test mode endpoint", () => {
-  const originalTestMode = process.env.AOP_TEST_MODE;
-  let cleanupAopHome: () => void;
-
-  beforeEach(() => {
-    cleanupAopHome = useTestAopHome();
-    process.env.AOP_TEST_MODE = "true";
-  });
-
-  afterEach(() => {
-    cleanupAopHome();
-    if (originalTestMode !== undefined) {
-      process.env.AOP_TEST_MODE = originalTestMode;
-    } else {
-      delete process.env.AOP_TEST_MODE;
-    }
-  });
-
-  test("PATCH /api/tasks/:taskId/status updates task status", async () => {
-    const db = await createTestDb();
-    const ctx = createCommandContext(db);
-    const app = createApp({ ctx, startTimeMs: Date.now() });
-
-    await createTestRepo(db, "repo-1", "/path/to/repo");
-    await createTestTask(db, "task-1", "repo-1", "changes/feat", "DRAFT");
-
-    const res = await app.request("/api/tasks/task-1/status", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "READY" }),
-    });
-    const body: AnyJson = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(body.ok).toBe(true);
-    expect(body.task.status).toBe("READY");
-
-    await db.destroy();
-  });
-
-  test("PATCH /api/tasks/:taskId/status returns 400 for invalid status", async () => {
-    const db = await createTestDb();
-    const ctx = createCommandContext(db);
-    const app = createApp({ ctx, startTimeMs: Date.now() });
-
-    await createTestRepo(db, "repo-1", "/path/to/repo");
-    await createTestTask(db, "task-1", "repo-1", "changes/feat", "DRAFT");
-
-    const res = await app.request("/api/tasks/task-1/status", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "INVALID" }),
-    });
-    const body: AnyJson = await res.json();
-
-    expect(res.status).toBe(400);
-    expect(body.error).toBe("Invalid status");
-
-    await db.destroy();
-  });
-
-  test("PATCH /api/tasks/:taskId/status returns 404 for non-existent task", async () => {
-    const db = await createTestDb();
-    const ctx = createCommandContext(db);
-    const app = createApp({ ctx, startTimeMs: Date.now() });
-
-    const res = await app.request("/api/tasks/non-existent/status", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "READY" }),
-    });
-    const body: AnyJson = await res.json();
-
-    expect(res.status).toBe(404);
-    expect(body.error).toBe("Task not found");
-
-    await db.destroy();
   });
 });
 
@@ -510,36 +251,6 @@ describe("app - static file serving", () => {
     expect(html).toContain("/api/health");
 
     await db.destroy();
-  });
-});
-
-describe("app - local workflows", () => {
-  let db: Kysely<Database>;
-  let ctx: LocalServerContext;
-  let app: ReturnType<typeof createApp>;
-
-  beforeEach(async () => {
-    db = await createTestDb();
-    ctx = createCommandContext(db);
-    app = createApp({ ctx, startTimeMs: Date.now() });
-  });
-
-  afterEach(async () => {
-    await db.destroy();
-  });
-
-  test("returns local workflows without the retired built-ins", async () => {
-    const res = await app.request("/api/workflows");
-    const body: AnyJson = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(body.workflows).toEqual([]);
-  });
-
-  test("returns workflows in sorted order", async () => {
-    const res = await app.request("/api/workflows");
-    const body: AnyJson = await res.json();
-    expect(body.workflows).toEqual([...body.workflows].sort());
   });
 });
 

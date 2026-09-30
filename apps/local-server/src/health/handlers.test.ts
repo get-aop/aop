@@ -33,26 +33,18 @@ describe("health handlers", () => {
       expect(result.db).toEqual({ connected: true });
     });
 
-    test("includes orchestrator status when provided", async () => {
-      const status = {
-        watcher: "running" as const,
-        ticker: "running" as const,
-        processor: "running" as const,
-        scheduler: "running" as const,
-      };
-      const result = await getHealth(makeDeps({ orchestratorStatus: () => status }));
+    test("reports uptime in whole seconds", async () => {
+      const result = await getHealth(makeDeps({ startTimeMs: Date.now() - 5_500 }));
 
-      expect(result.orchestrator).toEqual(status);
+      expect(result.uptime).toBe(5);
     });
 
-    test("defaults orchestrator to stopped when not provided", async () => {
+    test("reports the database as disconnected once it is closed", async () => {
+      await db.destroy();
       const result = await getHealth(makeDeps());
 
-      expect(result.orchestrator).toEqual({
-        watcher: "stopped",
-        ticker: "stopped",
-        processor: "stopped",
-      });
+      expect(result.db).toEqual({ connected: false });
+      db = await createTestDb();
     });
   });
 });

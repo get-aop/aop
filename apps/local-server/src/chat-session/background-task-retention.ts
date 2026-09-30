@@ -7,8 +7,6 @@ import {
   replaceDelegationRuns,
 } from "./delegation-run-store.ts";
 
-export const BACKGROUND_TASK_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-
 interface BackgroundTaskRef {
   entry: ChatDelegationRun;
   entryIndex: number;
