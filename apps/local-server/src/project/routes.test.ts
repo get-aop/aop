@@ -38,7 +38,7 @@ describe("POST /api/projects", () => {
       coordinator: { provider: "claude-code", model: null, effort: "low" },
       thread: { provider: "claude-code", model: null, effort: "high" },
       notificationLevel: "coordinator",
-      threadAccess: "auto-accept-edits",
+      threadAccess: "full-access",
       autoFixPullRequests: true,
       repoIds: [],
     });

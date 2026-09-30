@@ -132,21 +132,21 @@ describe("updating a project", () => {
     expect(await eventTypes(s)).toEqual(["project.upserted", "project.upserted"]);
   });
 
-  test("full access is opted into per project and reaches the threads it already has", async () => {
+  test("thread access is set per project and reaches the threads it already has", async () => {
     const { s, project } = await setup();
     const spawned = await s.services.threads.spawn(project.id, { prompt: "work" });
     if (!spawned.success) throw new Error("thread not spawned");
     await s.settle();
     expect(
       (await s.ctx.chatSessionRepository.getById(spawned.thread.id))?.runtime_access_mode,
-    ).toBe("auto-accept-edits");
+    ).toBe("full-access");
 
-    await s.services.projects.update(project.id, { threadAccess: "full-access" });
+    await s.services.projects.update(project.id, { threadAccess: "auto-accept-edits" });
 
     expect(
       (await s.ctx.chatSessionRepository.getById(spawned.thread.id))?.runtime_access_mode,
-    ).toBe("full-access");
-    // The opt-in is for threads; the coordinator stays where it was created.
+    ).toBe("auto-accept-edits");
+    // The setting is for threads; the coordinator stays where it was created.
     expect(
       (await s.ctx.chatSessionRepository.getCoordinator(project.id))?.runtime_access_mode,
     ).toBe("approval-required");
@@ -154,7 +154,7 @@ describe("updating a project", () => {
     if (!next.success) throw new Error("thread not spawned");
     await s.settle();
     expect((await s.ctx.chatSessionRepository.getById(next.thread.id))?.runtime_access_mode).toBe(
-      "full-access",
+      "auto-accept-edits",
     );
   });
 

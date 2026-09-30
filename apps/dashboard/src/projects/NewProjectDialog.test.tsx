@@ -113,6 +113,14 @@ describe("NewProjectDialog", () => {
     expect(window.location.pathname).toBe("/projects/new");
   });
 
+  test("says a new project runs commands with full access, and that settings can change it", async () => {
+    renderDialog();
+    const notice = await screen.findByTestId("new-project-full-access-notice");
+    expect(notice.textContent).toContain("full access");
+    expect(notice.textContent).toContain("any command on this host");
+    expect(notice.textContent).toContain("settings");
+  });
+
   test("a project can start with no repository and only a name", async () => {
     renderDialog();
     await screen.findByTestId("new-project-repo");

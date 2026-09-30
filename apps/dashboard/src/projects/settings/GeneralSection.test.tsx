@@ -228,19 +228,36 @@ describe("models and effort", () => {
 });
 
 describe("thread access", () => {
-  test("defaults to editing files, with no warning", () => {
+  const editsOnly = () =>
+    makeProject({ id: "p1", name: "Checkout", threadAccess: "auto-accept-edits" });
+
+  test("a new project starts on full access, with the warning showing", () => {
     renderGeneral();
+    expect(screen.getByTestId("settings-thread-access").getAttribute("data-value")).toBe(
+      "full-access",
+    );
+    expect(screen.getByTestId("settings-full-access-warning").textContent).toContain(
+      "can run any command on this host",
+    );
+  });
+
+  test("Edit files says other commands are denied and has no warning", () => {
+    renderGeneral(editsOnly());
     expect(screen.getByTestId("settings-thread-access").getAttribute("data-value")).toBe(
       "auto-accept-edits",
     );
     expect(screen.queryByTestId("settings-full-access-warning")).toBeNull();
+    const label = screen.getByTestId("settings-thread-access-auto-accept-edits").closest("label");
+    expect(label?.textContent).toContain("denied");
+    expect(label?.textContent).toContain("no approval prompt");
+    expect(label?.textContent).not.toContain("until you approve");
   });
 
   test("choosing full access warns at once, and saving it asks first", async () => {
-    renderGeneral();
+    renderGeneral(editsOnly());
     fireEvent.click(screen.getByTestId("settings-thread-access-full-access"));
     expect(screen.getByTestId("settings-full-access-warning").textContent).toContain(
-      "will not ask before running commands",
+      "can run any command on this host",
     );
 
     save();
@@ -254,7 +271,7 @@ describe("thread access", () => {
   });
 
   test("declining the question saves nothing and keeps the choice", async () => {
-    renderGeneral();
+    renderGeneral(editsOnly());
     fireEvent.click(screen.getByTestId("settings-thread-access-full-access"));
     save();
     await screen.findByRole("alertdialog");
@@ -267,10 +284,11 @@ describe("thread access", () => {
     );
   });
 
-  test("going back to editing files needs no question", async () => {
-    renderGeneral(makeProject({ id: "p1", name: "Checkout", threadAccess: "full-access" }));
+  test("going back to editing files needs no question and drops the warning", async () => {
+    renderGeneral();
     expect(screen.getByTestId("settings-full-access-warning")).toBeTruthy();
     fireEvent.click(screen.getByTestId("settings-thread-access-auto-accept-edits"));
+    expect(screen.queryByTestId("settings-full-access-warning")).toBeNull();
     save();
 
     await waitFor(() => expect(api.writes()).toHaveLength(1));

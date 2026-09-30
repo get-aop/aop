@@ -91,7 +91,7 @@ describe("spawning a thread", () => {
     expect(run?.cwd).toBe(realpathSync(aopPaths.worktree(s.repos[1]?.id ?? "", thread.id)));
     expect(run?.allowedDirectories).toEqual([s.repos[0]?.path ?? ""]);
     expect(run?.isolation).toBe("open");
-    expect(run?.accessMode).toBe("auto-accept-edits");
+    expect(run?.accessMode).toBe("full-access");
   });
 
   test("a project with several repos needs the coordinator to pick one, and only from its own", async () => {

@@ -4,7 +4,7 @@ import {
   PROJECT_GOAL_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
 } from "@aop/common";
-import { FolderIcon, PlusIcon } from "lucide-react";
+import { FolderIcon, PlusIcon, TriangleAlertIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/ui/button";
 import { Checkbox } from "@/ui/checkbox";
@@ -169,6 +169,17 @@ const NewProjectForm = () => {
           )
         }
       />
+
+      <p
+        data-testid="new-project-full-access-notice"
+        className="flex items-start gap-2 rounded-row border border-blocked/30 bg-blocked/10 px-3 py-2 text-[12.5px] leading-relaxed text-text"
+      >
+        <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-blocked" />
+        <span>
+          New projects run with full access: a thread can run any command on this host without
+          asking. You can change this in the project's settings.
+        </span>
+      </p>
 
       {formProblem ? (
         <p data-testid="new-project-error" role="alert" className="text-[12.5px] text-blocked">

@@ -34,7 +34,7 @@ While a thread's pull request is open, the server watches it. It looks at GitHub
 | A review that requests changes | A review in the state `CHANGES_REQUESTED` by an owner, member or collaborator of the repository (on a public repository anyone can review, and a stranger's words are not something to send an agent off to act on), and still its reviewer's latest verdict: GitHub keeps a request in the list after the same reviewer approves. A review that only comments, or approves, is left to the person. | Each review |
 | A merge conflict | GitHub says the pull request conflicts. | Each head commit that conflicts |
 
-Trouble found together is one message. The message starts with `Automatic fix, attempt 1 of 3` and says that the watcher sent it, not the person. It names the failing checks with the link to each run and quotes the end of the log of each failing Actions run (`gh run view --log-failed`; at most 3 runs, 60 lines each), because a thread that may only edit files cannot run `gh` itself. Or it quotes the reviewers' words and line comments as feedback to weigh, not as instructions, or asks the thread to bring the base branch in and resolve the conflict, which a thread that cannot run `git` can only report. It tells the thread to push with `aop_open_pr`. It is cut to 16,000 characters, since a message to a thread is refused above 20,000. It is stored and started the way a person's message is, so the run queue and the worktree rules apply.
+Trouble found together is one message. The message starts with `Automatic fix, attempt 1 of 3` and says that the watcher sent it, not the person. It names the failing checks with the link to each run and quotes the end of the log of each failing Actions run (`gh run view --log-failed`; at most 3 runs, 60 lines each), because a thread on `auto-accept-edits` cannot run `gh` itself. Or it quotes the reviewers' words and line comments as feedback to weigh, not as instructions, or asks the thread to bring the base branch in and resolve the conflict, which a thread on `auto-accept-edits` cannot run `git` to do and can only report. It tells the thread to push with `aop_open_pr`. It is cut to 16,000 characters, since a message to a thread is refused above 20,000. It is stored and started the way a person's message is, so the run queue and the worktree rules apply.
 
 A thread that is `idle` or `ready-for-review` gets it, and its status is checked again as the message is stored (`send` with `onlyIn`), so a thread resolved or asked something while the watcher was reading GitHub is not reopened or answered. One that is `working`, `queued`, `rate-limited`, `waiting-on-you` or `landing` is left alone and asked at the next look if the trouble is still there: a message would queue behind its turn, end its wait on a limit or answer its question. A `resolved` thread is still watched but never reopened by a fix.
 
@@ -51,6 +51,21 @@ A thread that is `idle` or `ready-for-review` gets it, and its status is checked
 **Pace and limits.** A pull request is looked at every 30 seconds while it changes or its checks run, and less and less often, down to every 5 minutes, while it stays as it is (also while a fix is owed to a thread that is not at rest); while its checks keep running the wait grows only to 2 minutes. A look that fails waits 1, 2, 4 minutes and so on, up to 15. All waits are spread by 20% so pull requests do not look in step. At most 4 pull requests are read at once, and one at a time within a repository. A rate limit from GitHub holds the whole repository for about 10 minutes. `AOP_PR_POLL_INTERVAL_MS` sets a fixed pace instead (see [the host guide](./HOST.md)). Only pull requests of active projects are watched.
 
 What is not verified against the real GitHub: the calls are `gh pr view --json state,mergeable,headRefOid,baseRefName`, `gh pr checks <number> --json ...`, `gh api repos/{owner}/{repo}/pulls/<number>/reviews` (and `.../comments`, with `--paginate`) and `gh run view <run id> --log-failed`. Their output shapes come from `gh`'s documentation and are played by a fake (`.claude/skills/verify/scripts/fake-gh.ts`); no test calls GitHub.
+
+## Access
+
+The project setting `threadAccess` decides what every thread of the project may do on the host. It is set when the project is created and changed only by the person (project settings, General, Thread access; or `PATCH /api/projects/:id`).
+
+| Value | What a thread can do | Claude Code flags |
+| --- | --- | --- |
+| `full-access` (the default for a new project) | Run any command as the person on this host, without asking. This includes deleting files outside the repository, reading credentials and pushing to any remote. | `--dangerously-skip-permissions` |
+| `auto-accept-edits` ("Edit files" in settings) | Edit files in its own worktree. Every other command is denied. No approval prompt exists, so a denied command is not asked about. | `--permission-mode acceptEdits` |
+
+A project created without a `threadAccess` gets `full-access`; the dashboard's New project form says so and does not offer the choice. Projects that already exist keep the value they stored. Changing the setting applies to the project's existing threads from their next turn, and to the ones started afterwards. The settings page shows a warning for as long as Full access is selected, and saving a change to Full access asks once more.
+
+The coordinator is not affected. It always runs `approval-required`, pinned for every run whatever the project or the stored session says, and no coordinator tool can change `threadAccess`; see [the MCP guide](./MCP.md).
+
+Other runtimes map the same two values to their own flags (Codex and Pi); a thread on a runtime without an equivalent is limited by that runtime, not by this table.
 
 ## States
 

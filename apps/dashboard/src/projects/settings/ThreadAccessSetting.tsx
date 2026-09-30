@@ -5,21 +5,23 @@ import type { SettingsDraft } from "./use-settings-draft";
 
 const OPTIONS: { value: ThreadAccess; label: string; description: string }[] = [
   {
+    value: "full-access",
+    label: "Full access",
+    description:
+      "Threads run any command on this host without asking. This is the default for new projects.",
+  },
+  {
     value: "auto-accept-edits",
     label: "Edit files",
     description:
-      "Threads edit files in their own worktree without asking. Anything beyond that, such as running arbitrary commands, is not allowed until you approve it.",
-  },
-  {
-    value: "full-access",
-    label: "Full access",
-    description: "Threads run any command on this host without asking.",
+      "Threads edit files in their own worktree. Every other command, such as running tests or git, is denied: there is no approval prompt.",
   },
 ];
 
 /**
- * What a project's threads may do without asking. Full access is an opt-in that says plainly
- * what it gives away; only the person can turn it on, since no coordinator tool can.
+ * What a project's threads may do without asking. Full access is what a new project starts with,
+ * so its warning shows for as long as it is selected; only the person can change the setting,
+ * since no coordinator tool can. The coordinator itself never gets full access.
  */
 export const ThreadAccessSetting = ({ draft }: { draft: SettingsDraft }) => {
   const access = draft.value("threadAccess");
@@ -75,13 +77,14 @@ const FullAccessWarning = () => (
   >
     <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-blocked" />
     <div className="flex flex-col gap-1">
-      <p className="font-medium text-blocked">Threads will not ask before running commands.</p>
+      <p className="font-medium text-blocked">Threads can run any command on this host.</p>
       <p className="text-text-muted">
         A thread runs as you on this machine: it can delete files outside the repository, read
         credentials and push to any remote. A wrong instruction, or text an attacker put in a file
-        or in memory, is enough to make it try. Turn this on only for a project whose repositories
-        and instructions you trust. It applies to every thread of the project, including the ones
-        running now, from their next turn.
+        or in memory, is enough to make it try. Choose Edit files for a project whose repositories
+        and instructions you do not trust. The setting applies to every thread of the project,
+        including the ones running now, from their next turn. The coordinator never gets this
+        access.
       </p>
     </div>
   </div>

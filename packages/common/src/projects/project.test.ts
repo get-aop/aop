@@ -108,14 +108,19 @@ describe("CreateProjectInputSchema", () => {
       coordinator: { provider: "claude-code", model: null, effort: "low" },
       thread: { provider: "claude-code", model: null, effort: "high" },
       notificationLevel: "coordinator",
-      threadAccess: "auto-accept-edits",
+      threadAccess: "full-access",
       autoFixPullRequests: true,
       repoIds: [],
     });
   });
 
   test("keeps what the client sent over the defaults", () => {
-    const input = { name: "checkout", goal: "Ship", threadAccess: "full-access", repoIds: ["r1"] };
+    const input = {
+      name: "checkout",
+      goal: "Ship",
+      threadAccess: "auto-accept-edits",
+      repoIds: ["r1"],
+    };
     expect(CreateProjectInputSchema.parse(input)).toMatchObject(input);
   });
 

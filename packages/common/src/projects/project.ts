@@ -16,9 +16,11 @@ export const NotificationLevelSchema = z.enum(["coordinator", "every-turn", "off
 export type NotificationLevel = z.infer<typeof NotificationLevelSchema>;
 
 /**
- * How much a project's threads may do without asking. `auto-accept-edits` lets a thread edit
- * files in its workspace and nothing more; `full-access` also runs any command. The person
- * opts in per project: no tool the coordinator holds can change it.
+ * How much a project's threads may do without asking. `full-access` lets a thread run any
+ * command on the host and is what a new project starts with; `auto-accept-edits` lets a thread
+ * edit files in its workspace and denies every other command (no approval prompt exists). Only the
+ * person changes it, per project: no tool the coordinator holds can. The coordinator itself
+ * always runs `approval-required`, whatever a project chooses.
  */
 export const ThreadAccessSchema = z.enum(["auto-accept-edits", "full-access"]);
 export type ThreadAccess = z.infer<typeof ThreadAccessSchema>;
@@ -58,7 +60,7 @@ const { shape } = ProjectSettingsSchema;
 /**
  * What a client sends to create a project: only the name is required. The rest starts at Claude
  * Projects' own defaults: a quiet coordinator (low effort), thinking threads (high effort), the
- * provider's default model, and threads that may edit files but not run any command.
+ * provider's default model, and threads with full access (any command on the host).
  */
 export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
   goal: shape.goal.default(""),
@@ -66,7 +68,7 @@ export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
   coordinator: shape.coordinator.default({ provider: "claude-code", model: null, effort: "low" }),
   thread: shape.thread.default({ provider: "claude-code", model: null, effort: "high" }),
   notificationLevel: shape.notificationLevel.default("coordinator"),
-  threadAccess: shape.threadAccess.default("auto-accept-edits"),
+  threadAccess: shape.threadAccess.default("full-access"),
   autoFixPullRequests: shape.autoFixPullRequests.default(true),
   repoIds: shape.repoIds.default([]),
 });

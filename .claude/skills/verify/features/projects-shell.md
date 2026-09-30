@@ -30,7 +30,7 @@ Everything that starts an agent needs a stack seeded with `--fake-runtime`. Star
 | `project-attention-waiting`, `project-attention-working`, `project-paused` | What a row shows |
 | `project-row-menu`, `project-card-menu`, `project-header-menu`, `project-menu`, `project-menu-{pin,notifications,settings,pause,archive,delete}` | The project menu and its items |
 | `projects-index`, `project-card`, `project-card-link`, `project-search`, `projects-new`, `projects-empty` | The `/` screen |
-| `new-project-dialog`, `new-project-{name,goal,instructions,instructions-count,repos,repo,attach-repo,submit,error}` | The New project dialog |
+| `new-project-dialog`, `new-project-{name,goal,instructions,instructions-count,repos,repo,attach-repo,full-access-notice,submit,error}` | The New project dialog |
 | `project-page`, `project-title`, `project-attention`, `project-stream-state` (`data-state`), `project-tab-{threads,coordinator,settings}` | A project's header |
 | `thread-overview`, `thread-groups`, `thread-card` (`data-thread-id`, `data-status`, `data-unread`), `thread-card-link`, `thread-status-label`, `thread-status-line`, `thread-steps` (`data-done`, `data-total`), `thread-pr-chip`, `thread-search`, `thread-count` | The project home; the groups and counters are in [Projects thread pane and Overview](./projects-thread.md) |
 | `thread-pane` | The thread's screen; its handles are in [Projects thread pane and Overview](./projects-thread.md), the coordinator chat's in [Projects chat](./projects-chat.md) |
