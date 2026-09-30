@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
 
 setupDashboardDom();
@@ -6,10 +6,15 @@ setupDashboardDom();
 const { apiUrl, authHeaders, getHostConfig, isRemoteHost, setHostConfig, setManagedHostConfig } =
   await import("./host");
 
-beforeEach(() => {
+// Both are process-wide and bun runs every test file in one process, so the last test's host
+// would otherwise turn a later file's relative API paths into absolute ones.
+const resetHostConfig = () => {
   window.localStorage.clear();
   setManagedHostConfig(null);
-});
+};
+
+beforeEach(resetHostConfig);
+afterEach(resetHostConfig);
 
 describe("host config", () => {
   test("defaults to the page's own origin with no token", () => {
