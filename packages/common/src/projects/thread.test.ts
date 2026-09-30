@@ -18,6 +18,8 @@ import {
 const validByStatus: [string, Record<string, unknown>][] = [
   ["waiting-on-you", { blockedQuestion: makeBlockedQuestion() }],
   ["working", {}],
+  ["queued", {}],
+  ["rate-limited", { resumesAt: LATER }],
   ["ready-for-review", { artifacts: [{ type: "doc", name: "Preset CTA Variants" }] }],
   ["landing", { artifacts: [makePrArtifact()] }],
   ["idle", {}],
@@ -25,10 +27,12 @@ const validByStatus: [string, Record<string, unknown>][] = [
 ];
 
 describe("ThreadSchema", () => {
-  test("covers exactly the six statuses", () => {
+  test("covers exactly the eight statuses", () => {
     expect(THREAD_STATUSES).toEqual([
       "waiting-on-you",
       "working",
+      "queued",
+      "rate-limited",
       "ready-for-review",
       "landing",
       "idle",
@@ -91,6 +95,31 @@ describe("ThreadSchema", () => {
         expect(rejectedPaths(ThreadSchema, makeThread({ status, resolvedAt: LATER }))).toEqual([
           "resolvedAt",
         ]);
+      },
+    );
+  });
+
+  describe("resumesAt belongs to rate-limited alone", () => {
+    test("a rate-limited thread without resumesAt is rejected", () => {
+      expect(rejectedPaths(ThreadSchema, makeThread({ status: "rate-limited" }))).toEqual([
+        "resumesAt",
+      ]);
+    });
+
+    test("a rate-limited thread with an unreadable resumesAt is rejected", () => {
+      const thread = makeThread({ status: "rate-limited", resumesAt: "3:45pm" });
+      expect(rejectedPaths(ThreadSchema, thread)).toEqual(["resumesAt"]);
+    });
+
+    test.each(["working", "queued", "idle", "ready-for-review", "waiting-on-you"])(
+      "a %s thread carrying resumesAt is rejected",
+      (status) => {
+        const thread = makeThread({
+          status,
+          resumesAt: LATER,
+          ...(status === "waiting-on-you" && { blockedQuestion: makeBlockedQuestion() }),
+        });
+        expect(rejectedPaths(ThreadSchema, thread)).toEqual(["resumesAt"]);
       },
     );
   });

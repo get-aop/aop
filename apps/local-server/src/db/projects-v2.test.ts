@@ -68,6 +68,7 @@ describe("migration v2 on a database file", () => {
       { version: 2, name: "projects" },
       { version: 3, name: "run-usage" },
       { version: 4, name: "coordinator" },
+      { version: 5, name: "scheduling" },
     ]);
     expect(await listColumns(db, "chat_sessions")).toEqual(expect.arrayContaining(THREAD_COLUMNS));
     await db.destroy();
@@ -93,7 +94,7 @@ describe("migration v2 on a database file", () => {
     await runMigrations(db);
 
     const ledger = await listLedger(db);
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4]);
+    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
     expect(ledger[0]).toEqual(ledgerV1[0]);
 
     const legacy = await db
@@ -342,6 +343,8 @@ describe("projects v2 thread columns", () => {
   const validColumns: Record<ThreadStatus, Columns> = {
     "waiting-on-you": { blocked_question_json: question },
     working: {},
+    queued: {},
+    "rate-limited": { resumes_at: "2026-09-30T16:00:00.000Z" },
     "ready-for-review": {},
     landing: { pr_number: 7, pr_url: "https://github.com/o/r/pull/7", pr_state: "open" },
     idle: {},
@@ -369,6 +372,8 @@ describe("projects v2 thread columns", () => {
     ["a question that is not an object", { state: "waiting-on-you", blocked_question_json: "[]" }],
     ["a resolved thread without a resolution time", { state: "resolved" }],
     ["a resolution time on a thread that is not resolved", { resolved_at: resolvedAt }],
+    ["a rate-limited thread without a resume time", { state: "rate-limited" }],
+    ["a resume time on a thread that is not rate-limited", { resumes_at: resolvedAt }],
     ["a landing thread without a pull request", { state: "landing" }],
     ["a pull request number without a url", { pr_number: 4, pr_state: "open" }],
     ["a pull request url without a number", { pr_url: "https://github.com/o/r/pull/4" }],

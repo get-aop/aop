@@ -186,6 +186,32 @@ describe("claudeDialect events", () => {
     expect(contentOf(failed)[0]).toMatchObject({ is_error: true });
   });
 
+  test("a rate-limit ending is the documented limit shape: event, flagged reply, 429 result", () => {
+    const before = Math.round(Date.now() / 1000);
+    const [limit, reply, result] = claudeDialect.end(
+      { kind: "rate-limit", resetsInSeconds: 90 },
+      ctx,
+    );
+    const after = Math.round(Date.now() / 1000);
+
+    const info = (limit?.rate_limit_info ?? {}) as { status: string; resetsAt: number };
+    expect(limit).toMatchObject({ type: "rate_limit_event", session_id: "sess-1" });
+    expect(info.status).toBe("rejected");
+    expect(info.resetsAt).toBeGreaterThanOrEqual(before + 90);
+    expect(info.resetsAt).toBeLessThanOrEqual(after + 90);
+    expect(reply).toMatchObject({ type: "assistant", error: "rate_limit" });
+    expect(JSON.stringify(reply)).toMatch(
+      /You've hit your session limit · resets \d{1,2}:\d{2}(am|pm)/,
+    );
+    expect(result).toMatchObject({
+      type: "result",
+      is_error: true,
+      api_error_status: 429,
+      total_cost_usd: 0,
+      usage: { input_tokens: 0, output_tokens: 0 },
+    });
+  });
+
   test("a silent ending emits no terminal event", () => {
     expect(claudeDialect.end({ kind: "silent" }, ctx)).toEqual([]);
   });

@@ -36,6 +36,8 @@ export const describeServiceError = (error: ServiceError): string => {
       return error.message;
     case "NOT_WAITING":
       return "The thread is not waiting on an answer";
+    case "NOT_RATE_LIMITED":
+      return "The thread is not waiting on a rate limit";
     case "SEND_FAILED":
       return `The message could not be sent (${error.reason})`;
   }

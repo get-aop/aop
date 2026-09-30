@@ -102,6 +102,7 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
           "chat_sessions.last_activity_at",
           "chat_sessions.unread",
           "chat_sessions.resolved_at",
+          "chat_sessions.resumes_at",
           "repos.name as repo_name",
           "repos.path as repo_path",
           sql<string | null>`(

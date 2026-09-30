@@ -7,6 +7,7 @@ import type {
   ChatRunInterruptionKind,
   Database,
 } from "../db/schema.ts";
+import type { RateLimitHit } from "../scheduling/rate-limit.ts";
 import { encodeMessageContent, type StoredChatArtifact } from "./message-images.ts";
 
 type SessionBindingPolicy = "preserve" | "set" | "clear";
@@ -18,6 +19,8 @@ export type FinalizeChatRunOutcome = {
   interruptionKind?: ChatRunInterruptionKind | null;
   bindingPolicy?: SessionBindingPolicy;
   runtimeSessionState?: ChatRun["runtime_session_state"];
+  /** Set on a failed run that a rate or usage limit refused: the session waits and resumes instead of failing. */
+  rateLimit?: RateLimitHit;
 };
 
 const EMPTY_OUTPUT_FAILURE_KINDS = new Set<ChatRunFailureKind>(["startup_timeout", "empty_output"]);

@@ -6,11 +6,17 @@ import {
 } from "@aop/common";
 import { z } from "zod";
 import { parseMessageOrigin } from "../chat-session/message-origin.ts";
-import type { FinalizedTurn, SessionHooks, TurnFollowUp } from "../chat-session/session-hooks.ts";
+import type {
+  FinalizedTurn,
+  SchedulePhase,
+  SessionHooks,
+  TurnFollowUp,
+} from "../chat-session/session-hooks.ts";
 import type { ChatMessage, ChatSession } from "../db/schema.ts";
 import type { EventPublisher, PublisherTransaction } from "../event-log/publisher.ts";
+import { holdCoordinator, releaseCoordinator } from "../scheduling/hold.ts";
 import { createThreadRepository } from "../thread/repository.ts";
-import type { TurnEnd } from "../thread/state.ts";
+import { statusAfterSchedule, type TurnEnd } from "../thread/state.ts";
 import { settleThreadTurn } from "../thread/turn-outcome.ts";
 import { recordMessageCreated, recordThreadUpserted } from "./events.ts";
 import { scopeOf, toWireMessage } from "./wire-messages.ts";
@@ -29,14 +35,23 @@ export const createProjectSessionHooks = (publisher: EventPublisher): SessionHoo
       const session = await loadProjectSession(tx, message.session_id);
       if (!session) return;
       if (session.kind === "thread") await startThreadWork(tx, session, message);
+      // A person's message to a coordinator ends its wait on a rate limit: sending it is a retry.
+      else await releaseCoordinator(tx.db, session.id);
       const wire = toWireMessage(scopeOf(session), message);
       if (wire) await recordMessageCreated(tx, wire);
+    },
+
+    onTurnScheduled: async (tx, sessionId, phase) => {
+      const session = await loadProjectSession(tx, sessionId);
+      if (!session) return;
+      if (session.kind === "thread") await scheduleThreadTurn(tx, session, phase);
+      else if (phase === "running") await releaseCoordinator(tx.db, session.id);
     },
 
     onRunFinalized: async (tx, turn) => {
       liveSoFar.delete(turn.run.id);
       const session = await loadProjectSession(tx, turn.run.session_id);
-      if (!session) return { wakeSessionIds: [] };
+      if (!session) return { wakeSessionIds: [], resume: null };
       const { followUp, replied } =
         session.kind === "thread"
           ? await finishThreadRun(tx, session, turn)
@@ -80,17 +95,35 @@ const loadProjectSession = async (
 };
 
 // A message to a thread is work for it: a reply clears its question, a message reopens a
-// resolved thread, and the previous turn's status line no longer describes what it is doing.
+// resolved thread, ends a wait on a rate limit, and the previous turn's status line no longer
+// describes what it is doing. A thread already queued stays queued: another message does not
+// move it up.
 const startThreadWork = async (
   tx: PublisherTransaction,
   session: ChatSession,
   message: ChatMessage,
 ): Promise<void> => {
   await createThreadRepository(tx.db).update(session.id, {
-    status: { status: "working" },
-    liveStatusLine: null,
+    ...(session.state !== "queued" && { status: { status: "working" }, liveStatusLine: null }),
     unread: false,
     lastActivityAt: message.created_at,
+  });
+  await recordThreadUpserted(tx, session.id);
+};
+
+// The run queue moved a thread's turn: the change is the thread's status and, while it waits,
+// the line that says why.
+const scheduleThreadTurn = async (
+  tx: PublisherTransaction,
+  session: ChatSession,
+  phase: SchedulePhase,
+): Promise<void> => {
+  if (!session.state) return;
+  const change = statusAfterSchedule(session.state, phase);
+  if (!change) return;
+  await createThreadRepository(tx.db).update(session.id, {
+    status: { status: change.status },
+    liveStatusLine: change.liveStatusLine,
   });
   await recordThreadUpserted(tx, session.id);
 };
@@ -108,11 +141,17 @@ const finishThreadRun = async (
 ): Promise<Finished> => {
   const wire = toWireMessage(scopeOf(session), turn.assistantMessage);
   if (wire) await recordMessageCreated(tx, wire);
+  const { rateLimit } = turn.outcome;
   const wakeSessionIds = await settleThreadTurn(tx, session, {
-    end: turnEnd(turn.outcome.status),
+    end: rateLimit ? "rate-limited" : turnEnd(turn.outcome.status),
     text: wire && wire.role === "assistant" ? assistantText(wire.blocks) : "",
+    resumesAt: rateLimit?.resumesAt,
   });
-  return { followUp: { wakeSessionIds }, replied: wire !== null };
+  // The thread may not have gone on hold (it was resolved, say): only a thread that did has a timer to arm.
+  const settled = await createThreadRepository(tx.db).getById(session.id);
+  const resume =
+    settled?.status === "rate-limited" ? { sessionId: session.id, at: settled.resumesAt } : null;
+  return { followUp: { wakeSessionIds, resume }, replied: wire !== null };
 };
 
 const finishCoordinatorRun = async (
@@ -123,7 +162,12 @@ const finishCoordinatorRun = async (
   const blocks = await runBlocks(tx, turn);
   const wire = toWireMessage(scopeOf(session), turn.assistantMessage, blocks);
   if (wire) await recordMessageCreated(tx, wire);
-  return { followUp: { wakeSessionIds: [] }, replied: wire !== null };
+  // A coordinator has no status to show the wait in; its reply says it, and the hold makes its
+  // inbox wait too, so reports that arrive meanwhile are not spent on runs the limit would refuse.
+  const { rateLimit } = turn.outcome;
+  if (rateLimit) await holdCoordinator(tx.db, session.id, rateLimit.resumesAt);
+  const resume = rateLimit ? { sessionId: session.id, at: rateLimit.resumesAt } : null;
+  return { followUp: { wakeSessionIds: [], resume }, replied: wire !== null };
 };
 
 // Blocks the run's tools recorded, plus the card of the thread a report woke the coordinator
@@ -165,9 +209,17 @@ const runBlocks = async (
   return withCard;
 };
 
+// A thread that will run again is still live, whether it waits for a slot or for a rate limit.
+const IN_FLIGHT: ReadonlySet<ThreadStatus> = new Set([
+  "working",
+  "queued",
+  "rate-limited",
+  "landing",
+]);
+
 const cardVariant = (status: ThreadStatus): ThreadCardVariant => {
   if (status === "waiting-on-you") return "needs-call";
-  return status === "working" || status === "landing" ? "live" : "done";
+  return IN_FLIGHT.has(status) ? "live" : "done";
 };
 
 const turnEnd = (status: FinalizedTurn["outcome"]["status"]): TurnEnd => status;

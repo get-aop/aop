@@ -10,6 +10,8 @@ import {
   recoveryTasks,
   waitForPendingChatReplies,
 } from "./reply-state.ts";
+import { cancelAllResumeTimers } from "./resume-timers.ts";
+import { stopDispatching } from "./run-dispatch.ts";
 import { stopOrphanedChatRunProcess } from "./run-process.ts";
 import { activeSessionRunIds, interruptSessionRun } from "./runtime-engine.ts";
 import { sessionDtoFor } from "./session-dto.ts";
@@ -133,6 +135,10 @@ const ensureRuntimeBindingCleared = async (
 
 /** Stop current-process chat work before the local server releases its database. */
 export const shutdownChatSessions = async (ctx: LocalServerContext): Promise<void> => {
+  // First, so the runs stopped below do not free slots that start queued turns, and no rate-limit
+  // timer fires into a closing database. Both are stored, and start again at boot.
+  stopDispatching(ctx);
+  cancelAllResumeTimers();
   for (const controller of recoveryAbortControllers.values()) controller.abort();
   const sessionIds = new Set([...activeSessionRunIds(), ...pendingSessionReplies]);
   for (const sessionId of sessionIds) {

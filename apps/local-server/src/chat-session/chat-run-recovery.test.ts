@@ -244,6 +244,64 @@ describe("detectChatRunTerminalState", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  test("recovers a run that ended on a usage limit as a wait, not a completed reply", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-limit-"));
+    const logFilePath = join(dir, "limit.jsonl");
+    const text = "You've hit your session limit · resets 3:45pm";
+    await writeFile(
+      logFilePath,
+      `${jsonl([
+        { type: "system", subtype: "init", session_id: "sess-limit" },
+        {
+          type: "rate_limit_event",
+          rate_limit_info: { status: "rejected", resetsAt: 4_102_444_800 },
+        },
+        { type: "assistant", error: "rate_limit", message: { content: [{ type: "text", text }] } },
+        { type: "result", subtype: "success", is_error: true, api_error_status: 429, result: text },
+      ])}\n`,
+    );
+
+    const recovered = await waitForChatRunTerminal({
+      run: runningRun(logFilePath, { runtime: "claude-code" }),
+      pollIntervalMs: 5,
+    });
+
+    expect(recovered).toMatchObject({
+      status: "failed",
+      failureKind: "rate_limit",
+      runtimeSessionId: "sess-limit",
+      rateLimit: { message: text, resetKnown: true },
+    });
+    expect(recovered.text).toBe(`Runtime error: ${text}`);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test("recovers a run whose CLI died right after a limit flagged its reply", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-limit-exited-"));
+    const logFilePath = join(dir, "limit-exited.jsonl");
+    await writeFile(
+      logFilePath,
+      `${jsonl([
+        { type: "system", subtype: "init", session_id: "sess-limit" },
+        {
+          type: "assistant",
+          error: "rate_limit",
+          message: { content: [{ type: "text", text: "You've hit your session limit" }] },
+        },
+      ])}\n`,
+    );
+
+    const recovered = await waitForChatRunTerminal({
+      run: runningRun(logFilePath, { runtime: "claude-code", pid: 999_999 }),
+      isProcessGone: () => true,
+      pollIntervalMs: 5,
+    });
+
+    expect(recovered).toMatchObject({ status: "failed", failureKind: "rate_limit" });
+    expect(recovered.rateLimit?.resetKnown).toBe(false);
+    await rm(dir, { recursive: true, force: true });
+  });
+
   test("keeps waiting while the recorded CLI is alive", async () => {
     const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-alive-"));
     const logFilePath = join(dir, "alive.jsonl");

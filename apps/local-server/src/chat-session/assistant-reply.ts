@@ -7,6 +7,7 @@ import type {
   ChatSession,
 } from "../db/schema.ts";
 import { loadProjectRunContext } from "../project/prompt-context.ts";
+import type { RateLimitHit } from "../scheduling/rate-limit.ts";
 import { executeChatCommand } from "./commands.ts";
 import { prepareConversationPrompt } from "./conversation-history.ts";
 import {
@@ -45,6 +46,8 @@ interface AssistantReply {
   runtimeSessionState?: ChatRun["runtime_session_state"];
   activity: AssistantActivity | null;
   artifacts?: StoredChatArtifact[];
+  /** Set when a rate or usage limit refused the run; the session waits and resumes. */
+  rateLimit?: RateLimitHit;
 }
 
 export const produceAssistantReply = async (
@@ -118,6 +121,7 @@ const toAssistantReply = (
     runtimeSessionState: run.runtimeSessionState,
     activity: finalizeAssistantActivity(activity, run),
     artifacts: run.artifacts ?? [],
+    rateLimit: run.rateLimit,
   };
 };
 

@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
 import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { COORDINATOR_V4_STATEMENTS } from "./coordinator-v4.ts";
 import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
+import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
 import type { Database } from "./schema.ts";
 import { USAGE_V3_STATEMENTS } from "./usage-v3.ts";
 
@@ -22,6 +23,7 @@ const MIGRATIONS: readonly Migration[] = [
   { version: 2, name: "projects", statements: PROJECTS_V2_STATEMENTS },
   { version: 3, name: "run-usage", statements: USAGE_V3_STATEMENTS },
   { version: 4, name: "coordinator", statements: COORDINATOR_V4_STATEMENTS },
+  { version: 5, name: "scheduling", statements: SCHEDULING_V5_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

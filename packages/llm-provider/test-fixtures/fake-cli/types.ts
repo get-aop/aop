@@ -41,6 +41,8 @@ export type PlannedBeat = Exclude<Beat, { kind: "mcp" }> | { kind: "call"; call:
 export type Ending =
   | { kind: "success"; text: string }
   | { kind: "failure"; message: string }
+  /** The CLI refuses the turn: a rate or usage limit that resets in this many seconds. */
+  | { kind: "rate-limit"; resetsInSeconds: number }
   /** The CLI dies without a terminal event; only the exit code says what happened. */
   | { kind: "silent" };
 

@@ -1,14 +1,14 @@
 import type { Thread, ThreadReportOutcome } from "@aop/common";
 import { generateTypeId } from "@aop/infra";
-import type { Kysely } from "kysely";
 import { serializeMessageOrigin } from "../chat-session/message-origin.ts";
 import { nextChatTurnIndex } from "../chat-session/turn-order.ts";
-import type { ChatSession, Database } from "../db/schema.ts";
+import type { ChatSession } from "../db/schema.ts";
 import type { PublisherTransaction } from "../event-log/publisher.ts";
 import { recordMessageCreated, recordThreadUpserted } from "../project/events.ts";
 import { toWireMessage } from "../project/wire-messages.ts";
-import { createThreadRepository } from "./repository.ts";
-import { closingStatusLine, statusAfterTurn, type TurnEnd } from "./state.ts";
+import { hasQueuedMessage } from "../scheduling/queue.ts";
+import { createThreadRepository, type ThreadPatch } from "./repository.ts";
+import { canWaitOnRateLimit, closingStatusLine, statusAfterTurn, type TurnEnd } from "./state.ts";
 
 const REPORT_TEXT_MAX = 3000;
 
@@ -16,12 +16,15 @@ interface EndedTurn {
   end: TurnEnd;
   /** What the agent said last, or the failure message. */
   text: string;
+  /** With `end` `rate-limited`: when the thread resumes by itself. */
+  resumesAt?: string;
 }
 
 /**
  * A thread's agent finished a turn. Moves the thread to where the turn leaves it, records it
  * in the event log, and, when the thread has nothing more queued, reports to the project's
  * coordinator through its inbox. Returns the coordinator's session id when it must be woken.
+ * A turn a rate limit refused is not reported: it is not over, the thread resumes by itself.
  */
 export const settleThreadTurn = async (
   tx: PublisherTransaction,
@@ -31,42 +34,39 @@ export const settleThreadTurn = async (
   const threads = createThreadRepository(tx.db);
   const thread = await threads.getById(session.id);
   if (!thread) return [];
-  const queued = await hasQueuedUserMessage(tx.db, session.id);
-  const change = statusAfterTurn(thread, turn.end, queued);
+  // A thread that is resolved, landing or waiting on a question cannot be put on hold: the limit
+  // is that turn's failure.
+  const end =
+    turn.end === "rate-limited" && !canWaitOnRateLimit(thread.status) ? "failed" : turn.end;
+  const queued = await hasQueuedMessage(tx.db, session.id);
+  const change = statusAfterTurn(thread, end, queued, turn.resumesAt);
   await threads.update(session.id, {
     ...(change && { status: change }),
-    ...(!queued && {
-      liveStatusLine: thread.liveStatusLine ?? closingStatusLine(turn.end, turn.text),
-      unread: turn.end === "completed" || turn.end === "failed",
-    }),
+    ...closingFields(thread, { ...turn, end }, queued, change?.status === "rate-limited"),
     lastActivityAt: new Date().toISOString(),
   });
   await recordThreadUpserted(tx, session.id);
   if (queued) return [];
 
   const settled = await threads.getById(session.id);
-  return settled ? reportToCoordinator(tx, settled, turn) : [];
+  return settled ? reportToCoordinator(tx, settled, { ...turn, end }) : [];
 };
 
-const hasQueuedUserMessage = async (db: Kysely<Database>, sessionId: string): Promise<boolean> => {
-  const row = await db
-    .selectFrom("chat_messages")
-    .select("id")
-    .where("session_id", "=", sessionId)
-    .where("role", "=", "user")
-    .where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom("chat_runs")
-            .select("id")
-            .whereRef("chat_runs.user_message_id", "=", "chat_messages.id"),
-        ),
-      ),
-    )
-    .limit(1)
-    .executeTakeFirst();
-  return row !== undefined;
+// What the thread shows once its turn is over. Nothing changes while another turn is about to
+// start, except that a thread put on hold says so; a status line the thread reported itself
+// outlives its turn, but the wait is not the thread's to word.
+const closingFields = (
+  thread: Thread,
+  turn: EndedTurn,
+  queued: boolean,
+  onHold: boolean,
+): Pick<ThreadPatch, "liveStatusLine" | "unread"> => {
+  if (queued && !onHold) return {};
+  const closing = closingStatusLine(turn.end, turn.text);
+  return {
+    liveStatusLine: onHold ? closing : (thread.liveStatusLine ?? closing),
+    unread: turn.end === "completed" || turn.end === "failed" || onHold,
+  };
 };
 
 // A stopped thread reports nothing (the person or the coordinator did it), and a paused or

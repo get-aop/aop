@@ -20,6 +20,7 @@ import type {
   SendChatMessageResult,
 } from "./session-types.ts";
 import { isChatSessionBusy } from "./steer-queue.ts";
+import { acceptThreadMessage } from "./thread-send.ts";
 
 export const sendChatMessage = async (
   ctx: LocalServerContext,
@@ -32,6 +33,10 @@ export const sendChatMessage = async (
     return { success: false, error: { code: "INVALID_MID_RUN_MODE" } };
   }
   ctx.sessionMutationLock.assertAllowed("send", { sessionId });
+  const session = await ctx.chatSessionRepository.getById(sessionId);
+  if (session?.kind === "thread") {
+    return acceptThreadMessage(ctx, runtimeConfigurations, session, input, deps);
+  }
   // Mid-run: accept the user message now (queue or interrupt+steer per setting).
   if (await isChatSessionBusy(ctx, sessionId, pendingSessionReplies)) {
     return acceptMidRunMessage(ctx, sessionId, input, deps);

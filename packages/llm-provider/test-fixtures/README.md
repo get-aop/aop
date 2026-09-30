@@ -53,6 +53,7 @@ A value is bare (`steps=2`), `"double quoted"` or `'single quoted'`. A quoted va
 | `fail[="<message>"]` | Ends with Claude's `error_during_execution` result and exit 1. |
 | `exit=<n>` | Exits with code `n` and no terminal event. Combined with `fail`, sets the failing exit code. |
 | `crash[=<k>]` | Writes `k` whole events (default 2), then half of the next line, then SIGKILLs itself. |
+| `ratelimit[=<seconds>]` | Ends the turn the way a usage limit ends one, with the reset `<seconds>` away (default 3600). See [Usage limits](#usage-limits). `fail` does not override it. |
 | `usage=<in>,<out>,<cacheWrite>,<cacheRead>` | Tokens the turn reports as consumed. Omitted or non-numeric parts are 0. Without the key, or with a bare `usage`, the turn reports 10, 5, 200 and 4000. |
 | `system` | Adds the appended system prompt the turn ran with (`--append-system-prompt`) to the end of its reply, between two marker lines, or `[appended system prompt: none]`. Lets a test or a screenshot read what the CLI was told. See [System prompt](#system-prompt). |
 
@@ -65,6 +66,18 @@ Every turn reports the tokens from `usage=` the way Claude Code does:
 - The `result` event carries `usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), `modelUsage` keyed by the model the adapter passed with `--model` (`fake-claude` when none) and `total_cost_usd`. A failed turn reports them too.
 - The cost is computed from the counts at Claude Opus list prices: $15, $75, $18.75 and $1.50 per million input, output, cache-write and cache-read tokens. For example, `usage=1000,200,3000,50000` costs $0.16125.
 - Assistant events carry the same `message.usage` under one message id per turn, so a turn that dies before its `result` (`crash`, `exit`, a Stop) still has usage in its log.
+
+## Usage limits
+
+`[fake: ratelimit=<seconds>]` makes the turn refuse the way Claude Code refuses when a plan window is used up. After the `system` init event, the turn writes:
+
+1. `{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":<epoch seconds>,"rateLimitType":"five_hour","overageStatus":"rejected","isUsingOverage":false}}`, with `resetsAt` `<seconds>` from now.
+2. An `assistant` event flagged `"error":"rate_limit"` whose text is `You've hit your session limit · resets 3:45pm`: the reset as a local wall-clock time with no zone, which is how Claude Code prints it.
+3. A `result` event with `subtype: "success"`, `is_error: true`, `api_error_status: 429` and that same text as `result`. It reports no tokens and no cost.
+
+The exit code is 1; `exit=0` gives a limit hit that exits 0. A turn that resumes the session afterwards, with no marker, replies normally.
+
+These shapes come from Claude Code's [error reference](https://code.claude.com/docs/en/errors) (the message text) and the [Agent SDK reference](https://code.claude.com/docs/en/agent-sdk/typescript) (`SDKRateLimitEvent`, `SDKAssistantMessageError`, `api_error_status`), plus third-party reports for `resetsAt` being epoch seconds. Nothing here was checked against the real CLI, which these tests must never run: the field values, the order of the three events and the exit code are the documented or reported shape, not a recording.
 
 ## MCP tool calls
 

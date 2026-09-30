@@ -15,9 +15,21 @@ export interface SessionHooks {
   onUserMessageStored: (tx: PublisherTransaction, message: ChatMessage) => Promise<void>;
   /** A run reached its terminal state and its assistant message was stored. */
   onRunFinalized: (tx: PublisherTransaction, turn: FinalizedTurn) => Promise<TurnFollowUp>;
+  /**
+   * A turn's place in the run queue changed: it waits for a free run slot (`queued`) or got one
+   * (`running`). It also fires when a session's rate-limit wait ends. Runs in the transaction of
+   * the change, so the thread's status commits together with the run row that caused it.
+   */
+  onTurnScheduled: (
+    tx: PublisherTransaction,
+    sessionId: string,
+    phase: SchedulePhase,
+  ) => Promise<void>;
   /** The run's reply so far (`text` is everything written up to now), for clients showing it live. */
   onAssistantProgress: (session: ChatSession, run: ChatRun, text: string) => void;
 }
+
+export type SchedulePhase = "queued" | "running";
 
 export interface FinalizedTurn {
   run: ChatRun;
@@ -28,4 +40,6 @@ export interface FinalizedTurn {
 export interface TurnFollowUp {
   /** Sessions with a new queued message; the engine starts their next run once the transaction commits. */
   wakeSessionIds: string[];
+  /** A session that now waits out a rate limit until `at` (ISO-8601); the caller arms its resume timer. */
+  resume: { sessionId: string; at: string } | null;
 }

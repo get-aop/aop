@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { getLogger } from "@aop/infra";
 import { extractRuntimeSessionIdFromRawJsonl, parseRawJsonlContent } from "@aop/llm-provider";
 import type { ChatRun, ChatRunFailureKind, ChatRuntimeSessionState } from "../db/schema.ts";
+import { detectRateLimit, type RateLimitHit } from "../scheduling/rate-limit.ts";
 import { isProviderFailureEvent, isProviderSuccessEvent } from "./provider-event-classifier.ts";
 import {
   CHAT_MAX_LOG_BYTES,
@@ -38,6 +39,7 @@ export interface RecoveredChatRun {
   runtimeSessionId: string | null;
   runtimeSessionState: ChatRuntimeSessionState | null;
   failureKind?: ChatRunFailureKind | null;
+  rateLimit?: RateLimitHit;
 }
 
 export const waitForChatRunTerminal = async (input: {
@@ -230,6 +232,10 @@ const terminalResult = async (run: ChatRun, content: string): Promise<RecoveredC
   const terminal = detectChatRunTerminalState(run.runtime, content);
   const runtimeSessionId = resolveRecoveredSessionId(run, content);
   const runtimeSessionState = run.runtime_session_state;
+  if (terminal !== "running") {
+    const limited = rateLimitedRecovery(run, content);
+    if (limited) return limited;
+  }
   if (terminal === "failed") {
     return {
       status: "failed",
@@ -266,7 +272,23 @@ const parseActivityTime = (value: string): number => {
   return Number.isNaN(parsed) ? Date.now() : parsed;
 };
 
+// The same limit the live run path recognises, for a run that ended while the server was down.
+const rateLimitedRecovery = (run: ChatRun, content: string): RecoveredChatRun | null => {
+  const limited = run.runtime === "claude-code" ? detectRateLimit(content) : null;
+  if (!limited) return null;
+  return {
+    status: "failed",
+    text: `Runtime error: ${limited.message}`,
+    runtimeSessionId: resolveRecoveredSessionId(run, content),
+    runtimeSessionState: run.runtime_session_state,
+    failureKind: "rate_limit",
+    rateLimit: limited,
+  };
+};
+
 const processExitedResult = (run: ChatRun, content: string): RecoveredChatRun => {
+  const limited = rateLimitedRecovery(run, content);
+  if (limited) return limited;
   recoveryLogger.warn("Recovered chat runtime {runId} exited without a final response", {
     runId: run.id,
     pid: run.pid,

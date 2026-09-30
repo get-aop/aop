@@ -1,8 +1,9 @@
 import type { LocalServerContext } from "../context.ts";
 import type { ChatRun, ChatSession } from "../db/schema.ts";
 import { produceAssistantReply } from "./assistant-reply.ts";
-import { finalizeChatRunAndPublish } from "./finalize-publish.ts";
+import { finalizeChatRunAndPublish, NO_FOLLOW_UP } from "./finalize-publish.ts";
 import type { StoredChatDocument, StoredChatImage } from "./message-images.ts";
+import { armResume, type DrainSession, pausedReply } from "./rate-limit-resume.ts";
 import {
   abortRequestedSessions,
   isDbClosedError,
@@ -10,29 +11,90 @@ import {
   shouldSkipAssistantReply,
   trackBackgroundReply,
 } from "./reply-state.ts";
+import { dispatchQueuedThreadTurns, type StartOutcome } from "./run-dispatch.ts";
 import {
   type CreateProviderFn,
   registerPendingSessionRun,
   releaseSessionRunRegistration,
   type SessionRunRegistration,
 } from "./runtime-engine.ts";
+import type { TurnFollowUp } from "./session-hooks.ts";
 import type { ChatSessionServiceDeps } from "./session-types.ts";
 import { claimNextQueuedSteer } from "./steer-queue.ts";
+import { failUnstartableTurn } from "./unstartable-turn.ts";
 
+/**
+ * Starts the next queued message of a session that has gone idle. A thread's turn waits for a
+ * free run slot in line with every other thread's, so it goes through the dispatcher, which may
+ * start another thread's turn first; any other session starts its own at once.
+ */
 export const drainQueuedSteers = async (
   ctx: LocalServerContext,
   sessionId: string,
   runtime: string,
   deps: ChatSessionServiceDeps,
 ): Promise<void> => {
+  try {
+    if ((await ctx.chatSessionRepository.getById(sessionId))?.kind === "thread") {
+      await dispatchQueuedRuns(ctx, deps);
+      return;
+    }
+    await startQueuedTurn(ctx, sessionId, runtime, deps);
+  } catch (error) {
+    // Teardown / server stop can race with post-reply drain.
+    if (isDbClosedError(error)) return;
+    throw error;
+  }
+};
+
+/** Starts every queued thread turn the host has room for. */
+export const dispatchQueuedRuns = async (
+  ctx: LocalServerContext,
+  deps: ChatSessionServiceDeps,
+): Promise<void> => {
+  try {
+    await dispatchQueuedThreadTurns(ctx, (sessionId, runtime) =>
+      startQueuedTurn(ctx, sessionId, runtime, deps),
+    );
+  } catch (error) {
+    if (isDbClosedError(error)) return;
+    throw error;
+  }
+};
+
+/** How a session's rate-limit wait ends: its next queued turn starts, the way any turn's follow-up does. */
+export const drainAfterResume =
+  (ctx: LocalServerContext, deps: ChatSessionServiceDeps): DrainSession =>
+  (sessionId, runtime) =>
+    drainQueuedSteers(ctx, sessionId, runtime, deps);
+
+// A turn that got no run: the host is full, the session cannot take it now, or it can never start.
+const notStarted = async (
+  ctx: LocalServerContext,
+  sessionId: string,
+  claim: Extract<Awaited<ReturnType<typeof claimNextQueuedSteer>>, { success: false }>,
+  deps: ChatSessionServiceDeps,
+): Promise<StartOutcome> => {
+  if (claim.reason === "FULL") return "full";
+  if (claim.reason !== "UNSTARTABLE") return "skipped";
+  await applyFollowUp(ctx, await failUnstartableTurn(ctx, sessionId, claim.message), deps);
+  return "failed";
+};
+
+const startQueuedTurn = async (
+  ctx: LocalServerContext,
+  sessionId: string,
+  runtime: string,
+  deps: ChatSessionServiceDeps,
+): Promise<StartOutcome> => {
   let registration: SessionRunRegistration | null = null;
   try {
-    if (abortRequestedSessions.has(sessionId)) return;
+    if (abortRequestedSessions.has(sessionId)) return "skipped";
     registration = registerPendingSessionRun(sessionId, runtime);
-    if (!registration) return;
+    if (!registration) return "skipped";
     await deps.beforeQueuedRunClaim?.(sessionId);
     const claimed = await claimNextQueuedSteer(ctx, sessionId, pendingSessionReplies, registration);
-    if (!claimed.success) return;
+    if (!claimed.success) return notStarted(ctx, sessionId, claimed, deps);
     pendingSessionReplies.add(sessionId);
     trackBackgroundReply(
       completeAssistantReplyInBackground({
@@ -51,9 +113,10 @@ export const drainQueuedSteers = async (
       }),
     );
     registration = null;
+    return "started";
   } catch (error) {
     // Teardown / server stop can race with post-reply drain.
-    if (isDbClosedError(error)) return;
+    if (isDbClosedError(error)) return "skipped";
     throw error;
   } finally {
     if (registration) {
@@ -77,14 +140,14 @@ export const completeAssistantReplyInBackground = async (input: {
   beforeAssistantReply?: (run: ChatRun) => Promise<void>;
   beforeQueuedRunClaim?: (sessionId: string) => Promise<void>;
 }): Promise<void> => {
-  let wakeSessionIds: string[] = [];
+  let followUp: TurnFollowUp = NO_FOLLOW_UP;
   try {
     await input.beforeAssistantReply?.(input.run);
     if (await shouldSkipAssistantReply(input.ctx, input.sessionId, input.run.id)) {
       await finalizeSuppressedReply(input);
       return;
     }
-    wakeSessionIds = await runAndPublishAssistantReply(input);
+    followUp = await runAndPublishAssistantReply(input);
   } catch (error) {
     if (isDbClosedError(error)) return;
     await publishReplyFailure(input, error);
@@ -102,17 +165,23 @@ export const completeAssistantReplyInBackground = async (input: {
       beforeQueuedRunClaim: input.beforeQueuedRunClaim,
     };
     await drainQueuedSteers(input.ctx, input.sessionId, input.session.runtime, deps);
-    await wakeSessions(input.ctx, wakeSessionIds, deps);
+    await applyFollowUp(input.ctx, followUp, deps);
   }
 };
 
-/** Starts the next queued message of sessions another session's turn just wrote to (a coordinator's inbox). */
-export const wakeSessions = async (
+/**
+ * Does what a finished turn left to do: arms the resume timer of a session it put on hold, and
+ * starts the queued message of sessions it wrote to (a coordinator's inbox).
+ */
+export const applyFollowUp = async (
   ctx: LocalServerContext,
-  sessionIds: readonly string[],
+  followUp: TurnFollowUp,
   deps: ChatSessionServiceDeps,
 ): Promise<void> => {
-  for (const sessionId of sessionIds) {
+  if (followUp.resume) {
+    armResume(ctx, followUp.resume.sessionId, followUp.resume.at, drainAfterResume(ctx, deps));
+  }
+  for (const sessionId of followUp.wakeSessionIds) {
     const session = await ctx.chatSessionRepository.getById(sessionId);
     if (session) await drainQueuedSteers(ctx, sessionId, session.runtime, deps);
   }
@@ -151,8 +220,8 @@ const runAndPublishAssistantReply = async (input: {
   run: ChatRun;
   registration: SessionRunRegistration;
   createProviderFn?: CreateProviderFn;
-}): Promise<string[]> => {
-  const reply = await produceAssistantReply(
+}): Promise<TurnFollowUp> => {
+  const produced = await produceAssistantReply(
     input.ctx,
     input.session,
     input.run.user_message_id,
@@ -165,6 +234,8 @@ const runAndPublishAssistantReply = async (input: {
     input.run,
     input.registration,
   );
+  const paused = pausedReply(input.session, produced.text, produced.rateLimit);
+  const reply = { ...produced, text: paused.text, rateLimit: paused.rateLimit };
   return finalizeChatRunAndPublish(
     input.ctx,
     input.run,
@@ -193,6 +264,7 @@ const runAndPublishAssistantReply = async (input: {
             errorMessage: reply.text,
             failureKind: reply.failureKind ?? null,
             runtimeSessionState: reply.runtimeSessionState,
+            rateLimit: reply.rateLimit,
           }
         : undefined,
     reply.activity,

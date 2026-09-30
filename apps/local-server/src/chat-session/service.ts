@@ -2,6 +2,8 @@ import type { UpdateChatSessionInput } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { createRuntimeProfileRepository } from "../runtime-profile/repository.ts";
+import { resumeRateLimited } from "./rate-limit-resume.ts";
+import { dispatchQueuedRuns, drainAfterResume } from "./reply-lifecycle.ts";
 import { ensureAllChatRunRecoveries, ensureSessionChatRunRecovery } from "./run-recovery.ts";
 import { retryFreshChatRun, sendChatMessage } from "./send-message.ts";
 import { abortChatSession, resetRuntimeSession } from "./session-control.ts";
@@ -61,6 +63,13 @@ export const createChatSessionService = (
     },
 
     ensureRecovery: (sessionId: string) => ensureSessionChatRunRecovery(ctx, sessionId, deps),
+
+    /** Starts the queued thread turns the host has room for; the run cap changing is one reason to. */
+    dispatchQueuedRuns: () => dispatchQueuedRuns(ctx, deps),
+
+    /** Ends a session's wait on a rate limit now, instead of at its reset. False when it was not waiting. */
+    resumeRateLimited: (sessionId: string) =>
+      resumeRateLimited(ctx, sessionId, drainAfterResume(ctx, deps)),
 
     abort: (sessionId: string) => abortChatSession(ctx, sessionId, deps),
 

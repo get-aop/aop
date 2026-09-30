@@ -50,6 +50,8 @@ const summarize = (thread: Thread) => ({
   branch: thread.branch,
   pullRequest: thread.artifacts.find((artifact) => artifact.type === "pr") ?? null,
   ...(thread.status === "waiting-on-you" ? { blockedQuestion: thread.blockedQuestion } : {}),
+  // A rate-limited thread resumes by itself at this time; the coordinator has no need to steer it.
+  ...(thread.status === "rate-limited" ? { resumesAt: thread.resumesAt } : {}),
   lastActivityAt: thread.lastActivityAt,
 });
 

@@ -3,7 +3,13 @@ import type { ChatRun } from "../db/schema.ts";
 import { finalizeAssistantActivity } from "./assistant-reply.ts";
 import { waitForChatRunTerminal } from "./chat-run-recovery.ts";
 import { finalizeChatRunAndPublish } from "./finalize-publish.ts";
-import { drainQueuedSteers, wakeSessions } from "./reply-lifecycle.ts";
+import { armStoredResumes, pausedReply } from "./rate-limit-resume.ts";
+import {
+  applyFollowUp,
+  dispatchQueuedRuns,
+  drainAfterResume,
+  drainQueuedSteers,
+} from "./reply-lifecycle.ts";
 import { pendingSessionReplies, recoveryAbortControllers, recoveryTasks } from "./reply-state.ts";
 import { isChatRunProcessGone } from "./run-process.ts";
 import { isSessionRunActive } from "./runtime-engine.ts";
@@ -23,18 +29,21 @@ export const ensureAllChatRunRecoveries = async (
   for (const run of runs) {
     void startChatRunRecovery(ctx, run, deps);
   }
+  await armStoredResumes(ctx, drainAfterResume(ctx, deps));
   await drainProjectInboxes(ctx, deps);
 };
 
-// A thread's report is a queued message in the coordinator's session, so it survives a
-// restart; whatever was still waiting when the server stopped is started now.
+// A thread's report is a queued message in the coordinator's session, and a thread's turn that
+// waited for a run slot is a queued message in its own, so both survive a restart; whatever was
+// still waiting when the server stopped is started now. Threads start together, in the order
+// they queued, and only as many as the host has room for.
 const drainProjectInboxes = async (
   ctx: LocalServerContext,
   deps: ChatSessionServiceDeps,
 ): Promise<void> => {
   const sessions = await ctx.db
     .selectFrom("chat_sessions")
-    .select(["id", "runtime"])
+    .select(["id", "runtime", "kind"])
     .where("project_id", "is not", null)
     .where((eb) =>
       eb.exists(
@@ -58,8 +67,9 @@ const drainProjectInboxes = async (
     .execute()
     .catch(() => []);
   for (const session of sessions) {
-    await drainQueuedSteers(ctx, session.id, session.runtime, deps);
+    if (session.kind !== "thread") await drainQueuedSteers(ctx, session.id, session.runtime, deps);
   }
+  if (sessions.some((session) => session.kind === "thread")) await dispatchQueuedRuns(ctx, deps);
 };
 
 export const ensureSessionChatRunRecovery = async (
@@ -104,11 +114,11 @@ const recoverChatRun = async (
   signal: AbortSignal,
 ): Promise<void> => {
   let activity: AssistantActivity | null = null;
-  let recovered: Awaited<ReturnType<typeof waitForChatRunTerminal>>;
-  const executable =
-    (await ctx.chatSessionRepository.getById(run.session_id))?.runtime_alias ?? null;
+  let terminal: Awaited<ReturnType<typeof waitForChatRunTerminal>>;
+  const session = await ctx.chatSessionRepository.getById(run.session_id);
+  const executable = session?.runtime_alias ?? null;
   try {
-    recovered = await waitForChatRunTerminal({
+    terminal = await waitForChatRunTerminal({
       run,
       pollIntervalMs: deps.recoveryPollIntervalMs,
       isProcessGone: () => isChatRunProcessGone(run, executable),
@@ -123,7 +133,12 @@ const recoverChatRun = async (
     throw error;
   }
   if (signal.aborted) return;
-  const wakeSessionIds = await finalizeChatRunAndPublish(
+  // A project's session that a limit refused waits for it, as it does when the server stayed up.
+  const recovered = {
+    ...terminal,
+    ...pausedReply(session ?? { project_id: null }, terminal.text, terminal.rateLimit),
+  };
+  const followUp = await finalizeChatRunAndPublish(
     ctx,
     run,
     recovered.text,
@@ -134,6 +149,7 @@ const recoverChatRun = async (
       errorMessage: recovered.status === "failed" ? recovered.text : null,
       failureKind: recovered.failureKind ?? null,
       runtimeSessionState: recovered.runtimeSessionState,
+      rateLimit: recovered.rateLimit,
     },
     // Same stacking merge as the normal reply path so recovered activity keeps history.
     finalizeAssistantActivity(activity, {
@@ -144,5 +160,5 @@ const recoverChatRun = async (
   if (signal.aborted) return;
   // Server restart recovery: also drain steers queued while the recovered run was live.
   void drainQueuedSteers(ctx, run.session_id, run.runtime, deps);
-  void wakeSessions(ctx, wakeSessionIds, deps);
+  void applyFollowUp(ctx, followUp, deps);
 };

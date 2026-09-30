@@ -12,6 +12,7 @@ export type ThreadError =
   | { code: "REPO_REQUIRED"; repoIds: string[] }
   | { code: "REPO_UNAVAILABLE"; message: string }
   | { code: "NOT_WAITING" }
+  | { code: "NOT_RATE_LIMITED" }
   | { code: "SEND_FAILED"; reason: string };
 
 export type ThreadResult<T> = ({ success: true } & T) | { success: false; error: ThreadError };

@@ -3,6 +3,7 @@ import { generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatMessage, ChatRun, ChatSession } from "../db/schema.ts";
 import { loadTurnContext } from "../project/prompt-context.ts";
+import { countRunningThreadRuns, readRunCap } from "../scheduling/capacity.ts";
 import { prepareConversationPrompt } from "./conversation-history.ts";
 import {
   buildRuntimePrompt,
@@ -25,7 +26,7 @@ import {
 } from "./runtime-engine.ts";
 import { CHAT_RUNTIME_TIMEOUT_POLICY } from "./runtime-timeout-policy.ts";
 import { nextChatTurnIndex } from "./turn-order.ts";
-import { resolveSessionWorkspaceBinding } from "./workspace-binding.ts";
+import { resolveSessionWorkspaceBinding, WorkspaceBindingError } from "./workspace-binding.ts";
 
 export type SteerStoreResult =
   | {
@@ -54,7 +55,20 @@ export type ClaimQueuedResult =
       documents: StoredChatDocument[];
       run: ChatRun;
     }
-  | { success: false; reason: "BUSY" | "EMPTY" | "SESSION_NOT_FOUND" | "CONFLICT" };
+  | {
+      success: false;
+      reason:
+        | "BUSY"
+        | "EMPTY"
+        | "SESSION_NOT_FOUND"
+        | "CONFLICT"
+        /** The session waits out a rate limit. */
+        | "HELD"
+        /** A thread's turn, and the host runs as many thread turns as it may. */
+        | "FULL";
+    }
+  /** The session's workspace is gone, so the turn cannot start: `message` says why. */
+  | { success: false; reason: "UNSTARTABLE"; message: string };
 
 /** True when a reply is claimed, in-memory active, or durable running. */
 export const isChatSessionBusy = async (
@@ -189,23 +203,24 @@ export const claimNextQueuedSteer = async (
   pendingSessionReplies: Set<string>,
   registration?: SessionRunRegistration,
 ): Promise<ClaimQueuedResult> => {
-  ctx.sessionMutationLock.assertAllowed("steer-claim", { sessionId });
-  if (await isChatSessionBusy(ctx, sessionId, pendingSessionReplies, registration)) {
-    return { success: false, reason: "BUSY" };
-  }
-
-  const session = await ctx.chatSessionRepository.getById(sessionId);
-  if (!session) return { success: false, reason: "SESSION_NOT_FOUND" };
+  const idle = await loadIdleSession(ctx, sessionId, pendingSessionReplies, registration);
+  if ("reason" in idle) return idle;
+  const session = idle;
 
   const queued = await loadOldestQueuedMessage(ctx, sessionId);
 
   if (!queued) return { success: false, reason: "EMPTY" };
+  // Read before the transaction opens: a transaction holds the only connection.
+  const runCap = session.kind === "thread" ? await readRunCap(ctx.settingsRepository) : null;
 
   const assistantMessageId = generateTypeId("smsg");
   const runId = generateTypeId("crun");
   const logFilePath = await createSessionRunLogPath(sessionId);
   const decoded = decodeStoredImages(queued.content);
-  const workspacePath = await resolveSessionWorkspaceBinding(ctx, session);
+  const workspace = await boundWorkspace(ctx, session);
+  if ("error" in workspace) {
+    return { success: false, reason: "UNSTARTABLE", message: workspace.error };
+  }
   const globalInstructions = await loadChatGlobalInstructions(ctx.settingsRepository);
   const turnContext = await loadTurnContext(ctx, session);
   const basePrompt = buildRuntimePrompt(
@@ -233,11 +248,12 @@ export const claimNextQueuedSteer = async (
       assistantMessageId,
       logFilePath,
       contextStrategy: context.strategy,
-      workspacePath,
+      workspacePath: workspace.path,
       timeoutPolicy: CHAT_RUNTIME_TIMEOUT_POLICY.policyName,
+      runCap,
     });
 
-    if (!claimed) return { success: false, reason: "BUSY" };
+    if (claimed === "BUSY" || claimed === "FULL") return { success: false, reason: claimed };
 
     return {
       success: true,
@@ -255,7 +271,38 @@ export const claimNextQueuedSteer = async (
   }
 };
 
-const loadOldestQueuedMessage = (
+// The session, when it can take a turn now: not running one and not waiting out a rate limit,
+// which only its resume ends.
+const loadIdleSession = async (
+  ctx: LocalServerContext,
+  sessionId: string,
+  pendingSessionReplies: Set<string>,
+  registration?: SessionRunRegistration,
+): Promise<ChatSession | Extract<ClaimQueuedResult, { success: false }>> => {
+  ctx.sessionMutationLock.assertAllowed("steer-claim", { sessionId });
+  if (await isChatSessionBusy(ctx, sessionId, pendingSessionReplies, registration)) {
+    return { success: false, reason: "BUSY" };
+  }
+  const session = await ctx.chatSessionRepository.getById(sessionId);
+  if (!session) return { success: false, reason: "SESSION_NOT_FOUND" };
+  return session.resumes_at ? { success: false, reason: "HELD" } : session;
+};
+
+// A workspace that is gone (a deleted worktree, a removed repository) is the turn's failure to
+// report, not an error to throw at whoever happened to trigger the queue.
+const boundWorkspace = async (
+  ctx: LocalServerContext,
+  session: ChatSession,
+): Promise<{ path: string } | { error: string }> => {
+  try {
+    return { path: await resolveSessionWorkspaceBinding(ctx, session) };
+  } catch (error) {
+    if (error instanceof WorkspaceBindingError) return { error: error.message };
+    throw error;
+  }
+};
+
+export const loadOldestQueuedMessage = (
   ctx: LocalServerContext,
   sessionId: string,
 ): Promise<ChatMessage | undefined> =>
@@ -280,7 +327,7 @@ const loadOldestQueuedMessage = (
     .limit(1)
     .executeTakeFirst();
 
-const persistQueuedRun = async (
+export const persistQueuedRun = async (
   ctx: LocalServerContext,
   input: {
     session: ChatSession;
@@ -290,18 +337,25 @@ const persistQueuedRun = async (
     assistantMessageId: string;
     logFilePath: string;
     contextStrategy: ChatRun["context_strategy"];
-    workspacePath: string;
+    /** Null for a turn that failed before it could start, which has no workspace to run in. */
+    workspacePath: string | null;
     timeoutPolicy: string;
+    /** How many thread runs the host allows at once; null for a session that is not a thread. */
+    runCap: number | null;
   },
-): Promise<{ run: ChatRun; userMessage: ChatMessage } | null> =>
-  ctx.db.transaction().execute(async (trx) => {
+): Promise<{ run: ChatRun; userMessage: ChatMessage } | "BUSY" | "FULL"> =>
+  ctx.eventPublisher.transaction(async (tx) => {
+    const trx = tx.db;
     const active = await trx
       .selectFrom("chat_runs")
       .select("id")
       .where("session_id", "=", input.sessionId)
       .where("status", "=", "running")
       .executeTakeFirst();
-    if (active) return null;
+    if (active) return "BUSY";
+    // The cap is enforced where runs are made, in the transaction that makes one, so a claim that
+    // races another can never take a slot the other has just filled.
+    if (input.runCap !== null && (await countRunningThreadRuns(trx)) >= input.runCap) return "FULL";
 
     const claimedAt = new Date().toISOString();
     await trx
@@ -347,6 +401,7 @@ const persistQueuedRun = async (
         .where("id", "=", input.queued.id)
         .executeTakeFirstOrThrow(),
     ]);
+    await ctx.sessionHooks.onTurnScheduled(tx, input.sessionId, "running");
     return { run, userMessage };
   });
 
@@ -385,7 +440,9 @@ export const cancelQueuedSteers = async (
   if (queued.length === 0) return 0;
 
   const session = await ctx.chatSessionRepository.getById(sessionId);
-  const workspacePath = session ? await resolveSessionWorkspaceBinding(ctx, session) : null;
+  // Stopping a turn that could not start because its workspace is gone must still work.
+  const workspace = session ? await boundWorkspace(ctx, session) : null;
+  const workspacePath = workspace && "path" in workspace ? workspace.path : null;
 
   const now = new Date().toISOString();
   const rows = await Promise.all(

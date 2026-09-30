@@ -32,10 +32,12 @@ export const attentionSentence = (waiting: number): string => {
 const STATUS_RANK: Record<ThreadStatus, number> = {
   "waiting-on-you": 0,
   working: 1,
-  "ready-for-review": 2,
-  landing: 3,
-  idle: 4,
-  resolved: 5,
+  queued: 2,
+  "rate-limited": 3,
+  "ready-for-review": 4,
+  landing: 5,
+  idle: 6,
+  resolved: 7,
 };
 
 export const sortThreads = (threads: readonly Thread[]): Thread[] =>
@@ -48,6 +50,8 @@ export const sortThreads = (threads: readonly Thread[]): Thread[] =>
 export const THREAD_STATUS_LABEL: Record<ThreadStatus, string> = {
   "waiting-on-you": "Waiting on you",
   working: "Working",
+  queued: "Queued",
+  "rate-limited": "Rate limited",
   "ready-for-review": "Ready for review",
   landing: "Landing",
   idle: "Idle",

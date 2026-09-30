@@ -132,7 +132,10 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api", createThreadRoutes(projects));
   app.route("/api/repos", createRepoRoutes(ctx));
-  app.route("/api/settings", createSettingsRoutes(ctx));
+  app.route(
+    "/api/settings",
+    createSettingsRoutes(ctx, { runCapChanged: () => projects.chat.dispatchQueuedRuns() }),
+  );
   app.route("/api/exec-hosts", createExecHostRoutes(ctx));
   app.route("/api/runtime-profiles", createRuntimeProfileRoutes(ctx));
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));

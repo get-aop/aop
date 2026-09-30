@@ -39,6 +39,7 @@ describe("settings/routes", () => {
       expect(body.settings).toEqual([
         { key: "remote_exec_hosts_json", value: "" },
         { key: "chat_global_instructions", value: "" },
+        { key: "max_concurrent_runs", value: "4" },
       ]);
       expect(body.settings).toHaveLength(VALID_KEYS.length);
     });
@@ -92,6 +93,45 @@ describe("settings/routes", () => {
 
       const getRes = await app.request("/api/settings/chat_global_instructions");
       expect(((await getRes.json()) as AnyJson).value).toBe("Hi");
+    });
+
+    test("saves the run cap and starts the turns that now have room", async () => {
+      let started = 0;
+      const withEffect = new Hono();
+      withEffect.route(
+        "/api/settings",
+        createSettingsRoutes(ctx, {
+          runCapChanged: async () => {
+            started += 1;
+          },
+        }),
+      );
+
+      const res = await putJson(withEffect, "/api/settings/max_concurrent_runs", { value: "2" });
+
+      expect(res.status).toBe(200);
+      expect(await ctx.settingsRepository.get("max_concurrent_runs")).toBe("2");
+      expect(started).toBe(1);
+    });
+
+    test("refuses a run cap that is not a whole number from 1 to 32, keeping the old one", async () => {
+      for (const value of ["0", "99", "lots"]) {
+        const res = await putJson(app, "/api/settings/max_concurrent_runs", { value });
+        const body: AnyJson = await res.json();
+
+        expect(res.status).toBe(400);
+        expect(body).toEqual({
+          error: "Invalid value",
+          key: "max_concurrent_runs",
+          message: "max_concurrent_runs must be a whole number from 1 to 32",
+        });
+      }
+      const bulk = await putJson(app, "/api/settings", {
+        settings: [{ key: "max_concurrent_runs", value: "0" }],
+      });
+      expect(bulk.status).toBe(400);
+      expect(((await bulk.json()) as AnyJson).error).toBe("Invalid value");
+      expect(await ctx.settingsRepository.get("max_concurrent_runs")).toBe("4");
     });
 
     test("rejects removed keys such as Jira credentials", async () => {

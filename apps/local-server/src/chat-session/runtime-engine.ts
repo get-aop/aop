@@ -14,6 +14,7 @@ import {
 } from "@aop/llm-provider";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
 import { runAndReap } from "../process/reaper.ts";
+import { detectRateLimit, type RateLimitHit } from "../scheduling/rate-limit.ts";
 import { isProviderFailureEvent } from "./provider-event-classifier.ts";
 import { buildRunOptions } from "./run-options.ts";
 import {
@@ -127,8 +128,10 @@ export interface RuntimeRunResult {
   /** True when the user explicitly stopped the conversation. */
   aborted?: boolean;
   interruptionKind?: "steer" | "abort" | "reset" | "output_limit";
-  /** Structured empty-output classification when the run failed for silence/empty text. */
-  failureKind?: "startup_timeout" | "empty_output";
+  /** Structured classification when the run failed for silence/empty text or a rate limit. */
+  failureKind?: "startup_timeout" | "empty_output" | "rate_limit";
+  /** A rate or usage limit refused the run: it is paused, not failed, and resumes at `resumesAt`. */
+  rateLimit?: RateLimitHit;
   /** Native binding rejected by the provider and requiring an orchestrated fresh launch. */
   staleRuntimeSessionId?: string;
   runtimeSessionState?: ChatRuntimeSessionState;
@@ -946,6 +949,18 @@ const interpretRunResult = async (
     };
   }
 
+  const limited = await readRateLimit(runtime, logFilePath);
+  if (limited) {
+    return {
+      // Reads as any failed run does; a project's session words its wait itself (see `pausedReply`).
+      text: `Runtime error: ${limited.message}`,
+      runtimeSessionId: capturedSessionId,
+      failed: true,
+      failureKind: "rate_limit",
+      rateLimit: limited,
+    };
+  }
+
   if (result.exitCode !== 0) {
     const providerError = await readRuntimeErrorFromLog(logFilePath, runtime);
     return {
@@ -968,6 +983,19 @@ const interpretRunResult = async (
   }
 
   return { text, runtimeSessionId: capturedSessionId };
+};
+
+// A limit ends the log, and an exit code says nothing reliable about it, so the end of the log is
+// read whatever the CLI exited with. Only Claude Code's limit shapes are known.
+const RATE_LIMIT_LOG_TAIL_BYTES = 256 * 1024;
+
+const readRateLimit = async (
+  runtime: string,
+  logFilePath: string,
+): Promise<RateLimitHit | null> => {
+  if (runtime !== "claude-code") return null;
+  const tail = await readBoundedUtf8File(logFilePath, RATE_LIMIT_LOG_TAIL_BYTES);
+  return tail ? detectRateLimit(tail) : null;
 };
 
 const readRuntimeErrorFromLog = async (

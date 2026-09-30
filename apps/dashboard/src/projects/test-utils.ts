@@ -20,7 +20,9 @@ export const makeProject = (overrides: Partial<Project> = {}): Project => ({
   ...overrides,
 });
 
-type ThreadOverrides = Partial<Omit<Thread, "status" | "blockedQuestion" | "resolvedAt">> & {
+type ThreadOverrides = Partial<
+  Omit<Thread, "status" | "blockedQuestion" | "resolvedAt" | "resumesAt">
+> & {
   status?: ThreadStatus;
 };
 
@@ -60,6 +62,8 @@ export const makeThread = ({ status = "working", ...overrides }: ThreadOverrides
       };
     case "resolved":
       return { ...base, status, resolvedAt: AT };
+    case "rate-limited":
+      return { ...base, status, resumesAt: "2026-09-29T15:00:00.000Z" };
     default:
       return { ...base, status };
   }

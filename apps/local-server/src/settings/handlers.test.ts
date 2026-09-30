@@ -26,6 +26,7 @@ describe("settings/handlers", () => {
       expect(result.settings).toEqual([
         { key: "remote_exec_hosts_json", value: "" },
         { key: "chat_global_instructions", value: "" },
+        { key: "max_concurrent_runs", value: "4" },
       ]);
       expect(result.settings.map(({ key }) => key).sort()).toEqual(
         Object.keys(DEFAULT_SETTINGS).sort(),
@@ -113,6 +114,55 @@ describe("settings/handlers", () => {
           error: { code: "INVALID_KEY", key },
         });
       }
+    });
+
+    test("max_concurrent_runs takes a whole number from 1 to 32 and nothing else", async () => {
+      for (const value of ["1", "4", "32"]) {
+        expect(await setSetting(ctx, "max_concurrent_runs", value)).toMatchObject({
+          success: true,
+          value,
+        });
+        expect(await ctx.settingsRepository.get(SettingKey.MAX_CONCURRENT_RUNS)).toBe(value);
+      }
+      for (const value of ["0", "33", "-1", "2.5", "many", "", " 3", "03", "1e1"]) {
+        expect(await setSetting(ctx, "max_concurrent_runs", value)).toEqual({
+          success: false,
+          error: {
+            code: "INVALID_VALUE",
+            key: "max_concurrent_runs",
+            message: "max_concurrent_runs must be a whole number from 1 to 32",
+          },
+        });
+      }
+      expect(await ctx.settingsRepository.get(SettingKey.MAX_CONCURRENT_RUNS)).toBe("32");
+    });
+
+    test("a batch with one bad value saves none of it", async () => {
+      const result = await setAllSettings(ctx, [
+        { key: "chat_global_instructions", value: "be concise" },
+        { key: "max_concurrent_runs", value: "0" },
+      ]);
+
+      expect(result).toMatchObject({ success: false, error: { code: "INVALID_VALUE" } });
+      expect(await ctx.settingsRepository.get("chat_global_instructions")).toBe("");
+      expect(await ctx.settingsRepository.get("max_concurrent_runs")).toBe("4");
+    });
+
+    test("saving the run cap tells the server to start the turns that now have room", async () => {
+      let started = 0;
+      const effects = {
+        runCapChanged: async () => {
+          started += 1;
+        },
+      };
+
+      await setSetting(ctx, "chat_global_instructions", "hi", effects);
+      await setSetting(ctx, "max_concurrent_runs", "0", effects);
+      expect(started).toBe(0);
+      await setSetting(ctx, "max_concurrent_runs", "8", effects);
+      await setAllSettings(ctx, [{ key: "max_concurrent_runs", value: "2" }], effects);
+
+      expect(started).toBe(2);
     });
 
     test("stores remote_exec_hosts_json as a plain setting", async () => {

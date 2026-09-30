@@ -321,7 +321,7 @@ const persistPreparedSend = async (
     return { session, userMessage, run };
   });
 
-const resolveCurrentSessionRuntimeConfiguration = async (
+export const resolveCurrentSessionRuntimeConfiguration = async (
   ctx: LocalServerContext,
   runtimeConfigurations: RuntimeConfigurationRepository,
   session: ChatSession,

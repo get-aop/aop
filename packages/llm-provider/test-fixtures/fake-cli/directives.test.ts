@@ -57,10 +57,17 @@ describe("parseDirectives", () => {
   });
 
   test("bare flags take their documented defaults", () => {
-    const directives = parseDirectives("[fake: crash fail]");
+    const directives = parseDirectives("[fake: crash fail ratelimit]");
 
     expect(directives.crashAfter).toBe(2);
     expect(directives.failMessage).toBe("fake CLI failure");
+    expect(directives.rateLimitSeconds).toBe(3600);
+  });
+
+  test("ratelimit takes the seconds until the limit resets, and is off without the key", () => {
+    expect(parseDirectives("[fake: ratelimit=90]").rateLimitSeconds).toBe(90);
+    expect(parseDirectives("[fake: ratelimit=0]").rateLimitSeconds).toBe(0);
+    expect(parseDirectives("[fake: steps=1]").rateLimitSeconds).toBeUndefined();
   });
 
   test("keeps explicit values, including zero", () => {

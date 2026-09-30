@@ -120,6 +120,45 @@ describe("thread repository", () => {
     expect(reopened).not.toHaveProperty("resolvedAt");
   });
 
+  test("holds a thread in the queue, or on a rate limit with the time it resumes, and drops that time on leaving", async () => {
+    await addThread("t1");
+
+    const queued = await threads.update("t1", { status: { status: "queued" } });
+    expect(queued?.status).toBe("queued");
+    expect(queued).not.toHaveProperty("resumesAt");
+
+    const limited = await threads.update("t1", {
+      status: { status: "rate-limited", resumesAt: "2026-09-30T16:00:00.000Z" },
+    });
+    expect(limited).toMatchObject({
+      status: "rate-limited",
+      resumesAt: "2026-09-30T16:00:00.000Z",
+    });
+    expect(
+      (await db.selectFrom("chat_sessions").select("resumes_at").executeTakeFirst())?.resumes_at,
+    ).toBe("2026-09-30T16:00:00.000Z");
+
+    const resumed = await threads.update("t1", { status: { status: "working" } });
+    expect(resumed?.status).toBe("working");
+    expect(resumed).not.toHaveProperty("resumesAt");
+    expect(
+      (await db.selectFrom("chat_sessions").select("resumes_at").executeTakeFirst())?.resumes_at,
+    ).toBeNull();
+  });
+
+  test("does not touch the resume time of a coordinator waiting on a rate limit", async () => {
+    await insertProjectSession(
+      db,
+      { id: "c1", projectId: "p1", kind: "coordinator" },
+      { resumes_at: "2026-09-30T16:00:00.000Z" },
+    );
+
+    expect(await threads.update("c1", { status: { status: "idle" } })).toBeNull();
+
+    const row = await db.selectFrom("chat_sessions").select("resumes_at").executeTakeFirst();
+    expect(row?.resumes_at).toBe("2026-09-30T16:00:00.000Z");
+  });
+
   test("a landing thread needs its pull request in the same update", async () => {
     await addThread("t1");
 

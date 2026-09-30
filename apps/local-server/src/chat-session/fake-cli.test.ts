@@ -411,6 +411,29 @@ describe("usage accounting against the fake CLI", () => {
     await db.destroy();
   });
 
+  test("a usage limit on a plain chat fails the run with what the CLI said; nothing resumes it", async () => {
+    const { db, session, sendAndSettle } = await setup();
+
+    const limited = await sendAndSettle("go [fake: ratelimit=1]");
+
+    expect(limited.messages[0]?.runStatus).toBe("failed");
+    expect(lastAssistant(limited)?.content).toMatch(
+      /^Runtime error: You've hit your session limit · resets \d{1,2}:\d{2}(am|pm)$/,
+    );
+    const run = await db.selectFrom("chat_runs").selectAll().executeTakeFirstOrThrow();
+    expect(run.failure_kind).toBe("rate_limit");
+    const row = await db
+      .selectFrom("chat_sessions")
+      .select("resumes_at")
+      .where("id", "=", session.id)
+      .executeTakeFirstOrThrow();
+    expect(row.resumes_at).toBeNull();
+    // The session takes the next message like any other after a failed run.
+    const next = await sendAndSettle("try again");
+    expect(lastAssistant(next)?.content).toContain("turn 2");
+    await db.destroy();
+  });
+
   test("a turn stopped before it produced anything records no usage and breaks nothing", async () => {
     const { db, session, send, abort, sendAndSettle } = await setup();
 

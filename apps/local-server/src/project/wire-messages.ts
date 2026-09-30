@@ -61,7 +61,11 @@ export const toWireMessage = (
     return blocks.length === 0 ? null : MessageSchema.parse({ ...base, role: "assistant", blocks });
   }
   if (!text) return null;
-  return MessageSchema.parse(userSideMessage(base, text, parseMessageOrigin(row.origin_json)));
+  const origin = parseMessageOrigin(row.origin_json);
+  // The server's nudge to resume after a rate limit is plumbing: the reply that explains the
+  // wait is already in the transcript.
+  if (origin?.type === "rate-limit-resume") return null;
+  return MessageSchema.parse(userSideMessage(base, text, origin));
 };
 
 export const scopeOf = (session: ChatSession): MessageScope => {

@@ -15,6 +15,8 @@ export interface Directives {
   calls?: McpCall[];
   /** Set when `calls` is not a JSON array of `{name, arguments}`; the turn then fails loudly. */
   callsError?: string;
+  /** Set means the turn ends the way a usage limit ends it, with a reset this many seconds away. */
+  rateLimitSeconds?: number;
   /** Set means the turn ends with the CLI's error event and a failing exit code. */
   failMessage?: string;
   /** Without `failMessage` the CLI exits with this code and no terminal event. */
@@ -32,6 +34,7 @@ const TOKEN = /(\w+)(?:=(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
 export const DEFAULT_ASK_TOOL = "aop_ask_user";
 const DEFAULT_FAIL_MESSAGE = "fake CLI failure";
 const DEFAULT_CRASH_AFTER = 2;
+const DEFAULT_RATE_LIMIT_SECONDS = 3600;
 const DEFAULT_USAGE: TokenUsage = { input: 10, output: 5, cacheWrite: 200, cacheRead: 4000 };
 
 /**
@@ -51,6 +54,7 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
     say: tokens.get("say") || undefined,
     ask: question === undefined ? undefined : readAsk(question, tokens),
     ...readCalls(tokens.get("calls")),
+    rateLimitSeconds: readRateLimit(tokens),
     failMessage: readFailMessage(tokens),
     exitCode: optionalNumber(tokens.get("exit")),
     crashAfter: readCrashAfter(tokens),
@@ -157,6 +161,13 @@ const readFailMessage = (tokens: Map<string, string>): string | undefined => {
   const message = tokens.get("fail");
   if (message === undefined) return undefined;
   return message || DEFAULT_FAIL_MESSAGE;
+};
+
+// A bare `ratelimit` resets in an hour.
+const readRateLimit = (tokens: Map<string, string>): number | undefined => {
+  const value = tokens.get("ratelimit");
+  if (value === undefined) return undefined;
+  return toNumber(value, DEFAULT_RATE_LIMIT_SECONDS);
 };
 
 const readCrashAfter = (tokens: Map<string, string>): number | undefined => {

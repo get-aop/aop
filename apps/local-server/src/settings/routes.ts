@@ -1,8 +1,15 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import type { LocalServerContext } from "../context.ts";
-import { getAllSettings, getSetting, setAllSettings, setSetting } from "./handlers.ts";
+import {
+  getAllSettings,
+  getSetting,
+  type SetSettingResult,
+  type SettingsEffects,
+  setAllSettings,
+  setSetting,
+} from "./handlers.ts";
 
-export const createSettingsRoutes = (ctx: LocalServerContext) => {
+export const createSettingsRoutes = (ctx: LocalServerContext, effects: SettingsEffects = {}) => {
   const routes = new Hono();
 
   routes.get("/", async (c) => {
@@ -17,13 +24,8 @@ export const createSettingsRoutes = (ctx: LocalServerContext) => {
       return c.json({ error: "Missing required field: settings" }, 400);
     }
 
-    const result = await setAllSettings(ctx, body.settings);
-    if (!result.success) {
-      return c.json(
-        { error: "Invalid key", key: result.error.key, validKeys: result.error.validKeys },
-        400,
-      );
-    }
+    const result = await setAllSettings(ctx, body.settings, effects);
+    if (!result.success) return rejected(c, result.error);
 
     return c.json({ ok: true, settings: result.settings });
   });
@@ -47,13 +49,18 @@ export const createSettingsRoutes = (ctx: LocalServerContext) => {
       return c.json({ error: "Missing required field: value" }, 400);
     }
 
-    const result = await setSetting(ctx, key, body.value);
-    if (!result.success) {
-      return c.json({ error: "Invalid key", key, validKeys: result.error.validKeys }, 400);
-    }
+    const result = await setSetting(ctx, key, body.value, effects);
+    if (!result.success) return rejected(c, result.error);
 
     return c.json({ ok: true, key: result.key, value: result.value });
   });
 
   return routes;
 };
+
+type SettingError = Extract<SetSettingResult, { success: false }>["error"];
+
+const rejected = (c: Context, error: SettingError) =>
+  error.code === "INVALID_KEY"
+    ? c.json({ error: "Invalid key", key: error.key, validKeys: error.validKeys }, 400)
+    : c.json({ error: "Invalid value", key: error.key, message: error.message }, 400);

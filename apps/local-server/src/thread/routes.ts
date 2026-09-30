@@ -51,6 +51,11 @@ export const createThreadRoutes = ({ threads }: ProjectServices) => {
     return result.success ? c.json({ thread: result.thread }) : errorResponse(c, result.error);
   });
 
+  routes.post("/threads/:threadId/resume", async (c) => {
+    const result = await threads.resume(c.req.param("threadId"));
+    return result.success ? c.json({ thread: result.thread }) : errorResponse(c, result.error);
+  });
+
   routes.post("/threads/:threadId/stop", async (c) => {
     const result = await threads.stop(c.req.param("threadId"));
     return result.success ? c.json({ thread: result.thread }) : errorResponse(c, result.error);

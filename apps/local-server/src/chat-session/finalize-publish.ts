@@ -8,15 +8,17 @@ import { isDbClosedError } from "./reply-state.ts";
 import { type FinalizeChatRunOutcome, persistFinalizedChatRun } from "./run-finalization.ts";
 import { sessionDtoFor, toMessageDto } from "./session-dto.ts";
 import { publishChatSessionEvent } from "./session-events.ts";
+import type { TurnFollowUp } from "./session-hooks.ts";
 import type { AssistantActivity } from "./session-types.ts";
 
 const logger = getLogger("chat-session", "finalize");
 
 /**
  * Stores the run's terminal state and assistant message, lets the project domain react in the
- * same transaction, then publishes the change. Returns the sessions that now have a queued
- * message to start (a coordinator woken by a thread's report); the caller starts them, since
- * only it holds the provider dependencies.
+ * same transaction, then publishes the change. Returns what the turn leaves to do: the sessions
+ * that now have a queued message to start (a coordinator woken by a thread's report) and a
+ * session that waits out a rate limit and must be resumed. The caller does both, since only it
+ * holds the provider dependencies.
  */
 export const finalizeChatRunAndPublish = async (
   ctx: LocalServerContext,
@@ -30,7 +32,7 @@ export const finalizeChatRunAndPublish = async (
   },
   activity: AssistantActivity | null = null,
   artifacts: StoredChatArtifact[] = [],
-): Promise<string[]> => {
+): Promise<TurnFollowUp> => {
   const persist = (withHooks: boolean) =>
     ctx.eventPublisher.transaction(async (tx) => {
       const assistantMessage = await persistFinalizedChatRun(
@@ -46,8 +48,8 @@ export const finalizeChatRunAndPublish = async (
       if (!assistantMessage) return null;
       const followUp = withHooks
         ? await ctx.sessionHooks.onRunFinalized(tx, { run, outcome, assistantMessage })
-        : { wakeSessionIds: [] };
-      return { finalized: assistantMessage, wakeSessionIds: followUp.wakeSessionIds };
+        : NO_FOLLOW_UP;
+      return { finalized: assistantMessage, followUp };
     });
   const done = await persist(true).catch(async (error: unknown) => {
     if (isDbClosedError(error)) throw error;
@@ -59,13 +61,13 @@ export const finalizeChatRunAndPublish = async (
     });
     return persist(false);
   });
-  if (!done) return [];
-  const { finalized, wakeSessionIds } = done;
+  if (!done) return NO_FOLLOW_UP;
+  const { finalized, followUp } = done;
   // Before the client hears the run is over, so a usage read after `assistant-final` sees it.
   await createUsageService(ctx.db).recordRunUsage(run);
 
   const session = await ctx.chatSessionRepository.getById(run.session_id);
-  if (!session) return wakeSessionIds;
+  if (!session) return followUp;
   const sessionDto = await sessionDtoFor(ctx, session, finalized.content, finalized.created_at);
   publishChatSessionEvent({
     type: "assistant-final",
@@ -81,5 +83,7 @@ export const finalizeChatRunAndPublish = async (
     sessionId: run.session_id,
     session: sessionDto,
   });
-  return wakeSessionIds;
+  return followUp;
 };
+
+export const NO_FOLLOW_UP: TurnFollowUp = { wakeSessionIds: [], resume: null };

@@ -61,6 +61,7 @@ const ThreadBaseSchema = z.object({
 const stateBoundFields = {
   blockedQuestion: z.never().optional(),
   resolvedAt: z.never().optional(),
+  resumesAt: z.never().optional(),
 };
 
 const hasPullRequest = (artifacts: { type: string }[]): boolean =>
@@ -70,6 +71,11 @@ const hasPullRequest = (artifacts: { type: string }[]): boolean =>
  * A thread as the Overview and the thread pane see it. Discriminated on `status`:
  * - waiting-on-you: blocked on `blockedQuestion`, which only this status carries.
  * - working: an agent turn is running.
+ * - queued: a turn is accepted but waits for a free run slot; the host runs at most a set number
+ *   of thread turns at once, and queued turns start in the order they were accepted.
+ * - rate-limited: the agent's CLI refused a turn because of a rate or usage limit. The thread
+ *   carries `resumesAt`, when it resumes by itself (the limit's reset, or a retry time when the
+ *   CLI named none); the person can resume it sooner.
  * - ready-for-review: finished, waiting for the user to look at what it produced.
  * - landing: its pull request is being driven to merge, so a `pr` artifact is required.
  * - idle: no turn running, nothing pending.
@@ -82,6 +88,12 @@ export const ThreadSchema = z.discriminatedUnion("status", [
     blockedQuestion: BlockedQuestionSchema,
   }),
   ThreadBaseSchema.extend({ ...stateBoundFields, status: z.literal("working") }),
+  ThreadBaseSchema.extend({ ...stateBoundFields, status: z.literal("queued") }),
+  ThreadBaseSchema.extend({
+    ...stateBoundFields,
+    status: z.literal("rate-limited"),
+    resumesAt: TimestampSchema,
+  }),
   ThreadBaseSchema.extend({ ...stateBoundFields, status: z.literal("ready-for-review") }),
   ThreadBaseSchema.extend({
     ...stateBoundFields,

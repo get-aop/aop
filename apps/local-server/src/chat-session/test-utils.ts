@@ -27,6 +27,7 @@ export const NO_PROJECT_COLUMNS = {
   last_activity_at: null,
   unread: 0,
   resolved_at: null,
+  resumes_at: null,
 } as const;
 
 export interface SeedChatSessionOptions {

@@ -45,6 +45,17 @@ describe("runFakeCli", () => {
     expect(custom.exitCode).toBe(7);
   });
 
+  test("ratelimit plays a usage limit: exit 1, no reply, and exit= picks another code", async () => {
+    const limited = await play([...CLAUDE_ARGS, "x [fake: ratelimit=120]"]);
+    const zero = await play([...CLAUDE_ARGS, "x [fake: ratelimit=120 exit=0]"]);
+
+    expect(limited.exitCode).toBe(1);
+    expect(types(limited.events)).toEqual(["system", "rate_limit_event", "assistant", "result"]);
+    expect(limited.events.at(-1)).toMatchObject({ is_error: true, api_error_status: 429 });
+    expect(limited.warnings).toEqual(["fake-cli: usage limit reached, resets in 120s"]);
+    expect(zero.exitCode).toBe(0);
+  });
+
   test("exit=N alone exits without a terminal event", async () => {
     const run = await play([...CLAUDE_ARGS, "x [fake: exit=4]"]);
 

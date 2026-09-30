@@ -70,7 +70,7 @@ export type ChatRuntimeSessionState = "confirmed";
 export type ChatSessionKind = "coordinator" | "thread";
 
 /** Machine-readable empty-output failure classification on chat_runs. */
-export type ChatRunFailureKind = "startup_timeout" | "empty_output";
+export type ChatRunFailureKind = "startup_timeout" | "empty_output" | "rate_limit";
 
 export interface ChatSessionsTable {
   id: string;
@@ -117,6 +117,11 @@ export interface ChatSessionsTable {
   unread: Generated<0 | 1>;
   /** Set exactly when `state` is `resolved`. */
   resolved_at: string | null;
+  /**
+   * When the session resumes after a rate or usage limit, added by migration v5. A thread has it
+   * exactly while `state` is `rate-limited`; a coordinator may hold it at any time.
+   */
+  resumes_at: string | null;
 }
 
 export interface ChatMessagesTable {

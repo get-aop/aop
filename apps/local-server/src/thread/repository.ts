@@ -13,13 +13,14 @@ import type { ChatSession, ChatSessionUpdate, Database } from "../db/schema.ts";
 
 /**
  * A status change together with the one field only that status carries. Any other status
- * clears both, so a thread cannot keep a question after the user answered or a resolution
- * time after it reopened (the database refuses those rows too).
+ * clears all three, so a thread cannot keep a question after the user answered, a resolution
+ * time after it reopened or a resume time after it resumed (the database refuses those rows too).
  */
 export type ThreadStatusChange =
   | { status: "waiting-on-you"; blockedQuestion: BlockedQuestion }
   | { status: "resolved"; resolvedAt: string }
-  | { status: Exclude<ThreadStatus, "waiting-on-you" | "resolved"> };
+  | { status: "rate-limited"; resumesAt: string }
+  | { status: Exclude<ThreadStatus, "waiting-on-you" | "resolved" | "rate-limited"> };
 
 /** The thread state that changes after creation. Absent keys stay as they are. */
 export interface ThreadPatch {
@@ -118,6 +119,7 @@ const statusColumns = (change: ThreadStatusChange): ChatSessionUpdate => ({
   blocked_question_json:
     change.status === "waiting-on-you" ? JSON.stringify(change.blockedQuestion) : null,
   resolved_at: change.status === "resolved" ? change.resolvedAt : null,
+  resumes_at: change.status === "rate-limited" ? change.resumesAt : null,
 });
 
 const pullRequestColumns = (pullRequest: PullRequestRef | null): ChatSessionUpdate => ({
@@ -163,4 +165,5 @@ const toThread = (row: ThreadRow): Thread =>
       ? {}
       : { blockedQuestion: JSON.parse(row.blocked_question_json) }),
     ...(row.resolved_at === null ? {} : { resolvedAt: row.resolved_at }),
+    ...(row.resumes_at === null ? {} : { resumesAt: row.resumes_at }),
   });

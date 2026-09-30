@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { THREAD_STATUSES } from "@aop/common";
 import {
   attentionKind,
   attentionOf,
@@ -9,6 +10,7 @@ import {
   matchesProjectSearch,
   matchesThreadSearch,
   sortThreads,
+  THREAD_STATUS_LABEL,
 } from "./selectors";
 import { makeEntry, makeProject, makeState, makeThread } from "./test-utils";
 
@@ -63,6 +65,24 @@ describe("sortThreads", () => {
       "idle",
       "resolved",
     ]);
+  });
+
+  test("shows a thread waiting for a run slot or a rate limit after the ones doing work", () => {
+    const sorted = sortThreads([
+      makeThread({ id: "idle", status: "idle" }),
+      makeThread({ id: "limited", status: "rate-limited" }),
+      makeThread({ id: "queued", status: "queued" }),
+      makeThread({ id: "working", status: "working" }),
+    ]);
+    expect(sorted.map((thread) => thread.id)).toEqual(["working", "queued", "limited", "idle"]);
+  });
+
+  test("names every status a thread can have", () => {
+    for (const status of THREAD_STATUSES) {
+      expect(THREAD_STATUS_LABEL[status]).toBeTruthy();
+    }
+    expect(THREAD_STATUS_LABEL.queued).toBe("Queued");
+    expect(THREAD_STATUS_LABEL["rate-limited"]).toBe("Rate limited");
   });
 
   test("does not reorder the array it was given", () => {

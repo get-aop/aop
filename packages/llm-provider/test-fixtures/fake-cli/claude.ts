@@ -174,9 +174,45 @@ function renderEnding(ending: Ending, ctx: TurnContext): JsonLine[] {
           errors: [ending.message],
         }),
       ];
+    case "rate-limit":
+      return renderRateLimit(ending.resetsInSeconds, ctx);
     case "silent":
       return [];
   }
+}
+
+// A usage limit as Claude Code documents it (code.claude.com/docs/en/errors, and the Agent SDK's
+// SDKRateLimitEvent, SDKAssistantMessageError and SDKResultMessage.api_error_status): a
+// `rate_limit_event` whose `resetsAt` is epoch seconds, an assistant message flagged
+// `error: "rate_limit"` that holds the user-facing text, and an error result with HTTP status 429.
+// No token is consumed. The real exit code is not verified; `exit=` sets it.
+function renderRateLimit(resetsInSeconds: number, ctx: TurnContext): JsonLine[] {
+  const resetsAt = Math.round(Date.now() / 1000) + resetsInSeconds;
+  const text = `You've hit your session limit · resets ${clockTime(resetsAt)}`;
+  const limited = { ...ctx, usage: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 } };
+  return [
+    {
+      type: "rate_limit_event",
+      rate_limit_info: {
+        status: "rejected",
+        resetsAt,
+        rateLimitType: "five_hour",
+        overageStatus: "rejected",
+        isUsingOverage: false,
+      },
+      session_id: ctx.sessionId,
+    },
+    { ...assistant(limited, [{ type: "text", text }]), error: "rate_limit" },
+    result(limited, { subtype: "success", is_error: true, api_error_status: 429, result: text }),
+  ];
+}
+
+// Claude Code prints the reset as a wall-clock time without a zone, like "3:45pm".
+function clockTime(epochSeconds: number): string {
+  const at = new Date(epochSeconds * 1000);
+  const hours = at.getHours() % 12 || 12;
+  const minutes = String(at.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}${at.getHours() < 12 ? "am" : "pm"}`;
 }
 
 const assistant = (ctx: TurnContext, content: JsonLine[]): JsonLine => ({

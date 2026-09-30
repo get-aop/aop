@@ -1,4 +1,11 @@
-import type { BlockedQuestion, Message, Project, Thread, ThreadStep } from "@aop/common";
+import type {
+  BlockedQuestion,
+  Message,
+  Project,
+  Thread,
+  ThreadStatus,
+  ThreadStep,
+} from "@aop/common";
 import { generateTypeId } from "@aop/infra";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
 import type { LocalServerContext } from "../context.ts";
@@ -38,6 +45,8 @@ export interface ThreadService {
   ) => Promise<ThreadResult<{ thread: Thread }>>;
   /** Answers the question a thread is waiting on; the answer resumes its runtime session. */
   reply: (threadId: string, text: string) => Promise<ThreadResult<{ thread: Thread }>>;
+  /** Ends a rate-limited thread's wait now instead of at its reset; the thread takes up its work again. */
+  resume: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
   stop: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
   /** The thread's own tools: it needs the person's call (waiting on you) or reports progress. */
   askUser: (
@@ -93,12 +102,13 @@ export const createThreadService = (ctx: LocalServerContext, chat: ChatEngine): 
     await ctx.eventPublisher.transaction((tx) => recordThreadRemoved(tx, projectId, threadId));
   };
 
-  // Stop has waited for the session to go idle, so a thread still `working` or `waiting-on-you`
-  // has no turn behind it: a wait for the person that Stop ends, or a status left stale by a
-  // failure that kept its run from settling the thread.
+  // Stop has waited for the session to go idle, so a thread still `working`, `queued`,
+  // `rate-limited` or `waiting-on-you` has no turn behind it: a wait Stop ends (for the person, a
+  // free run slot or a rate limit's reset), or a status left stale by a failure that kept its run
+  // from settling the thread.
   const endStoppedThread = async (threadId: string): Promise<void> => {
     const thread = await ctx.threadRepository.getById(threadId);
-    if (thread?.status !== "waiting-on-you" && thread?.status !== "working") return;
+    if (!thread || !STOP_ENDS.has(thread.status)) return;
     await ctx.eventPublisher.transaction(async (tx) => {
       await createThreadRepository(tx.db).update(threadId, {
         status: { status: "idle" },
@@ -201,6 +211,16 @@ export const createThreadService = (ctx: LocalServerContext, chat: ChatEngine): 
       return sendToThread(thread, text, null);
     },
 
+    resume: async (threadId) => {
+      const thread = await ctx.threadRepository.getById(threadId);
+      if (!thread) return { success: false, error: { code: "THREAD_NOT_FOUND" } };
+      if (thread.status !== "rate-limited") {
+        return { success: false, error: { code: "NOT_RATE_LIMITED" } };
+      }
+      await chat.resumeRateLimited(threadId);
+      return reload(threadId);
+    },
+
     stop: async (threadId) => {
       const session = await threadSession(ctx, threadId);
       if (!session) return { success: false, error: { code: "THREAD_NOT_FOUND" } };
@@ -243,6 +263,13 @@ export const createThreadService = (ctx: LocalServerContext, chat: ChatEngine): 
     },
   };
 };
+
+const STOP_ENDS: ReadonlySet<ThreadStatus> = new Set([
+  "waiting-on-you",
+  "working",
+  "queued",
+  "rate-limited",
+]);
 
 /** The chat session behind a thread; a coordinator or a plain session is not a thread. */
 const threadSession = async (ctx: LocalServerContext, threadId: string) => {

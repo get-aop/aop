@@ -60,6 +60,11 @@ describe("planTurn", () => {
     expect(ending).toEqual({ kind: "failure", message: "fake CLI: invalid calls directive" });
   });
 
+  test("ratelimit ends the turn on a usage limit, ahead of a failure message", () => {
+    expect(plan("ratelimit=30").ending).toEqual({ kind: "rate-limit", resetsInSeconds: 30 });
+    expect(plan('ratelimit=30 fail="bad"').ending).toMatchObject({ kind: "rate-limit" });
+  });
+
   test("failure wins over exit code, and an exit code alone ends the turn silently", () => {
     expect(plan('fail="bad" exit=5').ending).toEqual({ kind: "failure", message: "bad" });
     expect(plan("exit=5").ending).toEqual({ kind: "silent" });

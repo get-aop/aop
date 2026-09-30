@@ -31,6 +31,9 @@ const chooseEnding = (directives: Directives, ctx: TurnContext): Ending => {
   if (directives.callsError !== undefined) {
     return { kind: "failure", message: directives.callsError };
   }
+  if (directives.rateLimitSeconds !== undefined) {
+    return { kind: "rate-limit", resetsInSeconds: directives.rateLimitSeconds };
+  }
   if (directives.failMessage !== undefined) {
     return { kind: "failure", message: directives.failMessage };
   }

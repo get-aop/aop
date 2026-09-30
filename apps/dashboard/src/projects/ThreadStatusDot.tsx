@@ -4,6 +4,9 @@ import { cn } from "@/lib/cn";
 const DOT_CLASS: Record<ThreadStatus, string> = {
   "waiting-on-you": "bg-waiting",
   working: "aop-running-dot bg-running motion-safe:animate-[aop-pulse_2s_ease-in-out_infinite]",
+  // Rings, not fills: neither is doing anything now. One waits for a run slot, one for a rate limit.
+  queued: "ring-1 ring-inset ring-queued",
+  "rate-limited": "ring-1 ring-inset ring-waiting",
   "ready-for-review": "bg-ok",
   landing: "bg-running",
   idle: "bg-queued",

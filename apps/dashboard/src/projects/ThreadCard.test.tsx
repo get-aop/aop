@@ -114,6 +114,36 @@ describe("ThreadCard", () => {
     expect(window.location.pathname).toBe("/projects/p1/threads/t%201");
   });
 
+  test("a queued or rate-limited thread has its own label and the line that says why", () => {
+    const { rerender } = render(
+      <ThreadCard
+        now={NOW}
+        thread={makeThread({ status: "queued", liveStatusLine: "Waiting for a free run slot" })}
+      />,
+    );
+    expect(card().getAttribute("data-status")).toBe("queued");
+    expect(screen.getByTestId("thread-status-label").textContent).toBe("Queued");
+    expect(screen.getByTestId("thread-status-line").textContent).toBe(
+      "Waiting for a free run slot",
+    );
+
+    rerender(
+      <ThreadCard
+        now={NOW}
+        thread={makeThread({
+          status: "rate-limited",
+          liveStatusLine:
+            "Paused: You've hit your session limit. Resuming automatically at 3:45 PM.",
+        })}
+      />,
+    );
+    expect(card().getAttribute("data-status")).toBe("rate-limited");
+    expect(screen.getByTestId("thread-status-label").textContent).toBe("Rate limited");
+    expect(screen.getByTestId("thread-status-line").textContent).toContain(
+      "Resuming automatically",
+    );
+  });
+
   test("a resolved thread reads as closed", () => {
     render(<ThreadCard now={NOW} thread={makeThread({ status: "resolved" })} />);
     expect(card().className).toContain("opacity-70");

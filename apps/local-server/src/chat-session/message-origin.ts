@@ -15,6 +15,8 @@ export const MessageOriginSchema = z.discriminatedUnion("type", [
     threadId: z.string().min(1),
     outcome: ThreadReportOutcomeSchema,
   }),
+  /** The server telling a session its wait on a rate limit is over; it is never shown as a message. */
+  z.object({ type: z.literal("rate-limit-resume") }),
 ]);
 export type MessageOrigin = z.infer<typeof MessageOriginSchema>;
 

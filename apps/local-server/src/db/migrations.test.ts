@@ -57,6 +57,7 @@ describe("runMigrations", () => {
       { version: 2, name: "projects" },
       { version: 3, name: "run-usage" },
       { version: 4, name: "coordinator" },
+      { version: 5, name: "scheduling" },
     ]);
   });
 
@@ -79,7 +80,7 @@ describe("runMigrations", () => {
       .executeTakeFirstOrThrow();
     expect(saved.value).toBe("be brief");
     const ledger = await db.selectFrom("schema_migrations").select("version").execute();
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4]);
+    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
   });
 
   test("refuses a database written by a newer build", async () => {

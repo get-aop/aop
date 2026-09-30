@@ -122,13 +122,20 @@ const emit = async (segments: Segment[], directives: Directives, io: Io): Promis
   return false;
 };
 
+const describeExit = (ending: Exclude<Ending, { kind: "success" }>, exitCode: number): string => {
+  switch (ending.kind) {
+    case "failure":
+      return ending.message;
+    case "rate-limit":
+      return `usage limit reached, resets in ${ending.resetsInSeconds}s`;
+    case "silent":
+      return `exiting with status ${exitCode}`;
+  }
+};
+
 const exitCodeFor = (ending: Ending, directives: Directives, io: Io): number => {
   if (ending.kind === "success") return 0;
   const exitCode = directives.exitCode ?? FAILURE_EXIT_CODE;
-  io.warn(
-    ending.kind === "failure"
-      ? `fake-cli: ${ending.message}`
-      : `fake-cli: exiting with status ${exitCode}`,
-  );
+  io.warn(`fake-cli: ${describeExit(ending, exitCode)}`);
   return exitCode;
 };
