@@ -1,24 +1,15 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 process.env.AOP_LOCAL_SERVER_PORT ??= "4111";
 process.env.AOP_LOCAL_SERVER_URL ??= "http://127.0.0.1:4111";
 
 const clientModulePath = "./client.ts?client-test";
 const clientModule = await import(clientModulePath);
-const { fetchServer, getServerUrl, isServerRunning, requireServer } =
-  clientModule as typeof import("./client.ts");
+const { fetchServer, getServerUrl } = clientModule as typeof import("./client.ts");
 
-const originalExit = process.exit;
 const originalFetch = globalThis.fetch;
 
-beforeEach(() => {
-  process.exit = mock((code?: number) => {
-    throw new Error(`process.exit:${code ?? 0}`);
-  }) as never;
-});
-
 afterEach(() => {
-  process.exit = originalExit;
   globalThis.fetch = originalFetch;
 });
 
@@ -41,47 +32,6 @@ describe("getServerUrl", () => {
     }
 
     process.env.AOP_LOCAL_SERVER_URL = originalServerUrl;
-  });
-});
-
-describe("isServerRunning", () => {
-  test("returns true when health endpoint is ok", async () => {
-    globalThis.fetch = mock(async () => ({ ok: true })) as unknown as typeof fetch;
-
-    await expect(isServerRunning()).resolves.toBe(true);
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${getServerUrl()}/api/health`, {
-      signal: expect.any(AbortSignal),
-    });
-  });
-
-  test("returns false when health endpoint is not ok", async () => {
-    globalThis.fetch = mock(async () => ({ ok: false })) as unknown as typeof fetch;
-
-    await expect(isServerRunning()).resolves.toBe(false);
-  });
-
-  test("returns false when fetch throws", async () => {
-    globalThis.fetch = mock(async () => {
-      throw new Error("boom");
-    }) as unknown as typeof fetch;
-
-    await expect(isServerRunning()).resolves.toBe(false);
-  });
-});
-
-describe("requireServer", () => {
-  test("does not exit when server is healthy", async () => {
-    globalThis.fetch = mock(async () => ({ ok: true })) as unknown as typeof fetch;
-
-    await expect(requireServer()).resolves.toBeUndefined();
-    expect(process.exit).not.toHaveBeenCalled();
-  });
-
-  test("logs error and exits when server is not healthy", async () => {
-    globalThis.fetch = mock(async () => ({ ok: false })) as unknown as typeof fetch;
-
-    await expect(requireServer()).rejects.toThrow("process.exit:1");
-    expect(process.exit).toHaveBeenCalledWith(1);
   });
 });
 
@@ -111,7 +61,7 @@ describe("fetchServer", () => {
       json: async () => errorBody,
     })) as unknown as typeof fetch;
 
-    const result = await fetchServer<{ status: string }>("/api/create-task/start", {
+    const result = await fetchServer<{ status: string }>("/api/settings/unknown_key", {
       method: "POST",
     });
 

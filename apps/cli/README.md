@@ -11,40 +11,14 @@ aop --version
 
 The production local server and dashboard share `http://aop.localhost:25150`. Dashboard development commonly uses port `25160`.
 
-## Status
-
-```bash
-aop status [taskId] [--json]
-```
-
-Without a task id, status summarizes the local factory. With an id, it returns the matching task. `--json` emits machine-readable output.
-
 ## Repositories
 
 ```bash
 aop repo:init [path]
-aop repo:remove [path] [--force]
+aop repo:remove [path]
 ```
 
-`repo:init` registers the path, defaulting to the current directory. `repo:remove` asks you to type the repository name before removing AOP-owned data. `--force` aborts active tasks before removal.
-
-## Task lifecycle
-
-```bash
-aop task:ready <id> [--resume [stepId]]
-aop task:remove <id> [--force]
-```
-
-`task:ready` queues an assigned task. `--resume` retries from its last step; an optional step id selects the resume point. `task:remove` discards a task, with `--force` available when it is working.
-
-## Compatibility task commands
-
-```bash
-aop create-task [description]
-aop run-task <name>
-```
-
-`create-task` is deprecated. Open Sessions and use `/task create` so the runtime can load AOP's current methodology and generate the complete package. `run-task` remains a compatibility path for generating task documents from a name; chat is the public task-intake flow.
+`repo:init` registers the path, defaulting to the current directory. `repo:remove` asks you to type the repository name before removing AOP-owned data, including the repository's chat sessions and worktrees. Removing the last registered repository also resets AOP's runtime data and settings.
 
 ## Session workspace
 

@@ -14,7 +14,7 @@ Repositories lets a user register a local git repository with AOP, see it in the
 - Run `aop repo:init [path]` in a terminal (defaults to the current directory).
 - Choose the `+` next to **Projects** in the dashboard rail (`data-testid=rail-attach-repo`).
 - Open **Settings → Repositories**.
-- Run `aop repo:remove [path] [--force]`.
+- Run `aop repo:remove [path]`.
 
 ## Driving it with verify-stack and drive
 

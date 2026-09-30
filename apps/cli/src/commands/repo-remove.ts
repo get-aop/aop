@@ -1,5 +1,4 @@
 import { resolve } from "node:path";
-import type { RemoveRepoOptions } from "@aop/common";
 import { getLogger } from "@aop/infra";
 import { fetchServer } from "./client.ts";
 
@@ -17,11 +16,10 @@ interface StatusResponse {
 interface RepoRemoveResponse {
   ok: boolean;
   repoId: string;
-  abortedTasks: number;
   factoryReset?: boolean;
 }
 
-interface RepoRemoveCommandOptions extends RemoveRepoOptions {
+interface RepoRemoveCommandOptions {
   yes?: boolean;
 }
 
@@ -34,19 +32,15 @@ export const repoRemoveCommand = async (
   const repoName = path.split(/[\\/]/).pop() ?? path;
   confirmRepoRemoval(repoName, options);
 
-  const forceParam = options.force ? "?force=true" : "";
-  const result = await fetchServer<RepoRemoveResponse>(`/api/repos/${repo.id}${forceParam}`, {
+  const result = await fetchServer<RepoRemoveResponse>(`/api/repos/${repo.id}`, {
     method: "DELETE",
   });
 
   if (!result.ok) {
-    handleRemoveError(result);
-    return;
+    logger.error("Error: {error}", { error: result.error.error });
+    process.exit(1);
   }
 
-  if (result.data.abortedTasks > 0) {
-    logger.info("Aborted {count} working tasks", { count: result.data.abortedTasks });
-  }
   if (result.data.factoryReset) {
     logger.info("AOP data factory-reset after removing the last repository");
   }
@@ -80,22 +74,4 @@ const confirmRepoRemoval = (repoName: string, options: RepoRemoveCommandOptions)
     logger.error("Error: Repository removal cancelled");
     process.exit(1);
   }
-};
-
-const handleRemoveError = (
-  result: Awaited<ReturnType<typeof fetchServer<RepoRemoveResponse>>>,
-): void => {
-  if (result.ok) {
-    return;
-  }
-
-  if (result.error.error === "Cannot remove repo with working tasks") {
-    logger.error(
-      "Error: Cannot remove repository with {count} working tasks. Use --force to abort them.",
-      { count: (result.error as { count?: number }).count ?? 0 },
-    );
-  } else {
-    logger.error("Error: {error}", { error: result.error.error });
-  }
-  process.exit(1);
 };

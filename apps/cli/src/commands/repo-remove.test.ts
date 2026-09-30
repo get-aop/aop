@@ -65,32 +65,22 @@ describe("repoRemoveCommand", () => {
     });
     mockFetchServer.mockResolvedValueOnce({
       ok: true,
-      data: { ok: true, repoId: "repo-1", abortedTasks: 0 },
+      data: { ok: true, repoId: "repo-1" },
     });
 
     await repoRemoveCommand(undefined, { yes: true });
     expect(mockFetchServer).toHaveBeenCalledTimes(2);
   });
 
-  test("sends DELETE without force param by default", async () => {
+  test("sends DELETE for the registered repo id", async () => {
     mockFetchServer.mockResolvedValueOnce(statusWithRepo).mockResolvedValueOnce({
       ok: true,
-      data: { ok: true, repoId: "repo-1", abortedTasks: 0 },
+      data: { ok: true, repoId: "repo-1" },
     });
 
     await repoRemoveCommand(repoPath);
     expect(mockFetchServer.mock.calls.at(1)?.at(0)).toBe("/api/repos/repo-1");
     expect(mockFetchServer.mock.calls.at(1)?.at(1)).toEqual({ method: "DELETE" });
-  });
-
-  test("sends DELETE with force param when option set", async () => {
-    mockFetchServer.mockResolvedValueOnce(statusWithRepo).mockResolvedValueOnce({
-      ok: true,
-      data: { ok: true, repoId: "repo-1", abortedTasks: 2 },
-    });
-
-    await repoRemoveCommand(repoPath, { force: true });
-    expect(mockFetchServer.mock.calls.at(1)?.at(0)).toBe("/api/repos/repo-1?force=true");
   });
 
   test("exits without deleting when typed confirmation does not match", async () => {
@@ -106,7 +96,7 @@ describe("repoRemoveCommand", () => {
   test("skips typed confirmation with yes option", async () => {
     mockFetchServer.mockResolvedValueOnce(statusWithRepo).mockResolvedValueOnce({
       ok: true,
-      data: { ok: true, repoId: "repo-1", abortedTasks: 0, factoryReset: false },
+      data: { ok: true, repoId: "repo-1", factoryReset: false },
     });
 
     await repoRemoveCommand(repoPath, { yes: true });
@@ -115,34 +105,25 @@ describe("repoRemoveCommand", () => {
     expect(mockFetchServer.mock.calls.at(1)?.at(0)).toBe("/api/repos/repo-1");
   });
 
-  test("exits when repo has working tasks without force", async () => {
+  test("exits when the server refuses removal", async () => {
     mockFetchServer.mockResolvedValueOnce(statusWithRepo).mockResolvedValueOnce({
       ok: false,
       status: 409,
-      error: { error: "Cannot remove repo with working tasks", count: 3 },
+      error: { error: "Cannot remove repo until chat history cleanup succeeds" },
     });
 
     await expect(repoRemoveCommand(repoPath)).rejects.toThrow("process.exit");
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
-  test("succeeds and reports aborted tasks count", async () => {
+  test("succeeds when the last repository is removed and data is factory-reset", async () => {
     mockFetchServer.mockResolvedValueOnce(statusWithRepo).mockResolvedValueOnce({
       ok: true,
-      data: { ok: true, repoId: "repo-1", abortedTasks: 2 },
-    });
-
-    await repoRemoveCommand(repoPath, { force: true });
-    expect(process.exit).not.toHaveBeenCalled();
-  });
-
-  test("succeeds with zero aborted tasks", async () => {
-    mockFetchServer.mockResolvedValueOnce(statusWithRepo).mockResolvedValueOnce({
-      ok: true,
-      data: { ok: true, repoId: "repo-1", abortedTasks: 0 },
+      data: { ok: true, repoId: "repo-1", factoryReset: true },
     });
 
     await repoRemoveCommand(repoPath);
+    expect(mockFetchServer).toHaveBeenCalledTimes(2);
     expect(process.exit).not.toHaveBeenCalled();
   });
 });

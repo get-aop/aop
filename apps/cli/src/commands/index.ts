@@ -1,19 +1,8 @@
 export { configGetCommand } from "./config-get.ts";
 export { configSetCommand } from "./config-set.ts";
-export { createTaskCommand } from "./create-task.ts";
-export { jiraConfigureCommand } from "./jira-configure.ts";
-export { jiraStatusCommand } from "./jira-status.ts";
-export { linearConfigureCommand } from "./linear-configure.ts";
-export { linearConnectCommand } from "./linear-connect.ts";
-export { linearDisconnectCommand } from "./linear-disconnect.ts";
-export { linearStatusCommand } from "./linear-status.ts";
-export { linearUnlockCommand } from "./linear-unlock.ts";
 export { repoInitCommand } from "./repo-init.ts";
 export { repoRemoveCommand } from "./repo-remove.ts";
 export {
   sessionWorkspaceResetCommand,
   sessionWorkspaceSetCommand,
 } from "./session-workspace.ts";
-export { statusCommand } from "./status.ts";
-export { taskReadyCommand } from "./task-ready.ts";
-export { taskRemoveCommand } from "./task-remove.ts";

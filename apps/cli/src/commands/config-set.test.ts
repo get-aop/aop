@@ -25,14 +25,14 @@ describe("configSetCommand", () => {
   test("sends PUT with key and value", async () => {
     mockFetchServer.mockResolvedValue({
       ok: true,
-      data: { ok: true, key: "max_concurrent", value: "10" },
+      data: { ok: true, key: "chat_global_instructions", value: "Prefer small diffs" },
     });
 
-    await configSetCommand("max_concurrent", "10");
-    expect(mockFetchServer).toHaveBeenCalledWith("/api/settings/max_concurrent", {
+    await configSetCommand("chat_global_instructions", "Prefer small diffs");
+    expect(mockFetchServer).toHaveBeenCalledWith("/api/settings/chat_global_instructions", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value: "10" }),
+      body: JSON.stringify({ value: "Prefer small diffs" }),
     });
   });
 
@@ -40,7 +40,10 @@ describe("configSetCommand", () => {
     mockFetchServer.mockResolvedValue({
       ok: false,
       status: 400,
-      error: { error: "Invalid key", validKeys: ["max_concurrent", "timeout"] },
+      error: {
+        error: "Invalid key",
+        validKeys: ["remote_exec_hosts_json", "chat_global_instructions"],
+      },
     });
 
     await expect(configSetCommand("bad_key", "val")).rejects.toThrow("process.exit");
@@ -54,7 +57,7 @@ describe("configSetCommand", () => {
       error: { error: "Server error" },
     });
 
-    await expect(configSetCommand("max_concurrent", "10")).rejects.toThrow("process.exit");
+    await expect(configSetCommand("chat_global_instructions", "x")).rejects.toThrow("process.exit");
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 });

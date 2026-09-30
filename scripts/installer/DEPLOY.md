@@ -229,7 +229,7 @@ bun run build:release -- --target linux-x64
 
 # Start server (background)
 ./dist/release/aop-linux-x64 run --background
-./dist/release/aop-linux-x64 status
+curl -s http://127.0.0.1:25150/api/health
 ./dist/release/aop-linux-x64 stop
 
 # Dashboard is served at http://aop.localhost:25150/

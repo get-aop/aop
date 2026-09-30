@@ -195,64 +195,27 @@ describe("setupLogging", () => {
 });
 
 describe("registerCommands", () => {
-  test("registers all expected commands", () => {
+  test("registers exactly the surviving commands", () => {
     const cli = cac("test-aop");
     registerCommands(cli);
 
-    const commandNames = cli.commands.map((cmd) => cmd.name);
-    expect(commandNames).toContain("status");
-    expect(commandNames).toContain("repo:init");
-    expect(commandNames).toContain("repo:remove");
-    expect(commandNames).toContain("task:ready");
-    expect(commandNames).toContain("task:remove");
-    expect(commandNames).toContain("create-task");
-    expect(commandNames).not.toContain("run-task");
-    expect(commandNames).toContain("config:get");
-    expect(commandNames).toContain("config:set");
-    expect(commandNames).toContain("linear:configure");
-    expect(commandNames).toContain("jira:configure");
-    expect(commandNames).toContain("jira:status");
+    const commandNames = cli.commands.map((cmd) => cmd.name).sort();
+    expect(commandNames).toEqual([
+      "config:get",
+      "config:set",
+      "repo:init",
+      "repo:remove",
+      "session",
+    ]);
   });
 
-  test("status command has --json option", () => {
-    const cli = cac("test-aop");
-    registerCommands(cli);
-
-    const statusCmd = cli.commands.find((cmd) => cmd.name === "status");
-    expect(statusCmd).toBeDefined();
-    const optionNames = statusCmd?.options.map((opt) => opt.name);
-    expect(optionNames).toContain("json");
-  });
-
-  test("repo:remove command has --force option", () => {
+  test("repo:remove takes no --force option", () => {
     const cli = cac("test-aop");
     registerCommands(cli);
 
     const cmd = cli.commands.find((c) => c.name === "repo:remove");
     expect(cmd).toBeDefined();
-    const optionNames = cmd?.options.map((opt) => opt.name);
-    expect(optionNames).toContain("force");
-  });
-
-  test("task:ready command has only the --resume option", () => {
-    const cli = cac("test-aop");
-    registerCommands(cli);
-
-    const cmd = cli.commands.find((c) => c.name === "task:ready");
-    expect(cmd).toBeDefined();
-    const optionNames = cmd?.options.map((opt) => opt.name);
-    expect(optionNames).toContain("resume");
-    expect(optionNames).toHaveLength(1);
-  });
-
-  test("task:remove command has --force option", () => {
-    const cli = cac("test-aop");
-    registerCommands(cli);
-
-    const cmd = cli.commands.find((c) => c.name === "task:remove");
-    expect(cmd).toBeDefined();
-    const optionNames = cmd?.options.map((opt) => opt.name);
-    expect(optionNames).toContain("force");
+    expect(cmd?.options).toHaveLength(0);
   });
 
   test("dispatches documented session workspace commands through CAC", async () => {
@@ -280,15 +243,8 @@ describe("registerCommands", () => {
   test("wires command actions to the provided handlers", async () => {
     const cli = cac("test-aop");
     const handlers = {
-      statusCommand: mock(() => undefined),
-      linearConfigureCommand: mock(() => undefined),
-      jiraConfigureCommand: mock(() => undefined),
-      jiraStatusCommand: mock(() => undefined),
       repoInitCommand: mock(() => undefined),
       repoRemoveCommand: mock(() => undefined),
-      taskReadyCommand: mock(() => undefined),
-      taskRemoveCommand: mock(() => undefined),
-      createTaskCommand: mock(async () => undefined),
       configGetCommand: mock(() => undefined),
       configSetCommand: mock(() => undefined),
     };
@@ -306,48 +262,18 @@ describe("registerCommands", () => {
       return command.commandAction;
     };
 
-    getCommandAction("status")("task-1", { json: true });
-    getCommandAction("linear:configure")({
-      clientId: "linear-client-id",
-      callbackUrl: "http://127.0.0.1:4310/api/linear/callback",
-    });
-    getCommandAction("jira:configure")({
-      siteUrl: "https://acme.atlassian.net",
-      email: "dev@example.com",
-      apiToken: "jira-token",
-    });
-    getCommandAction("jira:status")();
     getCommandAction("repo:init")("/repo");
-    getCommandAction("repo:remove")("/repo", { force: true });
-    getCommandAction("task:ready")("task-123", { resume: "design_brief" });
-    getCommandAction("task:remove")("task-123", { force: false });
-    await getCommandAction("create-task")("build feature", { debug: true, raw: true });
-    getCommandAction("config:get")("max_concurrent_tasks");
-    getCommandAction("config:set")("max_concurrent_tasks", "10");
+    getCommandAction("repo:remove")("/repo");
+    getCommandAction("config:get")("chat_global_instructions");
+    getCommandAction("config:set")("chat_global_instructions", "Prefer small diffs");
 
-    expect(handlers.statusCommand).toHaveBeenCalledWith("task-1", { json: true });
-    expect(handlers.linearConfigureCommand).toHaveBeenCalledWith({
-      clientId: "linear-client-id",
-      callbackUrl: "http://127.0.0.1:4310/api/linear/callback",
-    });
-    expect(handlers.jiraConfigureCommand).toHaveBeenCalledWith({
-      siteUrl: "https://acme.atlassian.net",
-      email: "dev@example.com",
-      apiToken: "jira-token",
-    });
-    expect(handlers.jiraStatusCommand).toHaveBeenCalled();
     expect(handlers.repoInitCommand).toHaveBeenCalledWith("/repo");
-    expect(handlers.repoRemoveCommand).toHaveBeenCalledWith("/repo", { force: true });
-    expect(handlers.taskReadyCommand).toHaveBeenCalledWith("task-123", {
-      retryFromStep: "design_brief",
-    });
-    expect(handlers.taskRemoveCommand).toHaveBeenCalledWith("task-123", { force: false });
-    expect(handlers.createTaskCommand).toHaveBeenCalledWith("build feature", {
-      debug: true,
-      raw: true,
-    });
-    expect(handlers.configGetCommand).toHaveBeenCalledWith("max_concurrent_tasks");
-    expect(handlers.configSetCommand).toHaveBeenCalledWith("max_concurrent_tasks", "10");
+    expect(handlers.repoRemoveCommand).toHaveBeenCalledWith("/repo");
+    expect(handlers.configGetCommand).toHaveBeenCalledWith("chat_global_instructions");
+    expect(handlers.configSetCommand).toHaveBeenCalledWith(
+      "chat_global_instructions",
+      "Prefer small diffs",
+    );
   });
 });
 

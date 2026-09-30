@@ -10,21 +10,10 @@ import cac, { type CAC } from "cac";
 import {
   configGetCommand,
   configSetCommand,
-  createTaskCommand,
-  jiraConfigureCommand,
-  jiraStatusCommand,
-  linearConfigureCommand,
-  linearConnectCommand,
-  linearDisconnectCommand,
-  linearStatusCommand,
-  linearUnlockCommand,
   repoInitCommand,
   repoRemoveCommand,
   sessionWorkspaceResetCommand,
   sessionWorkspaceSetCommand,
-  statusCommand,
-  taskReadyCommand,
-  taskRemoveCommand,
 } from "./commands/index.ts";
 
 declare const BUILD_VERSION: string;
@@ -32,21 +21,10 @@ declare const BUILD_VERSION: string;
 type CommandHandlers = {
   configGetCommand: typeof configGetCommand;
   configSetCommand: typeof configSetCommand;
-  createTaskCommand: typeof createTaskCommand;
-  jiraConfigureCommand: typeof jiraConfigureCommand;
-  jiraStatusCommand: typeof jiraStatusCommand;
-  linearConfigureCommand: typeof linearConfigureCommand;
-  linearConnectCommand: typeof linearConnectCommand;
-  linearDisconnectCommand: typeof linearDisconnectCommand;
-  linearStatusCommand: typeof linearStatusCommand;
-  linearUnlockCommand: typeof linearUnlockCommand;
   repoInitCommand: typeof repoInitCommand;
   repoRemoveCommand: typeof repoRemoveCommand;
   sessionWorkspaceResetCommand: typeof sessionWorkspaceResetCommand;
   sessionWorkspaceSetCommand: typeof sessionWorkspaceSetCommand;
-  statusCommand: typeof statusCommand;
-  taskReadyCommand: typeof taskReadyCommand;
-  taskRemoveCommand: typeof taskRemoveCommand;
 };
 
 type LoggingDependencies = {
@@ -65,21 +43,10 @@ type CliDependencies = {
 const defaultCommandHandlers: CommandHandlers = {
   configGetCommand,
   configSetCommand,
-  createTaskCommand,
-  jiraConfigureCommand,
-  jiraStatusCommand,
-  linearConfigureCommand,
-  linearConnectCommand,
-  linearDisconnectCommand,
-  linearStatusCommand,
-  linearUnlockCommand,
   repoInitCommand,
   repoRemoveCommand,
   sessionWorkspaceResetCommand,
   sessionWorkspaceSetCommand,
-  statusCommand,
-  taskReadyCommand,
-  taskRemoveCommand,
 };
 
 export const CLI_VERSION = readCliPackageVersion();
@@ -160,89 +127,12 @@ export const registerCommands = (
   commands: CommandHandlers = defaultCommandHandlers,
 ): void => {
   cli
-    .command("status [taskId]", "Show status")
-    .option("--json", "Output as JSON")
-    .action((taskId, options) => commands.statusCommand(taskId, { json: options.json }));
-
-  cli
-    .command("linear:configure", "Save Linear OAuth settings")
-    .option("--client-id <clientId>", "Linear OAuth client ID")
-    .option("--callback-url <callbackUrl>", "Linear OAuth callback URL")
-    .action((options) =>
-      commands.linearConfigureCommand({
-        clientId: options.clientId,
-        callbackUrl: options.callbackUrl,
-      }),
-    );
-
-  cli
-    .command("linear:connect", "Start the Linear OAuth flow")
-    .action(() => commands.linearConnectCommand());
-
-  cli
-    .command("linear:status", "Show Linear connection status")
-    .action(() => commands.linearStatusCommand());
-
-  cli
-    .command("linear:unlock", "Unlock the local Linear token store")
-    .action(() => commands.linearUnlockCommand());
-
-  cli
-    .command("linear:disconnect", "Disconnect the local Linear token store")
-    .action(() => commands.linearDisconnectCommand());
-
-  cli
-    .command("jira:configure", "Save Jira Cloud settings")
-    .option("--site-url <siteUrl>", "Jira Cloud site URL")
-    .option("--email <email>", "Jira Cloud account email")
-    .option("--api-token <apiToken>", "Jira Cloud API token")
-    .action((options) =>
-      commands.jiraConfigureCommand({
-        siteUrl: options.siteUrl,
-        email: options.email,
-        apiToken: options.apiToken,
-      }),
-    );
-
-  cli
-    .command("jira:status", "Show Jira connection status")
-    .action(() => commands.jiraStatusCommand());
-
-  cli
     .command("repo:init [path]", "Register repository")
     .action((path) => commands.repoInitCommand(path));
 
   cli
     .command("repo:remove [path]", "Unregister repository")
-    .option("--force", "Abort working tasks")
-    .action((path, options) => commands.repoRemoveCommand(path, { force: options.force }));
-
-  cli
-    .command("task:ready <identifier>", "Mark task as READY")
-    .option("--resume [stepId]", "Retry from last step, or a specific step")
-    .action((identifier, options) =>
-      commands.taskReadyCommand(identifier, {
-        retryFromStep: options.resume === true ? "last" : options.resume || undefined,
-      }),
-    );
-
-  cli
-    .command("task:remove <identifier>", "Remove task")
-    .option("--force", "Abort working task")
-    .action((identifier, options) =>
-      commands.taskRemoveCommand(identifier, { force: options.force }),
-    );
-
-  cli
-    .command("create-task [description]", "Deprecated: use /task create in AOP Sessions")
-    .option("--debug", "Enable debug mode")
-    .option("--raw", "Show raw output")
-    .action(async (description, options) => {
-      await commands.createTaskCommand(description, {
-        debug: options.debug,
-        raw: options.raw,
-      });
-    });
+    .action((path) => commands.repoRemoveCommand(path));
 
   cli
     .command(

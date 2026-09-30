@@ -198,7 +198,6 @@ export {
   RepositoryScopeSchema,
   renderMultiAgentArchitectureMarkdown,
 } from "./types/multi-agent-architecture.ts";
-export type { RemoveRepoOptions } from "./types/repo";
 export type {
   BuiltInRuntimeConfiguration,
   RuntimeConfigurationModel,
