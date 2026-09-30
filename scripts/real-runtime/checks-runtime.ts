@@ -21,22 +21,20 @@ export const allRuns = (observed: Observed): RunObservation[] => [
 export const modelAndEffort = (observed: Observed): CheckResult => {
   const id = "model-and-effort";
   const title = "Every run is Sonnet at medium effort, and the runs stay inside the caps";
-  const runs = allRuns(observed);
-  const problems: string[] = [];
-  for (const run of runs) {
-    const where = `run ${run.row.id}`;
-    if (flagValue(run.argv, "--model") !== "sonnet")
-      problems.push(`${where} did not pass --model sonnet`);
-    if (flagValue(run.argv, "--effort") !== "medium")
-      problems.push(`${where} did not pass --effort medium`);
-    const reported = initOf(run.events)?.model ?? "";
-    if (reported && !/sonnet/i.test(reported)) problems.push(`${where} ran on ${reported}`);
-  }
+  // A run the gate refused (past its cap) never reached the real CLI, so the ledger has no
+  // command line for it; it is not a run on the wrong model.
+  const all = allRuns(observed);
+  const runs = all.filter((run) => run.argv.length > 0);
+  const refused = all.length - runs.length;
+  const problems: string[] = runs.flatMap(modelProblems);
   if (runs.length === 0) problems.push("no run was recorded");
   const models = [...new Set(runs.map((run) => initOf(run.events)?.model ?? "unreported"))];
   const { ledger } = observed;
   const details = [
     `models the CLI reported: ${models.join(", ")}`,
+    ...(refused > 0
+      ? [`${refused} run(s) never reached the real CLI (refused by the gate's caps)`]
+      : []),
     `real claude runs started (gate ledger): ${ledger.runs}; CLI turns (sum of num_turns): ${ledger.cliTurns}; cost $${ledger.costUsd.toFixed(3)}; runs killed by the wall-clock limit: ${ledger.timedOut}`,
   ];
   return verdict(
@@ -46,6 +44,20 @@ export const modelAndEffort = (observed: Observed): CheckResult => {
     "all runs passed --model sonnet --effort medium",
     details,
   );
+};
+
+const modelProblems = (run: RunObservation): string[] => {
+  const where = `run ${run.row.id}`;
+  const reported = initOf(run.events)?.model ?? "";
+  return [
+    ...(flagValue(run.argv, "--model") === "sonnet"
+      ? []
+      : [`${where} did not pass --model sonnet`]),
+    ...(flagValue(run.argv, "--effort") === "medium"
+      ? []
+      : [`${where} did not pass --effort medium`]),
+    ...(reported && !/sonnet/i.test(reported) ? [`${where} ran on ${reported}`] : []),
+  ];
 };
 
 const TOKEN_KEYS = [

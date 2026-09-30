@@ -27,7 +27,7 @@ The coordinator is hermetic: it runs with the AOP tools only, with no Claude set
 | `project_settings_set` | Changes the thread model and effort, or the notification level. The goal and instructions (which go into every session's system prompt), thread access, automatic pull request fixes, repositories and the coordinator's own runtime stay with the person: a call that names any of them fails with an error and changes nothing, also when it names a valid setting too. |
 | `memory_read`, `memory_write` | Read and write the project's memory files. |
 
-A thread's report reaches the coordinator as a `Thread report:` message that wakes it, so it does not poll.
+A thread's report reaches the coordinator as a `Thread report:` message that wakes it, so it does not poll. The wake waits until the coordinator's inbox has been quiet for 2 seconds (up to 10 after the first report), and a run takes every report waiting, in order, as one turn that says how many arrived. Threads that end together, or while the coordinator is busy, are answered by one reply. A report is a stored message, so none is lost if the server stops before the coordinator reads it: boot starts what is waiting. A message from the person ends a batch and gets its own turn.
 
 ### Project thread
 
@@ -38,7 +38,9 @@ A thread's report reaches the coordinator as a `Thread report:` message that wak
 | `aop_open_pr` | Opens the thread's pull request from its own branch, with the title and description the thread gives or ones written from its conversation. Called again, it pushes what the thread did since and returns the same pull request; a merged or closed one is refused. |
 | `memory_read`, `memory_write` | Same project memory as the coordinator. |
 
-Claude's own `AskUserQuestion` is withheld from threads: it cannot be answered without a terminal.
+Claude's own `AskUserQuestion` is withheld from threads: it cannot be answered without a terminal. So are the built-ins that schedule or wake a session (`ScheduleWakeup`, `CronCreate`, `CronDelete`, `CronList`, `Monitor`, `RemoteTrigger`): AOP decides when a thread's next turn starts, and a timer the thread armed would fire into a session AOP is not running.
+
+A thread keeps the person's own MCP servers, settings and hooks. Claude Code defers MCP tools behind its tool search by default, so the `aop` server is passed with `alwaysLoad: true` (a per-server option of Claude Code's MCP config). Its tools are in the prompt from the first request and never need a `ToolSearch` call; other servers keep the CLI's default loading.
 
 ### Plain chat session
 

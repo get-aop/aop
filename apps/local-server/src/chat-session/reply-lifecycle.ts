@@ -11,7 +11,12 @@ import {
   shouldSkipAssistantReply,
   trackBackgroundReply,
 } from "./reply-state.ts";
-import { dispatchQueuedThreadTurns, type StartOutcome } from "./run-dispatch.ts";
+import {
+  COORDINATOR_WAKE_WINDOW_MS,
+  isThreadReport,
+  scheduleCoordinatorWake,
+} from "./report-batch.ts";
+import { dispatchQueuedThreadTurns, isStopping, type StartOutcome } from "./run-dispatch.ts";
 import {
   type CreateProviderFn,
   registerPendingSessionRun,
@@ -20,13 +25,15 @@ import {
 } from "./runtime-engine.ts";
 import type { TurnFollowUp } from "./session-hooks.ts";
 import type { ChatSessionServiceDeps } from "./session-types.ts";
-import { claimNextQueuedSteer } from "./steer-queue.ts";
+import { claimNextQueuedSteer, loadOldestQueuedMessage } from "./steer-queue.ts";
 import { failUnstartableTurn } from "./unstartable-turn.ts";
 
 /**
  * Starts the next queued message of a session that has gone idle. A thread's turn waits for a
  * free run slot in line with every other thread's, so it goes through the dispatcher, which may
- * start another thread's turn first; any other session starts its own at once.
+ * start another thread's turn first. A coordinator whose next message is a thread report waits a
+ * short quiet window first, so reports that arrive together are answered by one run
+ * (report-batch.ts); any other session starts its own at once.
  */
 export const drainQueuedSteers = async (
   ctx: LocalServerContext,
@@ -35,11 +42,18 @@ export const drainQueuedSteers = async (
   deps: ChatSessionServiceDeps,
 ): Promise<void> => {
   try {
-    if ((await ctx.chatSessionRepository.getById(sessionId))?.kind === "thread") {
+    const kind = (await ctx.chatSessionRepository.getById(sessionId))?.kind;
+    if (kind === "thread") {
       await dispatchQueuedRuns(ctx, deps);
-      return;
+    } else if (kind === "coordinator" && (await nextIsThreadReport(ctx, sessionId))) {
+      scheduleCoordinatorWake(
+        sessionId,
+        deps.coordinatorWakeWindowMs ?? COORDINATOR_WAKE_WINDOW_MS,
+        async () => void (await startQueuedTurn(ctx, sessionId, runtime, deps)),
+      );
+    } else {
+      await startQueuedTurn(ctx, sessionId, runtime, deps);
     }
-    await startQueuedTurn(ctx, sessionId, runtime, deps);
   } catch (error) {
     // Teardown / server stop can race with post-reply drain.
     if (isDbClosedError(error)) return;
@@ -89,7 +103,7 @@ const startQueuedTurn = async (
 ): Promise<StartOutcome> => {
   let registration: SessionRunRegistration | null = null;
   try {
-    if (abortRequestedSessions.has(sessionId)) return "skipped";
+    if (abortRequestedSessions.has(sessionId) || isStopping(ctx)) return "skipped";
     registration = registerPendingSessionRun(sessionId, runtime);
     if (!registration) return "skipped";
     await deps.beforeQueuedRunClaim?.(sessionId);
@@ -110,6 +124,7 @@ const startQueuedTurn = async (
         createProviderFn: deps.createProviderFn,
         beforeAssistantReply: deps.beforeAssistantReply,
         beforeQueuedRunClaim: deps.beforeQueuedRunClaim,
+        coordinatorWakeWindowMs: deps.coordinatorWakeWindowMs,
       }),
     );
     registration = null;
@@ -139,6 +154,7 @@ export const completeAssistantReplyInBackground = async (input: {
   createProviderFn?: CreateProviderFn;
   beforeAssistantReply?: (run: ChatRun) => Promise<void>;
   beforeQueuedRunClaim?: (sessionId: string) => Promise<void>;
+  coordinatorWakeWindowMs?: number;
 }): Promise<void> => {
   let followUp: TurnFollowUp = NO_FOLLOW_UP;
   try {
@@ -163,10 +179,16 @@ export const completeAssistantReplyInBackground = async (input: {
     const deps = {
       createProviderFn: input.createProviderFn,
       beforeQueuedRunClaim: input.beforeQueuedRunClaim,
+      coordinatorWakeWindowMs: input.coordinatorWakeWindowMs,
     };
     await drainQueuedSteers(input.ctx, input.sessionId, input.session.runtime, deps);
     await applyFollowUp(input.ctx, followUp, deps);
   }
+};
+
+const nextIsThreadReport = async (ctx: LocalServerContext, sessionId: string): Promise<boolean> => {
+  const next = await loadOldestQueuedMessage(ctx, sessionId);
+  return next !== undefined && isThreadReport(next);
 };
 
 /**

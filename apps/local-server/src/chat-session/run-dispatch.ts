@@ -33,6 +33,9 @@ export const stopDispatching = (ctx: LocalServerContext): void => {
   shuttingDown.add(ctx);
 };
 
+/** Whether the server is stopping, so no turn may start. */
+export const isStopping = (ctx: LocalServerContext): boolean => shuttingDown.has(ctx);
+
 /**
  * Starts queued thread turns while the host has free run slots, oldest first.
  *

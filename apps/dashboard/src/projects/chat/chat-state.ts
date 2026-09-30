@@ -170,16 +170,26 @@ export const isReply = (message: Message): boolean => message.role === "assistan
 export const isUserSide = (message: Message): boolean => message.role !== "assistant";
 
 /**
- * Where a message that is new to the page goes. The host runs one turn at a time, oldest
- * message first, so a reply answers the oldest message no reply follows yet and sits right
- * after it; a message sent while the coordinator works comes after the reply it waited for.
- * That is the order a fetch returns, so the chat reads the same before and after a reload.
+ * Where a message that is new to the page goes. A reply sits right after the message it says it
+ * answers (`inReplyTo`): with thread reports that arrive together, that is the newest of several.
+ * Without one, the host runs one turn at a time, oldest message first, so a reply answers the
+ * oldest message no reply follows yet and sits right after it. A message sent while the
+ * coordinator works comes after the reply it waited for. That is the order a fetch returns, so
+ * the chat reads the same before and after a reload.
  */
 const insertMessage = (messages: readonly Message[], message: Message): readonly Message[] => {
   const at = isReply(message)
-    ? afterOldestUnanswered(messages)
+    ? afterAnswered(messages, message)
     : afterLatestNotNewer(messages, message);
   return [...messages.slice(0, at), message, ...messages.slice(at)];
+};
+
+const afterAnswered = (messages: readonly Message[], reply: Message): number => {
+  const answered =
+    reply.role === "assistant" && reply.inReplyTo
+      ? messages.findIndex(({ id }) => id === reply.inReplyTo)
+      : -1;
+  return answered === -1 ? afterOldestUnanswered(messages) : answered + 1;
 };
 
 const afterOldestUnanswered = (messages: readonly Message[]): number => {

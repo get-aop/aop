@@ -10,6 +10,7 @@ import {
   recoveryTasks,
   waitForPendingChatReplies,
 } from "./reply-state.ts";
+import { cancelCoordinatorWakes } from "./report-batch.ts";
 import { cancelAllResumeTimers } from "./resume-timers.ts";
 import { stopDispatching } from "./run-dispatch.ts";
 import { stopOrphanedChatRunProcess } from "./run-process.ts";
@@ -139,13 +140,18 @@ export const shutdownChatSessions = async (ctx: LocalServerContext): Promise<voi
   // timer fires into a closing database. Both are stored, and start again at boot.
   stopDispatching(ctx);
   cancelAllResumeTimers();
+  cancelCoordinatorWakes();
   for (const controller of recoveryAbortControllers.values()) controller.abort();
   const sessionIds = new Set([...activeSessionRunIds(), ...pendingSessionReplies]);
   for (const sessionId of sessionIds) {
     abortRequestedSessions.add(sessionId);
     interruptSessionRun(sessionId, "abort");
     const session = await ctx.chatSessionRepository.getById(sessionId);
-    if (session) await cancelQueuedSteers(ctx, sessionId, session.runtime, "abort");
+    // What waits in a project session (a thread report, a thread's next turn) is stored work
+    // that starts at boot; only a plain chat's queued steers are dropped with the conversation.
+    if (session && !session.project_id) {
+      await cancelQueuedSteers(ctx, sessionId, session.runtime, "abort");
+    }
   }
   while (backgroundReplyTasks.size > 0) {
     await Promise.allSettled(backgroundReplyTasks);

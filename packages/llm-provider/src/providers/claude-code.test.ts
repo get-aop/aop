@@ -87,7 +87,9 @@ describe("buildCommand", () => {
       cmd.slice(cmd.indexOf("--setting-sources"), cmd.indexOf("--setting-sources") + 2),
     ).toEqual(["--setting-sources", "project"]);
     expect(JSON.parse(cmd[cmd.indexOf("--mcp-config") + 1] ?? "{}")).toEqual({
-      mcpServers: { aop: { type: "http", url: "http://127.0.0.1:25350/api/mcp" } },
+      mcpServers: {
+        aop: { type: "http", url: "http://127.0.0.1:25350/api/mcp", alwaysLoad: true },
+      },
     });
   });
 
@@ -204,7 +206,7 @@ describe("buildCommand", () => {
     expect(cmd).not.toContain("project");
     expect(cmd).not.toContain(retiredSafeModeFlag);
     expect(cmd).toContain(
-      '{"mcpServers":{"aop":{"type":"http","url":"http://127.0.0.1:25350/api/mcp"}}}',
+      '{"mcpServers":{"aop":{"type":"http","url":"http://127.0.0.1:25350/api/mcp","alwaysLoad":true}}}',
     );
     expect(cmd).not.toContain("--settings");
   });
@@ -421,7 +423,9 @@ describe("buildCommand", () => {
     expect(cmd.slice(cmd.indexOf("coordinate"))).toEqual([
       "coordinate",
       "--mcp-config",
-      JSON.stringify({ mcpServers: { aop: { type: "http", url: mcpServerUrl } } }),
+      JSON.stringify({
+        mcpServers: { aop: { type: "http", url: mcpServerUrl, alwaysLoad: true } },
+      }),
       "--disallowedTools",
       "AskUserQuestion",
       "--add-dir",

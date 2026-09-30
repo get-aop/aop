@@ -82,6 +82,7 @@ const acceptIdleSessionMessage = async (
         createProviderFn: deps.createProviderFn,
         beforeAssistantReply: deps.beforeAssistantReply,
         beforeQueuedRunClaim: deps.beforeQueuedRunClaim,
+        coordinatorWakeWindowMs: deps.coordinatorWakeWindowMs,
       }),
     );
     transferredRegistration = true;
@@ -152,6 +153,7 @@ export const retryFreshChatRun = async (
         createProviderFn: deps.createProviderFn,
         beforeAssistantReply: deps.beforeAssistantReply,
         beforeQueuedRunClaim: deps.beforeQueuedRunClaim,
+        coordinatorWakeWindowMs: deps.coordinatorWakeWindowMs,
       }),
     );
     transferredRegistration = true;

@@ -18,6 +18,7 @@ import {
   validateChatImageAttachments,
 } from "./message-images.ts";
 import { type MessageOrigin, serializeMessageOrigin } from "./message-origin.ts";
+import { consumeAnsweredMessages, readNextTurn } from "./report-batch.ts";
 import {
   createSessionRunLogPath,
   isSessionRunActive,
@@ -207,16 +208,16 @@ export const claimNextQueuedSteer = async (
   if ("reason" in idle) return idle;
   const session = idle;
 
-  const queued = await loadOldestQueuedMessage(ctx, sessionId);
+  const oldest = await loadOldestQueuedMessage(ctx, sessionId);
 
-  if (!queued) return { success: false, reason: "EMPTY" };
+  if (!oldest) return { success: false, reason: "EMPTY" };
+  const { queued, alsoAnswered, decoded } = await readNextTurn(ctx, session, oldest);
   // Read before the transaction opens: a transaction holds the only connection.
   const runCap = session.kind === "thread" ? await readRunCap(ctx.settingsRepository) : null;
 
   const assistantMessageId = generateTypeId("smsg");
   const runId = generateTypeId("crun");
   const logFilePath = await createSessionRunLogPath(sessionId);
-  const decoded = decodeStoredImages(queued.content);
   const workspace = await boundWorkspace(ctx, session);
   if ("error" in workspace) {
     return { success: false, reason: "UNSTARTABLE", message: workspace.error };
@@ -243,6 +244,7 @@ export const claimNextQueuedSteer = async (
     const claimed = await persistQueuedRun(ctx, {
       session,
       queued,
+      alsoAnswered,
       sessionId,
       runId,
       assistantMessageId,
@@ -332,6 +334,8 @@ export const persistQueuedRun = async (
   input: {
     session: ChatSession;
     queued: ChatMessage;
+    /** Waiting messages this run answers along with `queued`; consumed in the same transaction. */
+    alsoAnswered?: ChatMessage[];
     sessionId: string;
     runId: string;
     assistantMessageId: string;
@@ -382,6 +386,7 @@ export const persistQueuedRun = async (
         updated_at: claimedAt,
       })
       .execute();
+    await consumeAnsweredMessages(trx, input, claimedAt);
     // Drop mid-run labels once the turn is claimed so the UI stops saying
     // "Steering/Queued" after the follow-up reply has started (or finished).
     await trx

@@ -355,7 +355,16 @@ describe("coordinator and threads against the fake CLI", () => {
     expect(new URL(coordinatorRun?.mcpServerUrl ?? "").searchParams.get("sessionId")).toBe(
       coordinator?.id ?? "",
     );
-    expect(threadRun).toMatchObject({ isolation: "open", disallowedTools: ["AskUserQuestion"] });
+    expect(threadRun).toMatchObject({ isolation: "open" });
+    expect(threadRun?.disallowedTools).toEqual([
+      "AskUserQuestion",
+      "ScheduleWakeup",
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "Monitor",
+      "RemoteTrigger",
+    ]);
     expect(threadRun?.builtInTools).toBeUndefined();
     expect(threadRun?.allowedTools).toContain("mcp__aop__aop_ask_user");
     expect(threadRun?.allowedTools).not.toContain("mcp__aop__thread_spawn");

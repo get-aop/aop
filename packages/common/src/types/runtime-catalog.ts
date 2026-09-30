@@ -14,12 +14,19 @@ interface RuntimeCatalogEntry {
   thinkingLabels: Readonly<Record<ReasoningEffort, string>>;
 }
 
+// Newest first within a family. The first entry is the fallback when a stored model is unusable, and
+// the CLI's own aliases resolve to claude-opus-5-5, claude-sonnet-5-5, claude-haiku-4-5 and
+// claude-fable-5-1 (Claude Code 2.1.285). Older ids stay listed so a project that names one keeps
+// working and keeps showing it in pickers.
 const CLAUDE_CODE_MODELS = [
+  "claude-opus-5-5",
   "claude-opus-5",
   "claude-opus-4-8",
   "claude-opus-4-7",
   "claude-opus-4-6",
+  "claude-fable-5-1",
   "claude-fable-5",
+  "claude-sonnet-5-5",
   "claude-sonnet-4-6",
   "claude-haiku-4-5",
 ] as const;
@@ -29,16 +36,26 @@ const RUNTIME_CATALOG: Record<CliProvider, RuntimeCatalogEntry> = {
     label: "Claude Code",
     models: CLAUDE_CODE_MODELS,
     modelLabels: {
+      "claude-opus-5-5": "Opus 5.5",
       "claude-opus-5": "Opus 5",
       "claude-opus-4-8": "Opus 4.8",
       "claude-opus-4-7": "Opus 4.7",
       "claude-opus-4-6": "Opus 4.6",
+      "claude-fable-5-1": "Fable 5.1",
       "claude-fable-5": "Fable 5",
+      "claude-sonnet-5-5": "Sonnet 5.5",
       "claude-sonnet-4-6": "Sonnet 4.6",
       "claude-haiku-4-5": "Haiku 4.5",
     },
-    maxThinkingModels: new Set(["claude-opus-5", "claude-opus-4-8", "claude-fable-5"]),
-    fastModeModels: new Set(["claude-opus-5"]),
+    maxThinkingModels: new Set([
+      "claude-opus-5-5",
+      "claude-opus-5",
+      "claude-opus-4-8",
+      "claude-fable-5-1",
+      "claude-fable-5",
+      "claude-sonnet-5-5",
+    ]),
+    fastModeModels: new Set(["claude-opus-5-5", "claude-opus-5"]),
     thinkingLabels: {
       low: "Low",
       medium: "Medium",

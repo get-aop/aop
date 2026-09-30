@@ -10,6 +10,17 @@ import {
 import { buildRunOptions, resolveAopMcpUrl } from "./run-options.ts";
 import { NO_PROJECT_COLUMNS } from "./test-utils.ts";
 
+/** Claude's own question tool (AOP asks through `aop_ask_user`) and the built-ins that wake or schedule a session. */
+const THREAD_DISALLOWED_TOOLS = [
+  "AskUserQuestion",
+  "ScheduleWakeup",
+  "CronCreate",
+  "CronDelete",
+  "CronList",
+  "Monitor",
+  "RemoteTrigger",
+];
+
 /** The one value after a single-valued `flag`; undefined when the command has no such flag. */
 const valueAfter = (command: string[], flag: string): string | undefined => {
   const at = command.indexOf(flag);
@@ -215,7 +226,7 @@ describe("buildRunOptions for project sessions", () => {
     expect(flagValues(accepting, "--allowedTools")).toEqual(
       THREAD_TOOL_NAMES.map(claudeMcpToolName),
     );
-    expect(flagValues(accepting, "--disallowedTools")).toEqual(["AskUserQuestion"]);
+    expect(flagValues(accepting, "--disallowedTools")).toEqual(THREAD_DISALLOWED_TOOLS);
   });
 
   test("a thread runs like the person's own Claude Code plus the thread tools, with the access its project chose", () => {
@@ -236,7 +247,7 @@ describe("buildRunOptions for project sessions", () => {
       "mcp__aop__memory_read",
       "mcp__aop__memory_write",
     ]);
-    expect(options.disallowedTools).toEqual(["AskUserQuestion"]);
+    expect(options.disallowedTools).toEqual(THREAD_DISALLOWED_TOOLS);
     expect(options.env).not.toHaveProperty("CLAUDE_CODE_DISABLE_CLAUDE_MDS");
   });
 });

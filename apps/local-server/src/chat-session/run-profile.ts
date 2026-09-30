@@ -34,9 +34,23 @@ const COORDINATOR_PROFILE: RunProfile = {
 // A thread works like the person's own Claude Code (their settings, hooks, MCP servers) plus
 // the AOP tools. Claude's own question tool cannot be answered without a terminal, so it is
 // withheld in favour of `aop_ask_user`, whose answer arrives as the next turn.
+//
+// The built-ins that schedule or wake a session are withheld too. A thread's turn ends when it
+// reports or asks, and AOP decides when the next one starts; a thread that armed its own wakeup,
+// cron, monitor or remote trigger would either be cut off with the process or start turns AOP
+// does not know about (Claude Code 2.1.285 tool names).
+export const SCHEDULING_BUILT_IN_TOOLS = [
+  "ScheduleWakeup",
+  "CronCreate",
+  "CronDelete",
+  "CronList",
+  "Monitor",
+  "RemoteTrigger",
+];
+
 const THREAD_PROFILE: RunProfile = {
   isolation: "open",
-  disallowedTools: ["AskUserQuestion"],
+  disallowedTools: ["AskUserQuestion", ...SCHEDULING_BUILT_IN_TOOLS],
   env: {},
 };
 

@@ -136,6 +136,7 @@ const finishThreadRun = async (
 ): Promise<Finished> => {
   const wire = toWireMessage(scopeOf(session), turn.assistantMessage, [], {
     failed: failedTurn(turn),
+    inReplyTo: turn.run.user_message_id,
   });
   if (wire) await recordMessageCreated(tx, wire);
   const { rateLimit } = turn.outcome;
@@ -159,6 +160,7 @@ const finishCoordinatorRun = async (
   const blocks = await runBlocks(tx, turn);
   const wire = toWireMessage(scopeOf(session), turn.assistantMessage, blocks, {
     failed: failedTurn(turn),
+    inReplyTo: turn.run.user_message_id,
   });
   if (wire) await recordMessageCreated(tx, wire);
   // A coordinator has no status to show the wait in; its reply says it, and the hold makes its
@@ -173,8 +175,8 @@ const finishCoordinatorRun = async (
 const failedTurn = ({ outcome }: FinalizedTurn): boolean =>
   isFailedRun(outcome.status, outcome.failureKind);
 
-// Blocks the run's tools recorded, plus the card of the thread a report woke the coordinator
-// about: the person sees the coordinator's reply next to the thread it is about.
+// Blocks the run's tools recorded, plus the card of each thread a report woke the coordinator
+// about: the person sees the coordinator's reply next to the threads it is about.
 const runBlocks = async (
   tx: PublisherTransaction,
   turn: FinalizedTurn,
@@ -187,29 +189,48 @@ const runBlocks = async (
   const blocks = z.array(MessageBlockSchema).parse(JSON.parse(run.blocks_json));
   if (turn.outcome.status !== "completed") return blocks;
 
-  const trigger = await tx.db
-    .selectFrom("chat_messages")
-    .select("origin_json")
-    .where("id", "=", turn.run.user_message_id)
-    .executeTakeFirst();
-  const origin = parseMessageOrigin(trigger?.origin_json ?? null);
-  if (origin?.type !== "thread-report") return blocks;
-  if (blocks.some((block) => block.type === "thread-card" && block.threadId === origin.threadId)) {
-    return blocks;
+  const cards: MessageBlock[] = [];
+  for (const threadId of await reportedThreadIds(tx, turn.run)) {
+    if (blocks.some((block) => block.type === "thread-card" && block.threadId === threadId)) {
+      continue;
+    }
+    const thread = await createThreadRepository(tx.db).getById(threadId);
+    if (thread) {
+      cards.push({ type: "thread-card", threadId, variant: threadCardVariant(thread.status) });
+    }
   }
-  const thread = await createThreadRepository(tx.db).getById(origin.threadId);
-  if (!thread) return blocks;
+  if (cards.length === 0) return blocks;
 
-  const withCard: MessageBlock[] = [
-    ...blocks,
-    { type: "thread-card", threadId: thread.id, variant: threadCardVariant(thread.status) },
-  ];
+  const withCards = [...blocks, ...cards];
   await tx.db
     .updateTable("chat_runs")
-    .set({ blocks_json: JSON.stringify(withCard) })
+    .set({ blocks_json: JSON.stringify(withCards) })
     .where("id", "=", turn.run.id)
     .execute();
-  return withCard;
+  return withCards;
+};
+
+// The threads whose reports this run answered, oldest first: its own message, and the others of
+// its batch, which share its log (see chat-session/report-batch.ts).
+const reportedThreadIds = async (
+  tx: PublisherTransaction,
+  run: FinalizedTurn["run"],
+): Promise<string[]> => {
+  const answered = await tx.db
+    .selectFrom("chat_runs")
+    .innerJoin("chat_messages", "chat_messages.id", "chat_runs.user_message_id")
+    .select("chat_messages.origin_json")
+    .where("chat_runs.session_id", "=", run.session_id)
+    .where("chat_runs.log_file_path", "=", run.log_file_path)
+    .orderBy("chat_messages.turn_index")
+    .orderBy("chat_messages.created_at")
+    .orderBy("chat_messages.id")
+    .execute();
+  const ids = answered.flatMap(({ origin_json }) => {
+    const origin = parseMessageOrigin(origin_json);
+    return origin?.type === "thread-report" ? [origin.threadId] : [];
+  });
+  return [...new Set(ids)];
 };
 
 const turnEnd = (status: FinalizedTurn["outcome"]["status"]): TurnEnd => status;

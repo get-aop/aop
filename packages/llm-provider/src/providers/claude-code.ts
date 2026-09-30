@@ -410,9 +410,13 @@ const buildClaudeMcpConfig = (options: RunOptions): Record<string, unknown> | nu
   const servers: Record<string, unknown> = {};
   const normalized = options.mcpServerUrl?.trim();
   // Both isolation modes get the aop server: hermetic adds --strict-mcp-config, so there it is
-  // the only server the run can reach.
+  // the only server the run can reach. `alwaysLoad` (a per-server option of Claude Code 2.1.x MCP
+  // configs) keeps every aop tool in the prompt from the first request. Without it, tool search
+  // defers MCP tools behind a ToolSearch call, and a thread that must ask the person something
+  // could spend a turn looking for `aop_ask_user`. It covers this one server only: the person's
+  // own servers keep the CLI's default loading.
   if (normalized) {
-    servers.aop = { type: "http", url: normalized };
+    servers.aop = { type: "http", url: normalized, alwaysLoad: true };
   }
   return Object.keys(servers).length > 0 ? { mcpServers: servers } : null;
 };

@@ -4,6 +4,8 @@ import type { LocalServerContext } from "../context.ts";
 export const pendingSessionReplies = new Set<string>();
 export const abortRequestedSessions = new Set<string>();
 export const backgroundReplyTasks = new Set<Promise<void>>();
+/** Coordinator wakes waiting out their quiet window (report-batch.ts); a wake is work the engine still owes. */
+export const coordinatorWakeTasks = new Set<Promise<void>>();
 export const recoveryTasks = new Map<string, Promise<void>>();
 export const recoveryAbortControllers = new Map<string, AbortController>();
 
@@ -15,8 +17,12 @@ export const cancelChatRunRecovery = async (runId: string): Promise<void> => {
 
 /** Await in-flight background replies and restart recoveries (tests). */
 export const waitForPendingChatReplies = async (): Promise<void> => {
-  while (backgroundReplyTasks.size > 0 || recoveryTasks.size > 0) {
-    await Promise.allSettled([...backgroundReplyTasks, ...recoveryTasks.values()]);
+  while (backgroundReplyTasks.size > 0 || recoveryTasks.size > 0 || coordinatorWakeTasks.size > 0) {
+    await Promise.allSettled([
+      ...backgroundReplyTasks,
+      ...recoveryTasks.values(),
+      ...coordinatorWakeTasks,
+    ]);
   }
 };
 

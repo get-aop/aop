@@ -6,6 +6,7 @@ import {
 } from "./checks-coordinator.ts";
 import { autoFixOnRealCheck, ghShapes, pullRequestOpened } from "./checks-github.ts";
 import { modelAndEffort, rateLimitShapes, usageShapes } from "./checks-runtime.ts";
+import { threadToolsPinned } from "./checks-thread-tools.ts";
 import {
   askUserAndResume,
   browserAnswerApplied,
@@ -22,6 +23,7 @@ const CHECKS: ((observed: Observed) => CheckResult)[] = [
   pullRequestOpened,
   editFilesThreadDenied,
   askUserAndResume,
+  threadToolsPinned,
   systemPromptOnResume,
   usageShapes,
   rateLimitShapes,
@@ -30,9 +32,12 @@ const CHECKS: ((observed: Observed) => CheckResult)[] = [
   browserAnswerApplied,
 ];
 
+// The focused scenario runs one thread, so only the checks about it have anything to judge.
+const TOOLS_SCENARIO_CHECKS = [modelAndEffort, threadToolsPinned, usageShapes, rateLimitShapes];
+
 /** A check that throws is a failed check, not a crash: the rest of the report still gets written. */
 export const evaluate = (observed: Observed): CheckResult[] =>
-  CHECKS.map((check) => {
+  (observed.facts.scenario === "tools" ? TOOLS_SCENARIO_CHECKS : CHECKS).map((check) => {
     try {
       return check(observed);
     } catch (error) {

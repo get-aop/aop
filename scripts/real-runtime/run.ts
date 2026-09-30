@@ -5,14 +5,15 @@
  * never part of a default test run or of CI.
  *
  *   AOP_REAL_RUNTIME=1 bun scripts/real-runtime/run.ts up       [--name real-runtime]
- *   AOP_REAL_RUNTIME=1 bun scripts/real-runtime/run.ts scenario [--name real-runtime]
+ *   AOP_REAL_RUNTIME=1 bun scripts/real-runtime/run.ts scenario [--name real-runtime] [--only tools]
  *   AOP_REAL_RUNTIME=1 bun scripts/real-runtime/run.ts report   [--name real-runtime]
  *   bun scripts/real-runtime/run.ts down [--name real-runtime]
  *
  * `up` starts an isolated stack (its own AOP_HOME, database and ports) whose only runtime is the
  * gate, which passes every run to the real CLI and enforces a run cap, a cost cap and a wall-clock
  * limit for each run. `scenario` drives Sonnet at medium effort through a short session and leaves
- * one thread waiting on a question, so a browser can answer it; `report` judges the logs and
+ * one thread waiting on a question, so a browser can answer it (`--only tools` runs just that
+ * thread: two real runs, one before the answer and one after); `report` judges the logs and
  * writes `.work/real-runtime/<name>/report.md`. Run `report` again after the browser test.
  *
  * Environment:
@@ -28,6 +29,7 @@ import { assertRealRuntimeEnabled, readLimits } from "./guard.ts";
 import { observe } from "./observe.ts";
 import { renderReport } from "./report.ts";
 import { runScenario } from "./scenario.ts";
+import { runToolsScenario } from "./scenario-tools.ts";
 import { down, up } from "./stack.ts";
 import { loadState, saveState } from "./state.ts";
 
@@ -60,7 +62,12 @@ async function upCommand(): Promise<number> {
 
 async function scenarioCommand(): Promise<number> {
   assertRealRuntimeEnabled(process.env);
-  const state = await runScenario(await loadState(name), say);
+  const only = rest.indexOf("--only");
+  const focus = only === -1 ? null : rest[only + 1];
+  const state = await (focus === "tools" ? runToolsScenario : runScenario)(
+    await loadState(name),
+    say,
+  );
   say(`scenario finished; ${state.facts?.notes.length ?? 0} step(s) did not finish`);
   return 0;
 }

@@ -29,15 +29,27 @@ describe("runtime catalog", () => {
 
   test("validates the claude-code model list", () => {
     expect(getRuntimeModelOptions("claude-code")).toEqual([
+      "claude-opus-5-5",
       "claude-opus-5",
       "claude-opus-4-8",
       "claude-opus-4-7",
       "claude-opus-4-6",
+      "claude-fable-5-1",
       "claude-fable-5",
+      "claude-sonnet-5-5",
       "claude-sonnet-4-6",
       "claude-haiku-4-5",
     ]);
     expect(isAllowedRuntimeModel("claude-code", "claude-opus-5")).toBe(true);
+    // The models the CLI's own aliases run (opus, sonnet, haiku, fable) are all listed.
+    for (const aliasTarget of [
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-haiku-4-5",
+      "claude-fable-5-1",
+    ]) {
+      expect(isAllowedRuntimeModel("claude-code", aliasTarget)).toBe(true);
+    }
     expect(isAllowedRuntimeModel("claude-code", "claude-haiku-4-5")).toBe(true);
     expect(isAllowedRuntimeModel("claude-code", "claude-fable-4-6")).toBe(false);
     expect(isAllowedRuntimeModel("claude-code", "gpt-5.5")).toBe(false);
@@ -47,6 +59,9 @@ describe("runtime catalog", () => {
   test("labels models and falls back to the raw id for unknown ones", () => {
     expect(formatRuntimeModelLabel("claude-haiku-4-5")).toBe("Haiku 4.5");
     expect(formatRuntimeModelLabel("claude-fable-5")).toBe("Fable 5");
+    expect(formatRuntimeModelLabel("claude-sonnet-5-5")).toBe("Sonnet 5.5");
+    expect(formatRuntimeModelLabel("claude-fable-5-1")).toBe("Fable 5.1");
+    expect(formatRuntimeModelLabel("claude-opus-5-5")).toBe("Opus 5.5");
     expect(formatRuntimeModelLabel("vendor/custom-model:v2")).toBe("vendor/custom-model:v2");
   });
 
@@ -62,8 +77,10 @@ describe("runtime catalog", () => {
   });
 
   test("falls back to the first catalog model for an unusable model", () => {
-    expect(getDefaultRuntimeModel("claude-code", "")).toBe("claude-opus-5");
-    expect(getDefaultRuntimeModel("claude-code", "default")).toBe("claude-opus-5");
+    expect(getDefaultRuntimeModel("claude-code", "")).toBe("claude-opus-5-5");
+    expect(getDefaultRuntimeModel("claude-code", "default")).toBe("claude-opus-5-5");
+    // An older model a project already names is still allowed.
+    expect(getDefaultRuntimeModel("claude-code", "claude-opus-5")).toBe("claude-opus-5");
     expect(getDefaultRuntimeModel("claude-code", "claude-haiku-4-5")).toBe("claude-haiku-4-5");
   });
 });

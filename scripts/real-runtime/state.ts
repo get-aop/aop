@@ -33,6 +33,8 @@ export interface ScenarioFacts {
   pullRequestUrl: string | null;
   /** The user message of the second coordinator turn, to find its run. */
   codewordMessageId?: string;
+  /** Which scenario ran; the full one when absent. The focused `tools` scenario has its own checks. */
+  scenario?: "full" | "tools";
   startedAt: string;
   finishedAt?: string;
   notes: string[];

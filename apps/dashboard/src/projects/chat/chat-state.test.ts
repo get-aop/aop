@@ -9,6 +9,7 @@ import {
   createChatState,
   dropLiveText,
   initialChatState,
+  isWorking,
   setEarlierError,
   setLoadError,
   startLoadingEarlier,
@@ -86,6 +87,35 @@ describe("applyMessage", () => {
 
     state = applyMessage(state, reply("a3", 6));
     expect(ids(state.messages)).toEqual(["u1", "a1", "u2", "a2", "r1", "a3"]);
+  });
+
+  test("a reply to several reports that arrived together sits after the newest of them and leaves nothing unanswered", () => {
+    let state = ready(userMessage("u1", 1), reply("a1", 2));
+    for (const [id, seconds] of [
+      ["r1", 3],
+      ["r2", 4],
+      ["r3", 5],
+    ] as const) {
+      state = applyMessage(state, report(id, seconds));
+    }
+
+    state = applyMessage(state, reply("a2", 6, undefined, { inReplyTo: "r3" }));
+    expect(ids(state.messages)).toEqual(["u1", "a1", "r1", "r2", "r3", "a2"]);
+    expect(isWorking(state)).toBe(false);
+
+    // A report that came in while the batch was being answered is still waiting.
+    state = applyMessage(state, report("r4", 7));
+    expect(ids(state.messages)).toEqual(["u1", "a1", "r1", "r2", "r3", "a2", "r4"]);
+    expect(isWorking(state)).toBe(true);
+  });
+
+  test("a reply whose message is not held falls back to the oldest one nothing answers", () => {
+    const state = applyMessage(
+      ready(userMessage("u1", 1)),
+      reply("a1", 2, undefined, { inReplyTo: "gone" }),
+    );
+
+    expect(ids(state.messages)).toEqual(["u1", "a1"]);
   });
 
   test("arriving one by one gives the order a fetch of the same messages gives", () => {

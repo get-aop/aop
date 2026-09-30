@@ -31,10 +31,12 @@ export interface MessageScope {
   threadId: string | null;
 }
 
-/** What a message needs beyond its row: the answers to its suggested threads, and whether its run failed. */
+/** What a message needs beyond its row: the answers to its suggested threads, whether its run failed, and what it answers. */
 export interface MessageExtras {
   answers?: MessageAnswers;
   failed?: boolean;
+  /** For a reply: the message its run answered. */
+  inReplyTo?: string;
 }
 
 /**
@@ -99,6 +101,7 @@ const readPage = async (
     const message = toWireMessage(scope, row, parseBlocks(row.run_blocks), {
       answers: answers.get(row.id),
       failed: isFailedRun(row.run_status, row.run_failure_kind),
+      inReplyTo: row.run_user_message_id ?? undefined,
     });
     return message ? [message] : [];
   });
@@ -135,6 +138,7 @@ export const getWireMessage = async (
   return toWireMessage(scopeOf(session), row, parseBlocks(row.run_blocks), {
     answers: answers.get(row.id),
     failed: isFailedRun(row.run_status, row.run_failure_kind),
+    inReplyTo: row.run_user_message_id ?? undefined,
   });
 };
 
@@ -168,7 +172,7 @@ const assistantMessage = (
   scope: MessageScope,
   text: string,
   runBlocks: readonly MessageBlock[],
-  { failed = false }: MessageExtras,
+  { failed = false, inReplyTo }: MessageExtras,
 ): Message | null => {
   // Only the coordinator refers to threads by link; a thread's own text is shown as written.
   const written =
@@ -176,7 +180,13 @@ const assistantMessage = (
   const blocks = [...written, ...runBlocks];
   return blocks.length === 0
     ? null
-    : MessageSchema.parse({ ...base, role: "assistant", blocks, ...(failed && { failed }) });
+    : MessageSchema.parse({
+        ...base,
+        role: "assistant",
+        blocks,
+        ...(failed && { failed }),
+        ...(inReplyTo && { inReplyTo }),
+      });
 };
 
 export const scopeOf = (session: ChatSession): MessageScope => {
@@ -233,6 +243,7 @@ const messagesWithRunBlocks = (db: Kysely<Database>, session: ChatSession) =>
       "chat_runs.blocks_json as run_blocks",
       "chat_runs.status as run_status",
       "chat_runs.failure_kind as run_failure_kind",
+      "chat_runs.user_message_id as run_user_message_id",
     ])
     .where("chat_messages.session_id", "=", session.id);
 

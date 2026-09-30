@@ -9,6 +9,12 @@ import {
 } from "./test-utils.ts";
 
 describe("MessageSchema", () => {
+  test("accepts a reply that says which message it answers", () => {
+    const reply = makeAssistantMessage({ inReplyTo: "smsg_1" });
+
+    expect(parsed(MessageSchema, reply)).toEqual(reply);
+  });
+
   test("accepts a user message in the coordinator chat", () => {
     expect(parsed(MessageSchema, makeUserMessage())).toEqual(makeUserMessage());
   });

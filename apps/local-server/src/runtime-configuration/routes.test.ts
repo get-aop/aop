@@ -78,6 +78,7 @@ describe("runtime configuration routes", () => {
       claude?.models.find((item) => item.model === model)?.thinkingLevels;
 
     expect(levels("claude-opus-5")).toEqual(["low", "medium", "high", "extra-high", "max"]);
+    expect(levels("claude-sonnet-5-5")).toEqual(["low", "medium", "high", "extra-high", "max"]);
     expect(levels("claude-sonnet-4-6")).toEqual(["low", "medium", "high", "extra-high"]);
   });
 
@@ -116,7 +117,7 @@ describe("runtime configuration routes", () => {
         description: "Fable 5",
         builtIn: true,
         thinkingLevels: ["low", "medium", "high", "extra-high", "max"],
-        position: 4,
+        position: 6,
         isDefault: true,
       }),
     );

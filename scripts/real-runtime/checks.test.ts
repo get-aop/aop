@@ -7,6 +7,7 @@ import {
 } from "./checks-coordinator.ts";
 import { autoFixOnRealCheck, ghShapes, pullRequestOpened } from "./checks-github.ts";
 import { modelAndEffort, rateLimitShapes, usageShapes } from "./checks-runtime.ts";
+import { SCHEDULING_TOOLS, threadToolsPinned } from "./checks-thread-tools.ts";
 import {
   askUserAndResume,
   browserAnswerApplied,
@@ -259,6 +260,18 @@ describe("runtime checks", () => {
     expect(checked.summary).toContain("--effort medium");
   });
 
+  test("model and effort: a run the gate refused is not a run on the wrong model", () => {
+    const o = emptyObserved();
+    const refused = run("c2", []);
+    refused.argv = [];
+    o.coordinator = { ...o.coordinator, ...session("coordinator", [run("c1", []), refused]) };
+
+    const checked = modelAndEffort(o);
+
+    expect(checked.status).toBe("pass");
+    expect(checked.details.join(" ")).toContain("1 run(s) never reached the real CLI");
+  });
+
   test("usage: the real result shape and a project total with a Sonnet row pass", () => {
     const o = emptyObserved();
     o.coordinator = { ...o.coordinator, ...session("coordinator", [run("c1", [])]) };
@@ -439,5 +452,115 @@ describe("evaluate", () => {
   test("verdict fails with the problems joined, passes with the summary", () => {
     expect(verdict("i", "t", ["a", "b"], "ok").summary).toBe("a; b");
     expect(verdict("i", "t", [], "ok").status).toBe("pass");
+  });
+});
+
+describe("thread tools check", () => {
+  const THREAD_ARGV = [
+    "--mcp-config",
+    JSON.stringify({ mcpServers: { aop: { type: "http", url: "http://x", alwaysLoad: true } } }),
+    "--disallowedTools",
+    "AskUserQuestion",
+    ...SCHEDULING_TOOLS,
+  ];
+  const INIT = initEvent({
+    tools: ["Bash", "ToolSearch", aop("aop_ask_user")],
+    mcp_servers: [
+      { name: "aop", status: "connected" },
+      { name: "claude.ai Figma", status: "connected" },
+    ],
+  });
+  const asking = (id: string) => [
+    toolUse(id, aop("aop_ask_user"), { question: "Which?" }),
+    toolResult(id, "asked"),
+  ];
+  const observed = (events: ReturnType<typeof toolUse>[], argv = THREAD_ARGV) => {
+    const o = emptyObserved();
+    const first = run("a1", events, argv);
+    o.threads.ask = threadObservation("ask", [
+      { ...first, events: [INIT, ...first.events.slice(1)] },
+    ]);
+    return o;
+  };
+
+  test("passes when the aop tools were pinned, the person's servers listed and nothing scheduled", () => {
+    const checked = threadToolsPinned(observed(asking("1")));
+
+    expect(checked.status).toBe("pass");
+    expect(checked.summary).toContain("1 server(s) besides aop");
+  });
+
+  test("warns when the machine has no other server, so keeping them was not shown", () => {
+    const o = observed(asking("1"));
+    const first = o.threads.ask.runs[0];
+    if (!first) throw new Error("no run");
+    o.threads.ask = threadObservation("ask", [
+      {
+        ...first,
+        events: [initEvent({ tools: [aop("aop_ask_user")] }), ...first.events.slice(1)],
+      },
+    ]);
+
+    expect(threadToolsPinned(o).status).toBe("warn");
+  });
+
+  test("fails when ToolSearch ran before the question", () => {
+    const search = [toolUse("s", "ToolSearch", { query: "ask" }), toolResult("s", "found")];
+
+    const checked = threadToolsPinned(observed([...search, ...asking("1")]));
+
+    expect(checked.status).toBe("fail");
+    expect(checked.summary).toContain("ToolSearch ran before aop_ask_user");
+  });
+
+  test("fails when a scheduling built-in was called after the question", () => {
+    const wake = [toolUse("w", "ScheduleWakeup", { delaySeconds: 60 }), toolResult("w", "set")];
+
+    const checked = threadToolsPinned(observed([...asking("1"), ...wake]));
+
+    expect(checked.status).toBe("fail");
+    expect(checked.summary).toContain("ScheduleWakeup");
+  });
+
+  test("fails when the command line lacks alwaysLoad or a disallowed scheduling tool", () => {
+    const checked = threadToolsPinned(
+      observed(asking("1"), [
+        "--mcp-config",
+        JSON.stringify({ mcpServers: { aop: { type: "http", url: "http://x" } } }),
+        "--disallowedTools",
+        "AskUserQuestion",
+      ]),
+    );
+
+    expect(checked.status).toBe("fail");
+    expect(checked.summary).toContain("alwaysLoad");
+    expect(checked.summary).toContain("Monitor");
+  });
+
+  test("fails when init still offers a scheduling tool", () => {
+    const o = observed(asking("1"));
+    const first = o.threads.ask.runs[0];
+    if (!first) throw new Error("no run");
+    o.threads.ask = threadObservation("ask", [
+      {
+        ...first,
+        events: [
+          initEvent({ tools: ["Bash", "CronCreate", aop("aop_ask_user")] }),
+          ...first.events.slice(1),
+        ],
+      },
+    ]);
+
+    expect(threadToolsPinned(o).summary).toContain("init still lists CronCreate");
+  });
+
+  test("the focused scenario is judged by its own checks", () => {
+    const o = observed(asking("1"));
+    o.facts.scenario = "tools";
+
+    const ids = evaluate(o).map((check) => check.id);
+
+    expect(ids).toContain("thread-tools-pinned");
+    expect(ids).not.toContain("coordinator-restricted");
   });
 });

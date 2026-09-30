@@ -50,6 +50,8 @@ The coordinator writes a thread into a reply as `[its title](thread:<id>)`; the 
 
 A thread's report to the coordinator is a `thread-report` message. It is drawn as an event line naming the thread and what happened, with the report behind "Show report", and never as something the person said. The person's own messages are shown as typed, not read as markdown.
 
+Reports that arrive close together are answered by one coordinator turn (see [the MCP guide](../MCP.md)). Its reply says which message it answers (`inReplyTo`, the newest report of the batch), so it reads after every report it answers, live as well as after a reload, and no report is left looking unanswered.
+
 ## Suggested threads
 
 The coordinator's `propose_threads` tool attaches a `suggested-threads` block to its reply: proposals with a title, a brief and a repository, each with an id of its own. Nothing runs until the person answers one, and the host records the answer, so every device sees the same one.

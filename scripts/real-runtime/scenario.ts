@@ -22,7 +22,7 @@ import { type HarnessState, type ScenarioFacts, saveState, type ThreadLabel } fr
  * failing its check on purpose, and a second coordinator turn after the project instructions
  * changed. It only drives and waits; what it proves is decided from the logs afterwards.
  */
-const MODEL = { provider: "claude-code", model: "sonnet", effort: "medium" } as const;
+export const MODEL = { provider: "claude-code", model: "sonnet", effort: "medium" } as const;
 const MINUTE = 60_000;
 
 interface ThreadJson {
@@ -204,7 +204,7 @@ const waitForThread = (
     { timeoutMs },
   );
 
-const waitForStatus = (
+export const waitForStatus = (
   api: Api,
   id: string,
   status: string,

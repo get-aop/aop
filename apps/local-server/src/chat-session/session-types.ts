@@ -170,6 +170,8 @@ export interface ChatSessionServiceDeps {
   beforeAssistantReply?: (run: ChatRun) => Promise<void>;
   /** Test seam for observing queued lifecycle ownership before durable claim. */
   beforeQueuedRunClaim?: (sessionId: string) => Promise<void>;
+  /** How long a coordinator's inbox stays quiet before its thread reports start a run (default 2 s). */
+  coordinatorWakeWindowMs?: number;
 }
 
 export interface CreateChatSessionInput {

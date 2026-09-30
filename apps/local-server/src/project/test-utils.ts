@@ -189,6 +189,8 @@ export const createProjectStack = async (
     git?: ThreadGitDeps;
     /** The seams of the pull request watcher: its clock, its randomness, its pace and its cap. */
     watch?: PullRequestWatcherDeps;
+    /** The quiet window before thread reports wake the coordinator; short by default so suites stay fast. */
+    wakeWindowMs?: number;
   } = {},
 ): Promise<ProjectStack> => {
   const db = await createTestDb();
@@ -213,7 +215,11 @@ export const createProjectStack = async (
   };
   const services = createProjectServices(
     ctx,
-    { createProviderFn: () => recordingProvider, recoveryPollIntervalMs: 20 },
+    {
+      createProviderFn: () => recordingProvider,
+      recoveryPollIntervalMs: 20,
+      coordinatorWakeWindowMs: options.wakeWindowMs ?? 25,
+    },
     { runGh: refusingGh, ...options.git },
     options.watch,
   );

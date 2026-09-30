@@ -25,6 +25,12 @@ export const AssistantMessageSchema = MessageBaseSchema.extend({
   blocks: z.array(MessageBlockSchema).min(1),
   /** The run that wrote this reply failed and the text says why. A usage-limit wait is not a failure. */
   failed: z.literal(true).optional(),
+  /**
+   * The message this reply answers, which is where it sits in the conversation. A reply to
+   * several thread reports that arrived together answers the newest of them. Absent on a message
+   * no run wrote (the coordinator's brief relayed into a thread).
+   */
+  inReplyTo: IdSchema.optional(),
 });
 
 /** What a thread told the coordinator. */
