@@ -35,20 +35,23 @@ export interface PanelLayout {
  * always shows it, and closing the panel takes the thread off the address (`onCloseThread`).
  */
 export const usePanelLayout = ({
+  projectId,
   threadId,
   onCloseThread,
 }: {
+  /** Whose panel this is: the open state and width are remembered per project. */
+  projectId: string;
   threadId: string | null;
   onCloseThread: () => void;
 }): PanelLayout => {
   const containerRef = useRef<HTMLDivElement>(null);
   const containerWidth = useContainerWidth(containerRef);
   const mode = containerWidth === null ? "side" : layoutModeFor(containerWidth);
-  const [prefs, setPrefs] = useState<PanelPrefs>(loadPanelPrefs);
+  const [prefs, setPrefs] = useState<PanelPrefs>(() => loadPanelPrefs(projectId));
   const [transient, setTransient] = useState(threadId !== null);
   const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => savePanelPrefs(prefs), [prefs]);
+  useEffect(() => savePanelPrefs(projectId, prefs), [projectId, prefs]);
 
   // Whoever names a thread (a link, a chip, a card, a reload) wants to see it.
   useEffect(() => {

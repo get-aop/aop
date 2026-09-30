@@ -14,8 +14,9 @@ import { useThreadActivity } from "./use-thread-activity";
 import { useThreadConversation } from "./use-thread-conversation";
 import { WorkLog } from "./WorkLog";
 
-// A thread in these statuses has a turn running or lined up: Stop ends it.
-const STOPPABLE = new Set<Thread["status"]>(["working", "queued", "rate-limited"]);
+// A thread in these statuses has a turn running or lined up: Stop ends it. A rate-limited one
+// has none; it waits for its reset, and its notice offers "Resume now".
+const STOPPABLE = new Set<Thread["status"]>(["working", "queued"]);
 
 /**
  * The thread's own conversation: the brief it was given, what the agent said and did, and what
@@ -28,12 +29,15 @@ export const ThreadTranscript = ({
   threads,
   threadsLoaded,
   threadsError,
+  aboveComposer = null,
 }: {
   project: Project;
   thread: Thread;
   threads: readonly Thread[];
   threadsLoaded: boolean;
   threadsError: string | null;
+  /** Sits just above the box to steer the thread (or the question it waits on): the pull request bar. */
+  aboveComposer?: React.ReactNode;
 }) => {
   const { conversation, state } = useThreadConversation(project.id, thread.id);
   const agentReplies = state.messages.filter((message) => message.role === "assistant").length;
@@ -64,7 +68,6 @@ export const ThreadTranscript = ({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ThreadProgress thread={thread} />
       <ChatProvider
         projectId={project.id}
         projectActive={project.status === "active"}
@@ -73,6 +76,7 @@ export const ThreadTranscript = ({
         threadsError={threadsError}
       >
         <Body
+          lead={<ThreadProgress thread={thread} />}
           state={state}
           working={working}
           sentCount={sentCount}
@@ -91,6 +95,9 @@ export const ThreadTranscript = ({
           <ChatRefreshNotice message={state.loadError} />
         ) : null}
         {project.status === "active" ? null : <ProjectClosedNotice project={project} />}
+        <div data-testid="thread-dock" className="mb-2 empty:hidden">
+          {aboveComposer}
+        </div>
         {thread.status === "waiting-on-you" ? (
           <AnswerCard thread={thread} answer={answer} disabledReason={disabledReason} />
         ) : (
@@ -113,6 +120,7 @@ export const ThreadTranscript = ({
 };
 
 const Body = ({
+  lead,
   state,
   working,
   sentCount,
@@ -122,6 +130,8 @@ const Body = ({
   onReload,
   onLoadEarlier,
 }: {
+  /** The thread's checklist: it scrolls with the conversation, so it never covers a line of it. */
+  lead: React.ReactNode;
   state: ChatState;
   working: boolean;
   sentCount: number;
@@ -140,16 +150,20 @@ const Body = ({
   }
   if (state.messages.length === 0 && !working) {
     return (
-      <p
-        data-testid="thread-empty"
-        className="flex-1 px-6 py-16 text-center text-body text-text-subtle"
-      >
-        Nothing has been said in this thread yet.
-      </p>
+      <>
+        <div className="px-6 pt-2">{lead}</div>
+        <p
+          data-testid="thread-empty"
+          className="flex-1 px-6 py-16 text-center text-body text-text-subtle"
+        >
+          Nothing has been said in this thread yet.
+        </p>
+      </>
     );
   }
   return (
     <MessageList
+      lead={lead}
       messages={state.messages}
       live={state.live}
       working={working}

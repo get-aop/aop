@@ -47,21 +47,33 @@ describe("panelWidthFor", () => {
 
 describe("the remembered panel", () => {
   test("starts open at the default width", () => {
-    expect(loadPanelPrefs()).toEqual(DEFAULT_PANEL_PREFS);
+    expect(loadPanelPrefs("p1")).toEqual(DEFAULT_PANEL_PREFS);
   });
 
   test("keeps what was saved", () => {
-    savePanelPrefs({ open: false, width: 640 });
+    savePanelPrefs("p1", { open: false, width: 640 });
 
-    expect(loadPanelPrefs()).toEqual({ open: false, width: 640 });
+    expect(loadPanelPrefs("p1")).toEqual({ open: false, width: 640 });
+  });
+
+  test("keeps each project's own, so closing one leaves the others open", () => {
+    savePanelPrefs("p1", { open: false, width: 640 });
+    savePanelPrefs("p2", { open: true, width: 400 });
+
+    expect(loadPanelPrefs("p1")).toEqual({ open: false, width: 640 });
+    expect(loadPanelPrefs("p2")).toEqual({ open: true, width: 400 });
+    expect(loadPanelPrefs("p3")).toEqual(DEFAULT_PANEL_PREFS);
   });
 
   test("ignores garbage, a width that cannot be, and storage that throws", () => {
-    window.localStorage.setItem("aop:threads-panel:v1", "{nope");
-    expect(loadPanelPrefs()).toEqual(DEFAULT_PANEL_PREFS);
+    window.localStorage.setItem("aop:threads-panel:v2:p1", "{nope");
+    expect(loadPanelPrefs("p1")).toEqual(DEFAULT_PANEL_PREFS);
 
-    window.localStorage.setItem("aop:threads-panel:v1", JSON.stringify({ open: "yes", width: 12 }));
-    expect(loadPanelPrefs()).toEqual(DEFAULT_PANEL_PREFS);
+    window.localStorage.setItem(
+      "aop:threads-panel:v2:p1",
+      JSON.stringify({ open: "yes", width: 12 }),
+    );
+    expect(loadPanelPrefs("p1")).toEqual(DEFAULT_PANEL_PREFS);
 
     const get = spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
@@ -70,8 +82,8 @@ describe("the remembered panel", () => {
       throw new Error("blocked");
     });
     try {
-      expect(loadPanelPrefs()).toEqual(DEFAULT_PANEL_PREFS);
-      expect(() => savePanelPrefs({ open: false, width: 500 })).not.toThrow();
+      expect(loadPanelPrefs("p1")).toEqual(DEFAULT_PANEL_PREFS);
+      expect(() => savePanelPrefs("p1", { open: false, width: 500 })).not.toThrow();
     } finally {
       get.mockRestore();
       set.mockRestore();

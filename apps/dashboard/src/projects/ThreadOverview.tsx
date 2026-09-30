@@ -1,12 +1,12 @@
 import type { Thread, ThreadStatus } from "@aop/common";
-import { ChevronDownIcon, MessageSquareIcon, SearchIcon } from "lucide-react";
+import { ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
-import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import type { OverviewFilters } from "./layout/use-overview-filters";
 import type { ProjectEntry } from "./projects-state";
 import {
+  ALWAYS_LISTED,
   attentionOf,
   attentionSentence,
   groupThreads,
@@ -18,23 +18,24 @@ import { ThreadStatusDot } from "./ThreadStatusDot";
 import { ThreadsLoadError } from "./ThreadsLoadError";
 import { useNow } from "./use-now";
 
+const LISTED_AT_ZERO = Object.keys(ALWAYS_LISTED) as ThreadStatus[];
+
 // Closed work is out of the way until asked for; everything else is what the person may need.
 const COLLAPSED_BY_DEFAULT: ReadonlySet<ThreadStatus> = new Set(["resolved"]);
 
 /**
  * What the threads panel shows first: a greeting and what needs the person, then one group per
- * status (questions first, closed work last), narrowed by the panel's search and filter. Every
- * row changes in place as entries arrive on the project's stream.
+ * status (questions first, closed work last), narrowed by the panel's search and filter. Waiting
+ * on you and Resolved stay listed at zero, so a project with no thread yet reads the same as
+ * one whose work is all done. Every row changes in place as entries arrive on the project's
+ * stream.
  */
 export const ThreadOverview = ({
   entry,
   filters,
-  onNewThread,
 }: {
   entry: ProjectEntry;
   filters: OverviewFilters;
-  /** Takes the person to where a thread is started: the coordinator's composer. */
-  onNewThread: () => void;
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
 
@@ -57,31 +58,8 @@ export const ThreadOverview = ({
     );
   }
 
-  if (threads.length === 0) return <NoThreads onNewThread={onNewThread} />;
   return <OverviewBody threads={threads} filters={filters} />;
 };
-
-const NoThreads = ({ onNewThread }: { onNewThread: () => void }) => (
-  <div
-    data-testid="threads-empty"
-    className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center"
-  >
-    <div className="flex flex-col gap-1.5">
-      <h2 className="text-title font-medium text-text">No threads yet</h2>
-      <p data-testid="project-attention" data-waiting={0} className="text-meta text-text-subtle">
-        {attentionSentence(0)}
-      </p>
-      <p className="max-w-sm text-body text-text-subtle">
-        Tell the coordinator what you want done. It starts a thread for each piece of work and
-        reports back here.
-      </p>
-    </div>
-    <Button size="sm" data-testid="threads-empty-chat" onClick={onNewThread}>
-      <MessageSquareIcon />
-      Talk to the coordinator
-    </Button>
-  </div>
-);
 
 const OverviewBody = ({
   threads,
@@ -102,12 +80,16 @@ const OverviewBody = ({
       <Greeting waiting={attentionOf(threads).waiting} />
       {filters.searchOpen ? <SearchBox query={query} onChange={filters.setQuery} /> : null}
       <ResultCount shown={visible.length} total={threads.length} filters={filters} />
-      {visible.length === 0 ? (
+      {visible.length === 0 && threads.length > 0 ? (
         <p data-testid="threads-no-match" className="py-8 text-center text-body text-text-subtle">
           {query.trim() ? `No threads match “${query.trim()}”.` : "No threads match the filter."}
         </p>
       ) : (
-        <Groups threads={visible} open={filters.active ? "all" : "default"} />
+        <Groups
+          threads={visible}
+          open={filters.active ? "all" : "default"}
+          listed={filters.active ? [] : LISTED_AT_ZERO.filter((status) => !hidden.has(status))}
+        />
       )}
     </div>
   );
@@ -144,10 +126,19 @@ const ResultCount = ({
   );
 
 /** One section per status. `open: "all"` opens every one, so a match is never folded away. */
-const Groups = ({ threads, open }: { threads: readonly Thread[]; open: "all" | "default" }) => {
+const Groups = ({
+  threads,
+  open,
+  listed,
+}: {
+  threads: readonly Thread[];
+  open: "all" | "default";
+  /** Groups drawn even with no thread in them. */
+  listed: readonly ThreadStatus[];
+}) => {
   const [toggled, setToggled] = useState<ReadonlySet<ThreadStatus>>(new Set());
   const now = useNow();
-  const groups = useMemo(() => groupThreads(threads), [threads]);
+  const groups = groupThreads(threads, listed);
   const isOpen = (status: ThreadStatus) =>
     open === "all" || COLLAPSED_BY_DEFAULT.has(status) === toggled.has(status);
   const toggle = (status: ThreadStatus) =>
@@ -216,6 +207,9 @@ const Greeting = ({ waiting }: { waiting: number }) => (
   </div>
 );
 
+const GROUP_BAR =
+  "flex h-10 w-full items-center gap-2.5 rounded-row bg-hover px-3.5 text-body font-medium text-text";
+
 const GroupSection = ({
   status,
   count,
@@ -229,28 +223,46 @@ const GroupSection = ({
   onToggle: () => void;
   children: React.ReactNode;
 }) => (
-  <section data-testid="thread-group" data-status={status} data-open={open}>
+  <section data-testid="thread-group" data-status={status} data-open={open} data-count={count}>
     <h2>
-      <button
-        type="button"
-        data-testid="thread-group-toggle"
-        aria-expanded={open}
-        onClick={onToggle}
-        className="flex h-10 w-full items-center gap-2.5 rounded-row bg-hover px-3.5 text-body font-medium text-text transition-colors duration-[120ms] hover:bg-active"
-      >
-        <ChevronDownIcon
-          aria-hidden="true"
-          className={cn("size-4 text-text-subtle transition-transform", !open && "-rotate-90")}
-        />
-        <ThreadStatusDot status={status} />
-        <span className={cn(status === "waiting-on-you" && "text-waiting")}>
-          {THREAD_STATUS_LABEL[status]}
-        </span>
-        <span data-testid="thread-group-count" className="tabular-nums text-text-subtle">
-          {count}
-        </span>
-      </button>
+      {count === 0 ? (
+        <div data-testid="thread-group-label" className={GROUP_BAR}>
+          <GroupLabel status={status} count={count} />
+        </div>
+      ) : (
+        <button
+          type="button"
+          data-testid="thread-group-toggle"
+          aria-expanded={open}
+          onClick={onToggle}
+          className={cn(GROUP_BAR, "transition-colors duration-[120ms] hover:bg-active")}
+        >
+          <ChevronDownIcon
+            aria-hidden="true"
+            className={cn("size-4 text-text-subtle transition-transform", !open && "-rotate-90")}
+          />
+          <GroupLabel status={status} count={count} />
+        </button>
+      )}
     </h2>
-    {open ? <div className="flex flex-col gap-1 pt-1.5">{children}</div> : null}
+    {count === 0 ? (
+      <p data-testid="thread-group-hint" className="px-3.5 py-3 text-body text-text-subtle">
+        {ALWAYS_LISTED[status]}
+      </p>
+    ) : null}
+    {open && count > 0 ? <div className="flex flex-col gap-1 pt-1.5">{children}</div> : null}
   </section>
+);
+
+const GroupLabel = ({ status, count }: { status: ThreadStatus; count: number }) => (
+  <>
+    {count === 0 ? <span aria-hidden="true" className="w-4" /> : null}
+    <ThreadStatusDot status={status} />
+    <span className={cn(status === "waiting-on-you" && "text-waiting")}>
+      {THREAD_STATUS_LABEL[status]}
+    </span>
+    <span data-testid="thread-group-count" className="tabular-nums text-text-subtle">
+      {count}
+    </span>
+  </>
 );

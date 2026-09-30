@@ -26,7 +26,8 @@ import type { OverviewFilters } from "./use-overview-filters";
 import type { PanelLayout } from "./use-panel-layout";
 
 // The panel's sections. Threads is the only one for now; a section added here gets a tab.
-const PANEL_TABS = [{ id: "threads", label: "Threads", icon: MessagesSquareIcon }] as const;
+export const PANEL_TABS = [{ id: "threads", label: "Threads", icon: MessagesSquareIcon }] as const;
+const ACTIVE_TAB: (typeof PANEL_TABS)[number]["id"] = "threads";
 
 /**
  * The right pane: the threads of the project. Its first view is the overview; a thread the
@@ -47,7 +48,6 @@ export const ThreadsPanel = ({
   onNewThread: () => void;
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
-  const controls = <PanelControls layout={layout} />;
 
   return (
     <div data-testid="threads-panel-content" className="flex min-h-0 flex-1 flex-col">
@@ -60,7 +60,7 @@ export const ThreadsPanel = ({
             onNewThread={onNewThread}
           />
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <ThreadOverview entry={entry} filters={filters} onNewThread={onNewThread} />
+            <ThreadOverview entry={entry} filters={filters} />
           </div>
         </>
       ) : (
@@ -70,30 +70,31 @@ export const ThreadsPanel = ({
           threads={threads}
           threadsLoaded={threadsLoaded}
           threadsError={threadsError}
-          headerActions={controls}
+          headerActions={<ExpandButton layout={layout} />}
+          headerClose={<CloseButton layout={layout} />}
         />
       )}
     </div>
   );
 };
 
-/** Expand (or restore) and close: the panel's buttons, wherever its header is. */
-const PanelControls = ({ layout }: { layout: PanelLayout }) => (
-  <>
-    {layout.mode === "single" ? null : (
-      <IconButton
-        testId="panel-expand"
-        label={layout.expanded ? "Restore panel" : "Expand panel"}
-        pressed={layout.expanded}
-        onClick={layout.toggleExpanded}
-      >
-        {layout.expanded ? <Minimize2Icon /> : <Maximize2Icon />}
-      </IconButton>
-    )}
-    <IconButton testId="panel-close" label="Close panel" onClick={layout.close}>
-      <XIcon />
+/** Expand (or restore): the panel's button, wherever its header is. A phone's panel is the whole screen already. */
+const ExpandButton = ({ layout }: { layout: PanelLayout }) =>
+  layout.mode === "single" ? null : (
+    <IconButton
+      testId="panel-expand"
+      label={layout.expanded ? "Restore panel" : "Expand panel"}
+      pressed={layout.expanded}
+      onClick={layout.toggleExpanded}
+    >
+      {layout.expanded ? <Minimize2Icon /> : <Maximize2Icon />}
     </IconButton>
-  </>
+  );
+
+const CloseButton = ({ layout }: { layout: PanelLayout }) => (
+  <IconButton testId="panel-close" label="Close panel" onClick={layout.close}>
+    <XIcon />
+  </IconButton>
 );
 
 const PanelTabStrip = ({
@@ -115,28 +116,15 @@ const PanelTabStrip = ({
       aria-label="Panel sections"
       className="flex h-pane-header shrink-0 items-center gap-1 px-3"
     >
-      {PANEL_TABS.map(({ id, label, icon: Icon }) => (
-        <Link
-          key={id}
-          to={projectPath(entry.project.id)}
-          role="tab"
-          aria-selected
-          data-testid={`panel-tab-${id}`}
-          className="flex h-9 items-center gap-2 rounded-row bg-active px-3.5 text-body font-medium text-text"
-        >
-          <Icon aria-hidden="true" className="size-4 text-text-muted" />
-          {label}
-          {waiting > 0 && id === "threads" ? (
-            <span
-              data-testid="project-tab-waiting"
-              className="rounded-full bg-running px-1.5 text-xs font-semibold tabular-nums text-primary-foreground"
-            >
-              {waiting}
-            </span>
-          ) : null}
-        </Link>
+      {PANEL_TABS.map((tab) => (
+        <PanelTab
+          key={tab.id}
+          tab={tab}
+          active={tab.id === ACTIVE_TAB}
+          projectId={entry.project.id}
+          waiting={tab.id === "threads" ? waiting : 0}
+        />
       ))}
-      <span aria-hidden="true" className="mx-1 h-4 w-px bg-border-strong" />
       <IconButton testId="panel-new-thread" label="New thread" onClick={onNewThread}>
         <PlusIcon />
       </IconButton>
@@ -151,10 +139,54 @@ const PanelTabStrip = ({
         <SearchIcon />
       </IconButton>
       <StatusFilter filters={filters} />
-      <PanelControls layout={layout} />
+      <ExpandButton layout={layout} />
+      <CloseButton layout={layout} />
     </div>
   );
 };
+
+/**
+ * One section of the panel: the one showing has its icon and name, the others only their icon
+ * (the name is in the tooltip), so the strip stays short.
+ */
+export const PanelTab = ({
+  tab: { id, label, icon: Icon },
+  active,
+  projectId,
+  waiting,
+}: {
+  tab: (typeof PANEL_TABS)[number];
+  active: boolean;
+  projectId: string;
+  /** Threads waiting on the person, counted on the tab. */
+  waiting: number;
+}) => (
+  <Link
+    to={projectPath(projectId)}
+    role="tab"
+    aria-selected={active}
+    aria-label={active ? undefined : label}
+    title={active ? undefined : label}
+    data-testid={`panel-tab-${id}`}
+    className={cn(
+      "flex h-8 items-center gap-2 rounded-row text-body transition-colors duration-[120ms]",
+      active
+        ? "border border-border-strong bg-active px-2.5 font-medium text-text"
+        : "w-8 justify-center text-text-subtle hover:bg-hover hover:text-text",
+    )}
+  >
+    <Icon aria-hidden="true" className={cn("size-4", active && "text-text-muted")} />
+    {active ? label : null}
+    {waiting > 0 ? (
+      <span
+        data-testid="project-tab-waiting"
+        className="rounded-full bg-running px-1.5 text-xs font-semibold tabular-nums text-primary-foreground"
+      >
+        {waiting}
+      </span>
+    ) : null}
+  </Link>
+);
 
 const StatusFilter = ({ filters }: { filters: OverviewFilters }) => (
   <DropdownMenu>

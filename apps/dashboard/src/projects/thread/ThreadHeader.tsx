@@ -6,6 +6,9 @@ import {
   EllipsisIcon,
   FolderGit2Icon,
   GitBranchIcon,
+  GitPullRequestIcon,
+  RotateCcwIcon,
+  SquareIcon,
   Trash2Icon,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -17,6 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
 import type { RegisteredRepo } from "../../api/client";
 import { IconButton } from "../../components/IconButton";
 import { Link, projectPath } from "../../shell/router";
@@ -36,85 +40,111 @@ const CANNOT_RESOLVE: ReadonlySet<ThreadStatus> = new Set([
   "resolved",
 ]);
 
+// A turn is running or lined up: Stop ends it.
+const STOPPABLE: ReadonlySet<ThreadStatus> = new Set(["working", "queued"]);
+
 /**
- * Who the thread is: the breadcrumb back to the overview with its title, the buttons that
- * resolve it and (from the panel that holds it) expand and close, and in one line where it
- * stands, where it works (repository and branch), what runs it, what it has used, and how
- * long ago it moved.
+ * Who the thread is, in one 56px row that never wraps: the breadcrumb back to the overview with
+ * the title (cut to one line; the whole of it in the tooltip, and where the thread stands, where
+ * it works and what it used one click away), then resolve, the holder's buttons (expand), the
+ * thread's menu, and the holder's close.
  */
 export const ThreadHeader = ({
   project,
   thread,
   actions,
+  close,
+  onShowPullRequestBar,
 }: {
   project: Project;
   thread: Thread;
-  /** Buttons of whatever holds the thread, between the thread's own and its menu. */
+  /** Buttons of whatever holds the thread, between resolve and the menu. */
   actions?: ReactNode;
-}) => {
-  const repos = useRegisteredRepos();
-  const now = useNow();
-  const blocked = thread.status === "waiting-on-you";
+  /** The holder's close button, last in the row. */
+  close?: ReactNode;
+  /** Brings back the pull request bar the person sent away; given only while it is away. */
+  onShowPullRequestBar?: () => void;
+}) => (
+  <header data-testid="thread-header" className="flex h-14 shrink-0 items-center gap-1.5 px-6">
+    <Link
+      to={projectPath(project.id)}
+      data-testid="thread-back"
+      className="-ml-1 inline-flex shrink-0 items-center rounded-row px-1 text-body text-text-subtle transition-colors duration-[120ms] hover:text-text"
+    >
+      Threads
+    </Link>
+    <ChevronRightIcon aria-hidden="true" className="size-3.5 shrink-0 text-text-subtle" />
+    <ThreadTitle thread={thread} />
+    <IconButton
+      testId="thread-resolve-button"
+      label="Mark resolved"
+      disabled={CANNOT_RESOLVE.has(thread.status)}
+      onClick={() => void threadActions.resolve(thread)}
+    >
+      <CheckCircle2Icon />
+    </IconButton>
+    {actions}
+    <ThreadMenu thread={thread} onShowPullRequestBar={onShowPullRequestBar} />
+    {close}
+  </header>
+);
 
-  return (
-    <header data-testid="thread-header" className="shrink-0 px-6">
-      <div className="flex min-h-pane-header items-center gap-2 py-1">
-        <Link
-          to={projectPath(project.id)}
-          data-testid="thread-back"
-          className="-ml-1 inline-flex shrink-0 items-center rounded-row px-1 text-body text-text-subtle transition-colors duration-[120ms] hover:text-text"
-        >
-          Threads
-        </Link>
-        <ChevronRightIcon aria-hidden="true" className="size-3.5 shrink-0 text-text-subtle" />
-        <h2
+/** The title on one line; pressing it shows the rest of who the thread is. */
+const ThreadTitle = ({ thread }: { thread: Thread }) => (
+  <Popover>
+    <h2 className="flex min-w-0 flex-1">
+      <PopoverTrigger asChild>
+        <button
+          type="button"
           data-testid="thread-title"
           title={thread.title}
-          className="min-w-0 flex-1 line-clamp-2 text-body font-medium text-text"
+          className="min-w-0 truncate rounded-row px-1 text-left text-body font-medium text-text transition-colors duration-[120ms] hover:bg-hover"
         >
           {thread.title}
-        </h2>
-        <IconButton
-          testId="thread-resolve-button"
-          label="Mark resolved"
-          disabled={CANNOT_RESOLVE.has(thread.status)}
-          onClick={() => void threadActions.resolve(thread)}
-        >
-          <CheckCircle2Icon />
-        </IconButton>
-        {actions}
-        <ThreadMenu thread={thread} />
-      </div>
-      <div
-        data-testid="thread-meta"
-        className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pb-1 text-meta text-text-muted"
+        </button>
+      </PopoverTrigger>
+    </h2>
+    <PopoverContent align="start" data-testid="thread-details" className="w-80 text-meta">
+      <ThreadDetails thread={thread} />
+    </PopoverContent>
+  </Popover>
+);
+
+/** The whole title, where the thread stands, where it works, what it used, and when it last moved. */
+const ThreadDetails = ({ thread }: { thread: Thread }) => {
+  const repos = useRegisteredRepos();
+  const now = useNow();
+  return (
+    <div className="flex flex-col gap-2.5 text-text-muted">
+      <p className="break-words text-body font-medium text-text">{thread.title}</p>
+      <DetailItem
+        testId="thread-status"
+        className={cn(thread.status === "waiting-on-you" && "text-waiting")}
       >
-        <MetaItem testId="thread-status" className={cn(blocked && "text-waiting")}>
-          <ThreadStatusDot status={thread.status} />
-          {THREAD_STATUS_LABEL[thread.status]}
-        </MetaItem>
-        {thread.repoId ? (
-          <MetaItem testId="thread-repo">
-            <FolderGit2Icon aria-hidden="true" className="size-3.5 text-text-subtle" />
-            {repoLabel(repos, thread.repoId)}
-          </MetaItem>
-        ) : null}
-        {thread.branch ? (
-          <MetaItem testId="thread-branch" title={thread.branch}>
-            <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0 text-text-subtle" />
-            <span className="max-w-64 truncate">{thread.branch}</span>
-          </MetaItem>
-        ) : null}
-        <ThreadUsageChip thread={thread} />
-        <MetaItem testId="thread-age" title={new Date(thread.lastActivityAt).toLocaleString()}>
-          {activeLabel(thread.lastActivityAt, now)}
-        </MetaItem>
-      </div>
-    </header>
+        <ThreadStatusDot status={thread.status} />
+        {THREAD_STATUS_LABEL[thread.status]}
+      </DetailItem>
+      {thread.repoId ? (
+        <DetailItem testId="thread-repo">
+          <FolderGit2Icon aria-hidden="true" className="size-3.5 shrink-0 text-text-subtle" />
+          <span className="break-all">{repoLabel(repos, thread.repoId)}</span>
+        </DetailItem>
+      ) : null}
+      {thread.branch ? (
+        <DetailItem testId="thread-details-branch">
+          <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0 text-text-subtle" />
+          <span className="break-all">{thread.branch}</span>
+        </DetailItem>
+      ) : null}
+      <DetailItem testId="thread-age" title={new Date(thread.lastActivityAt).toLocaleString()}>
+        {activeLabel(thread.lastActivityAt, now)}
+      </DetailItem>
+      <ThreadUsageChip thread={thread} />
+    </div>
   );
 };
 
-const MetaItem = ({
+const DetailItem = ({
   testId,
   title,
   className,
@@ -134,19 +164,44 @@ const MetaItem = ({
   </div>
 );
 
-const ThreadMenu = ({ thread }: { thread: Thread }) => (
+const ThreadMenu = ({
+  thread,
+  onShowPullRequestBar,
+}: {
+  thread: Thread;
+  onShowPullRequestBar?: () => void;
+}) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <button
         type="button"
         data-testid="thread-menu"
         aria-label="Thread actions"
+        title="Thread actions"
         className="grid size-8 shrink-0 place-items-center rounded-row text-text-subtle transition-colors duration-[120ms] hover:bg-hover hover:text-text"
       >
         <EllipsisIcon className="size-4" />
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="w-56" data-testid="thread-menu-content">
+      {STOPPABLE.has(thread.status) ? (
+        <DropdownMenuItem
+          data-testid="thread-stop"
+          onSelect={() => void threadActions.stop(thread)}
+        >
+          <SquareIcon />
+          Stop
+        </DropdownMenuItem>
+      ) : null}
+      {thread.status === "rate-limited" ? (
+        <DropdownMenuItem
+          data-testid="thread-menu-resume"
+          onSelect={() => void threadActions.resume(thread)}
+        >
+          <RotateCcwIcon />
+          Resume now
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuItem
         data-testid="thread-resolve"
         disabled={CANNOT_RESOLVE.has(thread.status)}
@@ -155,6 +210,12 @@ const ThreadMenu = ({ thread }: { thread: Thread }) => (
         <CheckCheckIcon />
         Mark resolved
       </DropdownMenuItem>
+      {onShowPullRequestBar ? (
+        <DropdownMenuItem data-testid="thread-show-pr-bar" onSelect={onShowPullRequestBar}>
+          <GitPullRequestIcon />
+          Show pull request bar
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuSeparator />
       <DropdownMenuItem
         variant="destructive"

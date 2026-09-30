@@ -4,14 +4,14 @@ The threads panel beside a project's chat opens on the Overview: every thread gr
 
 ## The Overview
 
-`ThreadOverview` draws one group per thread status, in the order a person should look at them: waiting on you, working, queued, rate limited, ready for review, landing, idle, resolved. A status with no thread has no group, and Resolved starts folded. Above the groups five counters give the project at a glance: threads waiting on you, running (working only: a queued or rate-limited thread has no turn running and shows in its own group), ready for review, open pull requests and resolved. Searching opens every group and filters the cards. A stopped thread whose open pull request fails its checks (where auto-fix ends at its cap) is drawn as an alert on its card and in the chat, not as ready or done. A card changes in place as `thread.upserted` entries arrive on the project's stream, and a rate-limited card carries a Resume button.
+`ThreadOverview` draws one group per thread status, in the order a person should look at them: waiting on you, working, queued, rate limited, ready for review, landing, idle, resolved. Waiting on you and Resolved are always there, at 0 with a line that says what goes in them, so a new project reads "Welcome back." and "Nothing is waiting on you." above those two; any other status with no thread has no group. Resolved starts folded. Above the groups the greeting says how many threads wait on the person; the groups carry the other counts. Searching opens every group and filters the cards. A stopped thread whose open pull request fails its checks (where auto-fix ends at its cap) is drawn as an alert on its card and in the chat, not as ready or done. A card changes in place as `thread.upserted` entries arrive on the project's stream, and a rate-limited card carries a Resume button.
 
 ## What the pane holds
 
 | Part | Source |
 | --- | --- |
-| Header: back link, title, status, repository, branch, usage, last activity | the `Thread` in the project's live state; usage from `GET /api/usage/threads/:id`, read again whenever the status changes |
-| Tabs and pull request bar | `thread.artifacts` (the `pr` item) and the calls of `usePullRequestControls` |
+| Header, one row: back link, title (clicking it shows status, repository, branch, last activity and usage) | the `Thread` in the project's live state; usage from `GET /api/usage/threads/:id`, read again whenever the status changes |
+| Pull request bar | `thread.artifacts` (the `pr` item), the diff's file count, and the calls of `usePullRequestControls` |
 | Notice: queued, rate limited (with a countdown to `resumesAt`), landing, resolved | the `Thread` |
 | Steps checklist and status line | `thread.steps` and `thread.liveStatusLine` (the line only while the thread is at work) |
 | Transcript | `GET /api/threads/:id/messages`, the stream's entries and live text |
@@ -39,13 +39,13 @@ While a turn runs, its text arrives as `delta` frames and shows typed out in the
 
 - **Waiting on you.** The answer card replaces the composer. Each option is a button (the recommended one is filled), and a one-line box takes an answer of the person's own. Either way the text goes to `POST /api/threads/:id/reply`, and the thread resumes in the same runtime session.
 - **Steering.** The composer sends `POST /api/threads/:id/messages`: queued while the thread works, a new turn while it is idle, a reopen once it is resolved. A thread in `landing` takes no message, and neither does a paused or archived project; the box says why.
-- **Stop.** While a turn runs, waits for a slot or waits out a rate limit, the composer has a Stop button, and Escape in the box does the same.
-- **Resume.** A rate-limited thread shows when it resumes by itself, counted down, and Resume now (`POST /api/threads/:id/resume`). The same button is on its card in the Overview and in the coordinator chat.
+- **Stop.** While a turn runs or waits for a slot, the composer has a Stop button, and Escape in the box does the same; the header menu has Stop too. A rate-limited thread has no turn to stop: it waits for its reset, and its notice has Resume now (the host still accepts a stop for it).
+- **Resume.** A rate-limited thread shows when it resumes by itself, counted down, and Resume now (`POST /api/threads/:id/resume`), also in the header menu. The same button is on its card in the Overview and in the coordinator chat.
 - **Resolve and Delete**: a check button in the header resolves, and the header menu has both. Resolve is refused by the host while a turn runs or a merge is landing, so the item is disabled for those statuses. Delete asks first, since it removes the thread with its worktree and branch.
 
 ## The pull request bar
 
-The bar sits beside the tabs. With no pull request it offers Open pull request (and "as draft"); with one open it shows the chip and its state, Sync, and Merge with its method (squash, merge commit, rebase); a merged or closed one shows what became of it. A thread with no repository has no bar and no Changes tab.
+The bar is one slim row just above the box that steers the thread (at the bottom of the pane while the changes show). With no pull request it shows the thread's branch in a read-only field, "N files changed" (which opens the changes in the pane, and closes them), Create PR (with "as draft" behind its chevron), and a cross that puts the bar away for that thread until the header menu's "Show pull request bar" brings it back; with one open it shows "PR #N" with its checks, Sync, and Merge with its method (squash, merge commit, rebase); a merged or closed one shows what became of it. A pull request that exists is never put away. A thread that changed nothing, or that waits out a rate limit with no pull request, has no bar, and neither has a thread with no repository.
 
 When the host refuses, the pane shows the host's own sentence and its code (`UNPUBLISHED_WORK`, `PULL_REQUEST_MERGED`, `NOTHING_TO_PUBLISH`, `THREAD_BUSY`, or the `PULL_REQUEST_FAILED` message GitHub gave), until the next attempt or until it is dismissed. Two refusals have a button that takes the step: `UNPUBLISHED_WORK` (the branch holds work its pull request lacks) offers Push the latest changes, which opens the pull request again, and `PULL_REQUEST_MERGED` offers Sync with GitHub.
 

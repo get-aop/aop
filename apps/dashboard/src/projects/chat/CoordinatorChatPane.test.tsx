@@ -202,7 +202,7 @@ describe("loading", () => {
 
 describe("the conversation", () => {
   test("shows the person's messages, the coordinator's replies with their cards, and a thread's report as an event", async () => {
-    const threads = [makeThread({ id: "thr_1", title: "Fix login", status: "working" })];
+    const threads = [makeThread({ id: "thr_1", title: "Fix login", status: "waiting-on-you" })];
     setup({
       threads,
       fetches: [
@@ -397,6 +397,27 @@ describe("an empty conversation", () => {
 
     expect(sent).toEqual(["What is the state of this project?"]);
     expect(screen.queryByTestId("chat-empty")).toBeNull();
+  });
+
+  test("a long goal is clamped on the text and not on the card, shows whole on hover, and is sent whole", async () => {
+    const goal = `Keep checkout fast and boring ${"and make every page cheap to render, ".repeat(12)}done.`;
+    expect(goal.length).toBeGreaterThan(300);
+    const { sent } = setup({ project: makeProject({ id: "prj_1", goal }) });
+    await settled();
+
+    const card = screen.getAllByTestId("chat-starter")[2] as HTMLElement;
+    const full = `Break the goal into threads: ${goal}`;
+    expect(card.getAttribute("title")).toBe(full);
+    // The clip belongs to the text inside the card's padding: on the card itself, the next line
+    // would show through the bottom padding.
+    expect(card.className).not.toContain("line-clamp");
+    expect(card.firstElementChild?.className).toContain("line-clamp-2");
+    expect(card.textContent).toBe(full);
+
+    fireEvent.click(card);
+    await settled();
+
+    expect(sent).toEqual([full]);
   });
 });
 

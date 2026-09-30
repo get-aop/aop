@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { Thread } from "@aop/common";
 import { toast } from "sonner";
 import { setupDashboardDom } from "../../test/setup-dom";
@@ -18,13 +18,38 @@ const withPullRequest = (state: "open" | "merged" | "closed", status: Thread["st
   makeThread({ id: "thr_1", status, artifacts: [{ ...OPEN_PR, state }] });
 
 /** The bar and its notice sharing one set of controls, as the pane wires them. */
-const Harness = ({ thread }: { thread: Thread }) => {
+const Harness = ({ thread, changedFiles = 3 }: { thread: Thread; changedFiles?: number }) => {
   const controls = usePullRequestControls(thread.id);
   return (
     <>
-      <PullRequestBar thread={thread} controls={controls} />
+      <PullRequestBar thread={thread} controls={controls} changedFiles={changedFiles} />
       <PullRequestProblemNotice controls={controls} />
     </>
+  );
+};
+
+/** The bar on its own, to see what it asks of its holder. */
+const Bare = ({
+  thread,
+  onHide = () => {},
+  onToggleChanges = () => {},
+  changesOpen = false,
+}: {
+  thread: Thread;
+  onHide?: () => void;
+  onToggleChanges?: () => void;
+  changesOpen?: boolean;
+}) => {
+  const controls = usePullRequestControls(thread.id);
+  return (
+    <PullRequestBar
+      thread={thread}
+      controls={controls}
+      changedFiles={3}
+      changesOpen={changesOpen}
+      onToggleChanges={onToggleChanges}
+      onHide={onHide}
+    />
   );
 };
 
@@ -42,7 +67,8 @@ afterEach(() => {
   success.mockRestore();
 });
 
-const idle = () => makeThread({ id: "thr_1", status: "idle" });
+const BRANCH = "aop/fix-the-login-redirect-a1b2c3";
+const idle = () => makeThread({ id: "thr_1", status: "idle", branch: BRANCH });
 const opened = (created = true) => json({ thread: idle(), pullRequest: OPEN_PR, created });
 const click = (testId: string) => fireEvent.click(screen.getByTestId(testId));
 const openMenu = async (testId: string, menuTestId: string) => {
@@ -60,12 +86,14 @@ const held = () => {
 };
 
 describe("a thread with no pull request", () => {
-  test("says so and opens one with an empty body, then reports it", async () => {
+  test("shows the branch and opens one with an empty body, then reports it", async () => {
     host.respondWith(() => opened());
     render(<Harness thread={idle()} />);
 
     expect(screen.getByTestId("pr-bar").getAttribute("data-state")).toBe("none");
-    expect(screen.getByTestId("pr-bar-summary").textContent).toContain("No pull request");
+    expect(screen.getByTestId("thread-branch").textContent).toBe(BRANCH);
+    expect(screen.getByTestId("thread-branch").getAttribute("title")).toBe(BRANCH);
+    expect(screen.getByTestId("pr-open").textContent).toContain("Create PR");
     expect(screen.queryByTestId("pr-merge")).toBeNull();
 
     click("pr-open");
@@ -74,6 +102,68 @@ describe("a thread with no pull request", () => {
     expect(host.requests).toEqual([
       { method: "POST", url: "/api/threads/thr_1/pull-request", body: {} },
     ]);
+  });
+
+  test("has no bar when the thread changed nothing", () => {
+    render(<Harness thread={idle()} changedFiles={0} />);
+
+    expect(screen.queryByTestId("pr-bar")).toBeNull();
+  });
+
+  test("has no bar while the thread waits out a rate limit with nothing published", () => {
+    render(
+      <Harness thread={makeThread({ id: "thr_1", status: "rate-limited", branch: BRANCH })} />,
+    );
+
+    expect(screen.queryByTestId("pr-bar")).toBeNull();
+  });
+
+  test("keeps the bar of a rate-limited thread whose pull request is already open", () => {
+    render(
+      <Harness
+        thread={makeThread({ id: "thr_1", status: "rate-limited", artifacts: [OPEN_PR] })}
+        changedFiles={0}
+      />,
+    );
+
+    expect(screen.getByTestId("pr-bar").getAttribute("data-state")).toBe("open");
+  });
+
+  test("says how many files changed, and the link opens and closes them", () => {
+    const toggle = mock();
+    const { rerender } = render(<Bare thread={idle()} onToggleChanges={toggle} />);
+
+    const link = screen.getByTestId("pr-bar-changes");
+    expect(link.textContent).toBe("3 files changed");
+    expect(link.getAttribute("aria-pressed")).toBe("false");
+    click("pr-bar-changes");
+    expect(toggle).toHaveBeenCalledTimes(1);
+
+    rerender(<Bare thread={idle()} onToggleChanges={toggle} changesOpen />);
+    expect(screen.getByTestId("pr-bar-changes").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  test("the cross puts the bar away for the thread, and only while there is no pull request", () => {
+    const hide = mock();
+    const { rerender } = render(<Bare thread={idle()} onHide={hide} />);
+
+    click("pr-bar-hide");
+    expect(hide).toHaveBeenCalledTimes(1);
+
+    rerender(<Bare thread={withPullRequest("open", "ready-for-review")} onHide={hide} />);
+    expect(screen.queryByTestId("pr-bar-hide")).toBeNull();
+  });
+
+  test("is one slim row of secondary controls, never a filled white button", () => {
+    render(<Bare thread={idle()} />);
+
+    const bar = screen.getByTestId("pr-bar");
+    expect(bar.className).toContain("h-8");
+    expect(bar.className).not.toContain("flex-wrap");
+    const open = screen.getByTestId("pr-open");
+    expect(open.getAttribute("data-variant")).toBe("secondary");
+    expect(open.className).toContain("h-6");
+    expect(screen.getByTestId("pr-open-menu").getAttribute("data-variant")).toBe("secondary");
   });
 
   test("opens it as a draft from the menu", async () => {
@@ -93,14 +183,16 @@ describe("a thread with no pull request", () => {
 });
 
 describe("a thread with an open pull request", () => {
-  test("shows the chip as a link to the pull request, with its state in words", () => {
+  test("shows 'PR #7' as a link to the pull request, the branch giving way to it", () => {
     render(<Harness thread={withPullRequest("open", "ready-for-review")} />);
 
     const chip = screen.getByTestId("pr-bar-chip");
     expect(chip.getAttribute("href")).toBe(PR_URL);
     expect(chip.getAttribute("data-state")).toBe("open");
-    expect(chip.textContent).toContain("#7");
-    expect(screen.getByTestId("pr-bar-state").textContent).toBe("Open");
+    expect(chip.textContent).toBe("PR #7");
+    // An open one's colour says it is open; the word is kept for merged and closed.
+    expect(screen.queryByTestId("pr-bar-state")).toBeNull();
+    expect(screen.queryByTestId("thread-branch")).toBeNull();
     expect(screen.getByTestId("pr-bar").getAttribute("data-state")).toBe("open");
     expect(screen.queryByTestId("pr-open")).toBeNull();
   });
@@ -124,18 +216,20 @@ describe("a thread with an open pull request", () => {
     rerender(
       <Harness thread={withChecks({ state: "failure", successful: 1, failing: 2, pending: 0 })} />,
     );
-    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("· 2 checks failing");
+    // Secondary text in the bar is the readable grey, not the faint one.
+    expect(screen.getByTestId("pr-bar-summary").className).toContain("text-text-muted");
+    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("2 checks failing");
     expect(screen.getByTestId("pr-bar-chip").getAttribute("data-checks")).toBe("failure");
 
     rerender(
       <Harness thread={withChecks({ state: "pending", successful: 0, failing: 0, pending: 1 })} />,
     );
-    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("· 1 check running");
+    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("1 check running");
 
     rerender(
       <Harness thread={withChecks({ state: "success", successful: 3, failing: 0, pending: 0 })} />,
     );
-    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("· All checks passed");
+    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("All checks passed");
   });
 
   test("Sync asks the host to bring the thread in line with GitHub", async () => {
@@ -236,21 +330,25 @@ describe("while a call is in flight", () => {
 
     click("pr-open");
 
-    await waitFor(() => expect(screen.getByTestId("pr-open").textContent).toContain("Opening…"));
+    await waitFor(() => expect(screen.getByTestId("pr-open").textContent).toContain("Creating…"));
     expect(screen.getByTestId("pr-open").hasAttribute("disabled")).toBe(true);
     expect(screen.getByTestId("pr-open-menu").hasAttribute("disabled")).toBe(true);
 
     await act(async () => call.release(opened()));
 
-    await waitFor(() =>
-      expect(screen.getByTestId("pr-open").textContent).toContain("Open pull request"),
-    );
+    await waitFor(() => expect(screen.getByTestId("pr-open").textContent).toContain("Create PR"));
     expect(screen.getByTestId("pr-open").hasAttribute("disabled")).toBe(false);
   });
 
+  // Sync is an icon: what it says is its accessible name.
+  const said = (testId: string) => {
+    const control = screen.getByTestId(testId);
+    return control.getAttribute("aria-label") ?? control.textContent ?? "";
+  };
+
   test.each([
     ["pr-merge", "Merging…", "Merge"],
-    ["pr-sync", "Syncing…", "Sync"],
+    ["pr-sync", "Syncing with GitHub", "Sync with GitHub"],
   ])("%s shows %s and disables the other controls", async (testId, busyLabel, idleLabel) => {
     const call = held();
     host.respondWith(() => call.answer);
@@ -258,14 +356,14 @@ describe("while a call is in flight", () => {
 
     click(testId);
 
-    await waitFor(() => expect(screen.getByTestId(testId).textContent).toContain(busyLabel));
+    await waitFor(() => expect(said(testId)).toContain(busyLabel));
     for (const id of ["pr-sync", "pr-merge", "pr-merge-menu"]) {
       expect(screen.getByTestId(id).hasAttribute("disabled")).toBe(true);
     }
 
     await act(async () => call.release(json({ thread: idle() })));
 
-    await waitFor(() => expect(screen.getByTestId(testId).textContent).toContain(idleLabel));
+    await waitFor(() => expect(said(testId)).toContain(idleLabel));
     for (const id of ["pr-sync", "pr-merge", "pr-merge-menu"]) {
       expect(screen.getByTestId(id).hasAttribute("disabled")).toBe(false);
     }

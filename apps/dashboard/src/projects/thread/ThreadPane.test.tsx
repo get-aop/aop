@@ -85,56 +85,6 @@ describe("a thread that is not there", () => {
   });
 });
 
-describe("the header", () => {
-  test("shows the title, the status, the branch and the repository by name", async () => {
-    await setupPane(host, {
-      thread: makeThread({
-        id: "thr_1",
-        title: "Fix 4s cold start regression",
-        status: "idle",
-        branch: "aop/fix-cold-start-ab12cd",
-      }),
-    });
-
-    expect(screen.getByTestId("thread-title").textContent).toBe("Fix 4s cold start regression");
-    expect(screen.getByTestId("thread-status").textContent).toBe("Idle");
-    expect(screen.getByTestId("thread-branch").textContent).toBe("aop/fix-cold-start-ab12cd");
-    expect(screen.getByTestId("thread-repo").textContent).toBe("checkout");
-  });
-
-  test("a repository the host does not list is shown by its id", async () => {
-    await setupPane(host, { thread: makeThread({ id: "thr_1", repoId: "repo_gone" }) });
-
-    expect(screen.getByTestId("thread-repo").textContent).toBe("repo_gone");
-  });
-
-  test("the way back leads to the project's threads without a page load", async () => {
-    await setupPane(host);
-
-    const back = screen.getByTestId("thread-back");
-    expect(back.getAttribute("href")).toBe("/projects/prj_1");
-    fireEvent.click(back);
-    expect(window.location.pathname).toBe("/projects/prj_1");
-  });
-
-  test("a thread waiting on you says so in the attention colour", async () => {
-    await setupPane(host, { thread: makeThread({ id: "thr_1", status: "waiting-on-you" }) });
-
-    expect(screen.getByTestId("thread-status").textContent).toBe("Waiting on you");
-    expect(screen.getByTestId("thread-status").className).toContain("text-waiting");
-    expect(screen.getByTestId("thread-pane").getAttribute("data-status")).toBe("waiting-on-you");
-  });
-
-  test("a thread with no repository has no repository, branch, changes tab or pull request bar", async () => {
-    await setupPane(host, { thread: makeThread({ id: "thr_1", repoId: null, branch: null }) });
-
-    expect(screen.queryByTestId("thread-repo")).toBeNull();
-    expect(screen.queryByTestId("thread-branch")).toBeNull();
-    expect(screen.queryByTestId("thread-tab-changes")).toBeNull();
-    expect(screen.queryByTestId("pr-bar")).toBeNull();
-  });
-});
-
 describe("the transcript", () => {
   const brief = () =>
     reply(
@@ -379,7 +329,7 @@ describe("steering", () => {
 });
 
 describe("stopping", () => {
-  test.each(["working", "queued", "rate-limited"] as const)(
+  test.each(["working", "queued"] as const)(
     "a %s thread can be stopped with the button",
     async (status) => {
       await setupPane(host, { thread: makeThread({ id: "thr_1", status }) });
@@ -391,7 +341,7 @@ describe("stopping", () => {
     },
   );
 
-  test.each(["working", "queued", "rate-limited"] as const)(
+  test.each(["working", "queued"] as const)(
     "and with Escape in the box when %s",
     async (status) => {
       await setupPane(host, { thread: makeThread({ id: "thr_1", status }) });
@@ -403,7 +353,7 @@ describe("stopping", () => {
     },
   );
 
-  test.each(["idle", "ready-for-review", "resolved"] as const)(
+  test.each(["idle", "ready-for-review", "resolved", "rate-limited"] as const)(
     "a %s thread has nothing to stop: no button, and Escape does nothing",
     async (status) => {
       await setupPane(host, { thread: makeThread({ id: "thr_1", status }) });

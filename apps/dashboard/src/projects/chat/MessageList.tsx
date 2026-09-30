@@ -10,6 +10,7 @@ import { buildRows, type ChatRow } from "./chat-rows";
 import type { EarlierMessages } from "./chat-state";
 import { formatElapsed } from "./chat-time";
 import { AssistantRow, ThreadReportRow, UserRow } from "./MessageRows";
+import { presenceOf, ThreadPresenceContext } from "./thread-presence";
 import { useStreamingReveal } from "./use-streaming-reveal";
 
 const INITIAL_WINDOW = 60;
@@ -29,6 +30,7 @@ export const COORDINATOR_WORKER: Worker = { name: "Coordinator", testIdPrefix: "
  * are asked for; once every one held is drawn, older ones are fetched from the host on request.
  */
 export const MessageList = ({
+  lead,
   messages,
   live,
   working,
@@ -40,6 +42,8 @@ export const MessageList = ({
   workingSince,
   earlier,
 }: {
+  /** Drawn at the top of the messages on screen and scrolling with them. */
+  lead?: ReactNode;
   messages: readonly Message[];
   live: Readonly<Record<string, string>>;
   working: boolean;
@@ -67,6 +71,8 @@ export const MessageList = ({
     [messages, live, working, firstNewId, window],
   );
 
+  const presence = useMemo(() => presenceOf(messages), [messages]);
+
   const scrollToEnd = () =>
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
 
@@ -77,56 +83,59 @@ export const MessageList = ({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <MessageScroller
-        scrollerRef={scroller}
-        data-testid="chat-scroll"
-        streaming={working}
-        anchorKey={rows.length}
-        onEdgeChange={setAtEnd}
-        className="overflow-x-hidden overscroll-contain"
-      >
-        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end px-6 pb-2 pt-6">
-          {hidden > 0 ? (
+    <ThreadPresenceContext.Provider value={presence}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <MessageScroller
+          scrollerRef={scroller}
+          data-testid="chat-scroll"
+          streaming={working}
+          anchorKey={rows.length}
+          onEdgeChange={setAtEnd}
+          className="overflow-x-hidden overscroll-contain"
+        >
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end px-6 pb-4 pt-6">
+            {hidden > 0 ? (
+              <button
+                type="button"
+                data-testid="chat-show-earlier"
+                onClick={() => setWindow((current) => current + WINDOW_STEP)}
+                className="mx-auto mb-3 rounded-md border border-border px-3 py-1 text-meta text-text-muted hover:bg-hover hover:text-text"
+              >
+                Show {Math.min(WINDOW_STEP, hidden)} earlier messages
+              </button>
+            ) : null}
+            {hidden === 0 && earlier?.available ? (
+              <LoadEarlier earlier={earlier} onLoad={() => void loadEarlier()} />
+            ) : null}
+            {lead}
+            {rows.map((row) => (
+              <RowView
+                key={row.key}
+                row={row}
+                worker={worker}
+                workLogOf={workLogOf}
+                liveWorkLog={liveWorkLog}
+                workingSince={workingSince}
+              />
+            ))}
+          </div>
+        </MessageScroller>
+        {/* Its own row under the transcript rather than a float over it: nothing it could cover. */}
+        {atEnd ? null : (
+          <div className="flex shrink-0 justify-center px-6 pb-1 pt-2">
             <button
               type="button"
-              data-testid="chat-show-earlier"
-              onClick={() => setWindow((current) => current + WINDOW_STEP)}
-              className="mx-auto mb-3 rounded-md border border-border px-3 py-1 text-meta text-text-muted hover:bg-hover hover:text-text"
+              data-testid="chat-scroll-to-end"
+              onClick={scrollToEnd}
+              className="flex items-center gap-1 rounded-md border border-border-strong bg-overlay px-3 py-1.5 text-meta text-text-muted shadow-2 hover:text-text"
             >
-              Show {Math.min(WINDOW_STEP, hidden)} earlier messages
+              <ChevronDownIcon className="size-3.5" />
+              Scroll to latest
             </button>
-          ) : null}
-          {hidden === 0 && earlier?.available ? (
-            <LoadEarlier earlier={earlier} onLoad={() => void loadEarlier()} />
-          ) : null}
-          {rows.map((row) => (
-            <RowView
-              key={row.key}
-              row={row}
-              worker={worker}
-              workLogOf={workLogOf}
-              liveWorkLog={liveWorkLog}
-              workingSince={workingSince}
-            />
-          ))}
-        </div>
-      </MessageScroller>
-      {/* Its own row under the transcript rather than a float over it: nothing it could cover. */}
-      {atEnd ? null : (
-        <div className="flex shrink-0 justify-center px-6 pb-1 pt-2">
-          <button
-            type="button"
-            data-testid="chat-scroll-to-end"
-            onClick={scrollToEnd}
-            className="flex items-center gap-1 rounded-md border border-border-strong bg-overlay px-3 py-1.5 text-meta text-text-muted shadow-2 hover:text-text"
-          >
-            <ChevronDownIcon className="size-3.5" />
-            Scroll to latest
-          </button>
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+      </div>
+    </ThreadPresenceContext.Provider>
   );
 };
 

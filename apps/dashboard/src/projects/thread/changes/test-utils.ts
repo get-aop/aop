@@ -121,6 +121,7 @@ export interface DiffHarnessProps {
   thread?: Thread;
   refreshKey?: string;
   visible?: boolean;
+  onBack?: () => void;
   onReviewSent?: () => void;
 }
 
@@ -129,8 +130,9 @@ export const DiffHarness = ({
   thread = makeThread({ id: THREAD_ID, status: "idle", branch: "aop/fix-login" }),
   refreshKey = "k1",
   visible = true,
+  onBack = () => {},
   onReviewSent = () => {},
 }: DiffHarnessProps) => {
   const view = useThreadDiff(thread.id, refreshKey, visible);
-  return createElement(ThreadChanges, { thread, view, onReviewSent });
+  return createElement(ThreadChanges, { thread, view, onBack, onReviewSent });
 };

@@ -108,6 +108,27 @@ describe("the panel toggle", () => {
     expect(panel()).toBeTruthy();
   });
 
+  test("each project keeps its own panel: closing it in one leaves the other open", () => {
+    const second = makeProject({ id: "p2", name: "Payments" });
+    mount(makeState([makeEntry(project, [blocked]), makeEntry(second, [])]));
+    expect(panel()).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId("panel-toggle"));
+    expect(panel()).toBeNull();
+
+    act(() => navigate("/projects/p2"));
+    expect(panel()).toBeTruthy();
+    fireEvent.click(screen.getByTestId("panel-toggle"));
+    expect(panel()).toBeNull();
+    fireEvent.click(screen.getByTestId("panel-toggle"));
+    expect(panel()).toBeTruthy();
+
+    act(() => navigate("/projects/p1"));
+    expect(panel()).toBeNull();
+    act(() => navigate("/projects/p2"));
+    expect(panel()).toBeTruthy();
+  });
+
   test("the close button in the panel does the same", () => {
     mount();
 
@@ -273,7 +294,7 @@ describe("dragging", () => {
 
       fireEvent.pointerMove(window, { clientX: 300 });
       expect(divider().getAttribute("aria-valuenow")).toBe("684");
-      expect(JSON.parse(window.localStorage.getItem("aop:threads-panel:v1") ?? "{}").width).toBe(
+      expect(JSON.parse(window.localStorage.getItem("aop:threads-panel:v2:p1") ?? "{}").width).toBe(
         684,
       );
     } finally {
@@ -377,7 +398,7 @@ describe("narrow windows", () => {
 
       expect(screen.getByTestId("thread-pane")).toBeTruthy();
       expect(chatColumn().className).toContain("hidden");
-      expect(JSON.parse(window.localStorage.getItem("aop:threads-panel:v1") ?? "{}").open).toBe(
+      expect(JSON.parse(window.localStorage.getItem("aop:threads-panel:v2:p1") ?? "{}").open).toBe(
         true,
       );
     } finally {

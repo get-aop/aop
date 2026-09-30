@@ -1,45 +1,39 @@
 import type { Thread } from "@aop/common";
-import {
-  ChevronDownIcon,
-  GitMergeIcon,
-  GitPullRequestIcon,
-  RefreshCwIcon,
-  XIcon,
-} from "lucide-react";
-import { useState } from "react";
+import { GitBranchIcon, XIcon } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/ui/dropdown-menu";
 import { Spinner } from "@/ui/spinner";
-import type { MergeMethod } from "../../api/threads";
 import { checksLabel, PullRequestChip } from "../PullRequestChip";
 import { pullRequestOf } from "../selectors";
+import { MergeButton, OpenButton, SyncButton } from "./PullRequestButtons";
 import type { PullRequestControls, PullRequestProblem } from "./use-pull-request";
 
-const MERGE_METHODS: { method: MergeMethod; label: string }[] = [
-  { method: "squash", label: "Squash and merge" },
-  { method: "merge", label: "Create a merge commit" },
-  { method: "rebase", label: "Rebase and merge" },
-];
-
 /**
- * The thread's pull request in one line: none yet (open one), open (sync it, merge it), merged
- * or closed (what became of it). It sits beside the pane's tabs because it is how the work
- * leaves the thread. What the host refuses is shown by `PullRequestProblemNotice`, below.
+ * The thread's code on its way out, in one slim row above its composer: the branch, how many
+ * files it changed (which opens them), and "Create PR"; once there is a pull request, that pull
+ * request with its checks and "Merge". A thread that changed nothing, or that waits out a rate
+ * limit with nothing published, has no bar. The person may send it away (`onHide`) until a pull
+ * request exists. What the host refuses is shown by `PullRequestProblemNotice`, above the bar.
  */
 export const PullRequestBar = ({
   thread,
   controls,
+  changedFiles,
+  changesOpen = false,
+  onToggleChanges,
+  onHide,
 }: {
   thread: Thread;
   controls: PullRequestControls;
+  /** How many files the thread's worktree changed; 0 while that is not known. */
+  changedFiles: number;
+  /** Whether the changes view is what the pane shows now. */
+  changesOpen?: boolean;
+  onToggleChanges?: () => void;
+  /** Puts the bar away for this thread; only offered while it has no pull request. */
+  onHide?: () => void;
 }) => {
+  if (!hasPullRequestBar(thread, changedFiles)) return null;
   const pullRequest = pullRequestOf(thread);
   const landing = thread.status === "landing";
   const disabled = controls.busy !== null || landing;
@@ -49,15 +43,81 @@ export const PullRequestBar = ({
       data-testid="pr-bar"
       data-state={pullRequest?.state ?? "none"}
       aria-label="Pull request"
-      className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1"
+      className="flex h-8 items-center gap-2 rounded-row border border-border bg-raised/60 pr-1 pl-3 text-meta max-sm:h-11"
     >
-      <StateSummary thread={thread} />
+      {pullRequest || landing ? <StateSummary thread={thread} /> : <BranchField thread={thread} />}
+      {changedFiles > 0 && onToggleChanges ? (
+        <ChangesLink count={changedFiles} open={changesOpen} onToggle={onToggleChanges} />
+      ) : null}
       {landing ? null : <Actions thread={thread} controls={controls} disabled={disabled} />}
+      {!pullRequest && onHide ? <HideButton onHide={onHide} /> : null}
     </section>
   );
 };
 
-const SUMMARY_CLASS = "flex items-center gap-1.5 whitespace-nowrap text-meta text-text-muted";
+/**
+ * Whether the thread has anything for the bar: a pull request (or one merging), or changed files
+ * a pull request could be made from. One paused on a rate limit has not finished them yet.
+ */
+export const hasPullRequestBar = (thread: Thread, changedFiles: number): boolean =>
+  pullRequestOf(thread) !== null ||
+  thread.status === "landing" ||
+  (changedFiles > 0 && thread.status !== "rate-limited");
+
+/** "3 files changed": opens the changes in the pane, and closes them again. */
+const ChangesLink = ({
+  count,
+  open,
+  onToggle,
+}: {
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) => (
+  <button
+    type="button"
+    data-testid="pr-bar-changes"
+    aria-pressed={open}
+    title={open ? "Back to the conversation" : "Show the changes"}
+    onClick={onToggle}
+    className={cn(
+      "shrink-0 rounded-row px-1 whitespace-nowrap underline-offset-2 transition-colors duration-[120ms] hover:text-text hover:underline max-sm:h-9",
+      open ? "text-text underline" : "text-text-muted",
+    )}
+  >
+    {count} {count === 1 ? "file" : "files"}
+    <span className="max-sm:hidden"> changed</span>
+  </button>
+);
+
+const HideButton = ({ onHide }: { onHide: () => void }) => (
+  <Button
+    type="button"
+    size="icon-sm"
+    variant="ghost"
+    data-testid="pr-bar-hide"
+    aria-label="Hide pull request bar"
+    title="Hide this bar for this thread"
+    onClick={onHide}
+    className="size-6 shrink-0 max-sm:size-9 [&_svg]:size-3.5"
+  >
+    <XIcon />
+  </Button>
+);
+
+/** The branch, read-only: it is what a pull request would be made from. */
+const BranchField = ({ thread }: { thread: Thread }) => (
+  <p
+    data-testid="thread-branch"
+    title={thread.branch ?? "No branch yet"}
+    className="flex min-w-0 flex-1 items-center gap-1.5 text-text-muted"
+  >
+    <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0 text-text-subtle" />
+    <span className="truncate">{thread.branch ?? "No branch yet"}</span>
+  </p>
+);
+
+const SUMMARY_CLASS = "flex min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-text-muted";
 
 const StateSummary = ({ thread }: { thread: Thread }) => {
   const pullRequest = pullRequestOf(thread);
@@ -66,40 +126,38 @@ const StateSummary = ({ thread }: { thread: Thread }) => {
       <p data-testid="pr-bar-summary" className={SUMMARY_CLASS}>
         <Spinner className="size-3.5" />
         Merging
-        {pullRequest ? <PullRequestChip pullRequest={pullRequest} testId="pr-bar-chip" /> : null}
+        {pullRequest ? (
+          <PullRequestChip pullRequest={pullRequest} testId="pr-bar-chip" prefix="PR " />
+        ) : null}
       </p>
     );
   }
-  if (!pullRequest) {
-    return (
-      <p
-        data-testid="pr-bar-summary"
-        title="Opening one commits the thread’s work and pushes its branch."
-        className={SUMMARY_CLASS}
-      >
-        <GitPullRequestIcon aria-hidden="true" className="size-3.5 text-text-subtle" />
-        No pull request
-      </p>
-    );
-  }
+  if (!pullRequest) return null;
   return (
     <p data-testid="pr-bar-summary" title={SUMMARY[pullRequest.state]} className={SUMMARY_CLASS}>
-      <PullRequestChip pullRequest={pullRequest} testId="pr-bar-chip" />
-      <span data-testid="pr-bar-state" className={STATE_TONE[pullRequest.state]}>
-        {STATE_LABEL[pullRequest.state]}
-      </span>
+      <PullRequestChip
+        pullRequest={pullRequest}
+        testId="pr-bar-chip"
+        prefix="PR "
+        className="h-5 shrink-0"
+      />
+      {pullRequest.state === "open" ? null : (
+        <span data-testid="pr-bar-state" className={cn("shrink-0", STATE_TONE[pullRequest.state])}>
+          {STATE_LABEL[pullRequest.state]}
+        </span>
+      )}
       {pullRequest.state === "open" && pullRequest.checks ? (
-        <span data-testid="pr-bar-checks" className="text-text-subtle">
-          · {checksLabel(pullRequest.checks)}
+        <span data-testid="pr-bar-checks" className="truncate">
+          {checksLabel(pullRequest.checks)}
         </span>
       ) : null}
     </p>
   );
 };
 
-const STATE_LABEL = { open: "Open", merged: "Merged", closed: "Closed" } as const;
+const STATE_LABEL = { merged: "Merged", closed: "Closed" } as const;
 
-const STATE_TONE = { open: "text-ok", merged: "text-merged", closed: "text-text-subtle" } as const;
+const STATE_TONE = { merged: "text-merged", closed: "text-text-subtle" } as const;
 
 const SUMMARY = {
   open: "Open on GitHub.",
@@ -121,117 +179,11 @@ const Actions = ({
   if (pullRequest.state === "merged") return null;
   return (
     <>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        data-testid="pr-sync"
-        disabled={disabled}
-        onClick={() => void controls.sync()}
-      >
-        {controls.busy === "sync" ? <Spinner className="size-3.5" /> : <RefreshCwIcon />}
-        {controls.busy === "sync" ? "Syncing…" : "Sync"}
-      </Button>
+      <SyncButton controls={controls} disabled={disabled} />
       {pullRequest.state === "open" ? (
         <MergeButton controls={controls} disabled={disabled} />
       ) : null}
     </>
-  );
-};
-
-const OpenButton = ({
-  controls,
-  disabled,
-}: {
-  controls: PullRequestControls;
-  disabled: boolean;
-}) => (
-  <div className="flex items-center">
-    <Button
-      type="button"
-      size="sm"
-      data-testid="pr-open"
-      disabled={disabled}
-      onClick={() => void controls.open()}
-      className="rounded-r-none"
-    >
-      {controls.busy === "open" ? <Spinner className="size-3.5" /> : <GitPullRequestIcon />}
-      {controls.busy === "open" ? "Opening…" : "Open pull request"}
-    </Button>
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          size="sm"
-          data-testid="pr-open-menu"
-          aria-label="More ways to open"
-          disabled={disabled}
-          className="rounded-l-none border-l border-canvas/30 px-1.5"
-        >
-          <ChevronDownIcon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          data-testid="pr-open-draft"
-          onSelect={() => void controls.open({ draft: true })}
-        >
-          Open as draft
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  </div>
-);
-
-const MergeButton = ({
-  controls,
-  disabled,
-}: {
-  controls: PullRequestControls;
-  disabled: boolean;
-}) => {
-  const [method, setMethod] = useState<MergeMethod>("squash");
-  return (
-    <div className="flex items-center">
-      <Button
-        type="button"
-        size="sm"
-        data-testid="pr-merge"
-        data-method={method}
-        disabled={disabled}
-        onClick={() => void controls.merge(method)}
-        className="rounded-r-none"
-      >
-        {controls.busy === "merge" ? <Spinner className="size-3.5" /> : <GitMergeIcon />}
-        {controls.busy === "merge" ? "Merging…" : "Merge"}
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            size="sm"
-            data-testid="pr-merge-menu"
-            aria-label="Merge method"
-            disabled={disabled}
-            className="rounded-l-none border-l border-canvas/30 px-1.5"
-          >
-            <ChevronDownIcon />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" data-testid="pr-merge-methods">
-          <DropdownMenuRadioGroup
-            value={method}
-            onValueChange={(value) => setMethod(value as MergeMethod)}
-          >
-            {MERGE_METHODS.map(({ method: value, label }) => (
-              <DropdownMenuRadioItem key={value} value={value} data-testid={`pr-merge-${value}`}>
-                {label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
   );
 };
 
@@ -258,7 +210,7 @@ const Problem = ({
     role="alert"
     data-testid="pr-error"
     data-code={problem.code}
-    className="mx-6 mt-3 flex items-start gap-3 rounded-card border border-blocked/30 bg-blocked/5 px-3.5 py-2.5"
+    className="mb-2 flex items-start gap-3 rounded-card border border-blocked/30 bg-blocked/5 px-3.5 py-2.5"
   >
     <div className="min-w-0 flex-1 text-meta">
       <p className="text-text">

@@ -24,7 +24,7 @@ export const ThreadUsageChip = ({ thread }: { thread: Thread }) => {
           type="button"
           data-testid="thread-usage"
           data-tokens={totalTokens(totals)}
-          className="flex items-center gap-1.5 rounded-row text-meta text-text-muted transition-colors duration-[120ms] hover:text-text"
+          className="flex shrink-0 items-center gap-1.5 rounded-row text-meta text-text-muted transition-colors duration-[120ms] hover:text-text"
         >
           <CoinsIcon aria-hidden="true" className="size-3.5 text-text-subtle" />
           {formatTokens(totalTokens(totals))} tokens

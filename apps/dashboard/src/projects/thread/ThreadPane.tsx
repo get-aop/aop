@@ -7,18 +7,16 @@ import { pullRequestOf } from "../selectors";
 import { ThreadsLoadError } from "../ThreadsLoadError";
 import { ThreadChanges } from "./changes/ThreadChanges";
 import { useThreadDiff } from "./changes/use-thread-diff";
-import { PullRequestBar, PullRequestProblemNotice } from "./PullRequestBar";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadNotice } from "./ThreadNotice";
 import { ThreadTranscript } from "./ThreadTranscript";
-import { usePullRequestControls } from "./use-pull-request";
-
-type Tab = "transcript" | "changes";
+import { usePullRequestDock } from "./use-pull-request-dock";
 
 /**
- * One thread: who it is, where its pull request stands, what is going on with it, and then
- * either its conversation (with the box to steer it, or the question it waits on) or the files
- * it changed. `thread` is undefined for an id the project does not have.
+ * One thread: who it is, what is going on with it, and its conversation, with the pull request
+ * bar and the box to steer it (or the question it waits on) at the bottom. The bar's "N files
+ * changed" swaps the conversation for the files the thread changed, and back.
+ * `thread` is undefined for an id the project does not have.
  */
 export const ThreadPane = ({
   project,
@@ -27,14 +25,17 @@ export const ThreadPane = ({
   threadsLoaded,
   threadsError,
   headerActions,
+  headerClose,
 }: {
   project: Project;
   thread: Thread | undefined;
   threads: readonly Thread[];
   threadsLoaded: boolean;
   threadsError: string | null;
-  /** The holder's buttons (expand, close), drawn in the thread's header. */
+  /** The holder's buttons (expand), drawn in the thread's header before its menu. */
   headerActions?: React.ReactNode;
+  /** The holder's close button, last in the thread's header. */
+  headerClose?: React.ReactNode;
 }) => {
   if (thread) {
     return (
@@ -46,6 +47,7 @@ export const ThreadPane = ({
         threadsLoaded={threadsLoaded}
         threadsError={threadsError}
         headerActions={headerActions}
+        headerClose={headerClose}
       />
     );
   }
@@ -70,6 +72,7 @@ const ThreadView = ({
   threadsLoaded,
   threadsError,
   headerActions,
+  headerClose,
 }: {
   project: Project;
   thread: Thread;
@@ -77,103 +80,67 @@ const ThreadView = ({
   threadsLoaded: boolean;
   threadsError: string | null;
   headerActions?: React.ReactNode;
+  headerClose?: React.ReactNode;
 }) => {
-  const [tab, setTab] = useState<Tab>("transcript");
+  const [changesOpen, setChangesOpen] = useState(false);
   useMarkRead(thread);
   // A turn that ends, or a pull request that changes, is when the worktree may have changed.
   const view = useThreadDiff(
     thread.id,
     `${thread.status}:${thread.lastActivityAt}:${pullRequestOf(thread)?.state ?? ""}`,
-    tab === "changes",
+    changesOpen,
   );
-  const changed = view.diff?.files.length ?? 0;
-  const pullRequest = usePullRequestControls(thread.id);
+  const showChanges = changesOpen && thread.repoId !== null;
+  const { dock, bringBack } = usePullRequestDock({
+    thread,
+    changedFiles: view.diff?.files.length ?? 0,
+    changesOpen: showChanges,
+    onToggleChanges: () => setChangesOpen((open) => !open),
+  });
 
   return (
     <div
       data-testid="thread-pane"
       data-thread-id={thread.id}
       data-status={thread.status}
+      data-view={showChanges ? "changes" : "transcript"}
       className="flex min-h-0 flex-1 flex-col"
     >
-      <ThreadHeader project={project} thread={thread} actions={headerActions} />
-      {thread.repoId ? (
+      <ThreadHeader
+        project={project}
+        thread={thread}
+        actions={headerActions}
+        close={headerClose}
+        onShowPullRequestBar={bringBack}
+      />
+      <ThreadNotice thread={thread} />
+      {showChanges ? (
         <>
-          <div className="mt-1.5 flex flex-wrap items-end gap-x-5 border-b border-border px-6">
-            <nav aria-label="Thread" className="flex items-end gap-5">
-              <TabButton
-                active={tab === "transcript"}
-                onSelect={() => setTab("transcript")}
-                testId="thread-tab-transcript"
-              >
-                Transcript
-              </TabButton>
-              <TabButton
-                active={tab === "changes"}
-                onSelect={() => setTab("changes")}
-                testId="thread-tab-changes"
-              >
-                Changes
-                {changed > 0 ? (
-                  <span
-                    data-testid="thread-tab-changes-count"
-                    className="ml-1.5 rounded-md bg-hover px-1.5 text-xs font-semibold tabular-nums text-text-muted"
-                  >
-                    {changed}
-                  </span>
-                ) : null}
-              </TabButton>
-            </nav>
-            <span className="flex-1" />
-            <div className="flex min-h-9 max-w-full items-center py-0.5">
-              <PullRequestBar thread={thread} controls={pullRequest} />
-            </div>
+          <ThreadChanges
+            thread={thread}
+            view={view}
+            onBack={() => setChangesOpen(false)}
+            onReviewSent={() => setChangesOpen(false)}
+          />
+          <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pb-3 pt-2 empty:hidden">
+            {dock}
           </div>
-          <PullRequestProblemNotice controls={pullRequest} />
         </>
       ) : null}
-      <ThreadNotice thread={thread} />
-      {tab === "changes" && thread.repoId ? (
-        <ThreadChanges thread={thread} view={view} onReviewSent={() => setTab("transcript")} />
-      ) : null}
-      {/* Kept mounted behind the Changes tab, so the conversation keeps its place and its draft. */}
-      <div className={cn("min-h-0 flex-1 flex-col", tab === "transcript" ? "flex" : "hidden")}>
+      {/* Kept mounted behind the changes, so the conversation keeps its place and its draft. */}
+      <div className={cn("min-h-0 flex-1 flex-col", showChanges ? "hidden" : "flex")}>
         <ThreadTranscript
           project={project}
           thread={thread}
           threads={threads}
           threadsLoaded={threadsLoaded}
           threadsError={threadsError}
+          aboveComposer={showChanges ? null : dock}
         />
       </div>
     </div>
   );
 };
-
-const TabButton = ({
-  active,
-  onSelect,
-  testId,
-  children,
-}: {
-  active: boolean;
-  onSelect: () => void;
-  testId: string;
-  children: React.ReactNode;
-}) => (
-  <button
-    type="button"
-    data-testid={testId}
-    aria-current={active ? "page" : undefined}
-    onClick={onSelect}
-    className={cn(
-      "-mb-px flex h-10 items-center border-b-2 text-body font-medium transition-colors duration-[120ms]",
-      active ? "border-text text-text" : "border-transparent text-text-muted hover:text-text",
-    )}
-  >
-    {children}
-  </button>
-);
 
 // Looking at a thread is reading it: the host clears its unread flag, while the page is visible.
 const useMarkRead = (thread: Thread): void => {

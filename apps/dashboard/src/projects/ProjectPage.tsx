@@ -34,7 +34,13 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
           </main>
         </>
       ) : (
-        <ProjectLayout entry={entry} route={route} chat={chat} model={model} />
+        <ProjectLayout
+          key={entry.project.id}
+          entry={entry}
+          route={route}
+          chat={chat}
+          model={model}
+        />
       )}
     </div>
   );

@@ -54,57 +54,29 @@ const NOTES_BODY: SessionDiffFile = {
 const CHANGED: SessionGitDiff = { ...EMPTY_DIFF, files: [NOTES] };
 const fileRequests = () => host.to("/api/threads/thr_1/diff/file?path=NOTES.md", "GET");
 
-describe("the Changes tab", () => {
-  test("counts the changed files, and reads no file until the tab is opened", async () => {
+describe("the changes, from the pull request bar", () => {
+  const openChanges = async () => {
+    fireEvent.click(screen.getByTestId("pr-bar-changes"));
+    await flush();
+  };
+
+  test("the bar counts the changed files, and no file is read until they are opened", async () => {
     await setupPane(host, { diff: CHANGED });
 
-    expect(screen.getByTestId("thread-tab-transcript").getAttribute("aria-current")).toBe("page");
-    expect(screen.getByTestId("thread-tab-changes-count").textContent).toBe("1");
+    expect(screen.getByTestId("pr-bar-changes").textContent).toBe("1 file changed");
+    expect(screen.getByTestId("thread-pane").getAttribute("data-view")).toBe("transcript");
     expect(screen.queryByTestId("thread-changes")).toBeNull();
     expect(fileRequests()).toHaveLength(0);
   });
 
-  test("shows no count for a thread that changed nothing", async () => {
+  test("a thread that changed nothing has no bar and no way into changes", async () => {
     await setupPane(host);
 
-    expect(screen.queryByTestId("thread-tab-changes-count")).toBeNull();
+    expect(screen.queryByTestId("pr-bar")).toBeNull();
+    expect(screen.queryByTestId("pr-bar-changes")).toBeNull();
   });
 
-  test("opens onto the files, and reads each one's lines once", async () => {
-    await setupPane(host, {
-      diff: CHANGED,
-      answers: { "GET /api/threads/thr_1/diff/file?path=NOTES.md": () => json(NOTES_BODY) },
-    });
-
-    fireEvent.click(screen.getByTestId("thread-tab-changes"));
-    await flush();
-
-    expect(screen.getByTestId("thread-tab-changes").getAttribute("aria-current")).toBe("page");
-    expect(screen.getByTestId("thread-diff-file").getAttribute("data-path")).toBe("NOTES.md");
-    expect(screen.getByTestId("thread-diff-line").textContent).toContain("hello");
-    expect(fileRequests()).toHaveLength(1);
-  });
-
-  test("keeps the conversation mounted behind it, so a draft survives the round trip", async () => {
-    await setupPane(host, {
-      diff: CHANGED,
-      answers: { "GET /api/threads/thr_1/diff/file?path=NOTES.md": () => json(NOTES_BODY) },
-    });
-    const box = screen.getByTestId("composer-input") as HTMLTextAreaElement;
-    fireEvent.change(box, { target: { value: "half a thought" } });
-
-    fireEvent.click(screen.getByTestId("thread-tab-changes"));
-    await flush();
-    expect(screen.getByTestId("thread-changes")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("thread-tab-transcript"));
-    await flush();
-
-    expect(screen.queryByTestId("thread-changes")).toBeNull();
-    expect(screen.getByTestId("composer-input")).toBe(box);
-    expect(box.value).toBe("half a thought");
-  });
-
-  test("says why there are no changes when the host cannot show them", async () => {
+  test("a thread whose worktree cannot be read has no bar either", async () => {
     await setupPane(host, {
       answers: {
         "GET /api/threads/thr_1/diff": () =>
@@ -112,28 +84,53 @@ describe("the Changes tab", () => {
       },
     });
 
-    fireEvent.click(screen.getByTestId("thread-tab-changes"));
-    await flush();
-
-    expect(screen.getByTestId("thread-diff-unavailable").textContent).toBe(
-      "The thread's git worktree failed: it is locked",
-    );
+    expect(screen.queryByTestId("pr-bar")).toBeNull();
   });
 
-  test("a resolved thread explains that its worktree is gone", async () => {
+  test("opens onto the files in the pane, and reads each one's lines once", async () => {
     await setupPane(host, {
-      thread: makeThread({ id: "thr_1", status: "resolved" }),
-      answers: {
-        "GET /api/threads/thr_1/diff": () =>
-          hostError(409, "WORKTREE_FAILED", "Bound chat workspace does not exist: /x"),
-      },
+      diff: CHANGED,
+      answers: { "GET /api/threads/thr_1/diff/file?path=NOTES.md": () => json(NOTES_BODY) },
     });
 
-    fireEvent.click(screen.getByTestId("thread-tab-changes"));
+    await openChanges();
+
+    expect(screen.getByTestId("thread-pane").getAttribute("data-view")).toBe("changes");
+    expect(screen.getByTestId("pr-bar-changes").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("thread-diff-file").getAttribute("data-path")).toBe("NOTES.md");
+    expect(screen.getByTestId("thread-diff-line").textContent).toContain("hello");
+    expect(fileRequests()).toHaveLength(1);
+  });
+
+  test("keeps the conversation mounted behind them, so a draft survives the round trip", async () => {
+    await setupPane(host, {
+      diff: CHANGED,
+      answers: { "GET /api/threads/thr_1/diff/file?path=NOTES.md": () => json(NOTES_BODY) },
+    });
+    const box = screen.getByTestId("composer-input") as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: "half a thought" } });
+
+    await openChanges();
+    expect(screen.getByTestId("thread-changes")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("thread-changes-back"));
     await flush();
 
-    expect(screen.getByTestId("thread-diff-unavailable").textContent).toContain("worktree is gone");
-    expect(screen.getByTestId("thread-diff-unavailable").textContent).not.toContain("/x");
+    expect(screen.queryByTestId("thread-changes")).toBeNull();
+    expect(screen.getByTestId("composer-input")).toBe(box);
+    expect(box.value).toBe("half a thought");
+  });
+
+  test("the link closes them again too", async () => {
+    await setupPane(host, {
+      diff: CHANGED,
+      answers: { "GET /api/threads/thr_1/diff/file?path=NOTES.md": () => json(NOTES_BODY) },
+    });
+
+    await openChanges();
+    await openChanges();
+
+    expect(screen.queryByTestId("thread-changes")).toBeNull();
+    expect(screen.getByTestId("thread-pane").getAttribute("data-view")).toBe("transcript");
   });
 
   test("reads the changes again when a turn ends", async () => {
@@ -191,6 +188,41 @@ describe("the thread menu", () => {
     await screen.findByTestId("thread-menu-content");
   };
   const isDisabled = () => screen.getByTestId("thread-resolve").getAttribute("aria-disabled");
+
+  test.each(["working", "queued"] as const)(
+    "a %s thread can be stopped from it",
+    async (status) => {
+      await setupPane(host, { thread: makeThread({ id: "thr_1", status }) });
+      await open();
+
+      fireEvent.click(screen.getByTestId("thread-stop"));
+      await flush();
+
+      expect(host.to("/api/threads/thr_1/stop", "POST")).toHaveLength(1);
+      expect(screen.queryByTestId("thread-menu-resume")).toBeNull();
+    },
+  );
+
+  test("a rate-limited thread can be resumed from it, and has nothing to stop", async () => {
+    await setupPane(host, {
+      thread: makeThread({ id: "thr_1", status: "rate-limited" }),
+    });
+    await open();
+
+    expect(screen.queryByTestId("thread-stop")).toBeNull();
+    fireEvent.click(screen.getByTestId("thread-menu-resume"));
+    await flush();
+
+    expect(host.to("/api/threads/thr_1/resume", "POST")).toHaveLength(1);
+  });
+
+  test("an idle thread has neither", async () => {
+    await setupPane(host, { thread: makeThread({ id: "thr_1", status: "idle" }) });
+    await open();
+
+    expect(screen.queryByTestId("thread-stop")).toBeNull();
+    expect(screen.queryByTestId("thread-menu-resume")).toBeNull();
+  });
 
   test.each(["idle", "ready-for-review", "waiting-on-you"] as const)(
     "a %s thread can be marked resolved",

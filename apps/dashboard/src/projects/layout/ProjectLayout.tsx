@@ -32,7 +32,7 @@ export const ProjectLayout = ({
   const { project, threads, threadsLoaded, threadsError } = entry;
   const threadId = route.name === "thread" ? route.threadId : null;
   const leaveThread = useCallback(() => navigate(projectPath(project.id)), [project.id]);
-  const layout = usePanelLayout({ threadId, onCloseThread: leaveThread });
+  const layout = usePanelLayout({ projectId: project.id, threadId, onCloseThread: leaveThread });
   const filters = useOverviewFilters();
   const { revealChat } = layout;
 

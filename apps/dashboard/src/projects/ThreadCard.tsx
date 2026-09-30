@@ -3,6 +3,7 @@ import { FileTextIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Link, threadPath } from "../shell/router";
 import { PullRequestChip } from "./PullRequestChip";
+import { plainStatusLine } from "./plain-status-line";
 import { ResumeThreadButton } from "./ResumeThreadButton";
 import { StepsRing } from "./StepsRing";
 import { formatAge, hasFailingChecks, pullRequestOf, THREAD_STATUS_LABEL } from "./selectors";
@@ -126,7 +127,7 @@ const StatusLine = ({ thread }: { thread: Thread }) => {
   if (!thread.liveStatusLine) return null;
   return (
     <p data-testid="thread-status-line" className="line-clamp-2 text-meta text-text-muted">
-      {thread.liveStatusLine}
+      {plainStatusLine(thread.liveStatusLine)}
     </p>
   );
 };

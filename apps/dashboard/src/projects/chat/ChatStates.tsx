@@ -44,9 +44,7 @@ export const ChatRefreshNotice = ({ message }: { message: string }) => (
 const STARTERS = (project: Project): string[] => [
   "What is the state of this project?",
   "Start a thread to audit the test suite and report what is fragile.",
-  ...(project.goal.trim()
-    ? [`Break the goal into threads: ${project.goal.trim().slice(0, 300)}`]
-    : []),
+  ...(project.goal.trim() ? [`Break the goal into threads: ${project.goal.trim()}`] : []),
 ];
 
 /** An empty conversation: what the coordinator is for, and messages to start with. */
@@ -78,10 +76,13 @@ export const ChatEmpty = ({
             <button
               type="button"
               data-testid="chat-starter"
+              title={text}
               onClick={() => onStart(text)}
-              className="line-clamp-2 w-full rounded-row border border-border bg-raised px-3 py-2 text-left text-body text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text"
+              className="w-full rounded-row border border-border bg-raised px-3 py-2 text-left text-body text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text"
             >
-              {text}
+              {/* The clamp is on the text and not on the button: on the button, whose padding is
+                  inside its clip, the line after the second would show through the bottom edge. */}
+              <span className="line-clamp-2 break-words">{text}</span>
             </button>
           </li>
         ))}

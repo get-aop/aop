@@ -13,6 +13,7 @@ import { useChatThread } from "./chat-context";
 import { MessageBlocks } from "./MessageBlocks";
 import { MessageMeta } from "./MessageMeta";
 import { ThreadChip } from "./ThreadChip";
+import { useThreadPresence } from "./thread-presence";
 
 const COLLAPSED_MAX_CHARS = 600;
 const COLLAPSED_MAX_LINES = 8;
@@ -109,8 +110,15 @@ export const ThreadReportRow = memo(function ThreadReportRow({
   message: ThreadReportMessage;
 }) {
   const { thread } = useChatThread(message.reportedThreadId);
+  const newest = useThreadPresence().latestReport.get(message.reportedThreadId);
   const [open, setOpen] = useState(false);
   const Icon = REPORT_ICON[message.outcome];
+  // A report is the thread's word at that time. A newer one replaces it, and a call that has
+  // been answered is not a call any more: what the thread is now is on its card.
+  const superseded = newest !== undefined && newest !== message.id;
+  const answered =
+    message.outcome === "needs-you" && thread !== undefined && thread.status !== "waiting-on-you";
+  if (superseded || answered) return null;
   return (
     <div
       data-testid="thread-report"

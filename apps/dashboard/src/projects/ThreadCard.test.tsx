@@ -103,6 +103,17 @@ describe("ThreadCard", () => {
     expect(within(card()).getByText("5m")).toBeTruthy();
   });
 
+  test("a status line written in markdown shows as plain text", () => {
+    render(
+      <ThreadCard
+        now={NOW}
+        thread={makeThread({ status: "idle", liveStatusLine: "You chose **formal**. No `diff`." })}
+      />,
+    );
+
+    expect(screen.getByTestId("thread-status-line").textContent).toBe("You chose formal. No diff.");
+  });
+
   test("a thread with no checklist yet has no ring", () => {
     render(<ThreadCard now={NOW} thread={makeThread({ steps: [] })} />);
     expect(screen.queryByTestId("thread-steps")).toBeNull();

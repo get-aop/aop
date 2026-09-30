@@ -87,7 +87,7 @@ describe("project home", () => {
 
     expect(
       screen.getAllByTestId("thread-group").map((group) => group.getAttribute("data-status")),
-    ).toEqual(["waiting-on-you", "working", "idle"]);
+    ).toEqual(["waiting-on-you", "working", "idle", "resolved"]);
     expect(screen.getByTestId("project-attention").getAttribute("data-waiting")).toBe("1");
     expect(screen.queryByTestId("overview-counters")).toBeNull();
   });
@@ -140,12 +140,12 @@ describe("project home", () => {
     expect(screen.queryByTestId("thread-groups")).toBeNull();
   });
 
-  test("a project with no threads sends the person to the coordinator's composer", async () => {
+  test("a project with no threads says nothing waits, and + takes the person to the coordinator's composer", async () => {
     renderPage(makeState([makeEntry(project, [])]), home);
 
-    expect(screen.getByTestId("threads-empty")).toBeTruthy();
     expect(screen.getByTestId("project-attention").textContent).toBe("Nothing is waiting on you.");
-    fireEvent.click(screen.getByTestId("threads-empty-chat"));
+    expect(screen.getAllByTestId("thread-group")).toHaveLength(2);
+    fireEvent.click(screen.getByTestId("panel-new-thread"));
     await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
     expect(document.activeElement).toBe(screen.getByTestId("composer-input"));
     expect(window.location.pathname).toBe("/");
@@ -186,6 +186,10 @@ describe("project screens", () => {
     expect(screen.getByTestId("coordinator-chat-pane")).toBeTruthy();
     expect(screen.getByTestId("threads-panel")).toBeTruthy();
     expect(screen.getByTestId("panel-tab-threads").getAttribute("aria-selected")).toBe("true");
+    // The tabs, then "+" straight after them.
+    expect(screen.getByTestId("panel-tab-threads").nextElementSibling).toBe(
+      screen.getByTestId("panel-new-thread"),
+    );
     expect(screen.getByTestId("thread-groups")).toBeTruthy();
     expect(screen.queryByTestId("thread-pane")).toBeNull();
     expect(screen.queryByTestId("project-tab-coordinator")).toBeNull();

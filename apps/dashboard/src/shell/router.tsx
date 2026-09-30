@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { canGoBack, canGoForward, pushEntry, replaceEntry } from "./app-history";
 
 /** The screens of a project's settings, in the order its side nav lists them. */
 export const PROJECT_SETTINGS_SECTIONS = ["general", "memory", "environment", "usage"] as const;
@@ -64,8 +65,8 @@ const NAVIGATE_EVENT = "aop:navigate";
 /** Moves to `path` without a page load. Going where you already are adds no history entry. */
 export const navigate = (path: string, options: { replace?: boolean } = {}): void => {
   if (window.location.pathname !== path) {
-    if (options.replace) window.history.replaceState({}, "", path);
-    else window.history.pushState({}, "", path);
+    if (options.replace) replaceEntry(path);
+    else pushEntry(path);
   }
   // Even when the address did not change here: whoever changed it may not have told the app.
   window.dispatchEvent(new Event(NAVIGATE_EVENT));
@@ -95,6 +96,12 @@ export const useRoute = (): Route => {
     }
   }, [route, pathname]);
   return route ?? { name: "projects" };
+};
+
+/** Whether the app's own history has a page behind the current one, and one ahead of it. */
+export const useHistoryEnds = (): { back: boolean; forward: boolean } => {
+  const ends = useSyncExternalStore(subscribe, () => `${canGoBack()}|${canGoForward()}`);
+  return { back: ends.startsWith("true"), forward: ends.endsWith("true") };
 };
 
 /** An anchor that navigates without reloading, and still opens in a new tab on modified clicks. */

@@ -1,4 +1,5 @@
 import type { Artifact, PullRequestRef, Thread, ThreadStatus } from "@aop/common";
+import { plainStatusLine } from "./plain-status-line";
 import type { ProjectEntry, ProjectsState } from "./projects-state";
 
 export interface Attention {
@@ -58,15 +59,27 @@ export interface ThreadGroup {
 }
 
 /**
+ * The groups that stay on the Overview at zero, each with the line that says what goes in it:
+ * they are where the person looks for a decision to make or for work that is finished.
+ */
+export const ALWAYS_LISTED: Readonly<Partial<Record<ThreadStatus, string>>> = {
+  "waiting-on-you": "Decisions, reviews, and permission requests.",
+  resolved: "Completed threads.",
+};
+
+/**
  * The Overview's groups: one per status, questions first and closed work last, each newest
  * activity first, except the queue, which lists threads in the order the host starts them
- * (oldest first). A status with no thread has no group.
+ * (oldest first). A status with no thread has no group, unless it is one of `alwaysListed`.
  */
-export const groupThreads = (threads: readonly Thread[]): ThreadGroup[] => {
+export const groupThreads = (
+  threads: readonly Thread[],
+  alwaysListed: readonly ThreadStatus[] = [],
+): ThreadGroup[] => {
   const sorted = sortThreads(threads);
   return THREAD_STATUS_ORDER.flatMap((status) => {
     const inStatus = sorted.filter((thread) => thread.status === status);
-    if (inStatus.length === 0) return [];
+    if (inStatus.length === 0 && !alwaysListed.includes(status)) return [];
     return [{ status, threads: status === "queued" ? inStatus.toReversed() : inStatus }];
   });
 };
@@ -104,7 +117,7 @@ export const matchesThreadSearch = (thread: Thread, query: string): boolean => {
   if (!needle) return true;
   const haystack = [
     thread.title,
-    thread.liveStatusLine ?? "",
+    plainStatusLine(thread.liveStatusLine ?? ""),
     thread.blockedQuestion?.question ?? "",
     thread.branch ?? "",
     THREAD_STATUS_LABEL[thread.status],

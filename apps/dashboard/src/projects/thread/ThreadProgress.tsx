@@ -2,6 +2,7 @@ import { getThreadProgress, type Thread, type ThreadStep } from "@aop/common";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/ui/collapsible";
+import { plainStatusLine } from "../plain-status-line";
 import { StepsRing } from "../StepsRing";
 
 // Queued and rate-limited threads have a notice of their own that says the same, with more.
@@ -14,14 +15,15 @@ const LIVE_LINE_STATUSES: ReadonlySet<Thread["status"]> = new Set(["working", "l
 export const ThreadProgress = ({ thread }: { thread: Thread }) => {
   const progress = getThreadProgress(thread);
   // The line is live only while the thread is at work; once it stops, the transcript says it better.
-  const line = LIVE_LINE_STATUSES.has(thread.status) ? thread.liveStatusLine : null;
+  const live = LIVE_LINE_STATUSES.has(thread.status) ? thread.liveStatusLine : null;
+  const line = live ? plainStatusLine(live) : null;
   if (!progress && !line) return null;
 
   return (
     <Collapsible
       defaultOpen
       data-testid="thread-progress"
-      className="group/progress mx-6 mt-1 rounded-card border border-border bg-raised"
+      className="group/progress mb-4 rounded-card border border-border bg-raised"
     >
       <CollapsibleTrigger
         data-testid="thread-progress-toggle"

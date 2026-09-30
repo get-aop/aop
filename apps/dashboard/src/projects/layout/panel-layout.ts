@@ -43,14 +43,15 @@ export interface PanelPrefs {
   width: number;
 }
 
-const STORAGE_KEY = "aop:threads-panel:v1";
+// One entry per project: each project keeps its own panel state.
+const storageKey = (projectId: string): string => `aop:threads-panel:v2:${projectId}`;
 
 export const DEFAULT_PANEL_PREFS: PanelPrefs = { open: true, width: PANEL_DEFAULT_WIDTH };
 
-/** What this browser remembers of the panel; storage that is blocked or garbled reads as the defaults. */
-export const loadPanelPrefs = (): PanelPrefs => {
+/** What this browser remembers of a project's panel; storage that is blocked or garbled reads as the defaults. */
+export const loadPanelPrefs = (projectId: string): PanelPrefs => {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey(projectId));
     if (!raw) return DEFAULT_PANEL_PREFS;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return DEFAULT_PANEL_PREFS;
@@ -67,9 +68,9 @@ export const loadPanelPrefs = (): PanelPrefs => {
   }
 };
 
-export const savePanelPrefs = (prefs: PanelPrefs): void => {
+export const savePanelPrefs = (projectId: string, prefs: PanelPrefs): void => {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    window.localStorage.setItem(storageKey(projectId), JSON.stringify(prefs));
   } catch {
     // Storage is blocked or full: the panel still works, it just is not remembered.
   }

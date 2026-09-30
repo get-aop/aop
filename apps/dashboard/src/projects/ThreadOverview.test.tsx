@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Thread, ThreadStatus } from "@aop/common";
 import { useEffect } from "react";
 import { setupDashboardDom } from "../test/setup-dom";
@@ -17,22 +17,14 @@ beforeEach(() => window.history.pushState({}, "", "/"));
 
 // The overview as the panel holds it: its search box open, and the filters it is handed.
 const NO_FILTER: ThreadStatus[] = [];
-const Overview = ({
-  entry,
-  hide = NO_FILTER,
-  onNewThread = () => {},
-}: {
-  entry: ProjectEntry;
-  hide?: ThreadStatus[];
-  onNewThread?: () => void;
-}) => {
+const Overview = ({ entry, hide = NO_FILTER }: { entry: ProjectEntry; hide?: ThreadStatus[] }) => {
   const filters = useOverviewFilters();
   const { toggleSearch, toggleStatus } = filters;
   useEffect(() => {
     toggleSearch();
     for (const status of hide) toggleStatus(status);
   }, [toggleSearch, toggleStatus, hide]);
-  return <ThreadOverview entry={entry} filters={filters} onNewThread={onNewThread} />;
+  return <ThreadOverview entry={entry} filters={filters} />;
 };
 
 const project = makeProject({ id: "p1" });
@@ -78,7 +70,7 @@ describe("the groups", () => {
     ]);
   });
 
-  test("a status with no thread has no group", () => {
+  test("Waiting on you and Resolved are always there; any other status only with a thread in it", () => {
     render(
       <Overview
         entry={entryOf([
@@ -88,7 +80,38 @@ describe("the groups", () => {
       />,
     );
 
-    expect(groups().map((group) => group.getAttribute("data-status"))).toEqual(["working", "idle"]);
+    expect(groups().map((group) => group.getAttribute("data-status"))).toEqual([
+      "waiting-on-you",
+      "working",
+      "idle",
+      "resolved",
+    ]);
+  });
+
+  test("an empty one says what goes in it, has nothing to fold, and counts 0", () => {
+    render(<Overview entry={entryOf([makeThread({ id: "b", status: "idle" })])} />);
+
+    const waiting = groupOf("waiting-on-you");
+    expect(within(waiting).getByTestId("thread-group-count").textContent).toBe("0");
+    expect(within(waiting).getByTestId("thread-group-hint").textContent).toBe(
+      "Decisions, reviews, and permission requests.",
+    );
+    expect(within(waiting).queryByTestId("thread-group-toggle")).toBeNull();
+    expect(within(groupOf("resolved")).getByTestId("thread-group-hint").textContent).toBe(
+      "Completed threads.",
+    );
+    expect(within(groupOf("idle")).queryByTestId("thread-group-hint")).toBeNull();
+  });
+
+  test("a filter that hides Waiting on you hides its empty group too", () => {
+    render(
+      <Overview
+        entry={entryOf([makeThread({ id: "b", status: "idle" })])}
+        hide={["waiting-on-you"]}
+      />,
+    );
+
+    expect(groups().map((group) => group.getAttribute("data-status"))).toEqual(["idle"]);
   });
 
   test("each group counts its threads and the newest activity leads", () => {
@@ -272,13 +295,15 @@ describe("before there is anything to group", () => {
     expect(screen.queryByTestId("threads-error")).toBeNull();
   });
 
-  test("a project with no threads sends the person to the coordinator's composer", () => {
-    const onNewThread = mock();
-    render(<Overview entry={entryOf([])} onNewThread={onNewThread} />);
+  test("a project with no threads greets the person, says nothing waits, and lists the two groups at 0", () => {
+    render(<Overview entry={entryOf([])} />);
 
-    expect(screen.getByTestId("threads-empty")).toBeTruthy();
-    expect(screen.queryByTestId("thread-groups")).toBeNull();
-    fireEvent.click(screen.getByTestId("threads-empty-chat"));
-    expect(onNewThread).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("overview-greeting").textContent).toBe("Welcome back.");
+    expect(screen.getByTestId("project-attention").textContent).toBe("Nothing is waiting on you.");
+    expect(groups().map((group) => group.getAttribute("data-status"))).toEqual([
+      "waiting-on-you",
+      "resolved",
+    ]);
+    expect(screen.queryByTestId("threads-no-match")).toBeNull();
   });
 });

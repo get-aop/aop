@@ -29,10 +29,13 @@ export const checksLabel = ({ state, failing, pending }: PullRequestChecks): str
 export const PullRequestChip = ({
   pullRequest,
   testId = "pr-chip",
+  prefix = "",
   className,
 }: {
   pullRequest: PullRequestRef;
   testId?: string;
+  /** Written before the number: "PR " where nothing else says it is a pull request. */
+  prefix?: string;
   className?: string;
 }) => {
   const checks = pullRequest.state === "open" ? pullRequest.checks : undefined;
@@ -51,7 +54,8 @@ export const PullRequestChip = ({
         className,
       )}
     >
-      <GitPullRequestIcon className="size-3" />#{pullRequest.number}
+      <GitPullRequestIcon className="size-3" />
+      {prefix}#{pullRequest.number}
       {checks ? (
         <span
           role="img"

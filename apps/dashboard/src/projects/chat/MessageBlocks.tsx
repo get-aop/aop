@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@aop/common";
+import type { MessageBlock, ThreadCardVariant } from "@aop/common";
 import { memo, useMemo } from "react";
 import { PullRequestChip } from "../PullRequestChip";
 import { ChatMarkdown } from "./ChatMarkdown";
@@ -14,6 +14,7 @@ import { QuoteForwarded } from "./QuoteForwarded";
 import { RoutingReceipt } from "./RoutingReceipt";
 import { SuggestedThreads } from "./SuggestedThreads";
 import { ThreadChip } from "./ThreadChip";
+import { useThreadPresence } from "./thread-presence";
 
 /**
  * The content of an assistant message: its blocks in reading order, each drawn as what it is.
@@ -67,12 +68,36 @@ const GroupView = ({
     case "routing-receipt":
       return <RoutingReceipt threadIds={block.threadIds} carded={carded} />;
     case "thread-card":
-      return <ChatThreadCard threadId={block.threadId} variant={block.variant} />;
+      return (
+        <ThreadCardBlock messageId={messageId} threadId={block.threadId} variant={block.variant} />
+      );
     case "suggested-threads":
       return <SuggestedThreads messageId={messageId} suggestions={block.suggestions} />;
     case "quote-forwarded":
       return <QuoteForwarded text={block.text} />;
   }
+};
+
+// A thread has one card in the conversation, the newest; where an earlier message had one, a chip
+// keeps the mention and the link, and shows the thread as it is now.
+const ThreadCardBlock = ({
+  messageId,
+  threadId,
+  variant,
+}: {
+  messageId: string;
+  threadId: string;
+  variant: ThreadCardVariant;
+}) => {
+  const owner = useThreadPresence().cardMessage.get(threadId);
+  if (owner === undefined || owner === messageId) {
+    return <ChatThreadCard threadId={threadId} variant={variant} />;
+  }
+  return (
+    <p data-testid="chat-thread-card-earlier" data-thread-id={threadId} className="my-1 text-meta">
+      <ThreadChip threadId={threadId} />
+    </p>
+  );
 };
 
 const Prose = ({ run }: { run: readonly InlineBlock[] }) => {

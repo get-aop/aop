@@ -3,25 +3,39 @@ import { useSidebar } from "@/ui/sidebar";
 import { IconButton } from "../components/IconButton";
 import { useProjectsState } from "../projects/ProjectsProvider";
 import { attentionOf } from "../projects/selectors";
+import { useHistoryEnds } from "./router";
 
 /**
  * The top bar's first three buttons, on every screen: the projects sidebar's toggle (with a
  * dot when something waits on the person while the sidebar is out of sight), then back and
  * forward through the pages the person has been on.
  */
-export const ShellNav = () => (
-  <div data-testid="shell-nav" className="flex shrink-0 items-center gap-0.5">
-    <SidebarToggle />
-    <span className="hidden items-center gap-0.5 sm:flex">
-      <IconButton testId="nav-back" label="Back" onClick={() => window.history.back()}>
-        <ArrowLeftIcon />
-      </IconButton>
-      <IconButton testId="nav-forward" label="Forward" onClick={() => window.history.forward()}>
-        <ArrowRightIcon />
-      </IconButton>
-    </span>
-  </div>
-);
+export const ShellNav = () => {
+  const ends = useHistoryEnds();
+  return (
+    <div data-testid="shell-nav" className="flex shrink-0 items-center gap-0.5">
+      <SidebarToggle />
+      <span className="hidden items-center gap-0.5 sm:flex">
+        <IconButton
+          testId="nav-back"
+          label="Back"
+          disabled={!ends.back}
+          onClick={() => window.history.back()}
+        >
+          <ArrowLeftIcon />
+        </IconButton>
+        <IconButton
+          testId="nav-forward"
+          label="Forward"
+          disabled={!ends.forward}
+          onClick={() => window.history.forward()}
+        >
+          <ArrowRightIcon />
+        </IconButton>
+      </span>
+    </div>
+  );
+};
 
 const SidebarToggle = () => {
   const { toggleSidebar, state, isMobile, openMobile } = useSidebar();

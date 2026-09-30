@@ -1,5 +1,5 @@
 import type { SessionGitDiff, Thread } from "@aop/common";
-import { RefreshCwIcon } from "lucide-react";
+import { ArrowLeftIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/ui/button";
 import { DiffFiles } from "./DiffFiles";
 import { DiffReviewContext } from "./DiffLineComment";
@@ -15,10 +15,13 @@ import type { ThreadDiffView } from "./use-thread-diff";
 export const ThreadChanges = ({
   thread,
   view,
+  onBack,
   onReviewSent,
 }: {
   thread: Thread;
   view: ThreadDiffView;
+  /** Back to the conversation. */
+  onBack: () => void;
   onReviewSent: () => void;
 }) => {
   const { diff, loading, error } = view;
@@ -27,17 +30,20 @@ export const ThreadChanges = ({
   if (loading && !diff) return <Note testId="thread-diff-loading">Loading changes…</Note>;
   if (error) {
     return (
-      <Note testId="thread-diff-unavailable" role="alert">
-        {thread.status === "resolved"
-          ? "This thread is resolved, so its worktree is gone. What it changed is on its branch and in its pull request."
-          : error}
-      </Note>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <BackButton onBack={onBack} className="mx-6 mt-3 self-start" />
+        <Note testId="thread-diff-unavailable" role="alert">
+          {thread.status === "resolved"
+            ? "This thread is resolved, so its worktree is gone. What it changed is on its branch and in its pull request."
+            : error}
+        </Note>
+      </div>
     );
   }
 
   return (
     <div data-testid="thread-changes" className="flex min-h-0 flex-1 flex-col">
-      <ChangesHeader thread={thread} diff={diff} view={view} />
+      <ChangesHeader thread={thread} diff={diff} view={view} onBack={onBack} />
       {diff && diff.files.length > 0 ? (
         <DiffReviewContext.Provider value={review}>
           <DiffFiles
@@ -55,18 +61,35 @@ export const ThreadChanges = ({
   );
 };
 
+const BackButton = ({ onBack, className }: { onBack: () => void; className?: string }) => (
+  <Button
+    type="button"
+    size="xs"
+    variant="ghost"
+    data-testid="thread-changes-back"
+    onClick={onBack}
+    className={className}
+  >
+    <ArrowLeftIcon />
+    Conversation
+  </Button>
+);
+
 const ChangesHeader = ({
   thread,
   diff,
   view,
+  onBack,
 }: {
   thread: Thread;
   diff: SessionGitDiff | null;
   view: ThreadDiffView;
+  onBack: () => void;
 }) => {
   const count = diff?.files.length ?? 0;
   return (
-    <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border px-6 text-[12px] text-text-muted">
+    <header className="flex h-11 shrink-0 items-center gap-3 border-y border-border px-6 text-[12px] text-text-muted">
+      <BackButton onBack={onBack} className="-ml-2 shrink-0" />
       <span className="min-w-0 flex-1 truncate">
         <span className="text-text">{diff?.defaultBranch ?? "main"}</span>
         <span className="mx-1.5 text-text-subtle">→</span>

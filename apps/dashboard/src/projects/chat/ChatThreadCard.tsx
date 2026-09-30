@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Link, threadPath } from "../../shell/router";
 import { PullRequestChip } from "../PullRequestChip";
+import { plainStatusLine } from "../plain-status-line";
 import { ResumeThreadButton } from "../ResumeThreadButton";
 import { StepsRing } from "../StepsRing";
 import { hasFailingChecks } from "../selectors";
@@ -162,7 +163,11 @@ const CardBody = ({ thread, variant }: { thread: Thread; variant: ThreadCardVari
       </>
     );
   }
-  const line = thread.liveStatusLine ?? (variant === "live" ? "Working…" : null);
+  const line = thread.liveStatusLine
+    ? plainStatusLine(thread.liveStatusLine)
+    : variant === "live"
+      ? "Working…"
+      : null;
   return (
     <>
       {line ? (
