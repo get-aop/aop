@@ -104,12 +104,15 @@ function setStatus(threadId: string, status: ThreadStatus) {
   });
 }
 
-// The fields each status requires: a question to wait on, a time it was resolved.
+// The fields each status requires: a question to wait on, a time it was resolved, a time it resumes.
 function statusChange(status: ThreadStatus): ThreadStatusChange {
   if (status === "waiting-on-you") {
     return { status, blockedQuestion: { question: "Which one?", options: [] } };
   }
   if (status === "resolved") return { status, resolvedAt: new Date().toISOString() };
+  if (status === "rate-limited") {
+    return { status, resumesAt: new Date(Date.now() + 60 * 60 * 1_000).toISOString() };
+  }
   if (status === "landing") throw new Error("A landing thread needs a pull request; not seedable.");
   return { status };
 }
