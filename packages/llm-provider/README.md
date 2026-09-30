@@ -76,3 +76,7 @@ Wraps the Claude CLI for interactive subscription billing (no `--print` / `-p`):
 Spawns unset `ANTHROPIC_API_KEY` so Claude Code uses your Pro/Max login instead of API billing.
 
 Requires the `claude` CLI to be available in PATH.
+
+## Testing without a model
+
+`test-fixtures/fake-cli.ts` is an executable that imitates Claude Code's `stream-json` output with scripted timing, questions, failures and crashes. Pass its path as `runtimeAlias` to run the real adapter end to end with no model call. See [`test-fixtures/README.md`](./test-fixtures/README.md).

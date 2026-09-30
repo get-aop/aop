@@ -19,6 +19,7 @@ All commands run from the repo root. `S=.claude/skills/verify/scripts`.
 bun install                                      # once per checkout; the first run needs it
 bun $S/verify-stack.ts start --name <run>        # server + dashboard dev server, detached
 bun $S/seed.ts --name <run>                      # fixture repo, workflow, worker, one assigned DRAFT task
+bun $S/seed.ts --name <run> --fake-runtime       # same, plus the fake CLI as the default chat runtime
 ```
 
 `start` prints the dashboard and API URLs and returns once `/api/health` reports `db.connected` and the dashboard serves HTML (about 1s). It picks two free ports in 25400-25499 and sets `AOP_HOME=.work/verify/<run>/home`, `AOP_DB_PATH`, and `AOP_TEST_MODE=true`. Test mode routes task steps to the deterministic `e2e-fixture` agent, so task runs cost nothing and finish in about a second. Names isolate concurrent runs; the default name is `default`. `start` refuses a name that is still running.
@@ -53,6 +54,8 @@ If Chrome shows an error page for a stack that `curl` reaches (`Frame with ID 0 
 
 **Sending chat messages runs the real runtime.** A Sessions message on a `claude-code` or `codex-cli` session spawns that CLI with the user's own auth, including unknown slash commands like `/status`, which are forwarded to it. Only `/clear` and `/alias` are handled by AOP; `/workflow` now reaches the runtime. Do not send chat text unless the feature file says to, or the user has agreed to that runtime spend.
 
+The exception is a stack seeded with `--fake-runtime` (`bun $S/seed.ts --name <run> --fake-runtime`). That registers `packages/llm-provider/test-fixtures/fake-cli.ts` as the first runtime configuration, so new sessions spawn it instead of `claude`. It never calls a model, streams Claude-style JSONL, and supports `--resume`, so chat is free to drive. Confirm the session's `runtimeAlias` in `GET /api/chat-sessions` ends in `fake-cli.ts` before typing. Script a turn with a `[fake: ...]` marker in the message; see `features/sessions.md` and `packages/llm-provider/test-fixtures/README.md`.
+
 ## Evidence
 
 Everything goes to `.work/verify/<run>/evidence/` (the paths `save_to_disk` returns for screenshots, a `console.log` you write from `read_console_messages`, anything else you save). Server and dashboard logs are in `.work/verify/<run>/logs/`. Record the feature ID and entry point beside each artifact.
@@ -80,4 +83,4 @@ Kills only the two PIDs recorded for this run (process groups), deletes `home/` 
 | Script | Invocation |
 | --- | --- |
 | `scripts/verify-stack.ts` | `bun $S/verify-stack.ts <start\|doctor\|env\|aop\|stop> [--name run] [-- aop args]` |
-| `scripts/seed.ts` | `bun $S/seed.ts [--name run]` after `start`; idempotent |
+| `scripts/seed.ts` | `bun $S/seed.ts [--name run] [--fake-runtime]` after `start`; idempotent |

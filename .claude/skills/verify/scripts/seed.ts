@@ -4,12 +4,18 @@
  * a fixture git repo, the `aop-default-gpt` workflow, one worker, and one
  * assigned DRAFT task (`backlog-test`, which creates hello.txt).
  *
- *   bun .claude/skills/verify/scripts/seed.ts [--name <run>]
+ *   bun .claude/skills/verify/scripts/seed.ts [--name <run>] [--fake-runtime]
  *
  * Prints the ids as JSON and records them in the run's state.json under
  * `seed`. Re-running returns the recorded ids. Task packages have no HTTP
  * creation path outside the runtime's MCP tools, so the package is written
  * into `$AOP_HOME/repos/<repoId>/tasks/` and picked up by /api/refresh.
+ *
+ * `--fake-runtime` also registers the fake CLI
+ * (packages/llm-provider/test-fixtures/fake-cli.ts) as the first runtime
+ * configuration, so new chat sessions spawn it instead of the user's real
+ * `claude`. Chat then costs nothing; script a reply with `[fake: ...]` in the
+ * message (see that directory's README). Recorded under `fakeRuntime`.
  */
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -18,6 +24,8 @@ const ROOT = resolve(import.meta.dir, "../../../..");
 const nameFlag = process.argv.indexOf("--name");
 const runName = nameFlag === -1 ? "default" : (process.argv[nameFlag + 1] ?? "default");
 const statePath = join(ROOT, ".work", "verify", runName, "state.json");
+const withFakeRuntime = process.argv.includes("--fake-runtime");
+const FAKE_CLI_PATH = join(ROOT, "packages/llm-provider/test-fixtures/fake-cli.ts");
 
 interface Seed {
   repoId: string;
@@ -27,17 +35,26 @@ interface Seed {
   workflow: string;
 }
 
+interface FakeRuntime {
+  providerId: string;
+  command: string;
+}
+
 const state = JSON.parse(await readFile(statePath, "utf8")) as {
   dir: string;
   home: string;
   env: Record<string, string>;
   seed?: Seed;
+  fakeRuntime?: FakeRuntime;
 };
 const api = state.env.AOP_LOCAL_SERVER_URL as string;
 
 state.seed ??= await seedBaseline();
+if (withFakeRuntime) state.fakeRuntime ??= await seedFakeRuntime();
 await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
-process.stdout.write(`${JSON.stringify(state.seed, null, 2)}\n`);
+process.stdout.write(
+  `${JSON.stringify({ ...state.seed, fakeRuntime: state.fakeRuntime }, null, 2)}\n`,
+);
 
 async function seedBaseline(): Promise<Seed> {
   const workflow = "aop-default-gpt";
@@ -60,6 +77,25 @@ async function seedBaseline(): Promise<Seed> {
   const taskId = await discoverTask(repoId);
   await call("PUT", `/api/repos/${repoId}/tasks/${taskId}/assignment`, { agentId: agent.id });
   return { repoId, repoPath, taskId, agentId: agent.id, workflow };
+}
+
+async function seedFakeRuntime(): Promise<FakeRuntime> {
+  const base = "/api/runtime-configuration";
+  const { provider } = await call<{ provider: { id: string } }>("POST", `${base}/providers`, {
+    name: "Fake CLI",
+    command: FAKE_CLI_PATH,
+    driver: "claude-code",
+  });
+  await call("POST", `${base}/providers/${provider.id}/models`, {
+    description: "Fake model",
+    model: "fake-model",
+    thinkingLevels: [],
+  });
+  // New sessions take the first runtime configuration in this order.
+  const { providers } = await call<{ providers: { id: string }[] }>("GET", base);
+  const others = providers.map(({ id }) => id).filter((id) => id !== provider.id);
+  await call("PUT", `${base}/providers/order`, { providerIds: [provider.id, ...others] });
+  return { providerId: provider.id, command: FAKE_CLI_PATH };
 }
 
 async function createFixtureRepo(): Promise<string> {

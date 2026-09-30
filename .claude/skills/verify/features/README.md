@@ -17,7 +17,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Prefer `data-testid` handles; they are the stable handles in the dashboard. Role and text selectors work too.
 - Run CLI actions through `bun $S/verify-stack.ts aop --name <run> -- <aop args>`.
 - Run dashboard actions in a new Claude in Chrome tab on `<dashboard>` (the URL in `env.AOP_DASHBOARD_URL`). Wait for elements with `find` by `data-testid`, batch steps with `browser_batch`, and read the console after each flow.
-- Do not type into the Sessions composer unless the recipe says to. Chat messages reach the real `claude-code` or `codex-cli` runtime with the user's auth.
+- Do not type into the Sessions composer unless the recipe says to. Chat messages reach the real `claude-code` or `codex-cli` runtime with the user's auth, unless the stack was seeded with `--fake-runtime` (see the Sessions recipe).
 - Stop with `bun $S/verify-stack.ts stop --name <run>`; it keeps evidence.
 
 ## Proof and skip reporting
