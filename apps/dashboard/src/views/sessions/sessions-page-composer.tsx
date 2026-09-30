@@ -1,33 +1,11 @@
-import { suggestSessionBranchName } from "@aop/common";
-
 import { readAnchorRect } from "@/ui/menu-panel";
 import { ChatComposer } from "./ChatComposer";
-import { createSessionCommitHandler } from "./session-commit";
 import {
-  diffstatForComposer,
   patchComposerSetting,
   runtimeAccessModeFor,
   sessionSupportsFastMode,
-  worktreeCreateHandler,
 } from "./sessions-page-internals";
 import type { SessionsPageViewModel } from "./sessions-page-view";
-
-/** The composer draft selection for a workflow option, or null when unknown. */
-const workflowSelectionFor = (
-  workflows: SessionsPageViewModel["workflowOptions"],
-  workflowId: string | null,
-): import("@aop/common").ChatWorkflowSelection | null => {
-  if (!workflowId) return null;
-  const option = workflows.find((workflow) => workflow.id === workflowId);
-  if (!option) return null;
-  return {
-    workflowId: option.id,
-    name: option.name,
-    stepCount: option.stepCount,
-    stepTypes: option.stepTypes,
-    steps: option.steps,
-  };
-};
 
 /** The composer with its full chrome — extracted to keep the view flat. */
 export const SessionsComposer = ({ view }: { view: SessionsPageViewModel }) => {
@@ -35,42 +13,25 @@ export const SessionsComposer = ({ view }: { view: SessionsPageViewModel }) => {
     aborting,
     active,
     activeRuntimeConfigurationName,
-    agents,
     assistantActive,
     composer,
     connected,
-    gitPrControls,
     handleAbort,
-    handleCreateWorktree,
-    handleTermRun,
-    listActiveSessionBranches,
-    openRightPanel,
-    tasksBadge,
     mergedPrBar,
     patchSession,
     queueCount,
     repos,
     runtimeConfigurations,
-    sessionGitStatus,
     setDetail,
     setMenu,
-    setTermInput,
-    setTermOpen,
-    setWorkspaceRefreshToken,
     showToast,
     skills,
-    switchActiveSessionBranch,
-    termInput,
-    termLines,
-    termOpen,
-    workflowOptions,
   } = view;
 
   if (!active) return null;
 
   return (
     <ChatComposer
-      sessionId={active.id}
       input={composer.input}
       onInput={composer.setInput}
       reviewComments={composer.reviewComments}
@@ -78,14 +39,6 @@ export const SessionsComposer = ({ view }: { view: SessionsPageViewModel }) => {
       onRemoveReviewComment={composer.removeReviewComment}
       runtimeConfigurations={runtimeConfigurations}
       sessionRuntimeConfigurationId={active.runtimeConfigurationId}
-      runtimeDelegation={composer.runtimeDelegation}
-      onRuntimeDelegationChange={composer.setRuntimeDelegation}
-      controlSelection={composer.controlSelection}
-      onControlSelectionChange={composer.setControlSelection}
-      runtimeActions={composer.runtimeActions}
-      onRuntimeActionsChange={composer.setRuntimeActions}
-      workflowSelection={composer.workflowSelection}
-      onWorkflowSelectionChange={composer.setWorkflowSelection}
       onSend={() => void composer.send()}
       assistantActive={assistantActive}
       aborting={aborting}
@@ -140,8 +93,6 @@ export const SessionsComposer = ({ view }: { view: SessionsPageViewModel }) => {
         });
       }}
       connected={connected}
-      termOpen={termOpen}
-      onToggleTerm={() => setTermOpen((open) => !open)}
       images={composer.pendingImages}
       documents={composer.pendingDocuments}
       pastes={composer.pastes}
@@ -172,52 +123,8 @@ export const SessionsComposer = ({ view }: { view: SessionsPageViewModel }) => {
             : undefined,
       }}
       onSlashPick={composer.setInput}
-      workers={agents.map((agent) => ({ id: agent.id, name: agent.name }))}
-      workflows={workflowOptions}
       repos={repos}
-      defaultWorkerId={active.defaultWorkerId ?? null}
-      defaultWorkflowId={active.defaultWorkflowId ?? null}
-      onDefaultWorkerChange={(workerId) => {
-        void patchSession(active.id, { defaultWorkerId: workerId });
-      }}
-      onDefaultWorkflowChange={(workflowId) => {
-        void patchSession(active.id, { defaultWorkflowId: workflowId });
-        // The fire button sends the composer draft selection, so the chip
-        // pick must also land there or the armed send is rejected.
-        composer.setWorkflowSelection(workflowSelectionFor(workflowOptions, workflowId));
-      }}
-      workflowArmed={composer.workflowArmed}
-      onWorkflowArmedChange={(armed) => {
-        composer.setWorkflowArmed(armed);
-        // Arming with a session default but no draft selection resolves it,
-        // so armed sends are not rejected as "no workflow selected".
-        if (armed && !composer.workflowSelection && active.defaultWorkflowId) {
-          composer.setWorkflowSelection(
-            workflowSelectionFor(workflowOptions, active.defaultWorkflowId),
-          );
-        }
-      }}
-      workflowRun={view.workflowRun}
-      termLines={termLines}
-      termInput={termInput}
-      onTermInput={setTermInput}
-      onTermRun={handleTermRun}
-      onTermClose={() => setTermOpen(false)}
-      repoPath={active.repoPath}
-      worktreePath={active.workspacePath}
-      branch={sessionGitStatus?.branch ?? null}
-      onListBranches={listActiveSessionBranches}
-      onBranchChange={switchActiveSessionBranch}
-      gitDiffstat={diffstatForComposer(sessionGitStatus)}
-      onDiffstatClick={() => openRightPanel("diff")}
-      onOpenTasks={() => openRightPanel("tasks")}
-      tasksCount={tasksBadge}
-      gitPrControls={gitPrControls}
       mergedPrBar={mergedPrBar}
-      suggestedWorktreeBranch={suggestSessionBranchName(active.title, active.id)}
-      onCreateWorktree={worktreeCreateHandler(active.repoId, active.id, handleCreateWorktree)}
-      onCommit={createSessionCommitHandler(active, showToast, setWorkspaceRefreshToken)}
-      onToast={showToast}
     />
   );
 };

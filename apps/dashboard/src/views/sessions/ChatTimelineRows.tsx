@@ -1,4 +1,3 @@
-import type { ChatActionPayload } from "@aop/common";
 import { memo, type ReactNode, useState } from "react";
 import { Attachment } from "@/ui/attachment";
 import { Bubble } from "@/ui/bubble";
@@ -6,34 +5,25 @@ import type { ChatSessionMessage, ChatSessionMessageDocument } from "../../api/c
 import { ChatImageGallery } from "./ChatImageGallery";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ChatMessageMeta } from "./ChatMessageMeta";
-import type { StreamCommandGroup } from "./ChatStreamActivity";
+import type { StreamCommandGroup } from "./ChatWorkLog";
 import { CompletedRunActivity, LiveRunActivity } from "./ChatWorkLog";
 import { ChatActionCards } from "./cards/ChatActionCards";
 import { shouldCollapseUserMessage } from "./chat-timeline-model";
 import { MarkdownFileChips } from "./MarkdownFileChips";
-import {
-  type HistoryActionBadge,
-  type MessageSegment,
-  parseMessageSegments,
-  resolveUserMessageDisplay,
-} from "./sessions-runtime";
+import { type MessageSegment, parseMessageSegments } from "./sessions-runtime";
 
 export const UserTimelineRow = memo(function UserTimelineRow({
   message,
   midRunHint,
-  workerNames,
-  workerColors,
   repoPath,
   onOpenFile,
 }: {
   message: ChatSessionMessage;
   midRunHint?: "queued" | "steered";
-  workerNames: string[];
-  workerColors: Record<string, string>;
   repoPath: string | null;
   onOpenFile: (path: string) => void;
 }) {
-  const { displayText, badges } = resolveUserMessageDisplay(message.content);
+  const displayText = message.content;
   return (
     <div
       className="group flex flex-col items-end gap-1 pb-4"
@@ -43,10 +33,7 @@ export const UserTimelineRow = memo(function UserTimelineRow({
       <UserMessageBubble
         message={message}
         displayText={displayText}
-        badges={badges}
         midRunHint={midRunHint}
-        workerNames={workerNames}
-        workerColors={workerColors}
         repoPath={repoPath}
         onOpenFile={onOpenFile}
       />
@@ -60,19 +47,13 @@ export const UserTimelineRow = memo(function UserTimelineRow({
 const UserMessageBubble = ({
   message,
   displayText,
-  badges,
   midRunHint,
-  workerNames,
-  workerColors,
   repoPath,
   onOpenFile,
 }: {
   message: ChatSessionMessage;
   displayText: string;
-  badges: HistoryActionBadge[];
   midRunHint?: "queued" | "steered";
-  workerNames: string[];
-  workerColors: Record<string, string>;
   repoPath: string | null;
   onOpenFile: (path: string) => void;
 }) => (
@@ -81,26 +62,14 @@ const UserMessageBubble = ({
     <RetryLabel runId={message.retryOfRunId} />
     <ChatImageGallery images={message.images ?? []} />
     <DocumentChips documents={message.documents ?? []} />
-    <CollapsibleUserMessage
-      content={displayText}
-      workerNames={workerNames}
-      workerColors={workerColors}
-    />
-    {badges.map((badge) => (
-      <HistoryActionBadgeView key={`${badge.kind}-${badge.label}`} badge={badge} />
-    ))}
-    <StructuredUserActionBadge action={message.action} />
+    <CollapsibleUserMessage content={displayText} />
     <MarkdownFileChips content={displayText} repoPath={repoPath} onOpenFile={onOpenFile} />
   </Bubble>
 );
 export const AssistantTimelineRow = memo(function AssistantTimelineRow({
   message,
   previousUserCreatedAt,
-  sessionId,
-  onAction,
-  onNavigate,
-  tasks,
-  workers,
+  onOpenSession,
   repoPath,
   onOpenFile,
   canRetry,
@@ -109,11 +78,7 @@ export const AssistantTimelineRow = memo(function AssistantTimelineRow({
 }: {
   message: ChatSessionMessage;
   previousUserCreatedAt: string | null;
-  sessionId: string | null;
-  onAction: (action: ChatActionPayload) => void;
-  onNavigate: (path: string) => void;
-  tasks: Array<{ id: string; status: string; assignedAgentId?: string | null }>;
-  workers: Array<{ id: string; name: string }>;
+  onOpenSession: (sessionId: string) => void;
   repoPath: string | null;
   onOpenFile: (path: string) => void;
   canRetry: boolean;
@@ -140,15 +105,7 @@ export const AssistantTimelineRow = memo(function AssistantTimelineRow({
           onOpenFile={onOpenFile}
         />
         {message.action ? (
-          <ChatActionCards
-            action={message.action}
-            sessionId={sessionId}
-            messageId={message.id}
-            onNavigate={onNavigate}
-            onLegacyAction={onAction}
-            tasks={tasks}
-            workers={workers}
-          />
+          <ChatActionCards action={message.action} onOpenSession={onOpenSession} />
         ) : null}
         {canRetry && message.runId && onRetryFresh ? (
           <button
@@ -192,15 +149,7 @@ export const LiveAssistantTimelineRow = ({
   </div>
 );
 
-const CollapsibleUserMessage = ({
-  content,
-  workerNames,
-  workerColors,
-}: {
-  content: string;
-  workerNames: string[];
-  workerColors: Record<string, string>;
-}) => {
+const CollapsibleUserMessage = ({ content }: { content: string }) => {
   const [expanded, setExpanded] = useState(false);
   if (!content) return null;
   const collapsible = shouldCollapseUserMessage(content);
@@ -220,7 +169,7 @@ const CollapsibleUserMessage = ({
             : undefined
         }
       >
-        <UserMessageText content={content} workerNames={workerNames} workerColors={workerColors} />
+        <UserMessageText content={content} />
       </div>
       {collapsible ? (
         <button
@@ -241,16 +190,8 @@ const RetryLabel = ({ runId }: { runId?: string | null }) =>
     <p className="mb-2 font-mono text-[10px] text-muted-foreground">Retry of {runId}</p>
   ) : null;
 
-const UserMessageText = ({
-  content,
-  workerNames,
-  workerColors,
-}: {
-  content: string;
-  workerNames: string[];
-  workerColors: Record<string, string>;
-}) => {
-  const segments = parseMessageSegments(content, workerNames);
+const UserMessageText = ({ content }: { content: string }) => {
+  const segments = parseMessageSegments(content);
   const hasStructuredSegments = segments.some((segment) => segment.kind !== "text");
   if (!hasStructuredSegments) {
     return (
@@ -262,7 +203,7 @@ const UserMessageText = ({
   return (
     <div className="chat-text-surface text-sm leading-relaxed text-foreground">
       {keyMessageSegments(segments).map(({ key, segment }) => (
-        <MessageSegmentView key={key} segment={segment} workerColors={workerColors} />
+        <MessageSegmentView key={key} segment={segment} />
       ))}
     </div>
   );
@@ -297,43 +238,6 @@ const DocumentChips = ({ documents }: { documents: ChatSessionMessageDocument[] 
   );
 };
 
-const StructuredUserActionBadge = ({ action }: { action: ChatSessionMessage["action"] }) => {
-  if (action?.type === "workflow-run") {
-    return (
-      <a
-        data-testid="history-workflow-badge"
-        className="history-action-badge"
-        href={`/workflows/${encodeURIComponent(action.id ?? "")}`}
-      >
-        Workflow: #{action.sub}
-      </a>
-    );
-  }
-  if (action?.type !== "runtime-actions") return null;
-  const actions = (action.proposal as import("@aop/common").RuntimeActionsFields | undefined)
-    ?.actions;
-  return (
-    <div data-testid="history-runtime-actions" className="flex flex-col gap-1">
-      {(actions ?? []).map((runtimeAction) => (
-        <span key={runtimeAction.id} className="history-action-badge">
-          {runtimeAction.runtimeConfigurationName ?? runtimeAction.provider} will{" "}
-          {runtimeAction.intent} using {runtimeAction.model} · {runtimeAction.reasoning}
-          {runtimeAction.fastMode ? " · fast" : ""}
-        </span>
-      ))}
-    </div>
-  );
-};
-
-const HistoryActionBadgeView = ({ badge }: { badge: HistoryActionBadge }) => (
-  <span
-    data-testid={badge.kind === "delegation" ? "history-delegation-badge" : "history-control-badge"}
-    className="history-action-badge"
-  >
-    {badge.label}
-  </span>
-);
-
 const keyMessageSegments = (
   segments: MessageSegment[],
 ): Array<{ key: string; segment: MessageSegment }> => {
@@ -346,28 +250,10 @@ const keyMessageSegments = (
   });
 };
 
-const MessageSegmentView = ({
-  segment,
-  workerColors,
-}: {
-  segment: MessageSegment;
-  workerColors: Record<string, string>;
-}) => {
+const MessageSegmentView = ({ segment }: { segment: MessageSegment }) => {
   if (segment.kind === "command") {
     return (
       <span className="rounded-md bg-info/15 px-1.5 py-0.5 font-mono text-xs font-semibold text-info-foreground">
-        {segment.text}
-      </span>
-    );
-  }
-  if (segment.kind === "mention") {
-    const name = segment.text.slice(1).toLowerCase();
-    const color = workerColors[name] ?? "var(--color-queued)";
-    return (
-      <span
-        className="rounded-md px-1.5 py-0.5 font-mono text-xs font-semibold"
-        style={{ background: `color-mix(in srgb,${color} 15%,transparent)`, color }}
-      >
         {segment.text}
       </span>
     );

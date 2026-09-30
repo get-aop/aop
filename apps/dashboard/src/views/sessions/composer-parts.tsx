@@ -3,7 +3,6 @@ import { Attachment } from "@/ui/attachment";
 import type { LocalCreateTaskImage } from "../../components/create-task-images";
 import { ComposerFooter } from "./composer-footer";
 import type { ChatComposerProps } from "./composer-types";
-import { ComposerWorkflowChip } from "./composer-workflow-chip";
 import { EFFORT_OPTIONS, getEffortLabel, getModelLabel, getRuntimeUi } from "./sessions-runtime";
 
 export const ComposerAttachmentStrip = ({
@@ -107,15 +106,6 @@ export const ComposerToolbar = ({
           onToggleFastMode={props.onToggleFastMode}
           modelLocked={props.modelLocked}
           plusMenu={props.plusMenu}
-          workflowChip={
-            props.defaultWorkflowId !== undefined ? (
-              <ComposerWorkflowChip
-                workflows={props.workflows}
-                defaultWorkflowId={props.defaultWorkflowId ?? null}
-                onChange={(workflowId) => props.onDefaultWorkflowChange?.(workflowId)}
-              />
-            ) : null
-          }
           onSend={props.onSend}
           onAbort={props.onAbort}
         />

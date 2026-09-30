@@ -1,7 +1,6 @@
-import type { TerminalLine } from "@aop/common";
 import { type Dispatch, type MutableRefObject, type SetStateAction, useEffect } from "react";
 import type { ChatSessionDetail, ChatSessionSummary } from "../../api/client";
-import { getRuntimeProfiles, getWorkflowDetails } from "../../api/client";
+import { getRuntimeProfiles } from "../../api/client";
 import { useSSE } from "../../hooks/useSSE";
 import type { StreamProgressUpdate } from "./session-stream-progress";
 
@@ -14,45 +13,22 @@ interface PrefillInput {
   refreshList: () => Promise<ChatSessionSummary[]>;
   loadDetail: (sessionId: string) => Promise<ChatSessionDetail | null>;
   markSessionRead: (sessionId: string | null) => Promise<void>;
-  setAgents: Dispatch<SetStateAction<import("../../types").Agent[]>>;
   setDetail: Dispatch<SetStateAction<ChatSessionDetail | null>>;
   setWorkspaceError: Dispatch<SetStateAction<WorkspaceBindingViewError | null>>;
   setDetailLoading: Dispatch<SetStateAction<boolean>>;
   setRuntimeProfiles: Dispatch<SetStateAction<import("@aop/common").RuntimeProfile[]>>;
-  setWorkflowOptions: Dispatch<
-    SetStateAction<
-      Array<{
-        id: string;
-        name: string;
-        stepCount: number;
-        stepTypes: string[];
-        steps: Array<{
-          id: string;
-          type: string;
-          provider?: string;
-          model?: string;
-          reasoning?: string;
-          fastMode?: boolean;
-        }>;
-      }>
-    >
-  >;
 }
 
-/** One-shot page prefill: bootstrap sessions, runtime profiles, workflow catalog. */
+/** One-shot page prefill: bootstrap sessions and runtime profiles. */
 export const useSessionsPagePrefill = (input: PrefillInput) => {
   const { refreshList, loadDetail, markSessionRead } = input;
 
   useEffect(() => {
-    void bootstrapSessions(
-      refreshList,
-      async (id) => {
-        const detail = await loadDetail(id);
-        void markSessionRead(id);
-        return detail;
-      },
-      input.setAgents,
-    ).catch((error) =>
+    void bootstrapSessions(refreshList, async (id) => {
+      const detail = await loadDetail(id);
+      void markSessionRead(id);
+      return detail;
+    }).catch((error) =>
       showBootstrapWorkspaceError(
         error,
         input.setDetail,
@@ -63,41 +39,13 @@ export const useSessionsPagePrefill = (input: PrefillInput) => {
     void getRuntimeProfiles()
       .then(input.setRuntimeProfiles)
       .catch(() => input.setRuntimeProfiles([]));
-    void getWorkflowDetails()
-      .then((workflows) =>
-        input.setWorkflowOptions(
-          workflows
-            .filter((workflow) => workflow.active)
-            .map((workflow) => ({
-              id: workflow.id,
-              name: workflow.name,
-              stepCount: workflow.stepCount,
-              stepTypes: workflow.steps.map((step) => step.type),
-              steps: workflow.steps.map((step) => ({
-                id: step.id,
-                type: step.type,
-                ...(step.agent
-                  ? {
-                      provider: step.agent.provider,
-                      model: step.agent.model,
-                      reasoning: step.agent.reasoning,
-                      fastMode: step.agent.fastMode,
-                    }
-                  : {}),
-              })),
-            })),
-        ),
-      )
-      .catch(() => input.setWorkflowOptions([]));
   }, [
     refreshList,
     loadDetail,
     markSessionRead,
-    input.setAgents,
     input.setDetail,
     input.setDetailLoading,
     input.setRuntimeProfiles,
-    input.setWorkflowOptions,
     input.setWorkspaceError,
   ]);
 };
@@ -111,35 +59,19 @@ interface StreamInput {
   setStreamProgress: (value: StreamProgressUpdate) => void;
   setDetail: Dispatch<SetStateAction<ChatSessionDetail | null>>;
   setMidRunHints: Dispatch<SetStateAction<Record<string, "queued" | "steered">>>;
-  setTermLines: Dispatch<SetStateAction<TerminalLine[]>>;
   refreshList: () => Promise<ChatSessionSummary[]>;
   reloadDetailQuiet: (sessionId: string) => Promise<ChatSessionDetail | null>;
-  onOpenWorkerDialog?: () => void;
   openSessionById: (sessionId: string) => void;
   markSessionRead: (sessionId: string | null) => Promise<void>;
-  setWorkflowRun: (
-    run:
-      | import("./sessions-page-helpers-stream").WorkflowRunStreamState
-      | null
-      | ((
-          current: import("./sessions-page-helpers-stream").WorkflowRunStreamState | null,
-        ) => import("./sessions-page-helpers-stream").WorkflowRunStreamState | null),
-  ) => void;
 }
 
-/** Live session/terminal/delegation event stream for the active session. */
+/** Live session event stream for the active session. */
 export const SESSION_STREAM_EVENT_TYPES = [
   "connected",
   "assistant-typing",
   "assistant-progress",
   "assistant-final",
   "session-updated",
-  "terminal-line",
-  "delegation-updated",
-  "delegation-progress",
-  "workflow-run-started",
-  "workflow-run-step",
-  "workflow-run-completed",
   "ping",
 ] as const;
 
@@ -157,13 +89,10 @@ export const useSessionsPageStream = (input: StreamInput) => {
         setStreamProgress: input.setStreamProgress,
         setDetail: input.setDetail,
         setMidRunHints: input.setMidRunHints,
-        setTermLines: input.setTermLines,
         refreshList: input.refreshList,
         reloadDetail: input.reloadDetailQuiet,
-        onOpenWorkerDialog: input.onOpenWorkerDialog,
         onOpenSession: input.openSessionById,
         onMarkSessionRead: input.markSessionRead,
-        setWorkflowRun: input.setWorkflowRun,
       }),
   });
 

@@ -1,18 +1,14 @@
-import type { RuntimeProfile, TerminalLine } from "@aop/common";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RuntimeProfile } from "@aop/common";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type ChatSessionDetail,
   type ChatSessionSummary,
   listChatSessions,
 } from "../../api/client";
-import { setDelegationSessionFocus } from "../../components/delegations/delegation-center";
 import { useRuntimeConfiguration } from "../../hooks/runtime-configuration";
 import { useActiveChatUnread } from "../../hooks/use-chat-unread";
 import { useOpenSessionRequest } from "../../hooks/use-open-session-request";
-import type { Agent, Task } from "../../types";
-import { useActiveDelegationCount } from "../../workspace/tasks-pane";
 import type { SessionToastContent, SessionToastLink } from "./SessionModals";
-import { setSessionSidePanelCovered } from "./session-side-panel-cover";
 import { type StreamProgressUpdate, setSessionStreamProgress } from "./session-stream-progress";
 import type { MenuState, SessionsRepo } from "./sessions-menu";
 import { storeActiveSessionId } from "./sessions-page-helpers";
@@ -27,13 +23,8 @@ import {
   useSessionScopedTyping,
   type WorkspaceBindingViewError,
 } from "./sessions-page-internals";
-import {
-  effectiveCommandFor,
-  resolveKnownTaskIds,
-  useSessionVisibilitySync,
-} from "./sessions-page-model";
+import { effectiveCommandFor, useSessionVisibilitySync } from "./sessions-page-model";
 import type { SessionsPageViewModel } from "./sessions-page-view";
-import { useSessionBranches } from "./use-session-branches";
 import { useSessionComposer } from "./use-session-composer";
 import { clearSessionUnreadCount, useSessionUnreadCounts } from "./use-session-unread-counts";
 import { useSessionsPageActions } from "./use-sessions-page-actions";
@@ -43,52 +34,15 @@ import { useSessionsPagePanels } from "./use-sessions-page-panels";
 
 interface SessionsPageProps {
   repos: SessionsRepo[];
-  onNavigate: (path: string) => void;
-  onOpenWorkerDialog?: () => void;
   /** Opens the register/attach repository directory browser. */
   onAttachRepo?: () => void;
-  /** Live board tasks (SSE) for task-live cards and known-task checks. */
-  tasks?: Task[];
-  /** Prefill composer when opened from Pool "Open in chat" (`/?task=`). */
-  focusTaskId?: string;
-  /** Clear the one-shot `?task=` intent after prefill (mirrors Workers create consume). */
-  onFocusTaskConsumed?: () => void;
-  /** @deprecated Prefer `tasks` — kept for older callers. */
-  knownTaskIds?: readonly string[];
 }
 
-export const useSessionsPageController = ({
-  repos,
-  onNavigate,
-  onOpenWorkerDialog,
-  onAttachRepo,
-  tasks = [],
-  focusTaskId,
-  onFocusTaskConsumed,
-  knownTaskIds,
-}: SessionsPageProps) => {
+export const useSessionsPageController = ({ repos, onAttachRepo }: SessionsPageProps) => {
   const { providers: runtimeConfigurations } = useRuntimeConfiguration();
   const settlementNow = useMinuteTimestamp();
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [runtimeProfiles, setRuntimeProfiles] = useState<RuntimeProfile[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [workflowOptions, setWorkflowOptions] = useState<
-    Array<{
-      id: string;
-      name: string;
-      stepCount: number;
-      stepTypes: string[];
-      steps: Array<{
-        id: string;
-        type: string;
-        provider?: string;
-        model?: string;
-        reasoning?: string;
-        fastMode?: boolean;
-      }>;
-    }>
-  >([]);
-  const workflowNames = workflowOptions.map((workflow) => workflow.name);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ChatSessionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
@@ -112,16 +66,6 @@ export const useSessionsPageController = ({
     localStorage.setItem("aop:md-panel-width", String(Math.round(mdPanelWidth)));
   }, [mdPanelExpanded, mdPanelWidth]);
 
-  // Hide floating task/delegation cards while a side panel owns the top-right.
-  useEffect(() => {
-    setSessionSidePanelCovered(diffPanelOpen || mdPanel != null);
-    return () => setSessionSidePanelCovered(false);
-  }, [diffPanelOpen, mdPanel]);
-  const [termLines, setTermLines] = useState<TerminalLine[]>([]);
-  const [termInput, setTermInput] = useState("");
-  const [workflowRun, setWorkflowRun] = useState<
-    import("./composer-types").WorkflowRunViewState | null
-  >(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const assistantStateGenerationRef = useRef(0);
@@ -156,7 +100,6 @@ export const useSessionsPageController = ({
     setMidRunHints,
     showToast,
     refreshList,
-    workflowRun,
   });
 
   const loadDetail = useCallback(
@@ -209,7 +152,6 @@ export const useSessionsPageController = ({
   /** Open a session by id (e.g. /clear sibling). Always leaves the previous thread. */
   const openSessionById = useCallback(
     async (sessionId: string) => {
-      setTermLines([]);
       setTyping(false);
       setStreamProgress(null);
       setMenu({ kind: "closed" });
@@ -224,43 +166,17 @@ export const useSessionsPageController = ({
     [loadDetail, markSessionRead, refreshList, setStreamProgress, setTyping],
   );
 
-  const { listActiveSessionBranches, switchActiveSessionBranch } = useSessionBranches({
-    activeIdRef,
-    setDetail,
-    setWorkspaceRefreshToken,
-    reloadDetailQuiet,
-    refreshList,
-    showToast,
-  });
-
   useSessionsPagePrefill({
     refreshList,
     loadDetail,
     markSessionRead,
-    setAgents,
     setDetail,
     setWorkspaceError,
     setDetailLoading,
     setRuntimeProfiles,
-    setWorkflowOptions,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: one-shot prefill; do not re-run on tasks[] SSE identity
-  useEffect(() => {
-    if (!focusTaskId) return;
-    const task = tasks.find((item) => item.id === focusTaskId);
-    const label = task?.sourceTitle?.trim() || task?.changePath?.split("/").pop() || focusTaskId;
-    composer.setInput(`About task ${label} (${focusTaskId}): `);
-    onFocusTaskConsumed?.();
-  }, [focusTaskId, onFocusTaskConsumed]);
-
   useSessionVisibilitySync(activeIdRef, reloadDetailQuiet, refreshList);
-
-  // Delegation cards only show for the session currently open in this page.
-  useEffect(() => {
-    setDelegationSessionFocus(activeId);
-    return () => setDelegationSessionFocus(null);
-  }, [activeId]);
 
   useActiveChatUnread(activeId);
   useOpenSessionRequest((sessionId) => {
@@ -276,31 +192,16 @@ export const useSessionsPageController = ({
     setStreamProgress,
     setDetail,
     setMidRunHints,
-    setTermLines,
     refreshList,
     reloadDetailQuiet,
-    onOpenWorkerDialog,
     openSessionById,
     markSessionRead,
-    setWorkflowRun,
   });
-  const knownTaskIdSet = useMemo(
-    () => resolveKnownTaskIds(tasks, knownTaskIds),
-    [tasks, knownTaskIds],
-  );
-  const tasksBadge = useActiveDelegationCount();
-  const {
-    openRightPanel,
-    closeRightPanel,
-    toggleRightPanel,
-    setRightPanelTab,
-    rightPanel,
-    termOpen,
-    setTermOpen,
-  } = useSessionsPagePanels();
+  const { rightPanel, closeRightPanel, toggleRightPanel, setRightPanelTab } =
+    useSessionsPagePanels();
   const {
     handleOpenChatFile,
-    handleChatAction,
+    handleOpenSession,
     handleRetryFresh,
     handleCreate,
     handleCreateTask,
@@ -309,10 +210,8 @@ export const useSessionsPageController = ({
     settleSession,
     unsettleSession,
     deleteSession,
-    handleTermRun,
     handleAbort,
     resetRuntimeSession,
-    handleCreateWorktree,
   } = useSessionsPageActions({
     active: detail,
     activeId,
@@ -322,8 +221,6 @@ export const useSessionsPageController = ({
     assistantStateGenerationRef,
     setAborting,
     composer,
-    knownTaskIdSet,
-    termInput,
     markSessionRead,
     loadDetail,
     reloadDetailQuiet,
@@ -336,39 +233,27 @@ export const useSessionsPageController = ({
     setDetailLoading,
     setSessions,
     setMenu,
-    setTermLines,
-    setTermInput,
     setDiffPanelOpen,
     setMdPanel,
-    setWorkspaceRefreshToken,
     showToast,
-    onNavigate,
-    onOpenWorkerDialog,
     openSessionById,
   });
   const {
     active,
     activeRuntimeConfigurationName,
     assistantActive,
-    gitPrControls,
-    liveTasks,
     menuItems,
     mergedPrBar,
-    parentMenuKind,
     pullRequest,
     queueCount,
     refreshWorkspace,
     scopedMidRunHints,
     sessionGitStatus,
     skills,
-    workerColors,
-    workerNames,
-    workers,
   } = useSessionsPageMenus({
     active: detail,
     activeId,
     connected,
-    agents,
     composer,
     diffPanelOpen,
     handleCreate,
@@ -387,21 +272,15 @@ export const useSessionsPageController = ({
     setMenu,
     setRename,
     setSessions,
-    setTermOpen,
     setWorkspaceRefreshToken,
     settlementNow,
     settleSession,
     showToast,
     skills: detail?.skills,
-    tasks,
-    termOpen,
     typing,
     unsettleSession,
     deleteSession,
-    workflowNames,
-    workflowOptions,
     workspaceRefreshToken,
-    knownTaskIds,
   });
   const ecmd = effectiveCommandFor(active);
 
@@ -413,7 +292,6 @@ export const useSessionsPageController = ({
     active,
     activeId,
     activeRuntimeConfigurationName,
-    agents,
     assistantActive,
     composer,
     connected,
@@ -422,23 +300,16 @@ export const useSessionsPageController = ({
     diffRefreshKey,
     draftSession,
     ecmd,
-    gitPrControls,
     handleAbort,
-    handleChatAction,
-    handleCreateWorktree,
     handleOpenChatFile,
+    handleOpenSession,
     handleRetryFresh,
-    handleTermRun,
-    listActiveSessionBranches,
-    liveTasks,
     mdPanel,
     mdPanelExpanded,
     mdPanelWidth,
     menu,
     menuItems,
     mergedPrBar,
-    onNavigate,
-    parentMenuKind,
     patchSession,
     previousMdPanelWidth,
     pullRequest,
@@ -447,9 +318,7 @@ export const useSessionsPageController = ({
     rename,
     repos,
     rightPanelOpen: rightPanel.open,
-    tasksBadge,
     rightPanelTab: rightPanel.tab,
-    openRightPanel,
     closeRightPanel,
     toggleRightPanel,
     setRightPanelTab,
@@ -467,23 +336,11 @@ export const useSessionsPageController = ({
     setMdPanelWidth,
     setMenu,
     setRename,
-    setTermInput,
-    setTermOpen,
-    setWorkspaceRefreshToken,
     showToast,
     sidePanelOpen,
     skills,
-    switchActiveSessionBranch,
-    termInput,
-    termLines,
-    termOpen,
     toast,
     typing,
-    workerColors,
-    workerNames,
-    workers,
-    workflowOptions,
-    workflowRun,
     workspaceError,
   };
 

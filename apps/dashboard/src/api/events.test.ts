@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
 
 setupDashboardDom();
@@ -9,6 +9,7 @@ class MockEventSource {
   readonly listeners = new Map<string, Array<(event: MessageEvent) => void>>();
   onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
+  closed = false;
 
   constructor(public readonly url: string) {
     MockEventSource.instances.push(this);
@@ -20,67 +21,78 @@ class MockEventSource {
     this.listeners.set(type, listeners);
   }
 
-  close() {}
+  close() {
+    this.closed = true;
+  }
 
   emit(type: string, data: unknown) {
     for (const listener of this.listeners.get(type) ?? []) {
-      listener({ data: JSON.stringify(data) } as MessageEvent);
+      listener({ data: typeof data === "string" ? data : JSON.stringify(data) } as MessageEvent);
     }
   }
 }
 
-const runningActivity = {
-  sessionId: "pi-session-1",
-  sessionState: "running",
-  latestEventKind: "assistant_text",
-  latestEventAt: "2026-03-31T00:00:05.000Z",
-  latestMessage: "Working on it",
-  needsAttention: false,
-  blocked: false,
-  handoffProduced: false,
-  verificationEvidenceRecorded: false,
+type PendingTimer = { callback: () => void; delay: number; cleared: boolean };
+
+const originalEventSource = globalThis.EventSource;
+const originalSetTimeout = globalThis.setTimeout;
+const originalClearTimeout = globalThis.clearTimeout;
+const originalRandom = Math.random;
+let timers: PendingTimer[] = [];
+
+const { createHostEventsConnection } = await import("./events");
+
+const latestSource = (): MockEventSource => {
+  const source = MockEventSource.instances.at(-1);
+  if (!source) throw new Error("Expected an EventSource instance");
+  return source;
 };
 
-const completedActivity = {
-  sessionId: "pi-session-1",
-  sessionState: "completed",
-  latestEventKind: "session_completed",
-  latestEventAt: "2026-03-31T00:10:00.000Z",
-  latestMessage: "Done",
-  needsAttention: false,
-  blocked: false,
-  handoffProduced: true,
-  verificationEvidenceRecorded: true,
-};
+beforeEach(() => {
+  MockEventSource.instances = [];
+  timers = [];
+  globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+  // Deterministic backoff: no jitter, and retries fire only when the test says so.
+  Math.random = () => 0;
+  globalThis.setTimeout = ((callback: () => void, delay?: number) => {
+    const timer: PendingTimer = { callback, delay: delay ?? 0, cleared: false };
+    timers.push(timer);
+    return timer;
+  }) as unknown as typeof setTimeout;
+  globalThis.clearTimeout = ((timer: PendingTimer) => {
+    timer.cleared = true;
+  }) as unknown as typeof clearTimeout;
+});
 
-describe("api/events", () => {
-  beforeEach(() => {
-    MockEventSource.instances = [];
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+afterEach(() => {
+  globalThis.EventSource = originalEventSource;
+  globalThis.setTimeout = originalSetTimeout;
+  globalThis.clearTimeout = originalClearTimeout;
+  Math.random = originalRandom;
+});
+
+describe("createHostEventsConnection", () => {
+  test("connects to the global host stream and listens for exactly the host event types", () => {
+    createHostEventsConnection({ onEvent: mock() });
+
+    expect(latestSource().url).toBe("/api/events");
+    expect([...latestSource().listeners.keys()].sort()).toEqual([
+      "chat-unread",
+      "data-reset",
+      "init",
+      "repo-removed",
+    ]);
   });
 
-  test("preserves server-authored swimlane metadata in init and status events", async () => {
-    const handled = mock();
-    const { createTaskEventsConnection } = await import("./events");
+  test("maps the init snapshot to the registered repos and drops task data", () => {
+    const onEvent = mock();
+    createHostEventsConnection({ onEvent });
 
-    const connection = createTaskEventsConnection({ onEvent: handled });
-    const source = MockEventSource.instances[0];
-
-    expect(source).toBeDefined();
-
-    source?.emit("init", {
+    latestSource().emit("init", {
       type: "init",
       status: {
         globalCapacity: { working: 1, max: 3 },
-        swimlanes: [
-          {
-            id: "architect-control",
-            title: "Architect Control",
-            description: "Plan slices, assign developers, and accept handoffs.",
-            ownerRole: "architect",
-            order: 0,
-          },
-        ],
+        swimlanes: [],
         repos: [
           {
             id: "repo-1",
@@ -88,114 +100,151 @@ describe("api/events", () => {
             path: "/repos/aop-mono",
             working: 1,
             max: 3,
-            tasks: [
-              {
-                id: "task-1",
-                repoId: "repo-1",
-                changePath: "docs/tasks/get-57",
-                status: "WORKING",
-                baseBranch: null,
-                preferredProvider: null,
-                preferredWorkflow: null,
-                createdAt: "2026-03-31T00:00:00.000Z",
-                updatedAt: "2026-03-31T00:00:00.000Z",
-                swimlane: {
-                  laneId: "architect-control",
-                  phaseLabel: "Review",
-                  ownerLabel: "architect-1",
-                  ownerRole: "architect",
-                },
-                runtimeActivity: runningActivity,
-              },
-            ],
+            tasks: [{ id: "task-1", repoId: "repo-1", status: "WORKING" }],
           },
+          { id: "repo-2", name: null, path: "/repos/other", working: 0, max: 3, tasks: [] },
         ],
       },
     });
 
-    source?.emit("task-status-changed", {
-      type: "task-status-changed",
-      taskId: "task-1",
-      previousStatus: "WORKING",
-      newStatus: "DONE",
-      task: {
-        id: "task-1",
-        repoId: "repo-1",
-        changePath: "docs/tasks/get-57",
-        status: "DONE",
-        baseBranch: null,
-        preferredProvider: null,
-        preferredWorkflow: null,
-        createdAt: "2026-03-31T00:00:00.000Z",
-        updatedAt: "2026-03-31T00:10:00.000Z",
-        swimlane: {
-          laneId: "completed",
-          phaseLabel: "Completed",
-          ownerLabel: "Architect",
-          ownerRole: "architect",
-        },
-        runtimeActivity: completedActivity,
-      },
-    });
-
-    expect(handled.mock.calls[0]?.[0]).toEqual({
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(onEvent).toHaveBeenCalledWith({
       type: "init",
       data: {
-        repos: [{ id: "repo-1", name: "aop-mono", path: "/repos/aop-mono" }],
-        swimlanes: [
-          {
-            id: "architect-control",
-            title: "Architect Control",
-            description: "Plan slices, assign developers, and accept handoffs.",
-            ownerRole: "architect",
-            order: 0,
-          },
-        ],
-        tasks: [
-          {
-            id: "task-1",
-            repoId: "repo-1",
-            changePath: "docs/tasks/get-57",
-            status: "WORKING",
-            baseBranch: null,
-            preferredProvider: null,
-            preferredWorkflow: null,
-            createdAt: "2026-03-31T00:00:00.000Z",
-            updatedAt: "2026-03-31T00:00:00.000Z",
-            repoPath: "/repos/aop-mono",
-            swimlane: {
-              laneId: "architect-control",
-              phaseLabel: "Review",
-              ownerLabel: "architect-1",
-              ownerRole: "architect",
-            },
-            runtimeActivity: runningActivity,
-          },
+        repos: [
+          { id: "repo-1", name: "aop-mono", path: "/repos/aop-mono" },
+          { id: "repo-2", name: null, path: "/repos/other" },
         ],
       },
+    });
+  });
+
+  test("maps chat-unread to the four fields the unread store consumes", () => {
+    const onEvent = mock();
+    createHostEventsConnection({ onEvent });
+
+    latestSource().emit("chat-unread", {
+      type: "chat-unread",
+      sessionId: "session-1",
+      title: "Fix flaky test",
+      snippet: "Done — pushed a fix",
+      kind: "assistant-final",
+      extraServerField: "ignored",
     });
 
-    expect(handled.mock.calls[1]?.[0]).toEqual({
-      type: "task-status-changed",
+    expect(onEvent).toHaveBeenCalledWith({
+      type: "chat-unread",
       data: {
-        taskId: "task-1",
-        status: "DONE",
-        updatedAt: "2026-03-31T00:10:00.000Z",
-        errorMessage: undefined,
-        currentExecutionId: undefined,
-        executionStartedAt: undefined,
-        executionCompletedAt: undefined,
-        taskProgress: undefined,
-        swimlane: {
-          laneId: "completed",
-          phaseLabel: "Completed",
-          ownerLabel: "Architect",
-          ownerRole: "architect",
-        },
-        runtimeActivity: completedActivity,
+        sessionId: "session-1",
+        title: "Fix flaky test",
+        snippet: "Done — pushed a fix",
+        kind: "assistant-final",
       },
     });
+  });
+
+  test("maps repo-removed and data-reset", () => {
+    const onEvent = mock();
+    createHostEventsConnection({ onEvent });
+
+    latestSource().emit("repo-removed", { type: "repo-removed", repoId: "repo-9" });
+    latestSource().emit("data-reset", { type: "data-reset" });
+
+    expect(onEvent.mock.calls.map((call) => call[0])).toEqual([
+      { type: "repo-removed", data: { repoId: "repo-9" } },
+      { type: "data-reset", data: {} },
+    ]);
+  });
+
+  test("does not deliver task events the dashboard no longer models", () => {
+    const onEvent = mock();
+    createHostEventsConnection({ onEvent });
+
+    latestSource().emit("task-created", { type: "task-created", task: { id: "task-1" } });
+    latestSource().emit("task-status-changed", { type: "task-status-changed", taskId: "task-1" });
+    latestSource().emit("heartbeat", { type: "heartbeat" });
+
+    expect(onEvent).not.toHaveBeenCalled();
+  });
+
+  test("reports unparseable payloads through onError without emitting an event", () => {
+    const onEvent = mock();
+    const onError = mock();
+    createHostEventsConnection({ onEvent, onError });
+
+    latestSource().emit("init", "{not json");
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    const error = onError.mock.calls[0]?.[0];
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("Failed to parse SSE event");
+  });
+
+  test("reports connect, disconnect, and reconnects with exponential backoff", () => {
+    const onConnect = mock();
+    const onDisconnect = mock();
+    createHostEventsConnection({ onEvent: mock(), onConnect, onDisconnect });
+
+    latestSource().onopen?.();
+    expect(onConnect).toHaveBeenCalledTimes(1);
+
+    const first = latestSource();
+    first.onerror?.();
+    expect(first.closed).toBe(true);
+    expect(onDisconnect).toHaveBeenCalledTimes(1);
+    expect(timers.map((timer) => timer.delay)).toEqual([1000]);
+    expect(MockEventSource.instances).toHaveLength(1);
+
+    timers[0]?.callback();
+    expect(MockEventSource.instances).toHaveLength(2);
+
+    // A failed reconnect backs off further.
+    latestSource().onerror?.();
+    expect(timers.map((timer) => timer.delay)).toEqual([1000, 2000]);
+
+    // A successful reconnect resets the backoff.
+    timers[1]?.callback();
+    latestSource().onopen?.();
+    expect(onConnect).toHaveBeenCalledTimes(2);
+    latestSource().onerror?.();
+    expect(timers.map((timer) => timer.delay)).toEqual([1000, 2000, 1000]);
+  });
+
+  test("caps the reconnect delay at 30 seconds", () => {
+    createHostEventsConnection({ onEvent: mock() });
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+      latestSource().onerror?.();
+      timers.at(-1)?.callback();
+    }
+
+    expect(Math.max(...timers.map((timer) => timer.delay))).toBe(30000);
+  });
+
+  test("close() shuts the stream, cancels a pending retry, and stops reconnecting", () => {
+    const connection = createHostEventsConnection({ onEvent: mock() });
+
+    latestSource().onerror?.();
+    const pending = timers[0];
+    expect(pending?.cleared).toBe(false);
 
     connection.close();
+    expect(pending?.cleared).toBe(true);
+
+    // Even if the stale timer fires, no new stream is opened.
+    pending?.callback();
+    expect(MockEventSource.instances).toHaveLength(1);
+  });
+
+  test("close() closes the live stream and suppresses the reconnect on a late error", () => {
+    const connection = createHostEventsConnection({ onEvent: mock() });
+    const source = latestSource();
+
+    connection.close();
+    expect(source.closed).toBe(true);
+
+    source.onerror?.();
+    expect(timers).toHaveLength(0);
   });
 });

@@ -1,15 +1,11 @@
 import type { Dispatch, SetStateAction } from "react";
 import {
-  type ChatSessionAction,
   type ChatSessionDetail,
   type ChatSessionSummary,
-  getAgents,
   resetChatSessionRuntime,
-  runChatSessionTerminal,
   type updateChatSession,
 } from "../../api/client";
 import { requestConfirmation } from "../../components/ConfirmationHost";
-import type { Agent } from "../../types";
 import { isSessionSettled } from "./session-settled";
 
 export const IDLE_RESET_RUNTIME_MESSAGE = "The next message will start a fresh runtime session.";
@@ -139,91 +135,14 @@ export const pickSessionAfterSettle = (
   return list.find((session) => !isSessionSettled(session, { now }))?.id ?? null;
 };
 
-export const loadSessionBootstrapData = async (
-  loadAgents: () => Promise<Agent[]>,
-  refreshList: () => Promise<ChatSessionSummary[]>,
-): Promise<{ agents: Agent[]; list: ChatSessionSummary[] }> => {
-  const [agents, list] = await Promise.all([loadAgents().catch(() => []), refreshList()]);
-  return { agents, list };
-};
-
 export const bootstrapSessions = async (
   refreshList: () => Promise<ChatSessionSummary[]>,
   loadDetail: (id: string) => Promise<ChatSessionDetail | null>,
-  setAgents: (agents: Agent[]) => void,
   preferredSessionId?: string | null,
 ): Promise<void> => {
-  const { agents, list } = await loadSessionBootstrapData(getAgents, refreshList);
-  setAgents(agents);
+  const list = await refreshList();
   const openId = pickSessionToOpen(list, preferredSessionId ?? readStoredActiveSessionId());
   if (openId) await loadDetail(openId);
-};
-
-export const navigateFromAction = (
-  action: ChatSessionAction,
-  onNavigate: (path: string) => void,
-  onOpenWorkerDialog: (() => void) | undefined,
-  showToast: (message: string) => void,
-  /** When set, missing/stale task ids fall back to Pool (concept goRef contract). */
-  knownTaskIds?: readonly string[],
-  onOpenSession?: (sessionId: string) => void,
-): void => {
-  switch (action.type) {
-    case "task":
-      navigateTaskAction(action, onNavigate, showToast, knownTaskIds);
-      return;
-    case "pool":
-      onNavigate("/pool");
-      return;
-    case "workflows":
-      onNavigate(action.id ? `/workflows/${encodeURIComponent(action.id)}` : "/workflows");
-      return;
-    case "review":
-      onNavigate("/pool");
-      showToast("Review items are shown in Pool");
-      return;
-    case "workerNew":
-      onOpenWorkerDialog?.();
-      return;
-    case "session":
-      if (action.id) onOpenSession?.(action.id);
-      return;
-  }
-};
-
-const navigateTaskAction = (
-  action: ChatSessionAction,
-  onNavigate: (path: string) => void,
-  showToast: (message: string) => void,
-  knownTaskIds?: readonly string[],
-): void => {
-  if (action.id && (!knownTaskIds || knownTaskIds.includes(action.id))) {
-    onNavigate(`/tasks/${encodeURIComponent(action.id)}`);
-    return;
-  }
-  onNavigate("/pool");
-  showToast("Task moved — showing Pool");
-};
-export const runTermCommand = (
-  termInput: string,
-  sessionId: string | undefined,
-  setTermInput: (value: string) => void,
-  showToast: (message: string) => void,
-): void => {
-  const cmd = termInput.trim();
-  if (!cmd) return;
-  if (cmd.toLowerCase() === "clear") {
-    // Caller clears local lines via setTermLines before invoking, or we signal via toast only.
-    setTermInput("");
-    return;
-  }
-  setTermInput("");
-  if (!sessionId) return;
-  // Output streams over SSE; HTTP response is optional confirmation. Errors surface as meta.
-  void runChatSessionTerminal(sessionId, cmd).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : "Terminal command failed";
-    showToast(message);
-  });
 };
 
 /** Pin/unpin with immediate rail update and restore+toast on failure. */

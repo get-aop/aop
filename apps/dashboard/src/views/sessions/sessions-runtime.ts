@@ -1,12 +1,7 @@
 import {
-  CONTROL_COMMANDS,
-  controlCommandLabel,
   formatWorkflowRuntimeModelLabel,
   getWorkflowModelOptions,
   getWorkflowThinkingLabel,
-  parseControlCommand,
-  parseRuntimeDelegation,
-  RUNTIME_DELEGATIONS,
   WORKFLOW_RUNTIME_LABELS,
   WORKFLOW_THINKING_OPTIONS,
   type WorkflowRuntimeProvider,
@@ -81,35 +76,19 @@ export const modelOptionsFor = (runtime: string): readonly string[] =>
 export const EFFORT_OPTIONS = WORKFLOW_THINKING_OPTIONS;
 
 export const CHAT_COMMANDS = [
-  { cmd: "/implement", args: "<runtime>", desc: "Choose the runtime that implements the request" },
-  { cmd: "/review", args: "<runtime>", desc: "Review the implementation after it completes" },
-  { cmd: "/audit", args: "<runtime>", desc: "Audit the implementation after it completes" },
-  { cmd: "/test", args: "<runtime>", desc: "Run tests after the implementation completes" },
-  { cmd: "/security", args: "<runtime>", desc: "Run a security review after implementation" },
-  { cmd: "/workflow", args: "run <name>", desc: "Trigger a workflow" },
   { cmd: "/skill", args: "<name>", desc: "Run a runtime skill" },
   { cmd: "/clear", args: "", desc: "Settle session and open a fresh one" },
   { cmd: "/goal", args: "", desc: "Run the CLI GOAL command" },
 ] as const;
 
-export type MessageSegment =
-  | { kind: "text"; text: string }
-  | { kind: "command"; text: string }
-  | { kind: "mention"; text: string };
+export type MessageSegment = { kind: "text"; text: string } | { kind: "command"; text: string };
 
-/** Parse user message text into display segments for command/mention chips. */
-export const parseMessageSegments = (
-  text: string,
-  workerNames: string[] = [],
-): MessageSegment[] => {
-  const mentionPattern =
-    workerNames.length > 0
-      ? workerNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
-      : "\\w+";
+/** Parse user message text into display segments for slash-command chips. */
+export const parseMessageSegments = (text: string): MessageSegment[] => {
   const commandPattern = CHAT_COMMANDS.map(({ cmd }) => cmd.replace("/", "\\/"))
     .toSorted((left, right) => right.length - left.length)
     .join("|");
-  const re = new RegExp(`((?:${commandPattern})(?=$|\\s)|%(?:${mentionPattern}))`, "gi");
+  const re = new RegExp(`(?:${commandPattern})(?=$|\\s)`, "gi");
   const segs: MessageSegment[] = [];
   let last = 0;
   let match = re.exec(text);
@@ -118,7 +97,7 @@ export const parseMessageSegments = (
       segs.push({ kind: "text", text: text.slice(last, match.index) });
     }
     const token = match[0];
-    segs.push({ kind: classifyMessageToken(token), text: token });
+    segs.push({ kind: "command", text: token });
     last = match.index + token.length;
     match = re.exec(text);
   }
@@ -126,96 +105,6 @@ export const parseMessageSegments = (
     segs.push({ kind: "text", text: text.slice(last) });
   }
   return segs.length > 0 ? segs : [{ kind: "text", text }];
-};
-
-const classifyMessageToken = (token: string): MessageSegment["kind"] => {
-  if (token.startsWith("/")) return "command";
-  if (token.startsWith("%")) return "mention";
-  return "text";
-};
-
-export type HistoryActionBadge = {
-  kind: "delegation" | "control";
-  label: string;
-};
-
-/**
- * Strip transport markers from stored/optimistic user content and derive
- * yellow history badges only when a real delegation/control was used.
- */
-export const resolveUserMessageDisplay = (
-  content: string,
-): { displayText: string; badges: HistoryActionBadge[] } => {
-  const badges: HistoryActionBadge[] = [];
-  let displayText = content;
-
-  const delegationBadge = badgeFromDelegationMarker(content);
-  if (delegationBadge) {
-    badges.push(delegationBadge.badge);
-    displayText = delegationBadge.displayText;
-  }
-
-  const controlBadge = badgeFromControlMarker(displayText);
-  if (controlBadge) {
-    badges.push(controlBadge.badge);
-    displayText = controlBadge.displayText;
-  }
-
-  return { displayText, badges };
-};
-
-const badgeFromDelegationMarker = (
-  content: string,
-): { badge: HistoryActionBadge; displayText: string } | null => {
-  const delegation = parseRuntimeDelegation(content);
-  if (!delegation || "error" in delegation) return null;
-  const runtimeLabel =
-    RUNTIME_DELEGATIONS.find((item) => item.id === delegation.id)?.label ?? delegation.label;
-  return {
-    badge: {
-      kind: "delegation",
-      label: `Delegated to ‘${runtimeLabel}’ using ${formatBadgeSelection(
-        delegation.model,
-        delegation.reasoning,
-        delegation.fastMode,
-      )}`,
-    },
-    displayText: delegation.prompt,
-  };
-};
-
-const badgeFromControlMarker = (
-  content: string,
-): { badge: HistoryActionBadge; displayText: string } | null => {
-  const control = parseControlCommand(content);
-  if (!control || "error" in control) return null;
-  const command = CONTROL_COMMANDS.find(
-    (item) =>
-      item.provider === control.command.provider && item.capability === control.command.capability,
-  );
-  const label = command ? controlCommandLabel(command) : "control";
-  return {
-    badge: {
-      kind: "control",
-      label: `Used ${label} with ${formatBadgeSelection(
-        control.command.model,
-        control.command.reasoning,
-        control.command.fastMode,
-      )}`,
-    },
-    displayText: control.prompt,
-  };
-};
-
-const formatBadgeSelection = (
-  model: string | undefined,
-  reasoning: string | undefined,
-  fastMode: boolean | undefined,
-): string => {
-  const modelLabel = model ? formatWorkflowRuntimeModelLabel(model) : "default model";
-  const reasoningLabel = reasoning ?? "default thinking";
-  const fast = fastMode ? " · fast mode" : "";
-  return `${modelLabel} · ${reasoningLabel}${fast}`;
 };
 
 export const formatRelativeTime = (iso: string, now = Date.now()): string => {
@@ -228,15 +117,6 @@ export const formatRelativeTime = (iso: string, now = Date.now()): string => {
   if (hours < 48) return `${hours}h`;
   const days = Math.floor(hours / 24);
   return `${days}d`;
-};
-
-export const ACTION_COLORS: Record<string, string> = {
-  task: "var(--color-running)",
-  pool: "var(--color-running)",
-  workflows: "var(--color-queued)",
-  review: "var(--color-blocked)",
-  workerNew: "var(--color-favorite)",
-  session: "var(--color-ok)",
 };
 
 export interface SlashTokenMatch {

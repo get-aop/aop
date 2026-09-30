@@ -1,4 +1,3 @@
-import type { TerminalLine } from "@aop/common";
 import type { Dispatch, SetStateAction } from "react";
 import {
   abortChatSession,
@@ -10,11 +9,7 @@ import {
 } from "../../api/client";
 import { type StreamProgressUpdate, setSessionStreamProgress } from "./session-stream-progress";
 import type { MenuState } from "./sessions-menu";
-import {
-  pickSessionAfterSettle,
-  runTermCommand,
-  storeActiveSessionId,
-} from "./sessions-page-helpers";
+import { pickSessionAfterSettle, storeActiveSessionId } from "./sessions-page-helpers";
 
 export const reloadSessionDetailQuiet = async (input: {
   sessionId: string;
@@ -64,7 +59,6 @@ export const selectSession = async (input: {
   activeId: string | null;
   markSessionRead: (sessionId: string) => unknown;
   reloadDetailQuiet: (sessionId: string) => Promise<ChatSessionDetail | null>;
-  setTermLines: Dispatch<SetStateAction<TerminalLine[]>>;
   setTyping: (value: boolean) => void;
   setStreamProgress: (value: StreamProgressUpdate) => void;
   setMenu: Dispatch<SetStateAction<MenuState>>;
@@ -76,7 +70,6 @@ export const selectSession = async (input: {
     await input.reloadDetailQuiet(input.sessionId);
     return;
   }
-  input.setTermLines([]);
   input.setTyping(false);
   input.setStreamProgress(null);
   input.setMenu({ kind: "closed" });
@@ -147,21 +140,6 @@ export const removeSessionAndSelectNext = async (input: {
   } catch (error) {
     input.showToast(error instanceof Error ? error.message : input.failureMessage);
   }
-};
-
-export const runSessionTerminalCommand = (input: {
-  termInput: string;
-  sessionId?: string;
-  setTermLines: Dispatch<SetStateAction<TerminalLine[]>>;
-  setTermInput: Dispatch<SetStateAction<string>>;
-  showToast: (message: string) => void;
-}): void => {
-  if (input.termInput.trim().toLowerCase() === "clear") {
-    input.setTermLines([]);
-    input.setTermInput("");
-    return;
-  }
-  runTermCommand(input.termInput, input.sessionId, input.setTermInput, input.showToast);
 };
 
 export type AbortConversationInput = {

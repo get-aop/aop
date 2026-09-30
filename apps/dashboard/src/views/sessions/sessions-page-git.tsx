@@ -3,14 +3,12 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   type ChatSessionDetail,
   type ChatSessionSummary,
-  createSessionWorktree,
   getSessionGitStatus,
   type SessionGitStatus,
   type SessionPullRequestState,
 } from "../../api/client";
 import type { RailRepoGroup } from "../../shell/rail-store";
 import { MergedPrBar } from "./MergedPrBar";
-import { SessionGitPrControls } from "./SessionGitPrControls";
 import type { SessionToastContent, SessionToastLink } from "./SessionModals";
 import { dismissMergedPrBar, useMergedPrBarDismissed } from "./session-merged-pr-dismissal";
 import { isSessionSettled } from "./session-settled";
@@ -262,17 +260,11 @@ export const pullRequestStateForMenu = (
   return pullRequestStates.get(menu.sessionId) ?? null;
 };
 
-/**
- * Owns the session PR controller and derives the two composer slots (git-bar
- * controls + merged-PR bar) so the page component stays flat.
- */
+/** Owns the session PR controller and derives the merged-PR bar shown above the composer. */
 export const useSessionPrComposerSlots = (
   sessionId: string | null | undefined,
   gitStatus: SessionGitStatus | null,
-  onToast: (message: string, link?: SessionToastLink) => void,
-  onChanged: () => void,
 ): {
-  gitPrControls: ReactNode;
   mergedPrBar: ReactNode;
   pullRequest: SessionPullRequestController;
 } => {
@@ -281,17 +273,6 @@ export const useSessionPrComposerSlots = (
   const status = sessionPullRequest.status;
   const mergedPr = status?.pr?.state === "MERGED" ? status.merged : null;
   const mergedPrDismissed = useMergedPrBarDismissed(id, mergedPr?.number ?? null);
-
-  // PR controls live primarily in the workspace top bar (t3code ChatHeader);
-  // keep the composer slot for location-strip adjacency when dirty.
-  const gitPrControls = gitStatus?.isGitRepo ? (
-    <SessionGitPrControls
-      gitStatus={gitStatus}
-      pr={sessionPullRequest}
-      onToast={onToast}
-      onChanged={onChanged}
-    />
-  ) : null;
 
   const mergedPrBar =
     mergedPr && !mergedPrDismissed ? (
@@ -304,41 +285,8 @@ export const useSessionPrComposerSlots = (
       />
     ) : null;
 
-  return { gitPrControls, mergedPrBar, pullRequest: sessionPullRequest };
+  return { mergedPrBar, pullRequest: sessionPullRequest };
 };
 
 export const toastContent = (message: string, link?: SessionToastLink): SessionToastContent =>
   link ? { message, link } : { message };
-
-export const diffstatForComposer = (
-  status: SessionGitStatus | null,
-): SessionGitStatus["diffstat"] | null =>
-  status?.isGitRepo && !status.isOnDefaultBranch ? status.diffstat : null;
-
-export const worktreeCreateHandler = (
-  repoId: string | null | undefined,
-  sessionId: string,
-  create: (sessionId: string, branchName: string) => Promise<void>,
-): ((branchName: string) => Promise<void>) | undefined => {
-  if (!repoId) return undefined;
-  return (branchName) => create(sessionId, branchName);
-};
-
-export const createSessionWorktreeForComposer = async (input: {
-  sessionId: string;
-  branchName: string;
-  showToast: (message: string) => void;
-  reloadDetailQuiet: (sessionId: string) => Promise<unknown>;
-  refreshList: () => Promise<unknown>;
-  onWorkspaceChanged: () => void;
-}): Promise<void> => {
-  try {
-    const result = await createSessionWorktree(input.sessionId, { branchName: input.branchName });
-    input.showToast(`Worktree ready on ${result.worktree.branch}`);
-    await Promise.all([input.reloadDetailQuiet(input.sessionId), input.refreshList()]);
-    input.onWorkspaceChanged();
-  } catch (error: unknown) {
-    input.showToast(error instanceof Error ? error.message : "Could not create session worktree");
-    throw error;
-  }
-};

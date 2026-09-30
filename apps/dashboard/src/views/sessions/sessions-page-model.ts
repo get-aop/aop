@@ -1,9 +1,4 @@
-import type {
-  ChatDocumentAttachment,
-  ChatRuntimeActionSelection,
-  ChatWorkflowSelection,
-  RuntimeDelegationSelection,
-} from "@aop/common";
+import type { ChatDocumentAttachment } from "@aop/common";
 import { useEffect } from "react";
 import {
   type ChatSessionDetail,
@@ -17,17 +12,13 @@ import {
   localImageToAttachment,
   revokeLocalCreateTaskImages,
 } from "../../components/create-task-images";
-import type { Agent, Task } from "../../types";
 import type { MenuState } from "./sessions-menu";
-
-const WORKER_COLOR = "var(--color-favorite)";
 
 import { getEffectiveCmd } from "./sessions-runtime";
 
 export const sendChatWithOptimistic = async (input: {
   sessionId: string;
   content: string;
-  requestContent?: string;
   imagesSnapshot: LocalCreateTaskImage[];
   documentsSnapshot: ChatDocumentAttachment[];
   pastesSnapshot?: Array<{ index: number; lineCount: number; content: string }>;
@@ -38,19 +29,11 @@ export const sendChatWithOptimistic = async (input: {
     value: { thinking: string; content: string; commandGroups: [] } | null,
   ) => void;
   setDetail: (updater: (current: ChatSessionDetail | null) => ChatSessionDetail | null) => void;
-  runtimeDelegationSnapshot?: RuntimeDelegationSelection | null;
-  runtimeActionsSnapshot?: ChatRuntimeActionSelection[];
-  workflowSelectionSnapshot?: ChatWorkflowSelection | null;
-  /** Armed workflow: the message starts a sequential workflow run instead of a reply. */
-  workflowArmed?: boolean;
   /** Restores the failed send only when the composer draft is still empty. */
   restoreFailedDraft?: (failed: {
     content: string;
     images: LocalCreateTaskImage[];
     documents: ChatDocumentAttachment[];
-    runtimeDelegation: RuntimeDelegationSelection | null;
-    runtimeActions: ChatRuntimeActionSelection[];
-    workflowSelection: ChatWorkflowSelection | null;
   }) => void;
   setMidRunHints: (
     updater: (
@@ -62,7 +45,7 @@ export const sendChatWithOptimistic = async (input: {
   showToast: (message: string) => void;
   refreshList: () => Promise<unknown>;
 }): Promise<void> => {
-  if (!input.wasTyping && !input.workflowArmed) {
+  if (!input.wasTyping) {
     input.setTyping(true);
     input.setStreamProgress({ thinking: "", content: "", commandGroups: [] });
   }
@@ -71,15 +54,12 @@ export const sendChatWithOptimistic = async (input: {
       sendChatMessage(
         input.sessionId,
         // Persist compact display text; paste bodies travel separately for runtime expansion.
-        input.requestContent ?? input.content,
+        input.content,
         input.imagesSnapshot.map(localImageToAttachment),
         input.documentsSnapshot,
         undefined,
-        input.workflowSelectionSnapshot?.workflowId,
-        input.runtimeActionsSnapshot,
         confirmToolInterrupt,
         input.pastesSnapshot,
-        input.workflowArmed,
       ),
     );
     revokeLocalCreateTaskImages(input.imagesSnapshot);
@@ -139,14 +119,8 @@ const restoreFailedSend = (input: Parameters<typeof sendChatWithOptimistic>[0]):
     content: input.content,
     images: input.imagesSnapshot,
     documents: input.documentsSnapshot,
-    runtimeDelegation: input.runtimeDelegationSnapshot ?? null,
-    runtimeActions: input.runtimeActionsSnapshot ?? [],
-    workflowSelection: input.workflowSelectionSnapshot ?? null,
   });
 };
-
-export const workerColorMap = (agents: Agent[]): Record<string, string> =>
-  Object.fromEntries(agents.map((agent) => [agent.name.toLowerCase(), WORKER_COLOR]));
 
 export const useSessionVisibilitySync = (
   activeIdRef: { current: string | null },
@@ -177,18 +151,6 @@ export const effectiveCommandFor = (session: ChatSessionDetail | null): string =
 
 export const anchorForMenu = (menu: MenuState): DOMRect | null =>
   menu.kind === "closed" ? null : menu.anchor;
-
-export const resolveLiveTasks = (
-  tasks: Task[],
-  knownTaskIds?: readonly string[],
-): Array<{ id: string; status: string }> =>
-  tasks.length > 0 ? tasks : (knownTaskIds ?? []).map((id) => ({ id, status: "WORKING" }));
-
-export const resolveKnownTaskIds = (
-  tasks: Task[],
-  knownTaskIds?: readonly string[],
-): readonly string[] | undefined =>
-  tasks.length > 0 ? tasks.map((task) => task.id) : knownTaskIds;
 
 export const emptySessionMessage = (repoCount: number): string =>
   repoCount === 0

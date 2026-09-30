@@ -1,31 +1,28 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { SetStateAction } from "react";
 import type { ChatSessionDetail, ChatSessionSummary } from "../../api/client";
-import {
-  getAllDelegationCards,
-  getDelegationCards,
-  resetDelegationCenter,
-  setDelegationSessionFocus,
-} from "../../components/delegations/delegation-center";
 import { setupDashboardDom } from "../../test/setup-dom";
-import {
+
+setupDashboardDom();
+
+// Radix reads `document` when its module evaluates, so the helpers load after the DOM exists.
+const {
   ACTIVE_RESET_RUNTIME_MESSAGE,
+  bootstrapSessions,
   confirmAndResetRuntimeSession,
   countQueuedSessionMessages,
   handleSessionStreamEvent,
   IDLE_RESET_RUNTIME_MESSAGE,
-  loadSessionBootstrapData,
-  navigateFromAction,
   pickSessionAfterSettle,
   pickSessionToOpen,
   pinSessionOptimistic,
   RESET_RUNTIME_SUCCESS_TOAST,
   scopeMidRunHintsToMessages,
-} from "./sessions-page-helpers";
-import { clearSessionUnreadCount, incrementSessionUnreadCount } from "./use-session-unread-counts";
-import { SESSION_STREAM_EVENT_TYPES } from "./use-sessions-page-effects";
-
-setupDashboardDom();
+} = await import("./sessions-page-helpers");
+const { clearSessionUnreadCount, incrementSessionUnreadCount } = await import(
+  "./use-session-unread-counts"
+);
+const { SESSION_STREAM_EVENT_TYPES } = await import("./use-sessions-page-effects");
 
 class NullEventSource {
   constructor(public url: string) {}
@@ -34,18 +31,6 @@ class NullEventSource {
 }
 
 globalThis.EventSource = NullEventSource as unknown as typeof EventSource;
-
-describe("loadSessionBootstrapData", () => {
-  test("loads the session list without waiting for agents", async () => {
-    const agents = Promise.withResolvers<[]>();
-    const refreshList = mock(async () => [summary("s1")]);
-    const loading = loadSessionBootstrapData(() => agents.promise, refreshList);
-
-    expect(refreshList).toHaveBeenCalledTimes(1);
-    agents.resolve([]);
-    await expect(loading).resolves.toMatchObject({ list: [{ id: "s1" }], agents: [] });
-  });
-});
 
 const summary = (id: string, settled = false): ChatSessionSummary =>
   ({
@@ -74,110 +59,72 @@ const summary = (id: string, settled = false): ChatSessionSummary =>
     createdAt: new Date().toISOString(),
   }) as ChatSessionSummary;
 
-describe("navigateFromAction", () => {
-  test("task with id navigates to task detail", () => {
-    const paths: string[] = [];
-    navigateFromAction(
-      { type: "task", id: "task_1", label: "x", sub: "y", meta: "z" },
-      (path) => paths.push(path),
-      undefined,
-      () => {},
-    );
-    expect(paths).toEqual(["/tasks/task_1"]);
+describe("bootstrapSessions", () => {
+  test("opens the preferred session from the loaded list", async () => {
+    const refreshList = mock(async () => [summary("s1"), summary("s2")]);
+    const loadDetail = mock(async (_id: string) => null);
+
+    await bootstrapSessions(refreshList, loadDetail, "s2");
+
+    expect(refreshList).toHaveBeenCalledTimes(1);
+    expect(loadDetail.mock.calls).toEqual([["s2"]]);
   });
 
-  test("task without id falls back to Pool with toast", () => {
-    const paths: string[] = [];
-    const toasts: string[] = [];
-    navigateFromAction(
-      { type: "task", label: "x", sub: "y", meta: "z" },
-      (path) => paths.push(path),
-      undefined,
-      (msg) => toasts.push(msg),
-    );
-    expect(paths).toEqual(["/pool"]);
-    expect(toasts).toEqual(["Task moved — showing Pool"]);
+  test("opens the newest non-settled session when nothing was opened before", async () => {
+    sessionStorage.clear();
+    const refreshList = mock(async () => [summary("settled", true), summary("live")]);
+    const loadDetail = mock(async (_id: string) => null);
+
+    await bootstrapSessions(refreshList, loadDetail);
+
+    expect(loadDetail.mock.calls).toEqual([["live"]]);
   });
 
-  test("stale task id falls back to Pool when not in knownTaskIds", () => {
-    const paths: string[] = [];
-    const toasts: string[] = [];
-    navigateFromAction(
-      { type: "task", id: "task_gone", label: "x", sub: "y", meta: "z" },
-      (path) => paths.push(path),
-      undefined,
-      (msg) => toasts.push(msg),
-      ["task_other"],
-    );
-    expect(paths).toEqual(["/pool"]);
-    expect(toasts).toEqual(["Task moved — showing Pool"]);
-  });
+  test("opens nothing for an empty session list", async () => {
+    sessionStorage.clear();
+    const loadDetail = mock(async (_id: string) => null);
 
-  test("known task id still navigates to detail", () => {
-    const paths: string[] = [];
-    navigateFromAction(
-      { type: "task", id: "task_1", label: "x", sub: "y", meta: "z" },
-      (path) => paths.push(path),
-      undefined,
-      () => {},
-      ["task_1", "task_2"],
-    );
-    expect(paths).toEqual(["/tasks/task_1"]);
-  });
+    await bootstrapSessions(async () => [], loadDetail);
 
-  test("workerNew opens worker dialog", () => {
-    let opened = false;
-    navigateFromAction(
-      { type: "workerNew", label: "x", sub: "y", meta: "z" },
-      () => {},
-      () => {
-        opened = true;
-      },
-      () => {},
-    );
-    expect(opened).toBe(true);
-  });
-
-  test("session action opens the sibling session id", () => {
-    const opened: string[] = [];
-    navigateFromAction(
-      {
-        type: "session",
-        id: "isess_new",
-        label: "New session",
-        sub: "Same repository",
-        meta: "cleared",
-      },
-      () => {},
-      undefined,
-      () => {},
-      undefined,
-      (id) => opened.push(id),
-    );
-    expect(opened).toEqual(["isess_new"]);
-  });
-
-  test("review actions fall back to Pool after the review page is removed", () => {
-    const paths: string[] = [];
-    const toasts: string[] = [];
-
-    navigateFromAction(
-      { type: "review", label: "Review", sub: "Needs attention", meta: "task" },
-      (path) => paths.push(path),
-      undefined,
-      (message) => toasts.push(message),
-    );
-
-    expect(paths).toEqual(["/pool"]);
-    expect(toasts).toEqual(["Review items are shown in Pool"]);
+    expect(loadDetail).not.toHaveBeenCalled();
   });
 });
 
 describe("handleSessionStreamEvent", () => {
-  test("session stream subscribes to workflow run events", () => {
-    expect(SESSION_STREAM_EVENT_TYPES).toContain("workflow-run-started");
-    expect(SESSION_STREAM_EVENT_TYPES).toContain("workflow-run-step");
-    expect(SESSION_STREAM_EVENT_TYPES).toContain("workflow-run-completed");
+  test("session stream subscribes only to chat session events", () => {
+    expect([...SESSION_STREAM_EVENT_TYPES]).toEqual([
+      "connected",
+      "assistant-typing",
+      "assistant-progress",
+      "assistant-final",
+      "session-updated",
+      "ping",
+    ]);
+  });
+
+  test("events from removed features are ignored", () => {
+    const handlers = {
+      activeIdRef: { current: "s1" },
+      setTyping: mock(() => {}),
+      setStreamProgress: mock(() => {}),
+      setDetail: mock(() => {}),
+      refreshList: mock(async () => {}),
+      reloadDetail: mock(async () => {}),
+    };
+
+    handleSessionStreamEvent(
+      "terminal-line",
+      { sessionId: "s1", text: "$ ls", tone: "cmd" },
+      handlers,
+    );
+    handleSessionStreamEvent("workflow-run-started", { sessionId: "s1", runId: "run_1" }, handlers);
+    handleSessionStreamEvent("delegation-updated", { sessionId: "s1" }, handlers);
+
+    expect(handlers.setTyping).not.toHaveBeenCalled();
+    expect(handlers.setStreamProgress).not.toHaveBeenCalled();
+    expect(handlers.setDetail).not.toHaveBeenCalled();
+    expect(handlers.refreshList).not.toHaveBeenCalled();
+    expect(handlers.reloadDetail).not.toHaveBeenCalled();
   });
 
   test("assistant-typing clears the hint for the message whose run started", () => {
@@ -198,7 +145,6 @@ describe("handleSessionStreamEvent", () => {
         setStreamProgress: mock(() => {}),
         setDetail: mock(() => {}),
         setMidRunHints,
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
       },
     );
@@ -227,7 +173,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping: mock(() => {}),
         setStreamProgress: mock(() => {}),
         setDetail,
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
       },
     );
@@ -244,7 +189,6 @@ describe("handleSessionStreamEvent", () => {
       setTyping: mock(() => {}),
       setStreamProgress: mock(() => {}),
       setDetail: mock(() => {}),
-      setTermLines: mock(() => {}),
       refreshList: mock(async () => {}),
       reloadDetail,
     };
@@ -273,7 +217,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping,
         setStreamProgress,
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
         reloadDetail,
       },
@@ -305,7 +248,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping,
         setStreamProgress,
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
         reloadDetail,
       },
@@ -335,7 +277,6 @@ describe("handleSessionStreamEvent", () => {
       setTyping,
       setStreamProgress,
       setDetail: mock(() => {}),
-      setTermLines: mock(() => {}),
       refreshList: mock(async () => {}),
       reloadDetail,
     };
@@ -368,7 +309,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping,
         setStreamProgress,
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
       },
     );
@@ -399,7 +339,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping: mock(() => {}),
         setStreamProgress,
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
       },
     );
@@ -409,149 +348,6 @@ describe("handleSessionStreamEvent", () => {
       content: "full content",
       commandGroups: [],
     });
-  });
-
-  test("delegation events forward to the delegation center for any session", () => {
-    resetDelegationCenter();
-    localStorage.clear();
-    handleSessionStreamEvent(
-      "delegation-updated",
-      {
-        type: "delegation-updated",
-        sessionId: "other-session",
-        hostRunId: "crun_1",
-        delegation: {
-          id: "del_fwd",
-          kind: "delegation",
-          label: "Codex",
-          runtime: "codex-cli",
-          runtimeAlias: null,
-          runtimeConfigurationId: null,
-          model: "gpt-5.5",
-          reasoning: "high",
-          fastMode: false,
-          status: "active",
-          activity: null,
-          runtimeSessionId: null,
-          logFilePath: "/tmp/del.jsonl",
-          error: null,
-          startedAt: "2026-07-16T10:00:00.000Z",
-          updatedAt: "2026-07-16T10:00:00.000Z",
-          hostRunId: "crun_1",
-          hostRunStatus: "running",
-          sessionId: "other-session",
-          sessionTitle: "Other",
-        },
-      },
-      // The open chat is a different session; cards are app-global.
-      {
-        activeIdRef: { current: "s1" },
-        setTyping: mock(() => {}),
-        setStreamProgress: mock(() => {}),
-        setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
-        refreshList: mock(async () => {}),
-      },
-    );
-
-    expect(getAllDelegationCards().map((card) => card.delegation.id)).toEqual(["del_fwd"]);
-
-    handleSessionStreamEvent(
-      "delegation-progress",
-      {
-        type: "delegation-progress",
-        sessionId: "other-session",
-        delegationId: "del_fwd",
-        thinking: "",
-        content: "live specialist output",
-        commandGroups: [],
-      },
-      {
-        activeIdRef: { current: "s1" },
-        setTyping: mock(() => {}),
-        setStreamProgress: mock(() => {}),
-        setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
-        refreshList: mock(async () => {}),
-      },
-    );
-
-    expect(getAllDelegationCards()[0]?.live?.content).toBe("live specialist output");
-    resetDelegationCenter();
-  });
-
-  test("assistant-final hides background tasks owned by the completed host run", () => {
-    resetDelegationCenter();
-    localStorage.clear();
-    handleSessionStreamEvent(
-      "delegation-updated",
-      {
-        type: "delegation-updated",
-        sessionId: "s1",
-        hostRunId: "crun_1",
-        delegation: {
-          id: "del_bg",
-          kind: "background-task",
-          label: "Typecheck dashboard",
-          runtime: "claude-code",
-          runtimeAlias: null,
-          runtimeConfigurationId: null,
-          model: "claude-opus-4-8",
-          reasoning: "high",
-          fastMode: false,
-          status: "completed",
-          activity: null,
-          runtimeSessionId: null,
-          logFilePath: "/tmp/bg.jsonl",
-          error: null,
-          startedAt: "2026-07-16T10:00:00.000Z",
-          updatedAt: "2026-07-16T10:01:00.000Z",
-          hostRunId: "crun_1",
-          hostRunStatus: "running",
-          sessionId: "s1",
-          sessionTitle: "Host",
-        },
-      },
-      {
-        activeIdRef: { current: "s1" },
-        setTyping: mock(() => {}),
-        setStreamProgress: mock(() => {}),
-        setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
-        refreshList: mock(async () => {}),
-      },
-    );
-    setDelegationSessionFocus("s1");
-    expect(getDelegationCards()).toHaveLength(1);
-
-    handleSessionStreamEvent(
-      "assistant-final",
-      {
-        sessionId: "s1",
-        message: {
-          id: "m1",
-          sessionId: "s1",
-          role: "assistant",
-          content: "Done",
-          action: null,
-          runId: "crun_1",
-          runStatus: "completed",
-          createdAt: "2026-07-16T10:02:00.000Z",
-        },
-      },
-      {
-        activeIdRef: { current: "s1" },
-        setTyping: mock(() => {}),
-        setStreamProgress: mock(() => {}),
-        setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
-        refreshList: mock(async () => {}),
-      },
-    );
-
-    expect(getDelegationCards()).toEqual([]);
-    expect(getAllDelegationCards()[0]?.delegation.hostRunStatus).toBe("completed");
-    resetDelegationCenter();
   });
 
   test("assistant-final with session action opens the new session", () => {
@@ -580,7 +376,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping: mock(() => {}),
         setStreamProgress: mock(() => {}),
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
         onOpenSession: (id) => opened.push(id),
       },
@@ -609,82 +404,11 @@ describe("handleSessionStreamEvent", () => {
         setTyping,
         setStreamProgress,
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
       },
     );
     expect(setTyping).toHaveBeenCalledWith(false);
     expect(setStreamProgress).toHaveBeenCalledWith(null);
-  });
-
-  test("assistant-final stops blinking specialist cards still marked active", () => {
-    resetDelegationCenter();
-    localStorage.clear();
-    handleSessionStreamEvent(
-      "delegation-updated",
-      {
-        type: "delegation-updated",
-        sessionId: "s1",
-        hostRunId: "crun_1",
-        delegation: {
-          id: "del_stuck",
-          kind: "background-task",
-          label: "Reinstall dev dependencies in main workspace, verify lockfile unchanged",
-          runtime: "claude-code",
-          runtimeAlias: null,
-          runtimeConfigurationId: null,
-          model: "fable-5",
-          reasoning: "high",
-          fastMode: false,
-          status: "active",
-          activity: null,
-          runtimeSessionId: null,
-          logFilePath: "/tmp/del.jsonl",
-          error: null,
-          startedAt: "2026-07-16T10:00:00.000Z",
-          updatedAt: "2026-07-16T10:00:00.000Z",
-          hostRunId: "crun_1",
-          hostRunStatus: "running",
-          sessionId: "s1",
-          sessionTitle: "Host",
-        },
-      },
-      {
-        activeIdRef: { current: "s1" },
-        setTyping: mock(() => {}),
-        setStreamProgress: mock(() => {}),
-        setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
-        refreshList: mock(async () => {}),
-      },
-    );
-    expect(getAllDelegationCards()[0]?.delegation.status).toBe("active");
-
-    handleSessionStreamEvent(
-      "assistant-final",
-      {
-        sessionId: "s1",
-        message: {
-          id: "m1",
-          sessionId: "s1",
-          role: "assistant",
-          content: "Done",
-          action: null,
-          createdAt: new Date().toISOString(),
-        },
-      },
-      {
-        activeIdRef: { current: "s1" },
-        setTyping: mock(() => {}),
-        setStreamProgress: mock(() => {}),
-        setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
-        refreshList: mock(async () => {}),
-      },
-    );
-
-    expect(getAllDelegationCards()[0]?.delegation.status).toBe("cancelled");
-    resetDelegationCenter();
   });
 
   test("assistant-final replaces an existing message when its persisted action changes", () => {
@@ -709,7 +433,6 @@ describe("handleSessionStreamEvent", () => {
         setDetail: (value) => {
           update = value;
         },
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
       },
     );
@@ -742,7 +465,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping: mock(() => {}),
         setStreamProgress: mock(() => {}),
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList,
         reloadDetail,
       },
@@ -778,7 +500,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping: mock(() => {}),
         setStreamProgress: mock(() => {}),
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList,
         onMarkSessionRead,
       },
@@ -825,7 +546,6 @@ describe("handleSessionStreamEvent", () => {
         setTyping,
         setStreamProgress: mock(() => {}),
         setDetail: mock(() => {}),
-        setTermLines: mock(() => {}),
         refreshList: mock(async () => {}),
       },
     );

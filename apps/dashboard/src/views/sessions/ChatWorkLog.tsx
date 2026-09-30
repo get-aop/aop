@@ -18,7 +18,6 @@ import { cn } from "@/lib/cn";
 import { Marker } from "@/ui/marker";
 import type { ChatSessionMessage } from "../../api/client";
 import { ChatMarkdown } from "./ChatMarkdown";
-import type { StreamCommandGroup, StreamCommandRow } from "./ChatStreamActivity";
 import {
   activityContentWithoutFinal,
   continuityStatusLabel,
@@ -26,6 +25,19 @@ import {
   hasRunActivity,
 } from "./chat-timeline-model";
 import { useStreamingReveal } from "./use-streaming-reveal";
+
+interface StreamCommandRow {
+  id: string;
+  command: string;
+  detail?: string;
+  status: "running" | "done" | "failed";
+  exitCode?: number | null;
+}
+
+export interface StreamCommandGroup {
+  id: string;
+  commands: StreamCommandRow[];
+}
 
 export const CompletedRunActivity = memo(function CompletedRunActivity({
   message,

@@ -17,7 +17,6 @@
   --color-raised: #1b1b1e; /* bubbles, rows, chips */
   --color-input-surface: #19191c; /* composer, fields */
   --color-overlay: #1d1d21; /* menus, popovers, modals */
-  --color-terminal: #0a0a0b; /* dock only */
 
   /* Borders / fills (white alphas) */
   --color-border: rgb(255 255 255 / 7%);
@@ -118,8 +117,6 @@
   /* Composer mention highlights. */
   --mention-bg: rgb(91 157 255 / 16%);
   --mention-fg: var(--color-running);
-  --mention-control-bg: rgb(227 179 65 / 14%);
-  --mention-control-fg: var(--color-favorite);
 
   /* Chrome dimensions. */
   --sidebar-width: 16rem;
@@ -204,33 +201,6 @@
   50% {
     opacity: 0.35;
   }
-}
-
-/* Armed workflow flame: flickering amber glow until the run completes. */
-@keyframes aop-flame {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-    filter: drop-shadow(0 0 2px var(--action));
-  }
-  30% {
-    opacity: 0.75;
-    transform: scale(0.92) rotate(-4deg);
-  }
-  60% {
-    opacity: 1;
-    transform: scale(1.06) rotate(3deg);
-  }
-  80% {
-    opacity: 0.85;
-    transform: scale(0.96);
-  }
-}
-
-.aop-flame-armed {
-  color: var(--action);
-  animation: aop-flame 1.2s ease-in-out infinite;
 }
 
 /* =========================================================================

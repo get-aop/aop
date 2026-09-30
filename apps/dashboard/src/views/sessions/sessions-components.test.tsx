@@ -1,25 +1,19 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { ComponentProps } from "react";
-import {
-  getAllDelegationCards,
-  ingestDelegationSessionEvent,
-  resetDelegationCenter,
-} from "../../components/delegations/delegation-center";
 import { setupDashboardDom } from "../../test/setup-dom";
-import { TerminalDock } from "../../workspace/terminal-dock";
-import { ChatComposer } from "./ChatComposer";
-import { ChatThread } from "./ChatThread";
-import { RenameSessionModal, SessionToast } from "./SessionModals";
-import { SlashCommandMenu } from "./SlashCommandMenu";
-import {
-  resetSessionStreamProgressStore,
-  setSessionStreamProgress,
-} from "./session-stream-progress";
-import { CHAT_COMMANDS, filterSlashCommands } from "./sessions-runtime";
 
 setupDashboardDom();
 
+// Radix reads `document` when its module evaluates, so components load after the DOM exists.
 const { act, cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
+const { ChatComposer } = await import("./ChatComposer");
+const { ChatThread } = await import("./ChatThread");
+const { RenameSessionModal, SessionToast } = await import("./SessionModals");
+const { SlashCommandMenu } = await import("./SlashCommandMenu");
+const { resetSessionStreamProgressStore, setSessionStreamProgress } = await import(
+  "./session-stream-progress"
+);
+const { CHAT_COMMANDS, filterSlashCommands } = await import("./sessions-runtime");
 
 class NullEventSource {
   constructor(public url: string) {}
@@ -31,44 +25,8 @@ globalThis.EventSource = NullEventSource as unknown as typeof EventSource;
 
 afterEach(() => {
   cleanup();
-  resetDelegationCenter();
   resetSessionStreamProgressStore();
 });
-
-const activeDelegation = (sessionId: string, overrides: Record<string, unknown> = {}) => ({
-  id: "del_thread",
-  kind: "delegation" as const,
-  label: "Codex",
-  runtime: "codex-cli",
-  runtimeAlias: null,
-  runtimeConfigurationId: null,
-  model: "gpt-5.5",
-  reasoning: "high",
-  fastMode: false,
-  status: "active" as const,
-  activity: null,
-  runtimeSessionId: null,
-  logFilePath: "/tmp/delegate.jsonl",
-  error: null,
-  startedAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  hostRunId: "crun_1",
-  hostRunStatus: "running",
-  sessionId,
-  sessionTitle: "Host session",
-  ...overrides,
-});
-
-const seedActiveDelegation = (sessionId: string): void => {
-  act(() => {
-    ingestDelegationSessionEvent({
-      type: "delegation-updated",
-      sessionId,
-      hostRunId: "crun_1",
-      delegation: activeDelegation(sessionId),
-    });
-  });
-};
 
 describe("ChatComposer", () => {
   const baseProps = (): ComponentProps<typeof ChatComposer> => ({
@@ -80,18 +38,11 @@ describe("ChatComposer", () => {
     effort: "medium",
     alias: null,
     connected: true,
-    termOpen: false,
     onRuntimeMenu: mock(() => {}),
     onModelMenu: mock(() => {}),
     onEffortMenu: mock(() => {}),
     onMoreMenu: mock(() => {}),
     onSlashPick: mock(() => {}),
-    termLines: [],
-    termInput: "",
-    onTermInput: mock(() => {}),
-    onTermRun: mock(() => {}),
-    onTermClose: mock(() => {}),
-    repoPath: "/tmp/repo",
   });
 
   test("send disabled when empty; Enter sends; Shift+Enter does not", () => {
@@ -190,12 +141,11 @@ describe("SessionModals", () => {
   });
 });
 
-describe("ChatThread segments + TerminalDock", () => {
-  test("delegations stay out of the thread and live in the Tasks pane (PLAN §7.2)", () => {
-    seedActiveDelegation("isess_delegating");
+describe("ChatThread live activity", () => {
+  test("shows the working row while the assistant types, before any stream content arrives", () => {
     render(
       <ChatThread
-        sessionId="isess_delegating"
+        sessionId="isess_live"
         repoName="aop-mono"
         runtime="claude-code"
         model="claude-opus-4-8"
@@ -203,71 +153,16 @@ describe("ChatThread segments + TerminalDock", () => {
         alias={null}
         messages={[]}
         typing={true}
-        workerNames={[]}
-        workerColors={{}}
-        onAction={() => {}}
       />,
     );
 
-    // No floating specialist card inside the thread.
-    expect(screen.queryByTestId("specialist-checking")).toBeNull();
-    expect(screen.queryByText(/Specialist checking/)).toBeNull();
-    // The run is tracked by the delegation center (Tasks pane data source).
-    expect(getAllDelegationCards()).toHaveLength(1);
-    // The raw specialist stream never renders under the host thread.
     expect(screen.queryByTestId("assistant-thinking")).toBeNull();
     expect(screen.queryByTestId("assistant-stream-content")).toBeNull();
-  });
 
-  test("the host live-activity surface keeps rendering while a delegation runs", () => {
-    seedActiveDelegation("isess_delegating");
-    render(
-      <ChatThread
-        sessionId="isess_delegating"
-        repoName="aop-mono"
-        runtime="claude-code"
-        model="claude-opus-4-8"
-        effort="medium"
-        alias={null}
-        messages={[]}
-        typing={true}
-        workerNames={[]}
-        workerColors={{}}
-        onAction={() => {}}
-      />,
-    );
-
-    // Host turn continues with its normal live activity surface.
     act(() => {
-      setSessionStreamProgress("isess_delegating", {
-        thinking: "",
-        content: "",
-        commandGroups: [],
-      });
+      setSessionStreamProgress("isess_live", { thinking: "", content: "", commandGroups: [] });
     });
     expect(screen.getByText("Working...")).toBeTruthy();
-    expect(screen.queryByTestId("specialist-checking")).toBeNull();
-  });
-
-  test("terminal dock runs on Enter and closes", () => {
-    const onTermRun = mock(() => {});
-    const onTermClose = mock(() => {});
-    render(
-      <TerminalDock
-        ecmd="claude"
-        repoPath="/tmp/repo"
-        branch={null}
-        termLines={[{ text: "$ ls", tone: "cmd" }]}
-        termInput="ls"
-        onTermInput={() => {}}
-        onTermRun={onTermRun}
-        onTermClose={onTermClose}
-      />,
-    );
-    fireEvent.keyDown(screen.getByDisplayValue("ls"), { key: "Enter" });
-    expect(onTermRun).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /close/i }));
-    expect(onTermClose).toHaveBeenCalled();
   });
 });
 

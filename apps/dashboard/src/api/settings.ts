@@ -1,10 +1,8 @@
 import type {
   AopUpdateInstallResult,
   AopUpdateStatus,
-  DashboardSwimlane,
   ExecHostConfig,
   ExecHostUpsert,
-  FactoryHealthSnapshot,
   MarkdownFileContent,
   RuntimeConfigurationModel,
   RuntimeConfigurationModelInput,
@@ -15,14 +13,8 @@ import type {
   RuntimeProfilePatch,
   RuntimeThinkingLevel,
   SSEServerStatus,
-  SSETask,
 } from "@aop/common";
-import type { Task } from "../types";
 import { request } from "./request";
-
-interface StatusResponse extends SSEServerStatus {
-  ready: boolean;
-}
 
 export type ProviderCapabilitySupport = "yes" | "no" | "partial";
 
@@ -64,45 +56,21 @@ export type ProviderUpdateStates = Record<
   ProviderCapabilityEntry["updateState"]
 >;
 
-const toTask = (sseTask: SSETask, repoPath: string): Task => ({
-  ...sseTask,
-  repoPath,
-});
+export interface RegisteredRepo {
+  id: string;
+  name: string | null;
+  path: string;
+}
 
-export const getStatus = async (): Promise<{
-  ready: boolean;
-  swimlanes: DashboardSwimlane[];
-  tasks: Task[];
-  repos: { id: string; name: string | null; path: string }[];
-}> => {
-  const data = await request<StatusResponse>("/status");
-
-  const tasks: Task[] = [];
-  const repos: { id: string; name: string | null; path: string }[] = [];
-
-  for (const repo of data.repos) {
-    repos.push({ id: repo.id, name: repo.name, path: repo.path });
-    for (const task of repo.tasks) {
-      tasks.push(toTask(task, repo.path));
-    }
-  }
-
-  return {
-    ready: data.ready,
-    swimlanes: data.swimlanes,
-    tasks,
-    repos,
-  };
+export const getRepos = async (): Promise<RegisteredRepo[]> => {
+  const data = await request<SSEServerStatus>("/status");
+  return data.repos.map(({ id, name, path }) => ({ id, name, path }));
 };
 
 export const unregisterRepo = async (
   repoId: string,
 ): Promise<{ ok: true; repoId: string; abortedTasks: number; factoryReset: boolean }> => {
   return request(`/repos/${repoId}?force=true`, { method: "DELETE" });
-};
-
-export const getFactoryHealth = async (): Promise<FactoryHealthSnapshot> => {
-  return request<FactoryHealthSnapshot>("/health/details");
 };
 
 export const getUpdateStatus = async (): Promise<AopUpdateStatus> => {
@@ -175,35 +143,6 @@ export const registerRepo = async (path: string): Promise<RegisterRepoResponse> 
   return request<RegisterRepoResponse>("/repos", {
     method: "POST",
     body: JSON.stringify({ path }),
-  });
-};
-
-export interface PauseContextResponse {
-  pauseContext: string | null;
-  signal: string | null;
-}
-
-export const getPauseContext = async (
-  repoId: string,
-  taskId: string,
-): Promise<PauseContextResponse> => {
-  return request<PauseContextResponse>(`/repos/${repoId}/tasks/${taskId}/pause-context`);
-};
-
-export interface ResumeTaskResponse {
-  ok: boolean;
-  taskId: string;
-  message: string;
-}
-
-export const resumeTask = async (
-  repoId: string,
-  taskId: string,
-  input: string,
-): Promise<ResumeTaskResponse> => {
-  return request<ResumeTaskResponse>(`/repos/${repoId}/tasks/${taskId}/resume`, {
-    method: "POST",
-    body: JSON.stringify({ input }),
   });
 };
 

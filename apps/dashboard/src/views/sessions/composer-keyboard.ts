@@ -1,9 +1,8 @@
 import type { ClipboardEvent, KeyboardEvent } from "react";
-import { handleDelegationSuggestionKey } from "./composer-delegation";
 import { handleTypeaheadKeys } from "./composer-typeahead";
 import type { ChatComposerProps } from "./composer-types";
 import { handleSlashCommandKeys } from "./SlashCommandMenu";
-import type { RuntimeDelegationCandidate, TypeaheadItem } from "./typeahead";
+import type { TypeaheadItem } from "./typeahead";
 
 /** True while an IME / dead-key composition is in progress (Enter commits the glyph, not send). */
 export const isComposerComposing = (event: KeyboardEvent<HTMLTextAreaElement>): boolean =>
@@ -38,7 +37,7 @@ export const handleComposerImagePaste = (
 export const clipboardPlainText = (event: ClipboardEvent<HTMLTextAreaElement>): string =>
   event.clipboardData?.getData("text/plain") ?? "";
 
-/** Shared priority: slash menu → typeahead → delegation suggestion → send. */
+/** Shared priority: slash menu → typeahead → send. */
 export const handleComposerKeyPipeline = (args: {
   event: KeyboardEvent<HTMLTextAreaElement>;
   input: string;
@@ -54,10 +53,6 @@ export const handleComposerKeyPipeline = (args: {
   applyTypeahead: (item: TypeaheadItem) => void;
   typeaheadKey: string | null;
   setDismissedTypeahead: (key: string | null) => void;
-  delegationSuggestion: RuntimeDelegationCandidate | null;
-  onRuntimeDelegationChange: ChatComposerProps["onRuntimeDelegationChange"];
-  dismissDelegation: () => void;
-  runtimeConfigurations?: ChatComposerProps["runtimeConfigurations"];
   canSend: boolean;
   onSend: () => void;
 }) => {
@@ -85,13 +80,5 @@ export const handleComposerKeyPipeline = (args: {
     dismiss: () => args.setDismissedTypeahead(args.typeaheadKey),
   });
   if (handled) return;
-  const delegationResult = handleDelegationSuggestionKey({
-    event: args.event,
-    suggestion: args.delegationSuggestion,
-    onArm: (selection) => args.onRuntimeDelegationChange?.(selection),
-    onDismiss: args.dismissDelegation,
-    configurations: args.runtimeConfigurations,
-  });
-  if (delegationResult === "armed") return;
   handleComposerSendKey(args.event, args.canSend, args.onSend);
 };

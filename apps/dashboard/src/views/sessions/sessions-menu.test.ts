@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChatSessionDetail, ChatSessionSummary } from "../../api/client";
-import {
-  buildMenuItems,
-  type MenuItemBuilders,
-  menuMinWidth,
-  parentMenuFor,
-  parentMenuLabel,
-} from "./sessions-menu";
+import { buildMenuItems, type MenuItemBuilders, menuMinWidth } from "./sessions-menu";
 
 const summary = (overrides: Partial<ChatSessionSummary> = {}): ChatSessionSummary => ({
   id: "s1",
@@ -57,10 +51,6 @@ const builders = (overrides: Partial<MenuItemBuilders> = {}): MenuItemBuilders =
   onRuntime: () => {},
   onModel: () => {},
   onEffort: () => {},
-  onControlCommand: () => {},
-  onGoal: () => {},
-
-  onSkills: () => {},
   onSkillPick: () => {},
   ...overrides,
 });
@@ -91,16 +81,6 @@ const sampleRuntimeConfigurations = [
     ],
   },
 ];
-
-describe("submenu parents", () => {
-  test("worker and workflow submenus return to Add; runtime settings has no drill-in parents", () => {
-    expect(parentMenuFor("cworker")).toBe("cadd");
-    expect(parentMenuFor("cworkflow")).toBe("cadd");
-    expect(parentMenuFor("cconfig")).toBeNull();
-    expect(parentMenuFor("cadd")).toBeNull();
-    expect(parentMenuLabel("cadd")).toBe("Add");
-  });
-});
 
 describe("sessmenuItems", () => {
   test("uses the menu target session for pin/rename — not the active one", () => {
@@ -225,43 +205,7 @@ describe("sessmenuItems", () => {
   });
 });
 
-describe("addItems / skillItems", () => {
-  test("hides Skills entry when none discoverable", () => {
-    const items = buildMenuItems(builders({ menu: { kind: "cadd" }, skills: [] }));
-    expect(items.some((i) => i.id === "skills")).toBe(false);
-    expect(items.map((item) => item.id)).toEqual([
-      "attach-image",
-      "attach-file",
-      "worker",
-      "workflow",
-      "goal",
-      "cc-browser-use",
-      "cx-browser-use",
-      "cc-computer-use",
-      "cx-computer-use",
-    ]);
-  });
-
-  test("structures the Add menu as a flat list with separators between groups", () => {
-    const items = buildMenuItems(builders({ menu: { kind: "cadd" }, skills: ["commit"] }));
-    expect(items.map((item) => item.id)).toEqual([
-      "attach-image",
-      "attach-file",
-      "worker",
-      "workflow",
-      "goal",
-      "skills",
-      "cc-browser-use",
-      "cx-browser-use",
-      "cc-computer-use",
-      "cx-computer-use",
-    ]);
-    expect(items.find((item) => item.id === "worker")?.separatorBefore).toBe(true);
-    expect(items.find((item) => item.id === "cc-browser-use")?.separatorBefore).toBe(true);
-    expect(items.find((item) => item.id === "attach-image")?.separatorBefore).toBeUndefined();
-    expect(items.find((item) => item.id === "goal")?.separatorBefore).toBeUndefined();
-  });
-
+describe("skillItems", () => {
   test("lists discovered skills", () => {
     const picked: string[] = [];
     const items = buildMenuItems(
@@ -277,86 +221,11 @@ describe("addItems / skillItems", () => {
     expect(items[0]?.mono).toBe(true);
   });
 
-  test("picks worker and workflow deliberately without cycling", () => {
-    const selected: string[] = [];
-    const workerItems = buildMenuItems(
-      builders({
-        menu: { kind: "cworker" },
-        workers: [
-          { id: "w1", name: "Ada" },
-          { id: "w2", name: "Bob" },
-        ],
-        onWorker: (id) => selected.push(`worker:${id}`),
-      }),
-    );
-    const workflowItems = buildMenuItems(
-      builders({
-        menu: { kind: "cworkflow" },
-        workflows: ["quick-fix"],
-        onWorkflow: (id) => selected.push(`workflow:${id}`),
-      }),
-    );
-
-    workerItems[1]?.onSelect();
-    workflowItems[0]?.onSelect();
-    expect(selected).toEqual(["worker:w2", "workflow:quick-fix"]);
-  });
-
   test("runtime settings do not duplicate CLI control configuration", () => {
     const items = buildMenuItems(builders({ menu: { kind: "cconfig" } }));
 
     expect(items.some((item) => item.id === "browser-control")).toBe(false);
     expect(items.some((item) => item.id === "computer-control")).toBe(false);
-  });
-
-  test("adds each explicit control command from the add menu", () => {
-    const selected: string[] = [];
-    const items = buildMenuItems(
-      builders({
-        menu: { kind: "cadd" },
-        onControlCommand: (command) => selected.push(command),
-      }),
-    );
-
-    const controls = items.filter((item) => item.id.endsWith("-use"));
-    expect(controls.map((item) => item.label)).toEqual([
-      "Claude Browser",
-      "Codex Browser",
-      "Claude Computer",
-      "Codex Computer",
-    ]);
-    expect(controls.every((item) => item.icon && !item.sub)).toBe(true);
-    // Claude vs Codex icons must differ (provider color) even for the same capability.
-    expect(controls[0]?.icon).not.toEqual(controls[1]?.icon);
-    expect(controls[2]?.icon).not.toEqual(controls[3]?.icon);
-    controls.forEach((item) => {
-      item.onSelect();
-    });
-    expect(selected).toEqual([
-      "CC_BROWSER_USE",
-      "CX_BROWSER_USE",
-      "CC_COMPUTER_USE",
-      "CX_COMPUTER_USE",
-    ]);
-  });
-
-  test("runs the CLI GOAL command from the add menu", () => {
-    let picked = false;
-    const items = buildMenuItems(
-      builders({ menu: { kind: "cadd" }, onGoal: () => (picked = true) }),
-    );
-
-    items.find((item) => item.id === "goal")?.onSelect();
-    expect(picked).toBe(true);
-  });
-
-  test("uses distinct icons for Goal and Skills", () => {
-    const items = buildMenuItems(builders({ menu: { kind: "cadd" } }));
-
-    expect(items.find((item) => item.id === "goal")?.label).toBe("Goal");
-    expect(items.find((item) => item.id === "goal")?.icon).not.toEqual(
-      items.find((item) => item.id === "skills")?.icon,
-    );
   });
 });
 
@@ -548,6 +417,7 @@ describe("configurationItems", () => {
 
   test("uses a wider min width for the inlined configuration panel", () => {
     expect(menuMinWidth("cconfig")).toBe(250);
-    expect(menuMinWidth("cadd")).toBe(230);
+    expect(menuMinWidth("cskills")).toBe(220);
+    expect(menuMinWidth("sessmenu")).toBe(190);
   });
 });

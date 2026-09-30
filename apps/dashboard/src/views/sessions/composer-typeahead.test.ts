@@ -4,10 +4,10 @@ import { handleTypeaheadKeys } from "./composer-typeahead";
 import type { TypeaheadItem } from "./typeahead";
 
 const item: TypeaheadItem = {
-  id: "worker",
-  label: "Worker",
-  kind: "worker",
-  insertText: "%Worker ",
+  id: "repo",
+  label: "aop-mono",
+  kind: "repo",
+  insertText: "~aop-mono ",
 };
 
 const event = (key: string) =>

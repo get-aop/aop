@@ -5,13 +5,10 @@ setupDashboardDom();
 
 const mockRefresh = mock(async () => {});
 
-mock.module("./hooks/useTaskEvents", () => ({
-  useTaskEvents: () => ({
-    tasks: [],
-    capacity: { working: 0, max: 5 },
+mock.module("./hooks/useHostEvents", () => ({
+  useHostEvents: () => ({
     repos: [],
     connected: true,
-    initialized: true,
     refresh: mockRefresh,
   }),
 }));
@@ -19,26 +16,12 @@ mock.module("./hooks/useTaskEvents", () => ({
 const createApiResponseBody = (input: RequestInfo | URL) => {
   const url = String(input);
 
-  if (url.endsWith("/api/agents")) {
-    return { agents: [] };
-  }
-
   if (url.includes("/api/chat-sessions")) {
     return { sessions: [] };
   }
 
-  if (url.includes("/api/workflows")) {
-    return { workflows: [] };
-  }
-
   if (url.includes("/api/status")) {
-    return {
-      ready: true,
-      capacity: { working: 0, max: 5 },
-      swimlanes: [],
-      tasks: [],
-      repos: [],
-    };
+    return { ready: true, swimlanes: [], repos: [] };
   }
 
   return {};
@@ -75,6 +58,7 @@ describe("App routing (one page: Sessions)", () => {
     expect(await screen.findByTestId("app-rail")).toBeTruthy();
     expect(screen.getByTestId("rail-new-session")).toBeTruthy();
     expect(screen.getByTestId("rail-footer-settings")).toBeTruthy();
+    expect(screen.queryByTestId("rail-footer-workflows")).toBeNull();
   });
 
   const LEGACY_ROUTES = ["/chat", "/pool", "/workers", "/metrics", "/workflows", "/settings"];
@@ -95,11 +79,10 @@ describe("App routing (one page: Sessions)", () => {
     expect(window.location.pathname).toBe("/");
   });
 
-  test("keeps /tasks/:id as the task detail deep link", async () => {
+  test("redirects the removed /tasks/:id deep link to /", async () => {
     window.history.pushState({}, "", "/tasks/task-1");
     render(<App />);
-    expect(window.location.pathname).toBe("/tasks/task-1");
-    // Task detail is not the sessions workspace.
-    expect(screen.queryByTestId("sessions-page")).toBeNull();
+    expect(await screen.findByTestId("sessions-page")).toBeTruthy();
+    expect(window.location.pathname).toBe("/");
   });
 });

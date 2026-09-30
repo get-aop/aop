@@ -6,7 +6,6 @@ import {
   GitCommitIcon,
   GitPullRequestIcon,
   PanelRightIcon,
-  SquareTerminalIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -32,20 +31,15 @@ export interface SessionWorkspaceTopBarProps {
   onToast: (message: string, link?: SessionToastLink) => void;
   onGitChanged: () => void;
   trailing?: React.ReactNode;
-  termOpen?: boolean;
-  onToggleTerm?: () => void;
   rightPanelOpen?: boolean;
   onToggleRightPanel?: () => void;
   /** Inline title rename (PLAN §6.2 top bar). */
   onRenameTitle?: (title: string) => void;
-  /** Kept for callers while worktree creation lives in the bottom checkout strip. */
-  suggestedWorktreeBranch?: string;
-  onCreateWorktree?: (branchName: string) => Promise<void> | void;
 }
 
 /**
  * Workspace top bar (PLAN §6.2): session title (inline rename); right side:
- * Create-PR split, terminal toggle (⌘J), ⋯ session menu. No branch text here.
+ * Create-PR split, right-panel toggle. No branch text here.
  */
 export const SessionWorkspaceTopBar = ({
   session,
@@ -54,8 +48,6 @@ export const SessionWorkspaceTopBar = ({
   onToast,
   onGitChanged,
   trailing,
-  termOpen,
-  onToggleTerm,
   rightPanelOpen,
   onToggleRightPanel,
   onRenameTitle,
@@ -85,7 +77,6 @@ export const SessionWorkspaceTopBar = ({
         onToast={onToast}
         onGitChanged={onGitChanged}
       />
-      <WorkspaceTerminalAction open={termOpen} onToggle={onToggleTerm} />
       <WorkspaceRightPanelAction open={rightPanelOpen} onToggle={onToggleRightPanel} />
       {trailing}
     </div>
@@ -298,27 +289,6 @@ const SessionSourceControlActions = ({
     </div>
   );
 };
-const WorkspaceTerminalAction = ({ open, onToggle }: { open?: boolean; onToggle?: () => void }) => {
-  if (!onToggle) return null;
-  const label = open ? "Hide terminal (⌘J)" : "Terminal (⌘J)";
-  return (
-    <button
-      type="button"
-      data-testid="topbar-terminal-toggle"
-      aria-label={label}
-      aria-pressed={open}
-      title={label}
-      onClick={onToggle}
-      className={cn(
-        "inline-flex size-7 shrink-0 items-center justify-center rounded-control text-text-subtle transition-colors duration-[120ms] hover:bg-hover hover:text-text",
-        open && "bg-active text-text",
-      )}
-    >
-      <SquareTerminalIcon className="size-4" strokeWidth={1.7} />
-    </button>
-  );
-};
-
 const WorkspaceRightPanelAction = ({
   open,
   onToggle,

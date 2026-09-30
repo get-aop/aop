@@ -1,4 +1,3 @@
-import type { ChatActionPayload } from "@aop/common";
 import { ChevronDownIcon } from "lucide-react";
 import {
   Fragment,
@@ -13,13 +12,13 @@ import {
 import { MarkerSeparator } from "@/ui/marker";
 import { MessageScroller } from "@/ui/message-scroller";
 import type { ChatSessionMessage } from "../../api/client";
-import type { StreamCommandGroup } from "./ChatStreamActivity";
 import { ChatTimelineMinimap } from "./ChatTimelineMinimap";
 import {
   AssistantTimelineRow,
   LiveAssistantTimelineRow,
   UserTimelineRow,
 } from "./ChatTimelineRows";
+import type { StreamCommandGroup } from "./ChatWorkLog";
 import {
   buildTimelineMinimapItems,
   HISTORY_MESSAGE_BATCH,
@@ -29,8 +28,6 @@ import {
 } from "./chat-timeline-model";
 import { useSessionStreamProgress } from "./session-stream-progress";
 
-const NO_WORKERS: Array<{ id: string; name: string }> = [];
-const NO_TASKS: Array<{ id: string; status: string; assignedAgentId?: string | null }> = [];
 const NO_HINTS: Record<string, "queued" | "steered"> = {};
 const NOOP = () => {};
 
@@ -51,12 +48,7 @@ interface ChatThreadProps {
     content: string;
     commandGroups?: StreamCommandGroup[];
   } | null;
-  workerNames: string[];
-  workers?: Array<{ id: string; name: string }>;
-  workerColors: Record<string, string>;
-  onAction: (action: ChatActionPayload) => void;
-  onNavigate?: (path: string) => void;
-  tasks?: Array<{ id: string; status: string; assignedAgentId?: string | null }>;
+  onOpenSession?: (sessionId: string) => void;
   onRetryFresh?: (runId: string) => void;
   assistantFooter?: ReactNode;
 }
@@ -70,12 +62,7 @@ export const ChatThread = memo(function ChatThread({
   midRunHints = NO_HINTS,
   typing,
   streamProgress: controlledStreamProgress,
-  workerNames,
-  workers = NO_WORKERS,
-  workerColors,
-  onAction,
-  onNavigate = NOOP,
-  tasks = NO_TASKS,
+  onOpenSession = NOOP,
   onRetryFresh,
   assistantFooter,
 }: ChatThreadProps) {
@@ -145,8 +132,6 @@ export const ChatThread = memo(function ChatThread({
         <UserTimelineRow
           message={prepared.message}
           midRunHint={prepared.midRunHint}
-          workerNames={workerNames}
-          workerColors={workerColors}
           repoPath={repoPath}
           onOpenFile={onOpenFile}
         />
@@ -154,11 +139,7 @@ export const ChatThread = memo(function ChatThread({
         <AssistantTimelineRow
           message={prepared.message}
           previousUserCreatedAt={prepared.previousUserCreatedAt}
-          sessionId={sessionId}
-          onAction={onAction}
-          onNavigate={onNavigate}
-          tasks={tasks}
-          workers={workers}
+          onOpenSession={onOpenSession}
           repoPath={repoPath}
           onOpenFile={onOpenFile}
           canRetry={prepared.canRetry}

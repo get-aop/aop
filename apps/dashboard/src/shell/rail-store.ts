@@ -21,7 +21,6 @@ export interface RailProps {
   settled: ChatSessionSummary[];
   activeSessionId: string | null;
   connected: boolean;
-  workflowCount: number;
   onSelect: (sessionId: string) => void;
   onNewSession: (repoId: string) => void;
   onNewTask: () => void;

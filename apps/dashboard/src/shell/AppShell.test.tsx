@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { ChatSessionSummary } from "../api/client";
 import { setupDashboardDom } from "../test/setup-dom";
-import { resetDialogs } from "./dialog-store";
+import { openSettingsDialog, resetDialogs } from "./dialog-store";
 import { type RailProps, resetRailProps, setRailProps } from "./rail-store";
 
 setupDashboardDom();
 
-const { cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
 const { AppShell } = await import("./AppShell");
 
 const summary = (overrides: Partial<ChatSessionSummary>): ChatSessionSummary =>
@@ -50,7 +50,6 @@ const railProps = (): RailProps =>
     settled: [],
     activeSessionId: null,
     connected: true,
-    workflowCount: 2,
     onSelect: mock(() => {}),
     onNewSession: mock(() => {}),
     onNewTask: mock(() => {}),
@@ -75,7 +74,7 @@ afterEach(() => {
 /** The rail renders session titles too, so palette assertions must be scoped. */
 const openPalette = async (): Promise<HTMLElement> => {
   render(
-    <AppShell connection="idle" onReposChanged={() => {}}>
+    <AppShell connected onReposChanged={() => {}}>
       <div />
     </AppShell>,
   );
@@ -104,5 +103,22 @@ describe("AppShell command palette", () => {
     const palette = await openPalette();
 
     expect(within(palette).getByText("Fix tests")).toBeTruthy();
+  });
+});
+
+describe("AppShell settings dialog", () => {
+  test("lists the surviving sections and no Workflows section", async () => {
+    render(
+      <AppShell connected onReposChanged={() => {}}>
+        <div />
+      </AppShell>,
+    );
+    act(() => openSettingsDialog("general"));
+
+    const dialog = await screen.findByTestId("settings-dialog");
+    for (const section of ["general", "repositories", "runtimes", "exec-hosts", "about"]) {
+      expect(within(dialog).getByTestId(`settings-nav-${section}`)).toBeTruthy();
+    }
+    expect(within(dialog).queryByTestId("settings-nav-workflows")).toBeNull();
   });
 });

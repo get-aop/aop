@@ -11,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/ui/alert-dialog";
-import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import {
   DropdownMenu,
@@ -20,22 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/ui/empty";
-import { getStatus, unregisterRepo } from "../api/client";
+import { getRepos, type RegisteredRepo, unregisterRepo } from "../api/client";
 import { openAttachRepoDialog } from "../shell/dialog-store";
-
-interface RepositorySummary {
-  id: string;
-  name: string | null;
-  path: string;
-}
-
-const countByRepo = (items: Array<{ repoId: string }>): Record<string, number> => {
-  const counts: Record<string, number> = {};
-  for (const item of items) {
-    counts[item.repoId] = (counts[item.repoId] ?? 0) + 1;
-  }
-  return counts;
-};
 
 export const buildUnregisterRepoWarning = (repoName: string, isLastRepo: boolean): string =>
   `This removes ${repoName} from AOP and deletes its data${
@@ -44,17 +29,14 @@ export const buildUnregisterRepoWarning = (repoName: string, isLastRepo: boolean
 
 /** Settings §Repositories — run-row style rows + Attach repository. */
 export const SettingsRepositories = () => {
-  const [repos, setRepos] = useState<RepositorySummary[] | null>(null);
-  const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
+  const [repos, setRepos] = useState<RegisteredRepo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [unregisterTarget, setUnregisterTarget] = useState<RepositorySummary | null>(null);
+  const [unregisterTarget, setUnregisterTarget] = useState<RegisteredRepo | null>(null);
 
   const reload = useCallback(async () => {
     setError(null);
     try {
-      const status = await getStatus();
-      setRepos(status.repos);
-      setTaskCounts(countByRepo(status.tasks));
+      setRepos(await getRepos());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to load repositories");
       setRepos([]);
@@ -65,7 +47,7 @@ export const SettingsRepositories = () => {
     void reload();
   }, [reload]);
 
-  const runUnregister = async (repo: RepositorySummary) => {
+  const runUnregister = async (repo: RegisteredRepo) => {
     setUnregisterTarget(null);
     try {
       const result = await unregisterRepo(repo.id);
@@ -110,7 +92,6 @@ export const SettingsRepositories = () => {
             <span className="hidden max-w-56 truncate font-mono text-[11px] text-text-subtle sm:block">
               {repo.path}
             </span>
-            <Badge variant="count">{taskCounts[repo.id] ?? 0}</Badge>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

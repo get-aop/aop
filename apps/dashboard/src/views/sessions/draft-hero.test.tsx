@@ -9,7 +9,7 @@ const { DraftSuggestions, DraftWordmark } = await import("./draft-hero");
 afterEach(cleanup);
 
 describe("draft hero", () => {
-  test("renders the wordmark and the four suggestion chips", () => {
+  test("renders the wordmark and the three suggestion chips", () => {
     render(
       <div>
         <DraftWordmark />
@@ -21,15 +21,17 @@ describe("draft hero", () => {
     expect(screen.getByText("Implement a feature")).toBeTruthy();
     expect(screen.getByText("Review a pull request")).toBeTruthy();
     expect(screen.getByText("Debug failing tests")).toBeTruthy();
-    expect(screen.getByText("Run “Ship it”")).toBeTruthy();
   });
 
-  test("routes each suggestion by id", () => {
-    const onSuggestion = mock((_id: string) => {});
+  test("passes the clicked suggestion as the prompt", () => {
+    const onSuggestion = mock((_prompt: string) => {});
     render(<DraftSuggestions onSuggestion={onSuggestion} />);
 
     fireEvent.click(screen.getByText("Debug failing tests"));
-    fireEvent.click(screen.getByText("Run “Ship it”"));
-    expect(onSuggestion.mock.calls.map((call) => call[0])).toEqual(["debug", "ship-it"]);
+    fireEvent.click(screen.getByText("Review a pull request"));
+    expect(onSuggestion.mock.calls.map((call) => call[0])).toEqual([
+      "Debug failing tests",
+      "Review a pull request",
+    ]);
   });
 });

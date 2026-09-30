@@ -54,7 +54,6 @@ const railProps = (overrides: Partial<RailProps> = {}): RailProps => ({
   settled: [summary({ id: "s9", title: "Old thread" })],
   activeSessionId: null,
   connected: true,
-  workflowCount: 2,
   onSelect: mock(() => {}),
   onNewSession: mock(() => {}),
   onNewTask: mock(() => {}),
@@ -63,11 +62,11 @@ const railProps = (overrides: Partial<RailProps> = {}): RailProps => ({
   ...overrides,
 });
 
-const renderRail = (props: RailProps) => {
+const renderRail = (props: RailProps, connected = true) => {
   setRailProps(props);
   return render(
     <SidebarProvider>
-      <AppRail connection="idle" onOpenCommand={() => {}} />
+      <AppRail connected={connected} onOpenCommand={() => {}} />
     </SidebarProvider>,
   );
 };
@@ -213,11 +212,24 @@ describe("AppRail", () => {
     expect(await screen.findByText("Old thread")).toBeTruthy();
   });
 
-  test("footer shows workflows count and settings entry", () => {
+  test("footer offers Settings and no Workflows entry", () => {
     renderRail(railProps());
 
-    expect(screen.getByTestId("rail-footer-workflows").textContent).toContain("2");
     expect(screen.getByTestId("rail-footer-settings").textContent).toContain("Settings");
+    expect(screen.queryByTestId("rail-footer-workflows")).toBeNull();
+  });
+
+  test("footer status follows the host connection", () => {
+    renderRail(railProps(), false);
+
+    expect(screen.getByTestId("rail-footer").textContent).toContain("Disconnected");
+    expect(screen.getByTestId("rail-footer-status-dot").className).toContain("bg-blocked");
+
+    cleanup();
+    renderRail(railProps(), true);
+
+    expect(screen.getByTestId("rail-footer").textContent).toContain("Connected");
+    expect(screen.getByTestId("rail-footer-status-dot").className).toContain("bg-ok");
   });
 
   test("new session: single-repo scope goes straight into the draft", () => {

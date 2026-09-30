@@ -1,8 +1,5 @@
-import type { TerminalLine } from "@aop/common";
-
 import type { ChatSessionDetail } from "../../api/client";
-import { ChecksPane, LogPane } from "../../workspace/right-panel";
-import { TasksPane } from "../../workspace/tasks-pane";
+import { ChecksPane } from "../../workspace/right-panel";
 import { SessionDiffPanel } from "./SessionDiffPanel";
 import type { SessionToastLink } from "./SessionModals";
 
@@ -13,7 +10,6 @@ export const RightPanelTabContent = ({
   showToast,
   diffRefreshKey,
   pullRequest,
-  termLines,
 }: {
   tab: import("../../workspace/right-panel").RightPanelTab;
   active: ChatSessionDetail | null;
@@ -21,10 +17,7 @@ export const RightPanelTabContent = ({
   showToast: (message: string, link?: SessionToastLink) => void;
   diffRefreshKey: number;
   pullRequest: import("./use-session-pull-request").SessionPullRequestController | null;
-  termLines: TerminalLine[];
 }) => {
-  if (tab === "tasks") return <TasksPane />;
-  if (tab === "log") return <LogPane lines={termLines} />;
   if (tab === "checks") {
     return (
       <ChecksPane
@@ -50,5 +43,3 @@ export const RightPanelTabContent = ({
     />
   );
 };
-
-/** The resizable workspace: center ⇄ right panel, then the terminal dock. */

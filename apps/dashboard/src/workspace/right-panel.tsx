@@ -1,24 +1,19 @@
-import type { TerminalLine } from "@aop/common";
 import {
   CircleCheckIcon,
   CircleIcon,
   ClockIcon,
   FileDiffIcon,
-  ListChecksIcon,
-  ScrollTextIcon,
   ShieldCheckIcon,
   XIcon,
 } from "lucide-react";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/ui/empty";
 import { Tabs, TabsList, TabsTrigger } from "@/ui/tabs";
 
-export type RightPanelTab = "diff" | "tasks" | "checks" | "log";
+export type RightPanelTab = "diff" | "checks";
 
 const TABS: Array<{ id: RightPanelTab; label: string; icon: typeof FileDiffIcon }> = [
   { id: "diff", label: "Diff", icon: FileDiffIcon },
-  { id: "tasks", label: "Tasks", icon: ListChecksIcon },
   { id: "checks", label: "Checks", icon: ShieldCheckIcon },
-  { id: "log", label: "Log", icon: ScrollTextIcon },
 ];
 
 /**
@@ -30,13 +25,11 @@ export const RightPanel = ({
   tab,
   onTabChange,
   onClose,
-  tasksBadge,
   children,
 }: {
   tab: RightPanelTab;
   onTabChange: (tab: RightPanelTab) => void;
   onClose: () => void;
-  tasksBadge?: number;
   children: (tab: RightPanelTab) => React.ReactNode;
 }) => (
   <div data-testid="right-panel" className="flex h-full min-h-0 min-w-0 flex-col">
@@ -51,14 +44,6 @@ export const RightPanel = ({
             <TabsTrigger key={id} value={id} className="relative gap-1.5 px-2.5">
               <Icon className="size-3.5" strokeWidth={1.7} />
               {label}
-              {id === "tasks" && tasksBadge ? (
-                <span
-                  data-testid="tasks-tab-badge"
-                  className="rounded-full bg-text px-1.5 text-[10px] font-semibold text-canvas"
-                >
-                  {tasksBadge}
-                </span>
-              ) : null}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -160,38 +145,4 @@ const checkDuration = (startedAt: string | null, completedAt: string | null): st
   const seconds = Math.round(total / 1000);
   if (seconds < 60) return `${seconds}s`;
   return `${Math.floor(seconds / 60)}m${seconds % 60}s`;
-};
-
-/** Log pane: the runtime/work feed (terminal lines with their tones). */
-export const LogPane = ({ lines }: { lines: TerminalLine[] }) => {
-  if (lines.length === 0) {
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>No log entries</EmptyTitle>
-          <EmptyDescription>Runtime output will appear here.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
-  return (
-    <div data-testid="log-pane" className="flex flex-col gap-1 p-3">
-      {lines.map((line, index) => (
-        <div
-          key={`${index}-${line.text}`}
-          className="whitespace-pre-wrap break-words font-mono text-[11.5px] leading-5"
-          style={{
-            color:
-              line.tone === "cmd"
-                ? "var(--color-running)"
-                : line.tone === "meta"
-                  ? "var(--color-text-subtle)"
-                  : "var(--color-text)",
-          }}
-        >
-          {line.text}
-        </div>
-      ))}
-    </div>
-  );
 };

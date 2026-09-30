@@ -1,12 +1,5 @@
-import { CONTROL_COMMANDS } from "@aop/common";
 import type { ClipboardEvent, KeyboardEvent } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import {
-  caretAfterArmedDelegation,
-  defaultDelegationSelection,
-  useDelegationSuggestion,
-  withDelegationHighlightTokens,
-} from "./composer-delegation";
 import { type MentionToken, parseMentionTokens } from "./composer-highlights";
 import {
   clipboardPlainText,
@@ -20,11 +13,6 @@ import {
   insertTokenAtSelection,
   shouldCollapsePaste,
 } from "./composer-paste-collapse";
-import {
-  addRuntimeAction,
-  createRuntimeAction,
-  quickActionIntent,
-} from "./composer-runtime-actions";
 import { resizeComposerInput } from "./composer-shell";
 import type { ChatComposerProps } from "./composer-types";
 import { applySlashPickToDraft } from "./SlashCommandMenu";
@@ -44,8 +32,6 @@ export const useChatComposerState = (props: ChatComposerProps) => {
     onPastesChange,
     onPasteImages,
     attachDisabled = false,
-    workers = [],
-    workflows = [],
     repos = [],
   } = props;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -55,29 +41,9 @@ export const useChatComposerState = (props: ChatComposerProps) => {
   const [dismissedTypeahead, setDismissedTypeahead] = useState<string | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const [dismissedSlashKey, setDismissedSlashKey] = useState<string | null>(null);
-  const [delegationConfirmed, setDelegationConfirmed] = useState(false);
-  const [pendingRuntimeAction, setPendingRuntimeAction] = useState<
-    import("@aop/common").ChatRuntimeActionIntent | null
-  >(null);
   const previousInputRef = useRef(input);
   const localInputEditRef = useRef(false);
   const isComposingRef = useRef(false);
-  const previousDelegationKeyRef = useRef<string | null>(null);
-
-  // New armed selection opens the config chip (not yet confirmed).
-  useEffect(() => {
-    const selection = props.runtimeDelegation;
-    if (!selection) {
-      previousDelegationKeyRef.current = null;
-      setDelegationConfirmed(false);
-      return;
-    }
-    const key = `${selection.id}:${selection.tokenStart ?? ""}:${selection.tokenEnd ?? ""}`;
-    if (previousDelegationKeyRef.current !== key) {
-      previousDelegationKeyRef.current = key;
-      setDelegationConfirmed(false);
-    }
-  }, [props.runtimeDelegation]);
 
   useLayoutEffect(() => {
     if (previousInputRef.current === input) return;
@@ -92,11 +58,10 @@ export const useChatComposerState = (props: ChatComposerProps) => {
   }, [input]);
   const ecmd = getEffectiveCmd(runtime, alias);
   const canSend =
-    !props.workflowRun &&
-    (!!input.trim() ||
-      images.length > 0 ||
-      documents.length > 0 ||
-      (props.reviewComments?.length ?? 0) > 0);
+    !!input.trim() ||
+    images.length > 0 ||
+    documents.length > 0 ||
+    (props.reviewComments?.length ?? 0) > 0;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when draft text changes so height tracks content
   useLayoutEffect(() => {
@@ -117,45 +82,15 @@ export const useChatComposerState = (props: ChatComposerProps) => {
   }, [props.assistantActive, props.aborting, props.onAbort]);
 
   const matchedTypeahead = useMemo(
-    () =>
-      matchTypeahead({
-        draft: input,
-        caret,
-        workers,
-        workflows,
-        repos,
-        runtimeConfigurations: props.runtimeConfigurations,
-      }),
-    [input, caret, workers, workflows, repos, props.runtimeConfigurations],
+    () => matchTypeahead({ draft: input, caret, repos }),
+    [input, caret, repos],
   );
   const typeaheadKey = matchedTypeahead
     ? `${matchedTypeahead.kind}:${matchedTypeahead.tokenStart}`
     : null;
   const typeahead = activeTypeahead(matchedTypeahead, typeaheadKey, dismissedTypeahead);
-  const mentionTokens = useMemo(
-    () =>
-      parseMentionTokens(input, {
-        workers,
-        workflows: workflows.map((workflow) =>
-          typeof workflow === "string" ? workflow : workflow.name,
-        ),
-        repos,
-      }),
-    [input, workers, workflows, repos],
-  );
-  const controlCommand = findControlCommand(mentionTokens);
-  const delegation = useDelegationSuggestion(
-    input,
-    caret,
-    props.runtimeDelegation,
-    props.runtimeConfigurations,
-  );
   const highlightTokens = useMemo(() => {
-    const mentionAndDelegation = withDelegationHighlightTokens(mentionTokens, {
-      suggestion: delegation.suggestion,
-      selection: props.runtimeDelegation ?? null,
-      draft: input,
-    });
+    const mentionTokens = parseMentionTokens(input, { repos });
     const pasteTokens: MentionToken[] = findPasteTokenRanges(input).map((range) => ({
       kind: "paste",
       start: range.start,
@@ -163,8 +98,8 @@ export const useChatComposerState = (props: ChatComposerProps) => {
       id: `paste-${range.index}`,
       label: input.slice(range.start, range.end),
     }));
-    return [...mentionAndDelegation, ...pasteTokens];
-  }, [mentionTokens, delegation.suggestion, props.runtimeDelegation, input]);
+    return [...mentionTokens, ...pasteTokens];
+  }, [input, repos]);
 
   const restoreCaret = (nextCaret: number) => {
     requestAnimationFrame(() => {
@@ -175,95 +110,25 @@ export const useChatComposerState = (props: ChatComposerProps) => {
     });
   };
 
-  /** Collapse config to the yellow summary and put the caret back after the runtime word. */
-  const confirmDelegationConfig = () => {
-    setDelegationConfirmed(true);
-    const selection = props.runtimeDelegation;
-    if (!selection) {
-      restoreCaret(caret);
-      return;
-    }
-    const nextCaret = caretAfterArmedDelegation(input, selection);
-    setCaret(nextCaret);
-    restoreCaret(nextCaret);
-  };
-
   const applyTypeahead = (item: TypeaheadItem) => {
     if (!typeahead) return;
-    if (
-      item.kind === "workflow" &&
-      props.runtimeActions?.length &&
-      !window.confirm("Replace the current Quick Actions with this workflow?")
-    ) {
-      return;
-    }
     const next = applyTypeaheadInsert(input, typeahead.tokenStart, caret, item.insertText);
     localInputEditRef.current = true;
     onInput(next.draft);
     setCaret(next.caret);
     setTypeaheadIndex(-1);
-    applyRuntimeTypeahead(item, typeahead.tokenStart);
-    applyWorkflowTypeahead(item);
     restoreCaret(next.caret);
   };
 
-  const applyRuntimeTypeahead = (item: TypeaheadItem, tokenStart: number) => {
-    if (item.kind !== "runtime" || !item.runtimeId) return;
-    const inserted = item.insertText.replace(/\s+$/, "");
-    props.onRuntimeDelegationChange?.(
-      defaultDelegationSelection(
-        item.runtimeId,
-        { start: tokenStart, end: tokenStart + inserted.length },
-        props.runtimeConfigurations,
-        item.runtimeConfigurationId,
-      ),
-    );
-    setDelegationConfirmed(false);
-  };
-
-  const applyWorkflowTypeahead = (item: TypeaheadItem) => {
-    if (item.kind !== "workflow" || !item.workflow) return;
-    props.onRuntimeActionsChange?.([]);
-    props.onWorkflowSelectionChange?.({
-      workflowId: item.workflow.id,
-      name: item.workflow.name,
-      stepCount: item.workflow.stepCount,
-      stepTypes: item.workflow.stepTypes,
-      steps: item.workflow.steps,
-    });
-  };
-
   const applySlashPick = (command: string) => {
-    const intent = quickActionIntent(command);
-    const next = applySlashPickToDraft(input, caret, intent ? "" : command);
+    const next = applySlashPickToDraft(input, caret, command);
     localInputEditRef.current = true;
     onInput(next.draft);
     setCaret(next.caret);
     setSlashIndex(0);
     // Parent may still treat this as a full draft write (SessionsPage setInput).
     props.onSlashPick(next.draft);
-    if (intent) setPendingRuntimeAction(intent);
     restoreCaret(next.caret);
-  };
-
-  const applyRuntimeActionConfiguration = (
-    configuration: import("@aop/common").RuntimeConfigurationProvider,
-  ) => {
-    if (!pendingRuntimeAction || !props.onRuntimeActionsChange) return;
-    if (
-      props.workflowSelection &&
-      !window.confirm("Replace the selected workflow with Quick Actions?")
-    ) {
-      setPendingRuntimeAction(null);
-      restoreCaret(caret);
-      return;
-    }
-    const action = createRuntimeAction(pendingRuntimeAction, configuration);
-    if (!action) return;
-    props.onWorkflowSelectionChange?.(null);
-    props.onRuntimeActionsChange(addRuntimeAction(props.runtimeActions ?? [], action));
-    setPendingRuntimeAction(null);
-    restoreCaret(caret);
   };
 
   // Dismiss is scoped to the active slash token identity, not the whole draft.
@@ -287,10 +152,6 @@ export const useChatComposerState = (props: ChatComposerProps) => {
       applyTypeahead,
       typeaheadKey,
       setDismissedTypeahead,
-      delegationSuggestion: delegation.suggestion,
-      onRuntimeDelegationChange: props.onRuntimeDelegationChange,
-      dismissDelegation: delegation.dismiss,
-      runtimeConfigurations: props.runtimeConfigurations,
       canSend,
       onSend,
     });
@@ -305,19 +166,11 @@ export const useChatComposerState = (props: ChatComposerProps) => {
     slashDismissed,
     typeahead,
     highlightTokens,
-    controlCommand,
-    delegation,
-    delegationConfirmed,
-    setDelegationConfirmed,
-    confirmDelegationConfig,
     textareaRef,
     localInputEditRef,
     isComposingRef,
     ecmd,
     canSend,
-    pendingRuntimeAction,
-    setPendingRuntimeAction,
-    applyRuntimeActionConfiguration,
     applyTypeahead,
     applySlashPick,
     handleKey,
@@ -344,8 +197,3 @@ export const useChatComposerState = (props: ChatComposerProps) => {
 
 const activeTypeahead = <T>(match: T, key: string | null, dismissed: string | null): T | null =>
   key === dismissed ? null : match;
-
-const findControlCommand = (tokens: MentionToken[]) =>
-  CONTROL_COMMANDS.find((command) =>
-    tokens.some((token) => token.kind === "control" && token.id === command.id),
-  );

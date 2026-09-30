@@ -9,7 +9,7 @@ AOP is a local control plane: `apps/local-server` (Bun + Hono + SQLite) is the s
 
 Read `features/README.md` before driving; the matching feature file is the recipe. A proof that drives one convenient entry point is incomplete when the map lists others.
 
-Surface: the dashboard (`/` Sessions, `/tasks/:id`, `/settings`) and the CLI. The Electron app in `apps/desktop` is not covered.
+Surface: the dashboard (`/` Sessions, with Settings as a dialog) and the CLI. The Electron app in `apps/desktop` is not covered.
 
 All commands run from the repo root. `S=.claude/skills/verify/scripts`.
 

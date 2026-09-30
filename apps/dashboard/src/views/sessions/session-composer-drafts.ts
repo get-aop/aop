@@ -1,10 +1,4 @@
-import type {
-  ChatDocumentAttachment,
-  ChatRuntimeActionSelection,
-  ChatWorkflowSelection,
-  ControlCommandSelection,
-  RuntimeDelegationSelection,
-} from "@aop/common";
+import type { ChatDocumentAttachment } from "@aop/common";
 import type { LocalCreateTaskImage } from "../../components/create-task-images";
 import type { ComposerPasteEntry } from "./composer-paste-collapse";
 
@@ -14,12 +8,6 @@ export interface SessionComposerDraft {
   documents: ChatDocumentAttachment[];
   /** Large clipboard pastes collapsed to `[paste #N +lines]` tokens in `input`. */
   pastes: ComposerPasteEntry[];
-  runtimeDelegation: RuntimeDelegationSelection | null;
-  controlSelection: ControlCommandSelection | null;
-  runtimeActions: ChatRuntimeActionSelection[];
-  workflowSelection: ChatWorkflowSelection | null;
-  /** Fire toggle: the next message runs through the selected workflow. */
-  workflowArmed: boolean;
 }
 
 const drafts = new Map<string, SessionComposerDraft>();
@@ -47,9 +35,4 @@ const emptyDraft = (): SessionComposerDraft => ({
   images: [],
   documents: [],
   pastes: [],
-  runtimeDelegation: null,
-  controlSelection: null,
-  runtimeActions: [],
-  workflowSelection: null,
-  workflowArmed: false,
 });

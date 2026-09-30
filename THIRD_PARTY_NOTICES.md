@@ -23,7 +23,6 @@ presentation — includes code copied and adapted from T3 Code.
   - `apps/dashboard/src/views/sessions/ChatWorkLog.tsx`
   - `apps/dashboard/src/views/sessions/SessionChangedFilesCard.tsx`
   - `apps/dashboard/src/views/sessions/changed-files-tree.ts`
-  - `apps/dashboard/src/views/sessions/composer-icons.tsx`
   - `apps/dashboard/src/views/sessions/sessions-page-git.tsx`
   - `apps/dashboard/src/views/sessions/sessions-page-view.tsx`
   - Historical copies of the same presentation live under

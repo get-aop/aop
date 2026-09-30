@@ -52,8 +52,6 @@ interface ComposerFooterProps {
   supportsFastMode: boolean;
   fastMode: boolean;
   plusMenu?: ComposerFooterPlusMenu;
-  /** Workflow chip slot (PLAN §6.4) rendered after the model picker. */
-  workflowChip?: React.ReactNode;
   onModelChange?: (model: string, runtimeConfigurationId?: string) => void;
   onEffortChange?: (effort: string) => void;
   onAccessModeChange?: (mode: ChatRuntimeAccessMode) => void;
@@ -106,7 +104,6 @@ export function ComposerFooter(props: ComposerFooterProps) {
           locked={props.modelLocked}
           onModelChange={props.onModelChange}
         />
-        {props.workflowChip}
         {compact ? (
           <CompactControlsMenu {...props} />
         ) : (

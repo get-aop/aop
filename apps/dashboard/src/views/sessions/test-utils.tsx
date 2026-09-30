@@ -11,8 +11,5 @@ export const chatThreadProps = (
   alias: null,
   messages: [],
   typing: false,
-  workerNames: [],
-  workerColors: {},
-  onAction: () => {},
   ...overrides,
 });

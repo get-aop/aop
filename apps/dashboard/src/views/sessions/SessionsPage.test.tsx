@@ -69,26 +69,6 @@ const getSessionGitStatus = mock(async () => ({
   pr: null,
   prState: null,
 }));
-const listSessionGitBranches = mock(async () => ({
-  branches: [
-    {
-      name: locationBranch,
-      isCurrent: true,
-      isDefault: locationBranch === "main",
-      worktreePath: "/tmp/aop-mono",
-    },
-    {
-      name: "feature/branch-picker",
-      isCurrent: false,
-      isDefault: false,
-      worktreePath: null,
-    },
-  ],
-}));
-const switchSessionGitBranch = mock(async (_sessionId: string, branch: string) => {
-  locationBranch = branch;
-  return { branch, workspacePath: "/tmp/aop-mono/.worktrees/branch-picker" };
-});
 const sampleDiffFile = {
   path: "changed.ts",
   oldPath: null,
@@ -157,7 +137,6 @@ const updateChatSession = mock(
     const target = sessions.find((item) => item.id === id);
     if (!target) throw new Error("Session not found");
     if (patch.fastMode !== undefined) target.fastMode = patch.fastMode;
-    if (patch.defaultWorkflowId !== undefined) target.defaultWorkflowId = patch.defaultWorkflowId;
     return target as ChatSessionSummary;
   },
 );
@@ -168,43 +147,21 @@ const markChatSessionRead = mock(async (id: string) => {
   return target as ChatSessionSummary;
 });
 
-let workflowDetails: Array<{
-  id: string;
-  name: string;
-  version: number;
-  active: boolean;
-  source: "builtin" | "user";
-  stepCount: number;
-  steps: Array<{
-    id: string;
-    type: string;
-    promptTemplate: string;
-    maxAttempts: number;
-    transitions: [];
-  }>;
-}> = [];
-const getWorkflowDetails = mock(async () => workflowDetails);
-
 mock.module("../../api/client", () => ({
   ...actualClient,
   abortChatSession,
-  getAgents: mock(async () => []),
   getChatSession,
   getRuntimeProfiles: mock(async () => []),
-  getWorkflowDetails,
-  getWorkflows: mock(async () => []),
   listChatSessions: mock(async () => sessions as ChatSessionSummary[]),
   getMarkdownFile,
   getChatSessionLocation,
   getSessionGitStatus,
   getSessionGitDiff,
   getSessionGitDiffFile,
-  listSessionGitBranches,
   markChatSessionRead,
   retryChatRunFresh,
   sendChatMessage,
   setChatSessionWorkspace,
-  switchSessionGitBranch,
   updateChatSession,
 }));
 
@@ -217,12 +174,9 @@ mock.module("../../hooks/useSSE", () => ({
   },
 }));
 
-const { act, cleanup, fireEvent, render, screen, waitFor, within } = await import(
-  "@testing-library/react"
-);
+const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
 const { abortActiveConversation, SessionsPage } = await import("./SessionsPage");
 const { getRailProps } = await import("../../shell/rail-store");
-const { clearSessionComposerDraft } = await import("./session-composer-drafts");
 
 /** The rail is shell chrome now: select a thread through the published rail props. */
 const selectRailSession = async (sessionId: string) => {
@@ -232,6 +186,11 @@ const selectRailSession = async (sessionId: string) => {
   act(() => getRailProps()?.onSelect(sessionId));
 };
 const { sendWithToolInterruptConfirmation } = await import("./sessions-page-model");
+
+/** Bind the first session to a worktree so the top bar source-control actions can enable. */
+const bindFirstSessionToWorktree = () => {
+  firstSession().workspacePath = "/tmp/aop-mono/.worktrees/one";
+};
 
 beforeEach(() => {
   sessions = createTestSessions();
@@ -243,10 +202,6 @@ beforeEach(() => {
   getChatSessionLocation.mockClear();
   getSessionGitStatus.mockClear();
   getSessionGitDiff.mockClear();
-  getWorkflowDetails.mockClear();
-  workflowDetails = [];
-  listSessionGitBranches.mockClear();
-  switchSessionGitBranch.mockClear();
   updateChatSession.mockClear();
   markChatSessionRead.mockClear();
   abortChatSession.mockClear();
@@ -275,12 +230,7 @@ afterEach(() => {
 
 describe("SessionsPage composer drafts", () => {
   test("publishes the thread list to the shell rail", async () => {
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await waitFor(() => {
       const titles = (getRailProps()?.groups ?? []).flatMap((group) =>
@@ -293,12 +243,7 @@ describe("SessionsPage composer drafts", () => {
   test("shows Stop for an uncontrollable recovered lifecycle", async () => {
     firstSession().assistantLifecycle = "uncontrollable";
 
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     expect(await screen.findByRole("button", { name: "Stop conversation" })).toBeTruthy();
   });
@@ -307,12 +252,7 @@ describe("SessionsPage composer drafts", () => {
     firstSession().assistantActive = true;
     firstSession().assistantLifecycle = "idle";
 
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     expect(await screen.findByRole("button", { name: "Send message" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Stop conversation" })).toBeNull();
@@ -321,12 +261,7 @@ describe("SessionsPage composer drafts", () => {
   test("shows Stop without a queue action when the running composer is empty", async () => {
     firstSession().assistantActive = true;
     firstSession().assistantLifecycle = "running";
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     expect(await screen.findByRole("button", { name: "Stop conversation" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Queue message" })).toBeNull();
@@ -348,12 +283,7 @@ describe("SessionsPage composer drafts", () => {
       },
     ];
 
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     expect(await screen.findByText("1 queued message will send automatically.")).toBeTruthy();
   });
@@ -368,69 +298,62 @@ describe("SessionsPage composer drafts", () => {
     const confirm = mock(async () => true);
 
     await sendWithToolInterruptConfirmation(
-      (confirmed) =>
-        sendChatMessage("one", "Are you stuck?", [], [], "steer", undefined, [], confirmed),
+      (confirmed) => sendChatMessage("one", "Are you stuck?", [], [], "steer", confirmed),
       confirm,
     );
 
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(sendChatMessage).toHaveBeenCalledTimes(2);
-    expect(sendChatMessage.mock.calls[1]?.[7]).toBe(true);
+    expect(sendChatMessage.mock.calls[0]?.[5]).toBe(false);
+    expect(sendChatMessage.mock.calls[1]?.[5]).toBe(true);
   });
 
   test("does not call the session-location endpoint", async () => {
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await waitFor(() => expect(getSessionGitStatus).toHaveBeenCalled());
     expect(getChatSessionLocation).not.toHaveBeenCalled();
   });
 
   test("does not refresh git status on focus while the cache is fresh", async () => {
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    bindFirstSessionToWorktree();
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
-    await screen.findByTestId("session-workspace-topbar");
-    await waitFor(() => expect(screen.getAllByText("main").length).toBeGreaterThan(0));
+    const commit = await screen.findByTestId("session-source-control-primary");
     await waitFor(() => expect(getSessionGitStatus).toHaveBeenCalledTimes(1));
-    locationBranch = "feature/should-not-appear";
+    expect(commit.textContent).toContain("Commit");
+    gitDiffstat = { filesChanged: 1, additions: 1, deletions: 0 };
     window.dispatchEvent(new window.Event("focus"));
     await act(() => Bun.sleep(50));
 
-    expect(screen.queryByText("feature/should-not-appear")).toBeNull();
+    expect(screen.getByTestId("session-source-control-primary").hasAttribute("disabled")).toBe(
+      true,
+    );
     expect(getSessionGitStatus).toHaveBeenCalledTimes(1);
     expect(getChatSessionLocation).not.toHaveBeenCalled();
   });
 
   test("refreshes git status once when focus arrives after the cache is stale", async () => {
+    bindFirstSessionToWorktree();
     const realNow = Date.now.bind(Date);
     let now = realNow();
     const nowSpy = spyOn(Date, "now").mockImplementation(() => now);
     try {
-      render(
-        <SessionsPage
-          repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-          onNavigate={() => {}}
-        />,
-      );
+      render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
-      await screen.findByTestId("session-workspace-topbar");
-      await waitFor(() => expect(screen.getAllByText("main").length).toBeGreaterThan(0));
+      await screen.findByTestId("session-source-control-primary");
       await waitFor(() => expect(getSessionGitStatus).toHaveBeenCalledTimes(1));
-      locationBranch = "feature/refreshed-location";
+      expect(screen.getByTestId("session-source-control-primary").hasAttribute("disabled")).toBe(
+        true,
+      );
+      gitDiffstat = { filesChanged: 1, additions: 1, deletions: 0 };
       now += 16_000;
       window.dispatchEvent(new window.Event("focus"));
 
       await waitFor(() =>
-        expect(screen.getAllByText("feature/refreshed-location").length).toBeGreaterThan(0),
+        expect(screen.getByTestId("session-source-control-primary").hasAttribute("disabled")).toBe(
+          false,
+        ),
       );
       expect(getSessionGitStatus).toHaveBeenCalledTimes(2);
       expect(getChatSessionLocation).not.toHaveBeenCalled();
@@ -442,15 +365,10 @@ describe("SessionsPage composer drafts", () => {
   test("does not start a background interval for session location", async () => {
     const setIntervalSpy = spyOn(window, "setInterval");
     try {
-      render(
-        <SessionsPage
-          repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-          onNavigate={() => {}}
-        />,
-      );
+      render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
       await screen.findByTestId("session-workspace-topbar");
-      await waitFor(() => expect(screen.getAllByText("main").length).toBeGreaterThan(0));
+      await waitFor(() => expect(getSessionGitStatus).toHaveBeenCalled());
       expect(setIntervalSpy).not.toHaveBeenCalled();
     } finally {
       setIntervalSpy.mockRestore();
@@ -458,12 +376,7 @@ describe("SessionsPage composer drafts", () => {
   });
 
   test("fetches Git status per session even when workspace paths match", async () => {
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await waitFor(() => expect(getSessionGitStatus).toHaveBeenCalledTimes(1));
     await selectRailSession("two");
@@ -476,12 +389,7 @@ describe("SessionsPage composer drafts", () => {
     const second = sessions[1];
     if (!second) throw new Error("Expected the second test session");
     sessions[1] = { ...second, workspacePath: "/tmp/aop-mono/.worktrees/other" };
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await waitFor(() => expect(getSessionGitStatus).toHaveBeenCalledTimes(1));
     await selectRailSession("two");
@@ -489,62 +397,32 @@ describe("SessionsPage composer drafts", () => {
     await waitFor(() => expect(getSessionGitStatus).toHaveBeenCalledTimes(2));
   });
 
-  test("loads session git status and shows the diffstat chip when dirty", async () => {
+  test("loads session git status and enables the top bar commit action when dirty", async () => {
+    bindFirstSessionToWorktree();
     locationBranch = "feature/session-diff";
     gitDiffstat = { filesChanged: 2, additions: 5, deletions: 1 };
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
-    const chip = await screen.findByTestId("session-git-diffstat");
-    expect(chip.textContent).toContain("+5");
-    expect(chip.textContent).toContain("−1");
+    const commit = await screen.findByTestId("session-source-control-primary");
+    await waitFor(() => expect(commit.hasAttribute("disabled")).toBe(false));
+    expect(commit.textContent).toContain("Commit & push");
     expect(getSessionGitStatus).toHaveBeenCalled();
   });
 
-  test("loads and switches branches from the composer footer", async () => {
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
-
-    fireEvent.click(await screen.findByRole("button", { name: "Branch" }));
-    const picker = await screen.findByTestId("branch-picker-content");
-    fireEvent.click(await within(picker).findByText("feature/branch-picker"));
-
-    await waitFor(() =>
-      expect(switchSessionGitBranch).toHaveBeenCalledWith("one", "feature/branch-picker"),
-    );
-    expect(await screen.findByText("Switched to feature/branch-picker")).toBeTruthy();
-  });
-
-  test("hides shared-checkout changes from a fresh session on the default branch", async () => {
+  test("keeps the top bar commit action disabled for changes in a shared checkout", async () => {
     gitDiffstat = { filesChanged: 2, additions: 5, deletions: 5 };
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await waitFor(() => expect(getSessionGitStatus).toHaveBeenCalled());
-    expect(screen.queryByTestId("session-git-diffstat")).toBeNull();
+    const commit = await screen.findByTestId("session-source-control-primary");
+    expect(commit.hasAttribute("disabled")).toBe(true);
+    expect(commit.getAttribute("title")).toBe("Create a session worktree before committing.");
   });
 
   test("toggles and persists fast mode from the lightning button", async () => {
     firstSession().runtime = "codex-cli";
     firstSession().model = "gpt-5.6";
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     const fastMode = await screen.findByTestId("composer-fast-mode");
     fireEvent.click(fastMode);
@@ -559,12 +437,7 @@ describe("SessionsPage composer drafts", () => {
     firstSession().runtime = "codex-cli";
     firstSession().model = "gpt-5.6";
     updateSessionError = new Error("Could not update fast mode");
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     const fastMode = await screen.findByTestId("composer-fast-mode");
     fireEvent.click(fastMode);
@@ -575,12 +448,7 @@ describe("SessionsPage composer drafts", () => {
   });
 
   test("locks the model picker once the session has its first message", async () => {
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     const freshTrigger = await screen.findByTestId("composer-runtime-config");
     expect(freshTrigger.getAttribute("data-locked")).toBeNull();
@@ -612,7 +480,8 @@ describe("SessionsPage composer drafts", () => {
     expect(screen.queryByPlaceholderText("Search models...")).toBeNull();
   });
 
-  test("diffstat chip opens the right panel at the Diff tab (PLAN §6.3)", async () => {
+  test("the top bar toggle opens the right panel at the Diff tab (PLAN §6.3)", async () => {
+    bindFirstSessionToWorktree();
     locationBranch = "feature/session-diff";
     gitDiffstat = { filesChanged: 1, additions: 2, deletions: 1 };
     firstSession().messages = [
@@ -625,14 +494,9 @@ describe("SessionsPage composer drafts", () => {
         createdAt: new Date().toISOString(),
       },
     ];
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
-    fireEvent.click(await screen.findByTestId("session-git-diffstat"));
+    fireEvent.click(await screen.findByTestId("topbar-right-panel-toggle"));
     await screen.findByTestId("session-diff-panel");
     expect(screen.getByTestId("right-panel")).toBeTruthy();
     // No legacy tab chrome inside the workspace right panel: the tabs and the
@@ -651,89 +515,24 @@ describe("SessionsPage composer drafts", () => {
     await waitFor(() => expect(screen.queryByTestId("session-diff-panel")).toBeNull());
   });
 
-  test("armed default workflow sends the workflow id instead of rejecting the send", async () => {
-    workflowDetails = [
-      {
-        id: "wf-quick",
-        name: "Quick fix",
-        version: 1,
-        active: true,
-        source: "builtin",
-        stepCount: 1,
-        steps: [
-          { id: "s1", type: "implement", promptTemplate: "", maxAttempts: 1, transitions: [] },
-        ],
-      },
-    ];
-    firstSession().defaultWorkflowId = "wf-quick";
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+  test("the right panel offers only the Diff and Checks tabs", async () => {
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
-    fireEvent.change(await screen.findByTestId("chat-composer-input"), {
-      target: { value: "Run the fix" },
-    });
-    // The chip rail with the fire button renders once workflows load.
-    fireEvent.click(await screen.findByTestId("composer-workflow-arm"));
-    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    fireEvent.click(await screen.findByTestId("topbar-right-panel-toggle"));
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(["Diff", "Checks"]);
 
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(1));
-    expect(sendChatMessage.mock.calls[0]?.[0]).toBe("one");
-    expect(sendChatMessage.mock.calls[0]?.[5]).toBe("wf-quick");
-    expect(sendChatMessage.mock.calls[0]?.[9]).toBe(true);
-    expect(screen.queryByText("Select a workflow before arming the fire button.")).toBeNull();
-    // The armed draft is module-level state; drop it so later tests start clean.
-    clearSessionComposerDraft("one");
-  });
-
-  test("chip-picked workflow stays selected when armed and sent", async () => {
-    workflowDetails = [
-      {
-        id: "wf-quick",
-        name: "Quick fix",
-        version: 1,
-        active: true,
-        source: "builtin",
-        stepCount: 1,
-        steps: [
-          { id: "s1", type: "implement", promptTemplate: "", maxAttempts: 1, transitions: [] },
-        ],
-      },
-    ];
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
-
-    fireEvent.click(await screen.findByTestId("composer-workflow-chip"));
-    fireEvent.click(await screen.findByText("Quick fix"));
-    fireEvent.click(await screen.findByTestId("composer-workflow-arm"));
-    fireEvent.change(screen.getByTestId("chat-composer-input"), {
-      target: { value: "Go" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
-
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledTimes(1));
-    expect(sendChatMessage.mock.calls[0]?.[5]).toBe("wf-quick");
-    expect(sendChatMessage.mock.calls[0]?.[9]).toBe(true);
-    expect(screen.queryByText("Select a workflow before arming the fire button.")).toBeNull();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Checks" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Checks" }));
+    expect(await screen.findByText("No pull request")).toBeTruthy();
   });
 
   test("forces exactly one git status refresh when a run completes", async () => {
+    bindFirstSessionToWorktree();
     locationBranch = "feature/session-diff";
     firstSession().assistantActive = true;
     firstSession().assistantLifecycle = "running";
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await screen.findByRole("button", { name: "Stop conversation" });
     // Active runs skip the deferred initial git fetch.
@@ -754,20 +553,18 @@ describe("SessionsPage composer drafts", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Stop conversation" })).toBeNull(),
     );
-    const chip = await screen.findByTestId("session-git-diffstat");
-    expect(chip.textContent).toContain("+3");
+    await waitFor(() =>
+      expect(screen.getByTestId("session-source-control-primary").hasAttribute("disabled")).toBe(
+        false,
+      ),
+    );
     expect(getSessionGitStatus).toHaveBeenCalledTimes(1);
   });
 
   test("does not refresh git status on focus while a run is active", async () => {
     firstSession().assistantActive = true;
     firstSession().assistantLifecycle = "running";
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await screen.findByRole("button", { name: "Stop conversation" });
     window.dispatchEvent(new window.Event("focus"));
@@ -779,12 +576,7 @@ describe("SessionsPage composer drafts", () => {
     const second = sessions.find((item) => item.id === "two");
     if (!second) throw new Error("Expected session two");
     second.unreadCount = 4;
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await selectRailSession("two");
     await waitFor(() => expect(markChatSessionRead).toHaveBeenCalledWith("two"));
@@ -792,10 +584,7 @@ describe("SessionsPage composer drafts", () => {
 
   test("preserves text and attachments per session across session and page changes", async () => {
     const view = render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
+      <SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />,
     );
 
     const composer = await screen.findByTestId("chat-composer-input");
@@ -825,18 +614,38 @@ describe("SessionsPage composer drafts", () => {
     expect(screen.getByText("browser-control.md")).toBeDefined();
 
     view.unmount();
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
     await waitFor(() =>
       expect((screen.getByTestId("chat-composer-input") as HTMLTextAreaElement).value).toBe(
         "Draft for session one",
       ),
     );
     expect(screen.getByText("browser-control.md")).toBeDefined();
+  });
+
+  test("a session action card in the thread opens that session", async () => {
+    firstSession().messages = [
+      {
+        id: "session-action-message",
+        sessionId: "one",
+        role: "assistant",
+        content: "Started a fresh session.",
+        action: {
+          type: "session",
+          id: "two",
+          label: "Fresh session",
+          sub: "Continue there",
+          meta: "New",
+        },
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Fresh session/ }));
+
+    await waitFor(() => expect(getChatSession).toHaveBeenLastCalledWith("two"));
+    await waitFor(() => expect(markChatSessionRead).toHaveBeenCalledWith("two"));
   });
 
   test("opens the markdown panel as a side column beside the chat", async () => {
@@ -852,12 +661,7 @@ describe("SessionsPage composer drafts", () => {
     };
     firstSession.messages = [message];
 
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     const chip = await screen.findByRole("button", { name: /plan\.md/i });
     fireEvent.click(chip);
@@ -884,12 +688,7 @@ describe("SessionsPage composer drafts", () => {
       },
     ];
 
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /findings\.md/i }));
     await screen.findByRole("complementary");
@@ -916,12 +715,7 @@ describe("SessionsPage composer drafts", () => {
     retryError = new Error("retry failed");
     window.confirm = () => true;
 
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Retry in a fresh runtime session" }),
@@ -935,12 +729,7 @@ describe("SessionsPage composer drafts", () => {
       code: "WORKSPACE_BINDING_ERROR",
       details: { path: "/tmp/aop-mono/.worktrees/deleted", resettable: true },
     });
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     await screen.findByTestId("workspace-binding-error");
     expect(screen.getByText("/tmp/aop-mono/.worktrees/deleted")).toBeTruthy();
@@ -963,12 +752,7 @@ describe("SessionsPage composer drafts", () => {
       },
     ];
 
-    render(
-      <SessionsPage
-        repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]}
-        onNavigate={() => {}}
-      />,
-    );
+    render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /plan\.md/i }));
     await screen.findByRole("complementary");

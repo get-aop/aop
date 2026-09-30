@@ -31,7 +31,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/ui/sidebar";
 import type { ChatSessionSummary } from "../api/client";
 import { AopLogoMark } from "../components/brand/AopLogoMark";
-import type { ConnectionState } from "../types";
 import { canSettleSession, isSessionLifecycleBusy } from "../views/sessions/session-settled";
 import { openSettingsDialog } from "./dialog-store";
 import { RailFooter } from "./rail-footer";
@@ -43,10 +42,10 @@ const THREAD_PAGE_SIZE = 12;
 
 /** The app's only chrome (PLAN §3 anatomy): brand, new session, scope chips, one flat thread list, settled, footer. */
 export const AppRail = ({
-  connection,
+  connected,
   onOpenCommand,
 }: {
-  connection: ConnectionState;
+  connected: boolean;
   onOpenCommand: () => void;
 }) => {
   const rail = useRailProps();
@@ -147,7 +146,7 @@ export const AppRail = ({
       ) : null}
 
       <SidebarFooter className="border-t border-border p-0">
-        <RailFooter connection={connection} workflowCount={rail?.workflowCount ?? 0} />
+        <RailFooter connected={connected} />
       </SidebarFooter>
 
       <DeleteSessionDialog

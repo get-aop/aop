@@ -9,16 +9,17 @@ import {
 } from "react";
 import type { ChatSessionDetail, ChatSessionSummary, updateChatSession } from "../../api/client";
 import { setRailProps } from "../../shell/rail-store";
-import type { Agent, Task } from "../../types";
 import type { SessionToastLink } from "./SessionModals";
 import type { MenuItemBuilders, MenuState, SessionsRepo } from "./sessions-menu";
-import { buildMenuItems, parentMenuFor } from "./sessions-menu";
-import { countQueuedSessionMessages, scopeMidRunHintsToMessages } from "./sessions-page-helpers";
+import { buildMenuItems } from "./sessions-menu";
+import {
+  countQueuedSessionMessages,
+  menuHandlers,
+  scopeMidRunHintsToMessages,
+} from "./sessions-page-helpers";
 import {
   attachRuntimeConfigurationNames,
-  buildComposerMenuArgs,
   isAssistantConversationActive,
-  moveMenuToParent,
   pullRequestStateForMenu,
   runtimeConfigurationNameFor,
   runtimeConfigurationNameMap,
@@ -28,31 +29,13 @@ import {
   useLiveSessionGitStatus,
   useSessionPrComposerSlots,
   useSessionRailData,
-  withMenuBackItem,
 } from "./sessions-page-internals";
-import { resolveKnownTaskIds, resolveLiveTasks, workerColorMap } from "./sessions-page-model";
 import type { useSessionComposer } from "./use-session-composer";
-
-interface WorkflowOption {
-  id: string;
-  name: string;
-  stepCount: number;
-  stepTypes: string[];
-  steps: Array<{
-    id: string;
-    type: string;
-    provider?: string;
-    model?: string;
-    reasoning?: string;
-    fastMode?: boolean;
-  }>;
-}
 
 export interface SessionsPageMenusInput {
   active: ChatSessionDetail | null;
   activeId: string | null;
   connected: boolean;
-  agents: Agent[];
   composer: ReturnType<typeof useSessionComposer>;
   diffPanelOpen: boolean;
   handleCreate: (repoId: string) => Promise<void>;
@@ -74,21 +57,15 @@ export interface SessionsPageMenusInput {
   setMenu: Dispatch<SetStateAction<MenuState>>;
   setRename: Dispatch<SetStateAction<{ id: string; value: string } | null>>;
   setSessions: Dispatch<SetStateAction<ChatSessionSummary[]>>;
-  setTermOpen: Dispatch<SetStateAction<boolean>>;
   setWorkspaceRefreshToken: Dispatch<SetStateAction<number>>;
   settlementNow: string;
   settleSession: (sessionId: string, title: string) => Promise<void>;
   showToast: (message: string, link?: SessionToastLink) => void;
   skills: string[] | undefined;
-  tasks: Task[];
-  termOpen: boolean;
   typing: boolean;
   unsettleSession: (sessionId: string, title: string) => Promise<void>;
   deleteSession: (sessionId: string, title: string) => Promise<void>;
-  workflowNames: string[];
-  workflowOptions: WorkflowOption[];
   workspaceRefreshToken: number;
-  knownTaskIds?: readonly string[];
 }
 
 /** Derived workspace selectors + composer menus + rail publication (PLAN §6.1). */
@@ -96,7 +73,6 @@ export const useSessionsPageMenus = (input: SessionsPageMenusInput) => {
   const {
     active,
     activeId,
-    agents,
     composer,
     connected,
     diffPanelOpen,
@@ -109,16 +85,10 @@ export const useSessionsPageMenus = (input: SessionsPageMenusInput) => {
     setDiffRefreshKey,
     setMenu,
     setSessions,
-    setTermOpen,
     showToast,
     skills,
-    tasks,
-    termOpen,
     typing,
-    workflowNames,
-    workflowOptions,
     workspaceRefreshToken,
-    knownTaskIds,
   } = input;
 
   const runtimeConfigurationNames = useMemo(
@@ -128,12 +98,6 @@ export const useSessionsPageMenus = (input: SessionsPageMenusInput) => {
   const sessionsWithRuntimeNames = useMemo(
     () => attachRuntimeConfigurationNames(sessions, runtimeConfigurationNames),
     [runtimeConfigurationNames, sessions],
-  );
-  const workerNames = useMemo(() => agents.map((a) => a.name), [agents]);
-  const workerColors = useMemo(() => workerColorMap(agents), [agents]);
-  const workers = useMemo(
-    () => agents.map((agent) => ({ id: agent.id, name: agent.name })),
-    [agents],
   );
   const assistantActive = isAssistantConversationActive(active, typing);
   const scopedMidRunHints = useMemo(
@@ -154,12 +118,7 @@ export const useSessionsPageMenus = (input: SessionsPageMenusInput) => {
     () => input.setWorkspaceRefreshToken((token) => token + 1),
     [input.setWorkspaceRefreshToken],
   );
-  const { gitPrControls, mergedPrBar, pullRequest } = useSessionPrComposerSlots(
-    active?.id,
-    sessionGitStatus,
-    showToast,
-    refreshWorkspace,
-  );
+  const { mergedPrBar, pullRequest } = useSessionPrComposerSlots(active?.id, sessionGitStatus);
   const activePullRequestState = sessionPullRequestState(pullRequest, sessionGitStatus);
   const { sidebarPullRequestStates, groups, settled, generalTasks } = useSessionRailData({
     repos,
@@ -180,39 +139,24 @@ export const useSessionsPageMenus = (input: SessionsPageMenusInput) => {
     runtimeConfigurationNames,
   );
   const derivedSkills = active?.skills;
-  const liveTasks = useMemo(() => resolveLiveTasks(tasks, knownTaskIds), [tasks, knownTaskIds]);
-  const knownTaskIdSet = useMemo(
-    () => resolveKnownTaskIds(tasks, knownTaskIds),
-    [tasks, knownTaskIds],
-  );
 
   const menuBuilderArgs: MenuItemBuilders = {
-    ...buildComposerMenuArgs({
-      handlers: {
-        menu,
-        active,
-        sessions,
-        termOpen,
-        skills: skills ?? [],
-        runtimeConfigurations,
-        patchSession: input.patchSession,
-        setSessions,
-        showToast,
-        setRename: input.setRename,
-        setMenu,
-        setTermOpen,
-        sendSkill: (name) => void composer.send(`/skill ${name}`),
-        settleSession: input.settleSession,
-        unsettleSession: input.unsettleSession,
-        onResetRuntime: input.resetRuntimeSession,
-        deleteSession: input.deleteSession,
-      },
-      composer,
-      setMenu,
-      agents,
-      workflowNames,
-      patchSession: input.patchSession,
+    ...menuHandlers({
+      menu,
       active,
+      sessions,
+      skills: skills ?? [],
+      runtimeConfigurations,
+      patchSession: input.patchSession,
+      setSessions,
+      showToast,
+      setRename: input.setRename,
+      setMenu,
+      sendSkill: (name) => void composer.send(`/skill ${name}`),
+      settleSession: input.settleSession,
+      unsettleSession: input.unsettleSession,
+      onResetRuntime: input.resetRuntimeSession,
+      deleteSession: input.deleteSession,
     }),
     now: settlementNow,
     pullRequestState: pullRequestStateForMenu(menu, sidebarPullRequestStates),
@@ -251,7 +195,6 @@ export const useSessionsPageMenus = (input: SessionsPageMenusInput) => {
       settled,
       activeSessionId: activeId,
       connected,
-      workflowCount: workflowOptions.length,
       onSelect: (id) => void input.handleSelect(id),
       onNewSession: (repoId) => void input.handleCreate(repoId),
       onNewTask: () => void input.handleCreateTask(),
@@ -261,26 +204,18 @@ export const useSessionsPageMenus = (input: SessionsPageMenusInput) => {
     return () => setRailProps(null);
   });
 
-  const baseMenuItems = buildMenuItems(menuBuilderArgs);
-  const parentMenuKind = parentMenuFor(menu.kind);
-  const menuItems = withMenuBackItem(baseMenuItems, parentMenuKind, () =>
-    setMenu((current) => moveMenuToParent(current, parentMenuKind ?? "cadd")),
-  );
+  const menuItems = buildMenuItems(menuBuilderArgs);
 
   return {
     active,
     activePullRequestState,
     activeRuntimeConfigurationName,
     assistantActive,
-    gitPrControls,
     groups,
     handleRailAction,
-    knownTaskIdSet,
-    liveTasks,
     menuBuilderArgs,
     menuItems,
     mergedPrBar,
-    parentMenuKind,
     pullRequest,
     queueCount,
     refreshWorkspace,
@@ -291,8 +226,5 @@ export const useSessionsPageMenus = (input: SessionsPageMenusInput) => {
     generalTasks,
     sidebarPullRequestStates,
     skills: derivedSkills,
-    workerColors,
-    workerNames,
-    workers,
   };
 };

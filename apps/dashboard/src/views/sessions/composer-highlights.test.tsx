@@ -10,45 +10,55 @@ const { ComposerHighlightLayer, parseMentionTokens } = await import("./composer-
 afterEach(cleanup);
 
 const sources = {
-  workers: [
-    { id: "k1", name: "K1" },
-    { id: "pair", name: "Pair Programmer" },
+  repos: [
+    { id: "repo", name: "aop-mono", path: "/workspace/aop-mono" },
+    { id: "repo-2", name: "aop-mono docs", path: "/workspace/aop-mono-docs" },
+    { id: "unnamed", name: null, path: "/workspace/unnamed" },
   ],
-  workflows: ["landing-page"],
-  repos: [{ id: "repo", name: "aop-mono", path: "/workspace/aop-mono" }],
 };
 
 describe("parseMentionTokens", () => {
-  test("parses all mention kinds and preserves exact ranges", () => {
-    const input = "%K1 #landing-page ~aop-mono $CC_BROWSER_USE";
-    expect(parseMentionTokens(input, sources)).toEqual([
-      { kind: "worker", start: 0, end: 3, id: "k1", label: "K1" },
-      { kind: "workflow", start: 4, end: 17, id: "landing-page", label: "landing-page" },
-      { kind: "repo", start: 18, end: 27, id: "repo", label: "aop-mono" },
-      {
-        kind: "control",
-        start: 28,
-        end: 43,
-        id: "CC_BROWSER_USE",
-        label: "CC_BROWSER_USE",
-      },
+  test("parses a repo mention and preserves its exact range", () => {
+    expect(parseMentionTokens("look at ~aop-mono please", sources)).toEqual([
+      { kind: "repo", start: 8, end: 17, id: "repo", label: "aop-mono" },
     ]);
   });
 
-  test("matches longest names with spaces case-insensitively", () => {
-    expect(parseMentionTokens("ask %pair programmer now", sources)).toEqual([
-      { kind: "worker", start: 4, end: 20, id: "pair", label: "Pair Programmer" },
+  test("matches the longest name with spaces, case-insensitively", () => {
+    expect(parseMentionTokens("~AOP-MONO DOCS now", sources)).toEqual([
+      { kind: "repo", start: 0, end: 14, id: "repo-2", label: "aop-mono docs" },
     ]);
   });
 
-  test("ignores unknown and non-boundary sigils", () => {
-    expect(parseMentionTokens("email%K1 %unknown", sources)).toEqual([]);
+  test("labels an unnamed repo by its id", () => {
+    expect(parseMentionTokens("in ~unnamed.", sources)).toEqual([
+      { kind: "repo", start: 3, end: 11, id: "unnamed", label: "unnamed" },
+    ]);
+  });
+
+  test("ignores unknown, prefix-only, and non-boundary sigils", () => {
+    expect(parseMentionTokens("~unknown", sources)).toEqual([]);
+    expect(parseMentionTokens("~aop-monorepo", sources)).toEqual([]);
+    expect(parseMentionTokens("email~aop-mono", sources)).toEqual([]);
+  });
+
+  test("no longer highlights the retired % # $ sigils", () => {
+    expect(parseMentionTokens("%aop-mono #aop-mono $aop-mono", sources)).toEqual([]);
   });
 });
 
-test("ComposerHighlightLayer renders control and mention marks without changing text", () => {
-  const input = "%K1 $CC_BROWSER_USE";
-  const tokens = parseMentionTokens(input, sources);
+test("ComposerHighlightLayer renders repo and paste marks without changing text", () => {
+  const input = "~aop-mono [paste #1 +5 lines]";
+  const tokens = [
+    ...parseMentionTokens(input, sources),
+    {
+      kind: "paste" as const,
+      start: 10,
+      end: input.length,
+      id: "paste-1",
+      label: "[paste #1 +5 lines]",
+    },
+  ];
   render(
     <ComposerHighlightLayer
       input={input}
@@ -60,6 +70,6 @@ test("ComposerHighlightLayer renders control and mention marks without changing 
   const layer = screen.getByTestId("composer-highlight-layer");
   expect(layer.textContent).toBe(input);
   expect(layer.className).toContain("composer-text-surface");
-  expect(screen.getByText("%K1").getAttribute("data-kind")).toBe("worker");
-  expect(screen.getByText("$CC_BROWSER_USE").getAttribute("data-kind")).toBe("control");
+  expect(screen.getByText("~aop-mono").getAttribute("data-kind")).toBe("repo");
+  expect(screen.getByText("[paste #1 +5 lines]").getAttribute("data-kind")).toBe("paste");
 });

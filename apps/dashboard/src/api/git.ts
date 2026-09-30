@@ -3,29 +3,15 @@ import type {
   CreateSessionPrResult,
   MergeSessionPrMethod,
   SessionDiffFile,
-  SessionGitBranchList,
   SessionGitDiff,
   SessionGitStatus,
   SessionPullRequestStateStatus,
   SessionPullRequestStatus,
-  SwitchSessionGitBranchResult,
 } from "@aop/common";
 import { request } from "./request";
 
 export const getSessionGitStatus = async (sessionId: string): Promise<SessionGitStatus> =>
   request<SessionGitStatus>(`/chat-sessions/${sessionId}/git/status`);
-
-export const listSessionGitBranches = async (sessionId: string): Promise<SessionGitBranchList> =>
-  request<SessionGitBranchList>(`/chat-sessions/${sessionId}/git/branches`);
-
-export const switchSessionGitBranch = async (
-  sessionId: string,
-  branch: string,
-): Promise<SwitchSessionGitBranchResult> =>
-  request<SwitchSessionGitBranchResult>(`/chat-sessions/${sessionId}/git/branch`, {
-    method: "POST",
-    body: JSON.stringify({ branch }),
-  });
 
 export type CreateSessionPullRequestResponse = CreateSessionPrResult;
 
@@ -80,20 +66,6 @@ export const commitSessionGit = async (
   input: { push: boolean },
 ): Promise<CommitSessionGitResult> =>
   request<CommitSessionGitResult>(`/chat-sessions/${sessionId}/git/commit`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-
-export interface CreateSessionWorktreeResult {
-  worktree: { path: string; branch: string; baseBranch: string };
-  session: { id: string; workspacePath: string };
-}
-
-export const createSessionWorktree = async (
-  sessionId: string,
-  input: { branchName?: string; baseBranch?: string } = {},
-): Promise<CreateSessionWorktreeResult> =>
-  request<CreateSessionWorktreeResult>(`/chat-sessions/${sessionId}/worktree`, {
     method: "POST",
     body: JSON.stringify(input),
   });

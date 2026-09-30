@@ -1,12 +1,9 @@
 import {
   CHAT_DOCUMENT_LIMITS,
-  type ChatActionPayload,
   type ChatDocumentAttachment,
   CREATE_TASK_IMAGE_LIMITS,
-  formatRuntimeDelegationMarker,
-  rewriteControlCommandMarker,
 } from "@aop/common";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ChatSessionDetail, ChatSessionMessage } from "../../api/client";
 import type { LocalCreateTaskImage } from "../../components/create-task-images";
 import {
@@ -48,8 +45,6 @@ interface SessionComposerStateInput {
   isActiveSession?: (sessionId: string) => boolean;
   showToast: (message: string) => void;
   refreshList: () => Promise<unknown>;
-  /** Active chat workflow run: locks the composer; clears the fire toggle on completion. */
-  workflowRun?: import("./composer-types").WorkflowRunViewState | null;
 }
 
 export const useSessionComposer = (input: SessionComposerStateInput) => {
@@ -62,11 +57,6 @@ export const useSessionComposer = (input: SessionComposerStateInput) => {
   const pendingImages = draft.images;
   const pendingDocuments = draft.documents;
   const pastes = draft.pastes;
-  const runtimeDelegation = draft.runtimeDelegation;
-  const controlSelection = draft.controlSelection;
-  const runtimeActions = draft.runtimeActions;
-  const workflowSelection = draft.workflowSelection;
-  const workflowArmed = draft.workflowArmed;
 
   const updateDraft = useCallback(
     (targetSessionId: string, update: Parameters<typeof updateSessionComposerDraft>[1]) => {
@@ -163,55 +153,34 @@ export const useSessionComposer = (input: SessionComposerStateInput) => {
     [input.showToast, sessionId, updateDraft],
   );
 
-  const sendUnchecked = async (override?: string): Promise<void> => {
+  const send = async (override?: string): Promise<void> => {
     if (!input.active) return;
     const sessionId = input.active.id;
     const snapshot = composerSendSnapshot(sessionId, override);
     if (!snapshot) return;
     const {
-      displayContent,
+      content,
       imagesSnapshot,
       documentsSnapshot,
       pastesSnapshot,
-      delegationSnapshot,
-      runtimeActionsSnapshot,
-      workflowSelectionSnapshot,
-      workflowArmedSnapshot,
       reviewSnapshot,
       typedSnapshot,
       isSlashCommand,
     } = snapshot;
     // Composer draft keeps compact tokens; the chat bubble shows expanded paste bodies.
-    // Armed workflow runs render no proposal card — the run status line replaces it.
-    const optimisticAction = workflowArmedSnapshot
-      ? null
-      : composerAction(runtimeActionsSnapshot, workflowSelectionSnapshot);
     const tempId = appendOptimisticUser(
       input.setDetail,
       sessionId,
-      expandPasteTokens(displayContent, pastesSnapshot),
+      expandPasteTokens(content, pastesSnapshot),
       imagesSnapshot,
       documentsSnapshot,
-      optimisticAction,
     );
-    updateDraft(sessionId, () => ({
-      input: "",
-      images: [],
-      documents: [],
-      pastes: [],
-      runtimeDelegation: null,
-      controlSelection: null,
-      runtimeActions: [],
-      // The fire toggle and its selection stay until the run completes.
-      workflowSelection: workflowArmedSnapshot ? draft.workflowSelection : null,
-      workflowArmed: draft.workflowArmed,
-    }));
+    updateDraft(sessionId, () => ({ input: "", images: [], documents: [], pastes: [] }));
     // Drain the review queue at send time; restored below only if the send fails.
     if (!isSlashCommand) clearSessionReviewQueue(sessionId);
     await sendChatWithOptimistic({
       sessionId,
-      content: displayContent,
-      requestContent: displayContent,
+      content,
       imagesSnapshot,
       documentsSnapshot,
       pastesSnapshot: pastesSnapshot.map(({ index, lineCount, content: pasteContent }) => ({
@@ -224,10 +193,6 @@ export const useSessionComposer = (input: SessionComposerStateInput) => {
       setTyping: input.setTyping,
       setStreamProgress: input.setStreamProgress,
       setDetail: input.setDetail,
-      runtimeDelegationSnapshot: delegationSnapshot,
-      runtimeActionsSnapshot,
-      workflowSelectionSnapshot,
-      workflowArmed: workflowArmedSnapshot,
       restoreFailedDraft: restoreFailedComposerState({
         sessionId,
         updateDraft,
@@ -242,38 +207,6 @@ export const useSessionComposer = (input: SessionComposerStateInput) => {
     });
   };
 
-  const send = async (override?: string): Promise<void> => {
-    const orchestrationModes = [
-      Boolean(runtimeDelegation),
-      Boolean(controlSelection),
-      runtimeActions.length > 0,
-      Boolean(workflowSelection),
-    ].filter(Boolean).length;
-    if (orchestrationModes > 1) {
-      input.showToast("Choose one orchestration mode before sending.");
-      return;
-    }
-    if (workflowArmed && !workflowSelection) {
-      input.showToast("Select a workflow before arming the fire button.");
-      return;
-    }
-    if (runtimeDelegation && input.typing) {
-      input.showToast("Wait for the current reply before delegating to another runtime.");
-      return;
-    }
-    await sendUnchecked(override);
-  };
-
-  // Auto-disarm: when the workflow run finishes, the fire toggle flips off.
-  const previousWorkflowRunRef = useRef(input.workflowRun);
-  useEffect(() => {
-    const wasRunning = previousWorkflowRunRef.current !== null;
-    previousWorkflowRunRef.current = input.workflowRun;
-    if (wasRunning && input.workflowRun === null) {
-      if (sessionId) updateDraft(sessionId, (draft) => ({ ...draft, workflowArmed: false }));
-    }
-  }, [input.workflowRun, sessionId, updateDraft]);
-
   return {
     input: draft.input,
     reviewComments,
@@ -286,10 +219,6 @@ export const useSessionComposer = (input: SessionComposerStateInput) => {
     pendingImages,
     pendingDocuments,
     pastes,
-    runtimeDelegation,
-    controlSelection,
-    runtimeActions,
-    workflowSelection,
     imageLimitReached: pendingImages.length >= CREATE_TASK_IMAGE_LIMITS.maxCount,
     documentLimitReached: pendingDocuments.length >= CHAT_DOCUMENT_LIMITS.maxCount,
     imageInputRef,
@@ -299,24 +228,6 @@ export const useSessionComposer = (input: SessionComposerStateInput) => {
     },
     setPastes: (nextPastes: ComposerPasteEntry[]) => {
       if (sessionId) updateDraft(sessionId, (draft) => ({ ...draft, pastes: nextPastes }));
-    },
-    setRuntimeDelegation: (delegation: typeof runtimeDelegation) => {
-      if (sessionId)
-        updateDraft(sessionId, (draft) => ({ ...draft, runtimeDelegation: delegation }));
-    },
-    setControlSelection: (selection: typeof controlSelection) => {
-      if (sessionId) updateDraft(sessionId, (draft) => ({ ...draft, controlSelection: selection }));
-    },
-    setRuntimeActions: (actions: typeof runtimeActions) => {
-      if (sessionId) updateDraft(sessionId, (draft) => ({ ...draft, runtimeActions: actions }));
-    },
-    setWorkflowSelection: (selection: typeof workflowSelection) => {
-      if (sessionId)
-        updateDraft(sessionId, (draft) => ({ ...draft, workflowSelection: selection }));
-    },
-    workflowArmed,
-    setWorkflowArmed: (armed: boolean) => {
-      if (sessionId) updateDraft(sessionId, (draft) => ({ ...draft, workflowArmed: armed }));
     },
     clear,
     attachImages,
@@ -347,25 +258,13 @@ const composerSendSnapshot = (sessionId: string, override?: string) => {
     : serializeReviewMessage(reviewSnapshot, typedSnapshot);
   if (!content && draft.images.length === 0 && draft.documents.length === 0) return null;
 
-  const withControl = draft.controlSelection
-    ? rewriteControlCommandMarker(content, draft.controlSelection)
-    : content;
   // Compact paste tokens stay in the request payload; bodies ship as `pastes`
   // and the chat bubble expands them for display.
-  const displayContent = draft.runtimeDelegation
-    ? `${withControl} ${formatRuntimeDelegationMarker(draft.runtimeDelegation)}`
-    : withControl;
   return {
     content,
-    requestContent: displayContent,
-    displayContent,
     imagesSnapshot: draft.images,
     documentsSnapshot: draft.documents,
     pastesSnapshot: draft.pastes,
-    delegationSnapshot: draft.runtimeDelegation,
-    runtimeActionsSnapshot: draft.runtimeActions,
-    workflowSelectionSnapshot: draft.workflowSelection,
-    workflowArmedSnapshot: draft.workflowArmed,
     reviewSnapshot,
     typedSnapshot,
     isSlashCommand,
@@ -395,10 +294,7 @@ const restoreFailedComposerState =
         draft.input.trim().length > 0 ||
         draft.images.length > 0 ||
         draft.documents.length > 0 ||
-        draft.pastes.length > 0 ||
-        draft.runtimeDelegation !== null ||
-        draft.runtimeActions.length > 0 ||
-        draft.workflowSelection !== null;
+        draft.pastes.length > 0;
       if (draftInUse) return draft;
       return {
         ...draft,
@@ -407,9 +303,6 @@ const restoreFailedComposerState =
         images: failed.images,
         documents: failed.documents,
         pastes: context.pastesSnapshot,
-        runtimeDelegation: failed.runtimeDelegation,
-        runtimeActions: failed.runtimeActions,
-        workflowSelection: failed.workflowSelection,
       };
     });
   };
@@ -420,7 +313,6 @@ const appendOptimisticUser = (
   content: string,
   images: LocalCreateTaskImage[],
   documents: ChatDocumentAttachment[],
-  action: ChatActionPayload | null,
 ): string => {
   const tempId = `local-${Date.now()}`;
   const optimistic: ChatSessionMessage = {
@@ -428,7 +320,7 @@ const appendOptimisticUser = (
     sessionId,
     role: "user",
     content,
-    action,
+    action: null,
     createdAt: new Date().toISOString(),
     images: images.map((image) => ({
       id: image.id,
@@ -448,35 +340,4 @@ const appendOptimisticUser = (
       : current,
   );
   return tempId;
-};
-
-const composerAction = (
-  runtimeActions: import("@aop/common").ChatRuntimeActionSelection[],
-  workflowSelection: import("@aop/common").ChatWorkflowSelection | null,
-): ChatActionPayload | null => {
-  if (workflowSelection) {
-    return {
-      type: "workflow-run",
-      id: workflowSelection.workflowId,
-      label: "Workflow",
-      sub: workflowSelection.name,
-      meta: `${workflowSelection.stepCount} steps`,
-      status: "proposed",
-      proposal: {
-        workflowId: workflowSelection.workflowId,
-        workflowName: workflowSelection.name,
-      },
-    };
-  }
-  if (runtimeActions.length === 0) return null;
-  return {
-    type: "runtime-actions",
-    label: "Runtime actions",
-    sub: runtimeActions
-      .map((action) => `${action.runtimeConfigurationName ?? action.provider} ${action.intent}`)
-      .join(" · "),
-    meta: `${runtimeActions.length} actions`,
-    status: "live",
-    proposal: { actions: runtimeActions },
-  };
 };

@@ -61,9 +61,6 @@ export const fileToLocalCreateTaskImage = async (file: File): Promise<LocalCreat
   return toLocalImage(file, file.type);
 };
 
-export const clipboardHasImage = (items: DataTransferItemList): boolean =>
-  [...items].some((item) => item.type.startsWith("image/"));
-
 export const clipboardItemsToLocalCreateTaskImages = async (
   items: DataTransferItemList,
 ): Promise<LocalCreateTaskImage[]> => {

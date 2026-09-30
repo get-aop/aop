@@ -1,26 +1,16 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import type {
-  ChatRuntimeActionSelection,
-  ChatWorkflowSelection,
-  ControlCommandSelection,
-  RuntimeConfigurationProvider,
-} from "@aop/common";
+import type { RuntimeConfigurationProvider } from "@aop/common";
 import { setupDashboardDom } from "../../test/setup-dom";
 
 setupDashboardDom();
 
-const { cleanup, fireEvent, render, screen, waitFor, within } = await import(
-  "@testing-library/react"
-);
+const { cleanup, fireEvent, render, screen } = await import("@testing-library/react");
 const { useState } = await import("react");
 const { ChatComposer } = await import("./ChatComposer");
-const { createRuntimeAction } = await import("./composer-runtime-actions");
 const { resizeComposerInput } = await import("./composer-shell");
-const originalConfirm = window.confirm;
 
 afterEach(() => {
   cleanup();
-  window.confirm = originalConfirm;
   window.localStorage.removeItem("aop:composer-model-favorites:v1");
 });
 
@@ -32,126 +22,24 @@ const baseProps = {
   model: "claude-opus-4-8",
   effort: "medium",
   connected: true,
-  termOpen: false,
   onRuntimeMenu: mock(() => {}),
   onModelMenu: mock(() => {}),
   onEffortMenu: mock(() => {}),
   onMoreMenu: mock(() => {}),
   onSlashPick: mock((_cmd: string) => {}),
-  termLines: [] as [],
-  termInput: "",
-  onTermInput: mock(() => {}),
-  onTermRun: mock(() => {}),
-  onTermClose: mock(() => {}),
-  repoPath: "/tmp/repo",
 };
+
+const repos = [
+  { id: "r1", name: "aop-mono", path: "/tmp/aop-mono" },
+  { id: "r2", name: "docs", path: "/tmp/docs" },
+];
 
 describe("ChatComposer context chips and typeahead", () => {
   test("composer column uses shared chat-column width (aligned with thread)", () => {
-    render(<ChatComposer {...baseProps} sessionId="s1" />);
+    render(<ChatComposer {...baseProps} />);
 
     const column = screen.getByTestId("chat-composer-column");
     expect(column.className).toContain("chat-column");
-    expect(column.className).not.toContain("chat-column--with-delegations");
-  });
-
-  test("does not offer delegation for ordinary runtime words", () => {
-    render(<ChatComposer {...baseProps} input="Ask PI and OpenCode to compare approaches" />);
-
-    expect(screen.queryByTestId("composer-delegation-action")).toBeNull();
-    expect(screen.queryByText(/Delegate to/)).toBeNull();
-  });
-
-  test("Confirm collapses the header chip into a yellow summary and restores caret", async () => {
-    render(
-      <ChatComposer
-        {...baseProps}
-        input="codex"
-        runtimeDelegation={{
-          id: "codex",
-          model: "gpt-5.5",
-          reasoning: "medium",
-          tokenStart: 0,
-          tokenEnd: 5,
-        }}
-      />,
-    );
-
-    expect(screen.getByTestId("composer-delegation-action").getAttribute("data-tone")).toBe(
-      "config",
-    );
-    expect(screen.queryByTestId("composer-delegation-token")).toBeNull();
-    fireEvent.click(screen.getByTestId("composer-delegation-confirm"));
-    expect(screen.getByTestId("composer-delegation-action").getAttribute("data-tone")).toBe(
-      "armed",
-    );
-    expect(screen.getByTestId("composer-delegation-summary").textContent).toContain(
-      "Will delegate to ‘Codex’",
-    );
-
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-    expect(document.activeElement).toBe(textarea);
-    expect(textarea.selectionStart).toBe(5);
-    expect(textarea.selectionEnd).toBe(5);
-  });
-
-  test("shows armed config with model, thinking, and removable selection", async () => {
-    const onRuntimeDelegationChange = mock((_value: unknown) => {});
-    render(
-      <ChatComposer
-        {...baseProps}
-        input="codex fix the build"
-        runtimeDelegation={{ id: "codex", model: "gpt-5.5", reasoning: "medium", fastMode: false }}
-        onRuntimeDelegationChange={onRuntimeDelegationChange}
-      />,
-    );
-
-    const action = screen.getByTestId("composer-delegation-action");
-    expect(action.getAttribute("data-tone")).toBe("config");
-    expect(action.textContent).toContain("Codex");
-    expect(screen.queryByTestId("composer-delegation-token")).toBeNull();
-
-    const model = screen.getByRole("combobox", { name: "Delegation model" });
-    expect(model.textContent).toContain("GPT 5.5");
-    fireEvent.pointerDown(model, { button: 0, ctrlKey: false });
-    fireEvent.click(model);
-    fireEvent.click(await screen.findByRole("option", { name: "gpt-5.4" }));
-    expect(onRuntimeDelegationChange).toHaveBeenLastCalledWith({
-      id: "codex",
-      model: "gpt-5.4",
-      reasoning: "medium",
-      fastMode: false,
-    });
-
-    const thinking = screen.getByRole("combobox", { name: "Delegation thinking" });
-    fireEvent.pointerDown(thinking, { button: 0, ctrlKey: false });
-    fireEvent.click(thinking);
-    fireEvent.click(await screen.findByRole("option", { name: "Extra-High" }));
-    expect(onRuntimeDelegationChange).toHaveBeenLastCalledWith({
-      id: "codex",
-      model: "gpt-5.5",
-      reasoning: "extra-high",
-      fastMode: false,
-    });
-
-    expect(screen.getByTestId("composer-delegation-confirm")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Cancel Codex delegation"));
-    expect(onRuntimeDelegationChange).toHaveBeenLastCalledWith(null);
-  });
-
-  test("keeps the armed header chip when the provider word is edited away", () => {
-    render(
-      <ChatComposer
-        {...baseProps}
-        input="fix the build"
-        runtimeDelegation={{ id: "codex", model: "gpt-5.5", reasoning: "high", fastMode: false }}
-      />,
-    );
-
-    const action = screen.getByTestId("composer-delegation-action");
-    expect(action.getAttribute("data-tone")).toBe("config");
-    expect(action.textContent).toContain("Codex");
   });
 
   test("animates the conversation divider only while the assistant is active", () => {
@@ -230,26 +118,6 @@ describe("ChatComposer context chips and typeahead", () => {
     expect(screen.getByTestId("composer-runtime-config")).toBeTruthy();
     expect(screen.getByTestId("composer-toolbar").className.split(/\s+/)).toContain("gap-3");
     expect(screen.getByTestId("composer-toolbar").className.split(/\s+/)).not.toContain("sm:gap-0");
-  });
-
-  test("does not surface AOP default worker or workflow pills in the T3Code composer", () => {
-    render(
-      <ChatComposer
-        {...baseProps}
-        workers={[
-          { id: "w1", name: "Ada" },
-          { id: "w2", name: "Bob" },
-        ]}
-        workflows={["aop-default-gpt", "simple"]}
-        defaultWorkerId="w1"
-        defaultWorkflowId="aop-default-gpt"
-        worktreePath="/workspace/aop-mono"
-      />,
-    );
-
-    expect(screen.queryByTestId("composer-worker-chip")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Clear @Ada" })).toBeNull();
-    expect(screen.queryByText("#aop-default-gpt")).toBeNull();
   });
 
   test("uses distinct t3-style model, effort, and access dropdowns without Build or Plan", async () => {
@@ -333,13 +201,9 @@ describe("ChatComposer context chips and typeahead", () => {
         onModelChange={onModelChange}
         onEffortChange={onEffortChange}
         onRuntimeAccessModeChange={onRuntimeAccessModeChange}
-        workers={[{ id: "w1", name: "Ada" }]}
-        workflows={["wf"]}
       />,
     );
 
-    expect(screen.queryByTestId("composer-worker-chip")).toBeNull();
-    expect(screen.queryByTestId("composer-workflow-chip")).toBeNull();
     expect(screen.queryByRole("button", { name: "Interaction mode" })).toBeNull();
     expect(screen.queryByText("Build")).toBeNull();
     expect(screen.queryByText("Plan")).toBeNull();
@@ -500,202 +364,6 @@ describe("ChatComposer context chips and typeahead", () => {
     expect(screen.queryByText("Full access")).toBeNull();
   });
 
-  test("shows the current checkout and branch in the footer strip", () => {
-    render(
-      <ChatComposer {...baseProps} worktreePath="/tmp/repo" branch="feature/session-location" />,
-    );
-
-    const footer = screen.getByTestId("composer-footer-strip");
-    expect(footer.textContent).toContain("Local checkout");
-    expect(footer.textContent).toContain("feature/session-location");
-  });
-
-  test("collapses an active worktree, diffstat, and long branch into one clean footer row", () => {
-    render(
-      <ChatComposer
-        {...baseProps}
-        worktreePath="/tmp/aop/worktrees/isess_very_long_session_identifier"
-        branch="revamp-sessions-page-port-t3code-sidebar-chat-composer"
-        gitDiffstat={{ filesChanged: 12, additions: 12011, deletions: 2204 }}
-      />,
-    );
-
-    const footer = screen.getByTestId("composer-footer-strip");
-    expect(footer.textContent).toContain("Current worktree");
-    expect(footer.textContent).not.toContain("isess_very_long_session_identifier");
-    expect(footer.textContent).toContain("+12011");
-    expect(footer.textContent).toContain("−2204");
-    expect(footer.className).toContain("max-w-3xl");
-    expect(screen.getByTestId("composer-footer-branch").className).toContain("min-w-0");
-  });
-
-  test("opens the branch picker, filters refs, and switches branches", async () => {
-    const onListBranches = mock(async () => ({
-      branches: [
-        {
-          name: "feature/current",
-          isCurrent: true,
-          isDefault: false,
-          worktreePath: "/tmp/current",
-        },
-        { name: "main", isCurrent: false, isDefault: true, worktreePath: "/tmp/repo" },
-        {
-          name: "feature/other-worktree",
-          isCurrent: false,
-          isDefault: false,
-          worktreePath: "/tmp/other",
-        },
-      ],
-    }));
-    const onBranchChange = mock(async (_branch: string) => {});
-    render(
-      <ChatComposer
-        {...baseProps}
-        worktreePath="/tmp/current"
-        branch="feature/current"
-        onListBranches={onListBranches}
-        onBranchChange={onBranchChange}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Branch" }));
-    const search = await screen.findByPlaceholderText("Search refs…");
-    await waitFor(() => expect(onListBranches).toHaveBeenCalledTimes(1));
-    const picker = await screen.findByTestId("branch-picker-content");
-    expect(await within(picker).findByText("feature/current")).toBeTruthy();
-    expect(within(picker).getByText("main")).toBeTruthy();
-
-    fireEvent.change(search, { target: { value: "other" } });
-    expect(within(picker).queryByText("main")).toBeNull();
-    fireEvent.click(await within(picker).findByText("feature/other-worktree"));
-
-    await waitFor(() => expect(onBranchChange).toHaveBeenCalledWith("feature/other-worktree"));
-  });
-
-  test("disables branch switching while the assistant is active", () => {
-    render(
-      <ChatComposer
-        {...baseProps}
-        assistantActive
-        worktreePath="/tmp/current"
-        branch="feature/current"
-        onListBranches={mock(async () => ({ branches: [] }))}
-        onBranchChange={mock(async () => {})}
-      />,
-    );
-
-    expect((screen.getByRole("button", { name: "Branch" }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-  });
-
-  test("hides the diffstat chip when the working tree is clean", () => {
-    render(
-      <ChatComposer
-        {...baseProps}
-        worktreePath="/workspace/aop-mono"
-        branch="main"
-        gitDiffstat={null}
-      />,
-    );
-
-    expect(screen.queryByTestId("session-git-diffstat")).toBeNull();
-  });
-
-  test("shows diffstat in the checkout strip when files changed", () => {
-    const onDiffstatClick = mock(() => {});
-    render(
-      <ChatComposer
-        {...baseProps}
-        worktreePath="/workspace/aop-mono"
-        branch="feature/dirty"
-        gitDiffstat={{ filesChanged: 3, additions: 12, deletions: 4 }}
-        onDiffstatClick={onDiffstatClick}
-      />,
-    );
-
-    const diffstat = screen.getByTestId("session-git-diffstat");
-    expect(diffstat.textContent).toContain("+12");
-    expect(diffstat.textContent).toContain("−4");
-    fireEvent.click(diffstat);
-    expect(onDiffstatClick).toHaveBeenCalledTimes(1);
-  });
-
-  test("does not show a location strip without a worktree path", () => {
-    render(
-      <ChatComposer {...baseProps} gitDiffstat={{ filesChanged: 2, additions: 1, deletions: 0 }} />,
-    );
-
-    expect(screen.queryByTestId("composer-session-location")).toBeNull();
-    expect(screen.queryByTestId("session-git-diffstat")).toBeNull();
-  });
-
-  test("shows worktree creation in the bottom checkout strip", () => {
-    render(
-      <ChatComposer
-        {...baseProps}
-        suggestedWorktreeBranch="aop/fix-auth-abc123"
-        onCreateWorktree={mock(async () => {})}
-      />,
-    );
-
-    expect(screen.getByTestId("composer-footer-strip")).toBeTruthy();
-    expect(screen.getByTestId("composer-worktree")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("composer-worktree"));
-    expect(screen.getByTestId("composer-worktree-branch")).toBeTruthy();
-  });
-
-  test("closes the bottom worktree menu after creation and reports failures", async () => {
-    const onCreateWorktree = mock(async () => {});
-    const { rerender } = render(
-      <ChatComposer
-        {...baseProps}
-        suggestedWorktreeBranch="aop/fix-auth-abc123"
-        onCreateWorktree={onCreateWorktree}
-      />,
-    );
-
-    const worktreeTrigger = screen.getByTestId("composer-worktree");
-    fireEvent.click(worktreeTrigger);
-    const newWorktree = screen.getByTestId("composer-worktree-branch");
-    fireEvent.pointerDown(newWorktree);
-    fireEvent.pointerUp(newWorktree);
-    fireEvent.click(newWorktree);
-    await waitFor(() => expect(worktreeTrigger.getAttribute("aria-expanded")).toBe("false"));
-    expect(onCreateWorktree).toHaveBeenCalledWith("aop/fix-auth-abc123");
-
-    rerender(
-      <ChatComposer
-        {...baseProps}
-        suggestedWorktreeBranch="aop/fix-auth-abc123"
-        onCreateWorktree={mock(async () => {
-          throw new Error("Branch already exists");
-        })}
-      />,
-    );
-    fireEvent.click(screen.getByTestId("composer-worktree"));
-    const failingWorktree = screen.getByTestId("composer-worktree-branch");
-    fireEvent.pointerDown(failingWorktree);
-    fireEvent.pointerUp(failingWorktree);
-    fireEvent.click(failingWorktree);
-    expect((await screen.findByRole("alert")).textContent).toContain("Branch already exists");
-    expect(screen.getByTestId("composer-worktree-branch")).toBeTruthy();
-  });
-
-  test("keeps commit and terminal actions in the t3code chat header", () => {
-    render(
-      <ChatComposer {...baseProps} onCommit={mock(async () => {})} onToggleTerm={mock(() => {})} />,
-    );
-
-    expect(screen.queryByTestId("composer-commit")).toBeNull();
-    expect(screen.queryByTestId("composer-terminal")).toBeNull();
-  });
-
-  test("hides commit control when no commit callback is supplied", () => {
-    render(<ChatComposer {...baseProps} onToggleTerm={mock(() => {})} />);
-    expect(screen.queryByTestId("composer-commit")).toBeNull();
-  });
-
   test("uses the scira rounded composer surface, ghost controls, and circular send action", () => {
     render(<ChatComposer {...baseProps} />);
 
@@ -717,411 +385,12 @@ describe("ChatComposer context chips and typeahead", () => {
     expect(modelButton.className).toContain("rounded-lg");
   });
 
-  test("does not duplicate the chat-header worktree popover inside the composer", () => {
-    render(
-      <ChatComposer
-        {...baseProps}
-        suggestedWorktreeBranch="aop/fix-auth-abc123"
-        onCreateWorktree={mock(async () => {})}
-      />,
-    );
-
-    expect(screen.queryByTestId("composer-worktree-popover")).toBeNull();
-    expect(screen.queryByTestId("composer-worktree-create")).toBeNull();
-  });
-
-  test("shows a header control chip for explicit $control tokens without draft highlights", () => {
-    const ControlledComposer = () => {
-      const [selection, setSelection] = useState<ControlCommandSelection | null>(null);
-      return (
-        <ChatComposer
-          {...baseProps}
-          input="$CX_BROWSER_USE inspect the page"
-          controlSelection={selection}
-          onControlSelectionChange={setSelection}
-        />
-      );
-    };
-    render(<ControlledComposer />);
-
-    expect(screen.queryByTestId("composer-control-warning")).toBeNull();
-    expect(screen.getByTestId("composer-control-action").getAttribute("data-tone")).toBe("config");
-    expect(screen.getByRole("combobox", { name: "Control model" })).toBeTruthy();
-    expect(screen.getByRole("combobox", { name: "Control thinking" })).toBeTruthy();
-    expect(screen.getByText("Codex Browser")).toBeTruthy();
-    expect(
-      screen.getByTestId("composer-highlight-layer").querySelector("[data-kind=control]"),
-    ).toBeNull();
-  });
-
-  test("confirming control collapses to a yellow summary; dismiss clears the $token", () => {
-    const ControlledComposer = () => {
-      const [input, setInput] = useState("$CX_BROWSER_USE inspect the page");
-      const [selection, setSelection] = useState<ControlCommandSelection | null>({
-        id: "CX_BROWSER_USE",
-        model: "gpt-5.5",
-        reasoning: "medium",
-        fastMode: false,
-      });
-      return (
-        <ChatComposer
-          {...baseProps}
-          input={input}
-          onInput={setInput}
-          controlSelection={selection}
-          onControlSelectionChange={setSelection}
-        />
-      );
-    };
-    render(<ControlledComposer />);
-
-    fireEvent.click(screen.getByTestId("composer-control-confirm"));
-    expect(screen.getByTestId("composer-control-action").getAttribute("data-tone")).toBe("armed");
-    expect(screen.getByTestId("composer-control-summary").textContent).toContain(
-      "Will use Codex Browser",
-    );
-
-    fireEvent.click(screen.getByLabelText("Remove Codex Browser control"));
-    expect(screen.queryByTestId("composer-control-action")).toBeNull();
-    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("inspect the page");
-  });
-
-  test("clearing a control preserves draft indentation", () => {
-    const input = ["$CX_BROWSER_USE Inspect this:", "    if (ready) {", "\t\trun();", "    }"].join(
-      "\n",
-    );
-    const ControlledComposer = () => {
-      const [draft, setDraft] = useState(input);
-      const [selection, setSelection] = useState<ControlCommandSelection | null>({
-        id: "CX_BROWSER_USE",
-        model: "gpt-5.5",
-        reasoning: "medium",
-        fastMode: false,
-      });
-      return (
-        <ChatComposer
-          {...baseProps}
-          input={draft}
-          onInput={setDraft}
-          controlSelection={selection}
-          onControlSelectionChange={setSelection}
-        />
-      );
-    };
-    render(<ControlledComposer />);
-
-    fireEvent.click(screen.getByLabelText("Remove Codex Browser control"));
-
-    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
-      ["Inspect this:", "    if (ready) {", "\t\trun();", "    }"].join("\n"),
-    );
-  });
-
   test("shows only the dedicated command menu when slash is typed", () => {
     render(<ChatComposer {...baseProps} input="/" />);
 
     expect(screen.getByTestId("slash-command-menu")).toBeTruthy();
     expect(screen.queryByTestId("composer-typeahead")).toBeNull();
     expect(screen.getByText("/goal")).toBeTruthy();
-  });
-
-  test("turns /review into a configured header card without leaving command text", () => {
-    const ControlledComposer = () => {
-      const [input, setInput] = useState("/");
-      const [runtimeActions, setRuntimeActions] = useState<ChatRuntimeActionSelection[]>([]);
-      return (
-        <ChatComposer
-          {...baseProps}
-          input={input}
-          onInput={setInput}
-          runtimeActions={runtimeActions}
-          onRuntimeActionsChange={setRuntimeActions}
-          runtimeConfigurations={[
-            {
-              id: "codex-personal",
-              name: "Codex Personal",
-              command: "codex",
-              driver: "codex-cli",
-              builtIn: false,
-              position: 0,
-              supportsFastMode: true,
-              models: [
-                {
-                  id: "codex-model",
-                  providerId: "codex-personal",
-                  description: "GPT 5.6",
-                  model: "gpt-5.6",
-                  thinkingLevels: ["high"],
-                  builtIn: false,
-                  position: 0,
-                  isDefault: true,
-                  defaultThinkingLevel: "high",
-                },
-              ],
-            },
-          ]}
-        />
-      );
-    };
-    render(<ControlledComposer />);
-
-    fireEvent.click(screen.getByText("/review"));
-    expect(screen.getByTestId("composer-runtime-action-picker")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Codex Personal/ }));
-
-    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
-    expect(screen.getByTestId("composer-runtime-action-review").textContent).toContain(
-      "Codex Personal will review",
-    );
-    expect(screen.getByTestId("composer-runtime-action-review").textContent).not.toContain("fast");
-
-    fireEvent.click(screen.getByRole("button", { name: "Configure review action" }));
-    expect(screen.getByLabelText("Quick Action model")).toBeTruthy();
-    expect(screen.getByLabelText("Quick Action thinking")).toBeTruthy();
-    expect((screen.getByLabelText("Quick Action fast mode") as HTMLInputElement).checked).toBe(
-      false,
-    );
-    fireEvent.click(screen.getByLabelText("Quick Action fast mode"));
-    fireEvent.click(screen.getByRole("button", { name: "Confirm review action" }));
-    expect(screen.getByTestId("composer-runtime-action-review").textContent).toContain("fast");
-  });
-
-  test("keeps the selected runtime configuration name on a Quick Action", () => {
-    const configuration: RuntimeConfigurationProvider = {
-      id: "codex-personal",
-      name: "Codex Personal",
-      command: "codex",
-      driver: "codex-cli",
-      builtIn: false,
-      position: 0,
-      supportsFastMode: true,
-      models: [
-        {
-          id: "codex-model",
-          providerId: "codex-personal",
-          description: "GPT 5.6",
-          model: "gpt-5.6",
-          thinkingLevels: ["high"],
-          builtIn: false,
-          position: 0,
-          isDefault: true,
-          defaultThinkingLevel: "high",
-        },
-      ],
-    };
-
-    expect(createRuntimeAction("review", configuration)).toMatchObject({
-      runtimeConfigurationId: "codex-personal",
-      runtimeConfigurationName: "Codex Personal",
-      provider: "codex-cli",
-    });
-  });
-
-  test("turns a selected #workflow into the §6.4 rail and removes its token", () => {
-    const ControlledComposer = () => {
-      const [input, setInput] = useState("please #aop fix this");
-      const [selection, setSelection] = useState<ChatWorkflowSelection | null>(null);
-      return (
-        <ChatComposer
-          {...baseProps}
-          input={input}
-          onInput={setInput}
-          workflowSelection={selection}
-          onWorkflowSelectionChange={setSelection}
-          workflows={[
-            {
-              id: "workflow-1",
-              name: "aop-default-gpt",
-              stepCount: 4,
-              stepTypes: ["implement", "review"],
-              steps: [
-                {
-                  id: "implement",
-                  type: "implement",
-                  provider: "codex-cli",
-                  model: "gpt-5.6",
-                  reasoning: "high",
-                  fastMode: true,
-                },
-                {
-                  id: "review",
-                  type: "review",
-                  provider: "claude-code",
-                  model: "opus-4.8",
-                  reasoning: "max",
-                },
-              ],
-            },
-          ]}
-        />
-      );
-    };
-    render(<ControlledComposer />);
-
-    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
-    textarea.setSelectionRange(11, 11);
-    fireEvent.select(textarea);
-    fireEvent.click(screen.getByText("aop-default-gpt"));
-
-    expect(textarea.value).toBe("please  fix this");
-    const rail = screen.getByTestId("composer-workflow-selection");
-    expect(rail.textContent).toContain("aop-default-gpt");
-    // Step chips render inline (provider marks + model short labels).
-    expect(rail.querySelectorAll('[data-testid="workflow-step-chip"]').length).toBe(2);
-    expect(rail.textContent).toContain("gpt-5.6");
-    // The Studio deep link is gone.
-    expect(screen.queryByRole("link", { name: "Open in Workflow Studio" })).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Remove workflow aop-default-gpt" }));
-    expect(screen.queryByTestId("composer-workflow-selection")).toBeNull();
-  });
-
-  test("renders a Legacy chip for selections without step detail", () => {
-    const ControlledComposer = () => {
-      const [input, setInput] = useState("please #aop");
-      const [selection, setSelection] = useState<ChatWorkflowSelection | null>({
-        workflowId: "legacy-1",
-        name: "Legacy flow",
-        stepCount: 7,
-      });
-      return (
-        <ChatComposer
-          {...baseProps}
-          input={input}
-          onInput={setInput}
-          workflowSelection={selection}
-          onWorkflowSelectionChange={setSelection}
-          workflows={[{ id: "legacy-1", name: "Legacy flow", stepCount: 7 }]}
-        />
-      );
-    };
-    render(<ControlledComposer />);
-
-    const rail = screen.getByTestId("composer-workflow-selection");
-    expect(rail.textContent).toContain("7 steps · Legacy");
-    expect(screen.queryByTestId("composer-workflow-legacy")).toBeTruthy();
-  });
-
-  test("keeps the workflow token when replacing Quick Actions is cancelled", () => {
-    const confirm = mock(() => false);
-    window.confirm = confirm;
-    const ControlledComposer = () => {
-      const [input, setInput] = useState("please #aop");
-      const [runtimeActions, setRuntimeActions] = useState<ChatRuntimeActionSelection[]>([
-        {
-          id: "review-1",
-          intent: "review",
-          runtimeConfigurationId: "codex-personal",
-          provider: "codex-cli",
-          model: "gpt-5.6",
-          reasoning: "high",
-          fastMode: false,
-          phase: "post-work",
-        },
-      ]);
-      return (
-        <ChatComposer
-          {...baseProps}
-          input={input}
-          onInput={setInput}
-          runtimeActions={runtimeActions}
-          onRuntimeActionsChange={setRuntimeActions}
-          onWorkflowSelectionChange={() => {}}
-          workflows={[
-            {
-              id: "workflow-1",
-              name: "aop-default-gpt",
-              stepCount: 2,
-              stepTypes: ["implement", "review"],
-            },
-          ]}
-        />
-      );
-    };
-    render(<ControlledComposer />);
-
-    fireEvent.click(screen.getByText("aop-default-gpt"));
-
-    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("please #aop");
-    expect(confirm).toHaveBeenCalledTimes(1);
-  });
-
-  test("opens @ runtime typeahead and arms delegation on pick", () => {
-    const onInput = mock((_value: string) => {});
-    const onRuntimeDelegationChange = mock((_value: unknown) => {});
-    render(
-      <ChatComposer
-        {...baseProps}
-        input="please @co"
-        onInput={onInput}
-        onRuntimeDelegationChange={onRuntimeDelegationChange}
-      />,
-    );
-
-    const menu = screen.getByTestId("composer-typeahead");
-    expect(menu.className).toContain("rounded-[20px]");
-    expect(menu.className).toContain("bg-popover/96");
-    expect(menu.textContent).toContain("Runtimes");
-    expect(menu.textContent).toContain("Codex");
-    fireEvent.click(screen.getByText("Codex"));
-    expect(onInput).toHaveBeenCalledWith("please Codex ");
-    expect(onRuntimeDelegationChange).toHaveBeenCalledWith({
-      id: "codex",
-      model: "gpt-5.5",
-      reasoning: "medium",
-      fastMode: false,
-      tokenStart: 7,
-      tokenEnd: 12,
-    });
-  });
-
-  test("keeps a custom runtime configuration bound when picked with @", () => {
-    const onInput = mock((_value: string) => {});
-    const onRuntimeDelegationChange = mock((_value: unknown) => {});
-    const ccPersonal: RuntimeConfigurationProvider = {
-      id: "rtprov_cc_personal",
-      name: "CC Personal",
-      command: "cpe",
-      driver: "claude-code",
-      builtIn: false,
-      position: 0,
-      supportsFastMode: false,
-      models: [
-        {
-          id: "rtmodel_cc_personal_fable",
-          providerId: "rtprov_cc_personal",
-          description: "Fable 5",
-          model: "claude-fable-5",
-          thinkingLevels: ["low", "medium", "high"],
-          builtIn: false,
-          position: 0,
-          isDefault: true,
-          defaultThinkingLevel: "low",
-        },
-      ],
-    };
-    render(
-      <ChatComposer
-        {...baseProps}
-        input="please @cc"
-        onInput={onInput}
-        onRuntimeDelegationChange={onRuntimeDelegationChange}
-        runtimeConfigurations={[ccPersonal]}
-      />,
-    );
-
-    fireEvent.click(screen.getByText("CC Personal"));
-
-    expect(onInput).toHaveBeenCalledWith("please CC Personal ");
-    expect(onRuntimeDelegationChange).toHaveBeenCalledWith({
-      id: "claude",
-      model: "claude-fable-5",
-      reasoning: "low",
-      fastMode: false,
-      runtimeConfigurationId: "rtprov_cc_personal",
-      tokenStart: 7,
-      tokenEnd: 18,
-    });
   });
 
   test("Enter on an exact leading slash command sends instead of completing", () => {
@@ -1322,23 +591,14 @@ describe("ChatComposer context chips and typeahead", () => {
   test("captures the typed caret before controlled input updates can move it", () => {
     let inputElement: HTMLTextAreaElement | null = null;
     const onInput = mock((value: string) => {
-      rerender(
-        <ChatComposer
-          {...baseProps}
-          input={value}
-          onInput={onInput}
-          workers={[{ id: "w1", name: "Ada" }]}
-        />,
-      );
+      rerender(<ChatComposer {...baseProps} input={value} onInput={onInput} repos={repos} />);
       inputElement?.setSelectionRange(0, 0);
     });
-    const { rerender } = render(
-      <ChatComposer {...baseProps} onInput={onInput} workers={[{ id: "w1", name: "Ada" }]} />,
-    );
+    const { rerender } = render(<ChatComposer {...baseProps} onInput={onInput} repos={repos} />);
     inputElement = screen.getByTestId("chat-composer-input") as HTMLTextAreaElement;
     inputElement.setSelectionRange(2, 2);
 
-    fireEvent.change(inputElement, { target: { value: "@a", selectionStart: 2 } });
+    fireEvent.change(inputElement, { target: { value: "~a", selectionStart: 2 } });
 
     expect(screen.getByTestId("composer-typeahead")).toBeTruthy();
   });
@@ -1424,100 +684,137 @@ describe("ChatComposer context chips and typeahead", () => {
     );
   });
 
-  test("shows $ control typeahead with descriptions instead of technical ids", () => {
-    let draft = "";
-    const handleInput = (value: string) => {
-      draft = value;
-      rerender(<ChatComposer {...baseProps} input={draft} onInput={handleInput} />);
-    };
-    const { rerender } = render(<ChatComposer {...baseProps} input="" onInput={handleInput} />);
+  test("the draft placeholder advertises only the surviving ~ and / triggers", () => {
+    render(<ChatComposer {...baseProps} />);
 
-    fireEvent.change(screen.getByTestId("chat-composer-input"), {
-      target: { value: "$", selectionStart: 1 },
-    });
-
-    const menu = screen.getByTestId("composer-typeahead");
-    expect(menu).toBeTruthy();
-    expect(screen.getByRole("option", { name: /Claude Browser/i })).toBeTruthy();
-    expect(screen.getByRole("option", { name: /Codex Computer/i })).toBeTruthy();
-    expect(menu.textContent).not.toContain("CC_BROWSER_USE");
-    expect(menu.textContent).not.toContain("CX_COMPUTER_USE");
-    expect(menu.textContent).toContain("Controls");
-    expect(menu.textContent).toContain("browser control");
+    const textarea = screen.getByTestId("chat-composer-input") as HTMLTextAreaElement;
+    expect(textarea.placeholder).toBe("Ask anything, ~ to mention a repository, or / for commands");
+    expect(textarea.readOnly).toBe(false);
   });
 
-  test("shows typeahead popover for %worker tokens and applies pick into onInput", () => {
+  test("picking a slash command writes it into the draft", () => {
     const onInput = mock((_value: string) => {});
-    const onDefaultWorkerChange = mock((_id: string | null) => {});
+    const onSlashPick = mock((_cmd: string) => {});
+    render(<ChatComposer {...baseProps} input="/" onInput={onInput} onSlashPick={onSlashPick} />);
+
+    expect(screen.queryByText("/review")).toBeNull();
+    expect(screen.queryByText("/workflow")).toBeNull();
+    fireEvent.click(screen.getByText("/skill"));
+
+    expect(onInput).toHaveBeenLastCalledWith("/skill ");
+    expect(onSlashPick).toHaveBeenLastCalledWith("/skill ");
+    expect(screen.queryByTestId("composer-runtime-action-picker")).toBeNull();
+  });
+
+  test("opens the ~ repository typeahead and applies the picked repo into onInput", () => {
+    const onInput = mock((_value: string) => {});
     let draft = "";
     const handleInput = (value: string) => {
       draft = value;
       onInput(value);
-      rerender(
-        <ChatComposer
-          {...baseProps}
-          input={draft}
-          onInput={handleInput}
-          workers={[{ id: "w1", name: "Ada" }]}
-          onDefaultWorkerChange={onDefaultWorkerChange}
-        />,
-      );
+      rerender(<ChatComposer {...baseProps} input={draft} onInput={handleInput} repos={repos} />);
     };
-
     const { rerender } = render(
-      <ChatComposer
-        {...baseProps}
-        input=""
-        onInput={handleInput}
-        workers={[{ id: "w1", name: "Ada" }]}
-        onDefaultWorkerChange={onDefaultWorkerChange}
-      />,
+      <ChatComposer {...baseProps} input="" onInput={handleInput} repos={repos} />,
     );
 
-    const input = screen.getByTestId("chat-composer-input");
-    fireEvent.change(input, { target: { value: "%a" } });
+    fireEvent.change(screen.getByTestId("chat-composer-input"), {
+      target: { value: "look at ~a", selectionStart: 10 },
+    });
 
-    expect(screen.getByTestId("composer-typeahead")).toBeTruthy();
-    fireEvent.click(screen.getByRole("option", { name: /Ada/ }));
-    expect(onInput).toHaveBeenCalled();
-    expect(onDefaultWorkerChange).not.toHaveBeenCalled();
-    expect(
-      draft.includes("Ada") || onInput.mock.calls.some((call) => String(call[0]).includes("Ada")),
-    ).toBe(true);
+    const menu = screen.getByTestId("composer-typeahead");
+    expect(menu.className).toContain("rounded-[20px]");
+    expect(menu.className).toContain("bg-popover/96");
+    expect(menu.textContent).toContain("Repositories");
+    expect(screen.queryByRole("option", { name: /docs/ })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: /aop-mono/ }));
+
+    expect(onInput).toHaveBeenLastCalledWith("look at ~aop-mono ");
+    expect(screen.queryByTestId("composer-typeahead")).toBeNull();
   });
 
-  test("armed workflow chip: sibling clear button, no nested interactive elements", () => {
-    const onDefaultWorkflowChange = mock((_id: string | null) => {});
+  test("arrow keys and Enter pick a repository; Escape dismisses until the token changes", () => {
+    const onInput = mock((_value: string) => {});
+    const onSend = mock(() => {});
     const { rerender } = render(
-      <ChatComposer
-        {...baseProps}
-        sessionId="s1"
-        workflows={["wf-1"]}
-        defaultWorkflowId="wf-1"
-        onDefaultWorkflowChange={onDefaultWorkflowChange}
-      />,
+      <ChatComposer {...baseProps} input="~" onInput={onInput} onSend={onSend} repos={repos} />,
+    );
+    const textarea = screen.getByTestId("chat-composer-input");
+
+    // An untouched suggestion is never applied by Enter: the message sends.
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onInput).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(textarea, { key: "ArrowDown" });
+    fireEvent.keyDown(textarea, { key: "ArrowDown" });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onInput).toHaveBeenLastCalledWith("~docs ");
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    rerender(<ChatComposer {...baseProps} input="~d" onInput={onInput} repos={repos} />);
+    expect(screen.getByTestId("composer-typeahead")).toBeTruthy();
+    fireEvent.keyDown(textarea, { key: "Escape" });
+    expect(screen.queryByTestId("composer-typeahead")).toBeNull();
+  });
+
+  test("the retired % # $ @ sigils no longer open a typeahead", () => {
+    const { rerender } = render(<ChatComposer {...baseProps} input="" repos={repos} />);
+
+    for (const draft of ["%a", "#a", "$", "@c"]) {
+      rerender(<ChatComposer {...baseProps} input={draft} repos={repos} />);
+      expect(screen.queryByTestId("composer-typeahead")).toBeNull();
+    }
+  });
+
+  test("highlights a known ~repo mention in the draft without changing its text", () => {
+    render(<ChatComposer {...baseProps} input="look at ~aop-mono now" repos={repos} />);
+
+    const layer = screen.getByTestId("composer-highlight-layer");
+    expect(layer.textContent).toBe("look at ~aop-mono now");
+    const mark = layer.querySelector("[data-kind=repo]");
+    expect(mark?.textContent).toBe("~aop-mono");
+  });
+
+  test("renders the merged-PR bar inside the composer canvas above the input", () => {
+    render(
+      <ChatComposer {...baseProps} mergedPrBar={<div data-testid="merged-pr-bar">Merged</div>} />,
     );
 
-    const chip = screen.getByTestId("composer-workflow-chip");
-    // F2: the armed chip must not nest <button> inside <button>.
-    expect(chip.querySelector("button button")).toBeNull();
-    expect(chip.querySelectorAll("button").length).toBe(2);
-    expect(screen.getByLabelText("Workflow").textContent).toContain("wf-1");
+    const bar = screen.getByTestId("merged-pr-bar");
+    const canvas = screen.getByTestId("composer-canvas");
+    expect(canvas.contains(bar)).toBe(true);
+    const input = screen.getByTestId("chat-composer-input");
+    expect(bar.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 
-    fireEvent.click(screen.getByLabelText("Clear workflow"));
-    expect(onDefaultWorkflowChange).toHaveBeenCalledWith(null);
+  test("queued review comments alone enable sending", () => {
+    const comment = {
+      id: "c1",
+      path: "src/a.ts",
+      lineType: "add" as const,
+      oldNo: null,
+      newNo: 3,
+      excerpt: "line 3",
+      note: "rename this",
+      createdAt: 1,
+    };
+    const { rerender } = render(<ChatComposer {...baseProps} />);
+    expect(screen.getByRole("button", { name: "Send message" }).hasAttribute("disabled")).toBe(
+      true,
+    );
 
-    // A cleared selection drops the × control once the parent re-renders.
     rerender(
       <ChatComposer
         {...baseProps}
-        sessionId="s1"
-        workflows={["wf-1"]}
-        defaultWorkflowId={null}
-        onDefaultWorkflowChange={onDefaultWorkflowChange}
+        reviewComments={[comment]}
+        onUpdateReviewComment={() => {}}
+        onRemoveReviewComment={() => {}}
       />,
     );
-    expect(screen.queryByTestId("composer-workflow-clear")).toBeNull();
-    expect(screen.getByTestId("composer-workflow-chip").querySelectorAll("button").length).toBe(1);
+    expect(screen.getByTestId("review-queue")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send message" }).hasAttribute("disabled")).toBe(
+      false,
+    );
   });
 });

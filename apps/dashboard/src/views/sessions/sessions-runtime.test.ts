@@ -8,23 +8,12 @@ import {
   isExactLeadingSlashCommand,
   matchSlashToken,
   parseMessageSegments,
-  resolveUserMessageDisplay,
 } from "./sessions-runtime";
 
 describe("sessions-runtime", () => {
   test("lists every supported AOP and CLI slash command", () => {
-    expect(CHAT_COMMANDS).toHaveLength(9);
-    expect(CHAT_COMMANDS.map((c) => c.cmd)).toEqual([
-      "/implement",
-      "/review",
-      "/audit",
-      "/test",
-      "/security",
-      "/workflow",
-      "/skill",
-      "/clear",
-      "/goal",
-    ]);
+    expect(CHAT_COMMANDS).toHaveLength(3);
+    expect(CHAT_COMMANDS.map((c) => c.cmd)).toEqual(["/skill", "/clear", "/goal"]);
   });
 
   test("does not offer legacy task/worker commands", () => {
@@ -34,10 +23,10 @@ describe("sessions-runtime", () => {
     expect(filterSlashCommands("/status")).toEqual([]);
   });
 
-  test("filters the five Quick Action commands", () => {
-    expect(filterSlashCommands("/re").map((command) => command.cmd)).toEqual(["/review"]);
-    expect(filterSlashCommands("/sec").map((command) => command.cmd)).toEqual(["/security"]);
-    expect(filterSlashCommands("/test").map((command) => command.cmd)).toEqual(["/test"]);
+  test("does not offer Quick Action or workflow commands", () => {
+    for (const command of ["/implement", "/review", "/audit", "/test", "/security", "/workflow"]) {
+      expect(filterSlashCommands(command)).toEqual([]);
+    }
   });
 
   test("filters slash commands only on bare /prefix", () => {
@@ -64,13 +53,11 @@ describe("sessions-runtime", () => {
     expect(matchSlashToken("word/skill", 11)).toBeNull();
   });
 
-  test("parses command and mention segments", () => {
-    const segs = parseMessageSegments("/skill tdd Fix teardown %K6 please", ["K6", "K1"]);
+  test("parses command segments and leaves %mentions as plain text", () => {
+    const segs = parseMessageSegments("/skill tdd Fix teardown %K6 please");
     expect(segs).toEqual([
       { kind: "command", text: "/skill" },
-      { kind: "text", text: " tdd Fix teardown " },
-      { kind: "mention", text: "%K6" },
-      { kind: "text", text: " please" },
+      { kind: "text", text: " tdd Fix teardown %K6 please" },
     ]);
   });
 
@@ -81,26 +68,6 @@ describe("sessions-runtime", () => {
     expect(parseMessageSegments("use OpenCode for this")).toEqual([
       { kind: "text", text: "use OpenCode for this" },
     ]);
-  });
-
-  test("history badges only appear when transport markers are present", () => {
-    expect(resolveUserMessageDisplay("codex please fix the flaky test")).toEqual({
-      displayText: "codex please fix the flaky test",
-      badges: [],
-    });
-    const delegated = resolveUserMessageDisplay(
-      "Fix the flaky test $DELEGATE_CODEX[gpt-5.4;extra-high]",
-    );
-    expect(delegated.displayText).toBe("Fix the flaky test");
-    expect(delegated.badges).toHaveLength(1);
-    expect(delegated.badges[0]?.kind).toBe("delegation");
-    expect(delegated.badges[0]?.label).toContain("Codex");
-    expect(delegated.badges[0]?.label).toContain("extra-high");
-
-    const controlled = resolveUserMessageDisplay("inspect billing $CX_BROWSER_USE[gpt-5.5;medium]");
-    expect(controlled.displayText).toBe("inspect billing");
-    expect(controlled.badges[0]?.kind).toBe("control");
-    expect(controlled.badges[0]?.label).toContain("Codex Browser");
   });
 
   test("does not style paths or unknown slash text as commands", () => {

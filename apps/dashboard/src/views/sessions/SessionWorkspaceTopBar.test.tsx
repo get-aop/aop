@@ -141,7 +141,7 @@ describe("SessionWorkspaceTopBar", () => {
     );
   });
 
-  test("does not duplicate worktree creation in the top bar", () => {
+  test("does not render worktree creation in the top bar", () => {
     render(
       <SessionWorkspaceTopBar
         session={session}
@@ -149,8 +149,6 @@ describe("SessionWorkspaceTopBar", () => {
         pr={pr}
         onToast={mock(() => {})}
         onGitChanged={mock(() => {})}
-        suggestedWorktreeBranch="feature/sessions"
-        onCreateWorktree={mock(async () => {})}
       />,
     );
 

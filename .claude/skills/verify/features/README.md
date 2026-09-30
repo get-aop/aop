@@ -33,7 +33,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Features
 
-- [Run a task](./task-run.md) covers assigning, `aop task:ready`, the dashboard Mark ready button, live completion, task detail, and the handoff branch.
+- [Run a task](./task-run.md) covers `aop task:ready`, completion, and the handoff branch. The dashboard has no task pages.
 - [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the dashboard attach dialog.
 - [Sessions](./sessions.md) covers the chat workbench, the composer, runtime-free commands, and settling.
-- [Workflows and Settings](./workflows-settings.md) covers the Settings dialog and the workflow list.
+- [Settings](./settings.md) covers the Settings dialog and its sections.

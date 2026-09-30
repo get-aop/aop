@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { ChatSessionMessage } from "../../api/client";
 import { setupDashboardDom } from "../../test/setup-dom";
-import { ChatStreamActivity } from "./ChatStreamActivity";
-import { ChatThread } from "./ChatThread";
-import { parseMessageSegments } from "./sessions-runtime";
-import { chatThreadProps } from "./test-utils";
 
 setupDashboardDom();
 
+// Radix reads `document` when its module evaluates, so components load after the DOM exists.
 const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
+const { ChatThread } = await import("./ChatThread");
+const { LiveRunActivity } = await import("./ChatWorkLog");
+const { parseMessageSegments } = await import("./sessions-runtime");
+const { chatThreadProps } = await import("./test-utils");
 
 afterEach(() => {
   cleanup();
@@ -26,13 +27,14 @@ const labeledMessages = (count: number, sessionId = "s1"): ChatSessionMessage[] 
   }));
 
 describe("ChatThread user messages", () => {
-  test("highlights command and mention segments", () => {
+  test("highlights slash commands and leaves %mentions as plain text", () => {
     expect(
       parseMessageSegments("codex please ship this").every((segment) => segment.kind === "text"),
     ).toBe(true);
-    expect(
-      parseMessageSegments("/skill tdd Fix it %K6", ["K6"]).map((segment) => segment.kind),
-    ).toEqual(["command", "text", "mention"]);
+    expect(parseMessageSegments("/skill tdd Fix it %K6").map((segment) => segment.kind)).toEqual([
+      "command",
+      "text",
+    ]);
 
     render(
       <ChatThread
@@ -47,16 +49,14 @@ describe("ChatThread user messages", () => {
               createdAt: "2026-07-18T12:00:00.000Z",
             },
           ],
-          workerNames: ["K6"],
-          workerColors: { k6: "var(--color-favorite)" },
         })}
       />,
     );
 
-    expect(screen.getByText("/skill")).toBeTruthy();
-    const mention = screen.getByText("%K6");
-    expect(mention).toBeTruthy();
-    expect(mention.className).toContain("text-xs");
+    const command = screen.getByText("/skill");
+    expect(command.className).toContain("font-mono");
+    expect(screen.queryByText("%K6")).toBeNull();
+    expect(screen.getByText("tdd Fix it %K6").className).not.toContain("font-mono");
   });
 
   test("preserves composer wrapping and indentation after sending", async () => {
@@ -345,33 +345,35 @@ describe("ChatThread progressive history", () => {
   });
 });
 
-describe("ChatStreamActivity live vs completed rendering", () => {
+describe("LiveRunActivity live vs completed rendering", () => {
   test("renders live answer text as plain pre-wrap and completed content as markdown", async () => {
-    const style = document.createElement("style");
-    style.dataset.chatThreadTestStyle = "true";
-    style.textContent = await Bun.file(new URL("../../index.css", import.meta.url)).text();
-    document.head.append(style);
-
     const { rerender } = render(
-      <ChatStreamActivity
+      <LiveRunActivity
         thinking=""
         content={"**bold** and plain"}
         commandGroups={[]}
         typing={true}
+        startedAt={null}
       />,
     );
 
-    const live = screen.getByTestId("assistant-stream-content").firstElementChild as HTMLElement;
-    expect(live.textContent).toBe("**bold** and plain");
-    expect(getComputedStyle(live).whiteSpace).toBe("pre-wrap");
+    const live = await waitFor(() => {
+      const element = screen.getByTestId("assistant-stream-content").firstElementChild;
+      if (!element?.textContent) throw new Error("live text has not been revealed yet");
+      return element as HTMLElement;
+    });
+    await waitFor(() => expect(live.textContent).toBe("**bold** and plain"));
+    expect(live.className).toContain("whitespace-pre-wrap");
+    expect(live.querySelector('[data-streamdown="strong"]')).toBeNull();
 
     await act(async () => {
       rerender(
-        <ChatStreamActivity
+        <LiveRunActivity
           thinking=""
           content={"**bold** and plain"}
           commandGroups={[]}
           typing={false}
+          startedAt={null}
         />,
       );
     });
@@ -384,15 +386,12 @@ describe("ChatStreamActivity live vs completed rendering", () => {
   });
 });
 
-describe("chat thread + delegation rail layout CSS", () => {
-  test("floating delegation cards never shift the centered chat column", async () => {
+describe("chat thread layout CSS", () => {
+  test("the chat column stays centered", async () => {
     const css = await Bun.file(new URL("../../index.css", import.meta.url)).text();
     const base = css.match(/\.chat-column,[\s\S]*?\.chat-thread-content\s*\{[^}]+\}/)?.[0] ?? "";
 
     expect(base).toContain("margin-left: auto");
     expect(base).toContain("margin-right: auto");
-    expect(css).not.toContain("--chat-delegation-rail");
-    expect(css).not.toContain("chat-column--with-delegations");
-    expect(css).not.toContain("chat-thread-content--with-delegations");
   });
 });

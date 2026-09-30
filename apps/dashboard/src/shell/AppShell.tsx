@@ -26,8 +26,6 @@ import {
 } from "../settings/settings-general";
 import { SettingsRepositories } from "../settings/settings-repositories";
 import { SettingsRuntimes } from "../settings/settings-runtimes";
-import type { ConnectionState } from "../types";
-import { SectionWorkflows } from "../workflow/section-workflows";
 import { AppRail } from "./AppRail";
 import {
   closeSettingsDialog,
@@ -44,21 +42,19 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   repositories: "Repositories",
   runtimes: "Runtimes",
   "exec-hosts": "Execution hosts",
-  workflows: "Workflows",
   about: "About",
 };
 
 /**
- * Shell: the left rail is the only chrome; Settings (with Workflows inside)
- * is a dialog (PLAN §6.1). Mounts dialog hosts, ⌘K palette, Toaster,
+ * Shell: the left rail is the only chrome; Settings is a dialog (PLAN §6.1). Mounts dialog hosts, ⌘K palette, Toaster,
  * ConfirmationHost, and the global keyboard layer.
  */
 export const AppShell = ({
-  connection,
+  connected,
   onReposChanged,
   children,
 }: {
-  connection: ConnectionState;
+  connected: boolean;
   onReposChanged: () => void;
   children: React.ReactNode;
 }) => {
@@ -80,7 +76,7 @@ export const AppShell = ({
 
   return (
     <SidebarProvider data-testid="app-shell">
-      <AppRail connection={connection} onOpenCommand={() => setCommandOpen(true)} />
+      <AppRail connected={connected} onOpenCommand={() => setCommandOpen(true)} />
       <SidebarInset className="min-w-0">{children}</SidebarInset>
 
       <CommandDialog open={commandOpen} onOpenChange={setCommandOpen} title="Search sessions">
@@ -120,8 +116,7 @@ export const AppShell = ({
 
 /**
  * Settings dialog — 780×580 with side nav. Phase 3 stopgap: legacy settings
- * form inside; sections are rebuilt on kit primitives in Phase 7 and
- * Workflows lands in Phase 6.
+ * form inside; sections are rebuilt on kit primitives in Phase 7.
  */
 const SettingsDialogHost = ({ onReposChanged }: { onReposChanged: () => void }) => {
   const dialogs = useDialogs();
@@ -199,7 +194,6 @@ const SettingsSectionHost = ({
       .finally(() => setLoaded(true));
   }, [section, loaded]);
 
-  if (section === "workflows") return <SectionWorkflows onChanged={onReposChanged} />;
   if (section === "repositories") return <SettingsRepositories />;
   if (section === "runtimes") return <SettingsRuntimes />;
   if (section === "exec-hosts") return <SettingsExecHosts />;

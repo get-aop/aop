@@ -1,6 +1,10 @@
 import { afterEach, expect, mock, test } from "bun:test";
 import { setupDashboardDom } from "../../test/setup-dom";
-import { getSessionComposerDraft, updateSessionComposerDraft } from "./session-composer-drafts";
+import {
+  clearSessionComposerDraft,
+  getSessionComposerDraft,
+  updateSessionComposerDraft,
+} from "./session-composer-drafts";
 
 setupDashboardDom();
 
@@ -15,11 +19,21 @@ test("an empty draft immediately replaces previously stored text", () => {
   expect(getSessionComposerDraft("session").input).toBe("");
 });
 
-test("new session drafts start with empty structured orchestration state", () => {
-  expect(getSessionComposerDraft("structured-empty")).toMatchObject({
-    runtimeActions: [],
-    workflowSelection: null,
+test("new session drafts start empty", () => {
+  expect(getSessionComposerDraft("fresh-session")).toEqual({
+    input: "",
+    images: [],
+    documents: [],
+    pastes: [],
   });
+});
+
+test("drafts are scoped per session and clearing one leaves the other", () => {
+  updateSessionComposerDraft("scoped-a", (draft) => ({ ...draft, input: "alpha" }));
+  updateSessionComposerDraft("scoped-b", (draft) => ({ ...draft, input: "beta" }));
+  clearSessionComposerDraft("scoped-a");
+  expect(getSessionComposerDraft("scoped-a").input).toBe("");
+  expect(getSessionComposerDraft("scoped-b").input).toBe("beta");
 });
 
 test("useSessionComposer restores each session's draft when switching sessions", () => {

@@ -9,7 +9,6 @@ export const menuHandlers = (args: {
   menu: MenuState;
   active: ChatSessionDetail | null;
   sessions: ChatSessionSummary[];
-  termOpen: boolean;
   skills: string[];
   runtimeConfigurations: RuntimeConfigurationProvider[];
   patchSession: (
@@ -21,7 +20,6 @@ export const menuHandlers = (args: {
   showToast: (message: string) => void;
   setRename: (value: { id: string; value: string } | null) => void;
   setMenu: Dispatch<SetStateAction<MenuState>>;
-  setTermOpen: Dispatch<SetStateAction<boolean>>;
   sendSkill: (name: string) => void;
   settleSession?: (id: string, title: string) => Promise<void>;
   unsettleSession?: (id: string, title: string) => Promise<void>;
@@ -100,10 +98,6 @@ export const menuHandlers = (args: {
     void args.patchSession(args.active.id, { fastMode });
     args.setMenu({ kind: "closed" });
   },
-  onSkills: () =>
-    args.setMenu((current) =>
-      current.kind === "closed" ? current : { ...current, kind: "cskills" },
-    ),
   onSkillPick: (name: string) => {
     args.setMenu({ kind: "closed" });
     args.sendSkill(name);

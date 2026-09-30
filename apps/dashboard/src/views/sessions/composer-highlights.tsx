@@ -1,8 +1,7 @@
-import { CONTROL_COMMANDS } from "@aop/common";
 import type { CSSProperties, RefObject } from "react";
 import { useLayoutEffect, useRef } from "react";
 
-export type MentionTokenKind = "worker" | "workflow" | "repo" | "control" | "paste";
+export type MentionTokenKind = "repo" | "paste";
 
 export interface MentionToken {
   kind: MentionTokenKind;
@@ -13,21 +12,16 @@ export interface MentionToken {
 }
 
 interface MentionSources {
-  workers: Array<{ id: string; name: string }>;
-  workflows: string[];
   repos: Array<{ id: string; name: string | null; path: string }>;
 }
 
 export const parseMentionTokens = (draft: string, sources: MentionSources): MentionToken[] => {
   const tokens: MentionToken[] = [];
-  const sigils = /(^|\s)([%#~$])/g;
-  for (const match of draft.matchAll(sigils)) {
-    const sigil = match[2];
-    if (!sigil || match.index === undefined) continue;
+  const candidates = repoCandidates(sources);
+  for (const match of draft.matchAll(/(^|\s)~/g)) {
+    if (match.index === undefined) continue;
     const start = match.index + (match[1]?.length ?? 0);
-    const candidate = mentionCandidates(sigil, sources).find(({ label }) =>
-      matchesKnownLabel(draft, start + 1, label),
-    );
+    const candidate = candidates.find(({ label }) => matchesKnownLabel(draft, start + 1, label));
     if (!candidate) continue;
     tokens.push({ ...candidate, start, end: start + 1 + candidate.label.length });
   }
@@ -87,33 +81,10 @@ export const ComposerHighlightLayer = ({
   );
 };
 
-const mentionCandidates = (sigil: string, sources: MentionSources) => {
-  const candidates =
-    sigil === "%"
-      ? sources.workers.map((worker) => ({
-          kind: "worker" as const,
-          id: worker.id,
-          label: worker.name,
-        }))
-      : sigil === "#"
-        ? sources.workflows.map((workflow) => ({
-            kind: "workflow" as const,
-            id: workflow,
-            label: workflow,
-          }))
-        : sigil === "~"
-          ? sources.repos.map((repo) => ({
-              kind: "repo" as const,
-              id: repo.id,
-              label: repo.name ?? repo.id,
-            }))
-          : CONTROL_COMMANDS.map((command) => ({
-              kind: "control" as const,
-              id: command.id,
-              label: command.id,
-            }));
-  return candidates.toSorted((a, b) => b.label.length - a.label.length);
-};
+const repoCandidates = (sources: MentionSources) =>
+  sources.repos
+    .map((repo) => ({ kind: "repo" as const, id: repo.id, label: repo.name ?? repo.id }))
+    .toSorted((a, b) => b.label.length - a.label.length);
 
 const matchesKnownLabel = (draft: string, labelStart: number, label: string): boolean => {
   const matched = draft.slice(labelStart, labelStart + label.length);
@@ -125,7 +96,7 @@ const matchesKnownLabel = (draft: string, labelStart: number, label: string): bo
 const renderHighlightedInput = (input: string, tokens: MentionToken[]) => {
   const fragments = [];
   let cursor = 0;
-  // Keep non-overlapping order so mixed mention + delegation marks paint cleanly.
+  // Keep non-overlapping order so mixed mention + paste marks paint cleanly.
   const ordered = [...tokens].toSorted((a, b) => a.start - b.start);
   for (const token of ordered) {
     if (token.start < cursor) continue;
@@ -146,7 +117,6 @@ const renderHighlightedInput = (input: string, tokens: MentionToken[]) => {
 };
 
 const markStyleForKind = (kind: MentionTokenKind): CSSProperties => {
-  if (kind === "control") return CONTROL_MARK_STYLE;
   if (kind === "paste") return PASTE_MARK_STYLE;
   return MENTION_MARK_STYLE;
 };
@@ -162,12 +132,6 @@ const MENTION_MARK_STYLE: CSSProperties = {
   font: "inherit",
   letterSpacing: "inherit",
   lineHeight: "inherit",
-};
-
-const CONTROL_MARK_STYLE: CSSProperties = {
-  ...MENTION_MARK_STYLE,
-  background: "var(--mention-control-bg)",
-  color: "var(--mention-control-fg)",
 };
 
 const PASTE_MARK_STYLE: CSSProperties = {

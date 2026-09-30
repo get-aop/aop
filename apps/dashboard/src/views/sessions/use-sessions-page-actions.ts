@@ -1,7 +1,5 @@
-import type { TerminalLine } from "@aop/common";
 import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback } from "react";
 import {
-  type ChatSessionAction,
   type ChatSessionDetail,
   type ChatSessionSummary,
   createChatSession,
@@ -11,15 +9,13 @@ import {
 import type { SessionToastLink } from "./SessionModals";
 import { type StreamProgressUpdate, setSessionStreamProgress } from "./session-stream-progress";
 import type { MenuState } from "./sessions-menu";
-import { confirmAndResetRuntimeSession, navigateFromAction } from "./sessions-page-helpers";
+import { confirmAndResetRuntimeSession } from "./sessions-page-helpers";
 import {
   abortActiveConversation,
-  createSessionWorktreeForComposer,
   openResolvedMarkdownFromChat,
   patchAndReloadSession,
   removeSessionAndSelectNext,
   retrySessionRunFresh,
-  runSessionTerminalCommand,
   selectSession,
   unsettleAndReloadSession,
 } from "./sessions-page-internals";
@@ -35,8 +31,6 @@ export interface SessionsPageActionsInput {
   assistantStateGenerationRef: MutableRefObject<number>;
   setAborting: Dispatch<SetStateAction<boolean>>;
   composer: ReturnType<typeof useSessionComposer>;
-  knownTaskIdSet: readonly string[] | undefined;
-  termInput: string;
   markSessionRead: (sessionId: string) => void;
   loadDetail: (sessionId: string) => Promise<ChatSessionDetail | null>;
   reloadDetailQuiet: (sessionId: string) => Promise<ChatSessionDetail | null>;
@@ -49,18 +43,13 @@ export interface SessionsPageActionsInput {
   setDetailLoading: Dispatch<SetStateAction<boolean>>;
   setSessions: Dispatch<SetStateAction<ChatSessionSummary[]>>;
   setMenu: Dispatch<SetStateAction<MenuState>>;
-  setTermLines: Dispatch<SetStateAction<TerminalLine[]>>;
-  setTermInput: Dispatch<SetStateAction<string>>;
   setDiffPanelOpen: Dispatch<SetStateAction<boolean>>;
   setMdPanel: Dispatch<SetStateAction<{ path: string } | null>>;
-  setWorkspaceRefreshToken: Dispatch<SetStateAction<number>>;
   showToast: (message: string, link?: SessionToastLink) => void;
-  onNavigate: (path: string) => void;
-  onOpenWorkerDialog?: () => void;
   openSessionById: (sessionId: string) => Promise<void>;
 }
 
-/** Thread/workspace action handlers (select, settle, delete, abort, terminal…). */
+/** Thread/workspace action handlers (select, settle, delete, abort…). */
 export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
   const {
     active,
@@ -68,7 +57,6 @@ export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
     activeIdRef,
     detailLoadGen,
     composer,
-    knownTaskIdSet,
     markSessionRead,
     loadDetail,
     reloadDetailQuiet,
@@ -76,10 +64,7 @@ export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
     setDetail,
     setSessions,
     setMenu,
-    setTermLines,
     showToast,
-    onNavigate,
-    onOpenWorkerDialog,
   } = input;
 
   const handleOpenChatFile = useCallback(
@@ -98,7 +83,6 @@ export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
     await loadDetail(session.id);
     void markSessionRead(session.id);
     setSessions((current) => clearSessionUnreadCount(current, session.id));
-    setTermLines([]);
     composer.clear();
     setMenu({ kind: "closed" });
   };
@@ -140,17 +124,9 @@ export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
       showToast,
     });
 
-  const handleChatAction = useCallback(
-    (action: ChatSessionAction) =>
-      navigateFromAction(
-        action,
-        onNavigate,
-        onOpenWorkerDialog,
-        showToast,
-        knownTaskIdSet,
-        (sessionId) => void input.openSessionById(sessionId),
-      ),
-    [input.openSessionById, knownTaskIdSet, onNavigate, onOpenWorkerDialog, showToast],
+  const handleOpenSession = useCallback(
+    (sessionId: string) => void input.openSessionById(sessionId),
+    [input.openSessionById],
   );
 
   const handleRetryFresh = useCallback(
@@ -181,7 +157,6 @@ export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
       activeId,
       markSessionRead,
       reloadDetailQuiet,
-      setTermLines,
       setTyping: input.setTyping,
       setStreamProgress: input.setStreamProgress,
       setMenu,
@@ -191,15 +166,6 @@ export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
 
   const unsettleSession = (sessionId: string, title: string) =>
     unsettleAndReloadSession({ sessionId, title, patchSession, showToast });
-
-  const handleTermRun = () =>
-    runSessionTerminalCommand({
-      termInput: input.termInput,
-      sessionId: active?.id,
-      setTermLines,
-      setTermInput: input.setTermInput,
-      showToast,
-    });
 
   const handleAbort = useCallback(
     () =>
@@ -241,22 +207,9 @@ export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
     [activeIdRef, refreshList, reloadDetailQuiet, showToast],
   );
 
-  const handleCreateWorktree = useCallback(
-    (sessionId: string, branchName: string) =>
-      createSessionWorktreeForComposer({
-        sessionId,
-        branchName,
-        showToast,
-        reloadDetailQuiet,
-        refreshList,
-        onWorkspaceChanged: () => input.setWorkspaceRefreshToken((token) => token + 1),
-      }),
-    [input.setWorkspaceRefreshToken, refreshList, reloadDetailQuiet, showToast],
-  );
-
   return {
     handleOpenChatFile,
-    handleChatAction,
+    handleOpenSession,
     handleRetryFresh,
     handleCreate,
     handleCreateTask,
@@ -266,9 +219,7 @@ export const useSessionsPageActions = (input: SessionsPageActionsInput) => {
     settleSession,
     unsettleSession,
     deleteSession,
-    handleTermRun,
     handleAbort,
     resetRuntimeSession,
-    handleCreateWorktree,
   };
 };

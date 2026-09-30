@@ -141,14 +141,7 @@ describe("useSessionComposer review queue drain", () => {
     sendChatWithOptimistic.mockImplementation(async (input: Record<string, unknown>) => {
       // Mirror the real model's failure path: optimistic cleanup then draft restore.
       const restore = input.restoreFailedDraft as (failed: Record<string, unknown>) => void;
-      restore({
-        content: input.content,
-        images: [],
-        documents: [],
-        runtimeDelegation: null,
-        runtimeActions: [],
-        workflowSelection: null,
-      });
+      restore({ content: input.content, images: [], documents: [] });
     });
     const { result } = renderHook(() => useSessionComposer(composerInput(sessionId)));
 
@@ -161,6 +154,85 @@ describe("useSessionComposer review queue drain", () => {
     expect(restored[0]?.note).toBe("keep me");
     expect(result.current.input).toBe("typed text");
     clearSessionComposerDraft(sessionId);
+  });
+
+  test("failed send puts attachments and pasted bodies back into an empty draft", async () => {
+    const sessionId = "sess-fail-attachments";
+    const image = {
+      id: "img-1",
+      mimeType: "image/png" as const,
+      dataBase64: "AA",
+      previewUrl: "blob:x",
+    };
+    const document = {
+      id: "doc-1",
+      fileName: "notes.md",
+      mimeType: "text/markdown" as const,
+      dataBase64: "AA",
+    };
+    const pasteEntry = { id: "p1", index: 1, lineCount: 5, content: "a\nb\nc\nd\ne" };
+    updateSessionComposerDraft(sessionId, (draft) => ({
+      ...draft,
+      input: "see [paste #1 +5 lines]",
+      images: [image],
+      documents: [document],
+      pastes: [pasteEntry],
+    }));
+    sendChatWithOptimistic.mockImplementation(async (input: Record<string, unknown>) => {
+      const restore = input.restoreFailedDraft as (failed: Record<string, unknown>) => void;
+      restore({ content: input.content, images: [image], documents: [document] });
+    });
+    const { result } = renderHook(() => useSessionComposer(composerInput(sessionId)));
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    expect(result.current.input).toBe("see [paste #1 +5 lines]");
+    expect(result.current.pendingImages).toEqual([image]);
+    expect(result.current.pendingDocuments).toEqual([document]);
+    expect(result.current.pastes).toEqual([pasteEntry]);
+    clearSessionComposerDraft(sessionId);
+  });
+
+  test("failed send never overwrites text typed while the request was in flight", async () => {
+    const sessionId = "sess-fail-typed";
+    updateSessionComposerDraft(sessionId, (draft) => ({ ...draft, input: "first try" }));
+    sendChatWithOptimistic.mockImplementation(async (input: Record<string, unknown>) => {
+      updateSessionComposerDraft(sessionId, (draft) => ({ ...draft, input: "second try" }));
+      const restore = input.restoreFailedDraft as (failed: Record<string, unknown>) => void;
+      restore({ content: input.content, images: [], documents: [] });
+    });
+    const { result } = renderHook(() => useSessionComposer(composerInput(sessionId)));
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    expect(result.current.input).toBe("second try");
+    clearSessionComposerDraft(sessionId);
+  });
+
+  test("send clears the draft and appends a plain optimistic user message", async () => {
+    const sessionId = "sess-optimistic";
+    updateSessionComposerDraft(sessionId, (draft) => ({ ...draft, input: "hello there" }));
+    let appended: { role: string; content: string; action: unknown } | undefined;
+    const setDetail = mock(
+      (updater: (current: ChatSessionDetail | null) => ChatSessionDetail | null) => {
+        const next = updater({ id: sessionId, messages: [] } as unknown as ChatSessionDetail);
+        appended = next?.messages[0] as typeof appended;
+      },
+    );
+    const { result } = renderHook(() =>
+      useSessionComposer({ ...composerInput(sessionId), setDetail }),
+    );
+
+    await act(async () => {
+      await result.current.send();
+    });
+
+    expect(appended).toMatchObject({ role: "user", content: "hello there", action: null });
+    expect(result.current.input).toBe("");
   });
 
   test("exposes update and remove for queued comments", async () => {
@@ -209,12 +281,10 @@ describe("useSessionComposer review queue drain", () => {
     expect(sendChatWithOptimistic).toHaveBeenCalledTimes(1);
     const sent = sendChatWithOptimistic.mock.calls[0]?.[0] as {
       content: string;
-      requestContent: string;
       pastesSnapshot: Array<{ index: number; lineCount: number; content: string }>;
     };
     // Wire still ships compact tokens + paste bodies for storage/runtime.
     expect(sent.content).toBe("review\n[paste #1 +5 lines]\nplease");
-    expect(sent.requestContent).toBe("review\n[paste #1 +5 lines]\nplease");
     expect(sent.pastesSnapshot).toEqual([{ index: 1, lineCount: 5, content: body }]);
     // Chat bubble shows the full paste, not the placeholder.
     expect(messages[0]?.content).toBe(`review\n${body}\nplease`);
