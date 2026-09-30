@@ -10,7 +10,6 @@ import {
   hostConnection,
   matchesProjectSearch,
   matchesThreadSearch,
-  overviewCounters,
   pullRequestOf,
   sortThreads,
   THREAD_STATUS_LABEL,
@@ -239,51 +238,6 @@ describe("groupThreads", () => {
     ];
     groupThreads(input);
     expect(input.map((thread) => thread.id)).toEqual(["b", "a"]);
-  });
-});
-
-describe("overviewCounters", () => {
-  const threads = [
-    makeThread({ id: "q", status: "waiting-on-you" }),
-    makeThread({ id: "w", status: "working" }),
-    makeThread({ id: "u", status: "queued" }),
-    makeThread({ id: "l", status: "rate-limited" }),
-    makeThread({ id: "r", status: "ready-for-review", artifacts: [pr("open", 1)] }),
-    makeThread({ id: "g", status: "landing", artifacts: [pr("open", 2)] }),
-    makeThread({ id: "i", status: "idle", artifacts: [pr("closed", 3)] }),
-    makeThread({ id: "d", status: "resolved", artifacts: [pr("merged", 4)] }),
-  ];
-
-  test("counts what waits on the person, what runs now, what waits for review and what is done", () => {
-    // Queued and rate-limited threads have no turn running, so they are not "running".
-    expect(overviewCounters(threads)).toEqual({
-      waiting: 1,
-      running: 1,
-      readyForReview: 1,
-      openPullRequests: 2,
-      resolved: 1,
-    });
-  });
-
-  test("counts a thread once for its open pull request, however many documents it holds", () => {
-    const counters = overviewCounters([
-      makeThread({
-        status: "idle",
-        artifacts: [{ type: "doc", name: "A" }, pr("open"), { type: "doc", name: "B" }],
-      }),
-    ]);
-
-    expect(counters.openPullRequests).toBe(1);
-  });
-
-  test("is all zero for no threads", () => {
-    expect(overviewCounters([])).toEqual({
-      waiting: 0,
-      running: 0,
-      readyForReview: 0,
-      openPullRequests: 0,
-      resolved: 0,
-    });
   });
 });
 

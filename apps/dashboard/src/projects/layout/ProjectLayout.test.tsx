@@ -74,6 +74,20 @@ const panel = () => screen.queryByTestId("threads-panel");
 const chatColumn = () => screen.getByTestId("chat-column");
 
 describe("the panel toggle", () => {
+  test("sits beside the project name, before the settings link", () => {
+    mount();
+    const order = (testId: string) => {
+      const all = Array.from(screen.getByTestId("project-topbar").querySelectorAll("*"));
+      return all.indexOf(screen.getByTestId(testId));
+    };
+
+    expect(order("panel-toggle")).toBeGreaterThan(order("project-title"));
+    expect(order("panel-toggle")).toBeLessThan(order("project-settings-link"));
+    expect(screen.getByTestId("panel-toggle").previousElementSibling).toBe(
+      screen.getByTestId("project-home-link"),
+    );
+  });
+
   test("closes the panel and opens it again, and this browser remembers which", async () => {
     mount();
     expect(panel()).toBeTruthy();

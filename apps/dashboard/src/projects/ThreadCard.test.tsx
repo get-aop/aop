@@ -164,7 +164,8 @@ describe("ThreadCard", () => {
     expect(chip.target).toBe("_blank");
     expect(chip.rel).toContain("noopener");
     expect(screen.getByTestId("thread-docs").textContent).toBe("2 documents");
-    expect(within(card()).getByText("aop/cold-start")).toBeTruthy();
+    // The branch is in the thread's header, not on the overview row.
+    expect(within(card()).queryByText("aop/cold-start")).toBeNull();
   });
 
   test("the chip of an open pull request shows what its checks add up to, and a merged one does not", () => {

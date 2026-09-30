@@ -80,6 +80,8 @@
   /* Type */
   --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
     sans-serif;
+  /* The greeting's serif display face: system serifs, nothing shipped. */
+  --font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace;
 
   /* Shape */

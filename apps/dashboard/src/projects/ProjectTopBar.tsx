@@ -16,9 +16,9 @@ const STREAM_LABEL: Record<StreamConnection, string | null> = {
 };
 
 /**
- * The top of a project's screens: the sidebar toggle and back/forward, who the project is and
- * whether its stream is live, then the panel toggle (with a dot when a thread waits on the
- * person), the project's settings and its menu. Settings has no panel, so no toggle.
+ * The top of a project's screens: the sidebar toggle and back/forward, who the project is,
+ * then the panel toggle right beside the name (with a dot when a thread waits on the person),
+ * the stream's state, and at the far end the project's settings and its menu. Settings has no panel, so no toggle.
  */
 export const ProjectTopBar = ({
   entry,
@@ -49,6 +49,19 @@ export const ProjectTopBar = ({
           {project.name}
         </h1>
       </Link>
+      {panel ? (
+        <IconButton
+          testId="panel-toggle"
+          label={panel.visible ? "Hide threads panel" : "Show threads panel"}
+          pressed={panel.visible}
+          active={panel.visible}
+          dot={waiting > 0}
+          dotTestId="panel-toggle-dot"
+          onClick={panel.toggle}
+        >
+          <PanelRightIcon />
+        </IconButton>
+      ) : null}
       {project.status !== "active" ? (
         <span
           data-testid="project-status-tag"
@@ -70,19 +83,7 @@ export const ProjectTopBar = ({
         </span>
       ) : null}
       <span className="flex-1" />
-      {panel ? (
-        <IconButton
-          testId="panel-toggle"
-          label={panel.visible ? "Hide threads panel" : "Show threads panel"}
-          pressed={panel.visible}
-          active={panel.visible}
-          dot={waiting > 0}
-          dotTestId="panel-toggle-dot"
-          onClick={panel.toggle}
-        >
-          <PanelRightIcon />
-        </IconButton>
-      ) : null}
+      <span className="flex-1" />
       <Link
         to={projectSettingsPath(project.id)}
         data-testid="project-settings-link"

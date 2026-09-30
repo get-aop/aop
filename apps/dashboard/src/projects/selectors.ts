@@ -71,25 +71,6 @@ export const groupThreads = (threads: readonly Thread[]): ThreadGroup[] => {
   });
 };
 
-export interface OverviewCounters {
-  waiting: number;
-  /** Threads with a turn running now; queued and rate-limited threads are waiting, not running. */
-  running: number;
-  readyForReview: number;
-  openPullRequests: number;
-  resolved: number;
-}
-
-export const overviewCounters = (threads: readonly Thread[]): OverviewCounters => ({
-  waiting: threads.filter((thread) => thread.status === "waiting-on-you").length,
-  running: threads.filter((thread) => thread.status === "working").length,
-  readyForReview: threads.filter((thread) => thread.status === "ready-for-review").length,
-  openPullRequests: threads.filter((thread) =>
-    thread.artifacts.some((artifact) => artifact.type === "pr" && artifact.state === "open"),
-  ).length,
-  resolved: threads.filter((thread) => thread.status === "resolved").length,
-});
-
 export const THREAD_STATUS_LABEL: Record<ThreadStatus, string> = {
   "waiting-on-you": "Waiting on you",
   working: "Working",

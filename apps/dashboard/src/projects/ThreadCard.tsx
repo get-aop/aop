@@ -1,5 +1,5 @@
 import { getThreadProgress, type Thread } from "@aop/common";
-import { FileTextIcon, GitBranchIcon } from "lucide-react";
+import { FileTextIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Link, threadPath } from "../shell/router";
 import { PullRequestChip } from "./PullRequestChip";
@@ -103,10 +103,10 @@ const CardAside = ({ thread, now }: { thread: Thread; now: number }) => {
   );
 };
 
-/** What else the thread has: a Resume button, its documents and the branch it works on. */
+/** What else the thread has: a Resume button, and its documents; the branch is in the thread's own header. */
 const CardFooter = ({ thread }: { thread: Thread }) => {
   const docCount = thread.artifacts.filter((artifact) => artifact.type === "doc").length;
-  if (thread.status !== "rate-limited" && docCount === 0 && !thread.branch) return null;
+  if (thread.status !== "rate-limited" && docCount === 0) return null;
   return (
     <footer className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-[11.5px] text-text-subtle">
       <ResumeThreadButton thread={thread} />
@@ -114,12 +114,6 @@ const CardFooter = ({ thread }: { thread: Thread }) => {
         <span className="inline-flex items-center gap-1" data-testid="thread-docs">
           <FileTextIcon className="size-3" />
           {docCount === 1 ? "1 document" : `${docCount} documents`}
-        </span>
-      ) : null}
-      {thread.branch ? (
-        <span className="inline-flex min-w-0 items-center gap-1">
-          <GitBranchIcon className="size-3 shrink-0" />
-          <span className="truncate">{thread.branch}</span>
         </span>
       ) : null}
     </footer>

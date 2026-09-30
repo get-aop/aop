@@ -62,9 +62,6 @@ const titlesIn = (group: HTMLElement) =>
   within(group)
     .queryAllByTestId("thread-card-link")
     .map((link) => link.textContent);
-const counter = (name: string) =>
-  screen.getByTestId("overview-counters").querySelector(`[data-counter="${name}"]`) as HTMLElement;
-
 describe("the groups", () => {
   test("come in the order a person should look at them, whatever order the threads arrive in", () => {
     render(<Overview entry={entryOf(onePerStatus())} />);
@@ -240,89 +237,12 @@ describe("the greeting", () => {
   });
 });
 
-describe("counters", () => {
-  const pr = (state: "open" | "merged" | "closed", number: number) =>
-    ({
-      type: "pr",
-      number,
-      url: `https://github.com/acme/app/pull/${number}`,
-      state,
-    }) as const;
-
-  const threads = () => [
-    makeThread({ id: "q1", status: "waiting-on-you" }),
-    makeThread({ id: "q2", status: "waiting-on-you" }),
-    makeThread({ id: "w1", status: "working" }),
-    makeThread({ id: "w2", status: "queued" }),
-    makeThread({ id: "w3", status: "rate-limited" }),
-    makeThread({ id: "r1", status: "ready-for-review", artifacts: [pr("open", 1)] }),
-    makeThread({ id: "l1", status: "landing", artifacts: [pr("open", 2)] }),
-    makeThread({ id: "d1", status: "resolved", artifacts: [pr("merged", 3)] }),
-    makeThread({
-      id: "d2",
-      status: "idle",
-      artifacts: [pr("closed", 4), { type: "doc", name: "N" }],
-    }),
-  ];
-
-  test("count what needs the person, what runs, what waits for review, open pull requests and what is done", () => {
-    render(<Overview entry={entryOf(threads())} />);
-
-    const values = Object.fromEntries(
-      ["waiting", "running", "readyForReview", "openPullRequests", "resolved"].map((name) => [
-        name,
-        counter(name).getAttribute("data-value"),
-      ]),
-    );
-    // Running is the working thread alone (queued and rate-limited are not running); only open
-    // pull requests count as open.
-    expect(values).toEqual({
-      waiting: "2",
-      running: "1",
-      readyForReview: "1",
-      openPullRequests: "2",
-      resolved: "1",
-    });
-    expect(counter("waiting").textContent).toContain("Waiting on you");
-    expect(counter("waiting").textContent).toContain("2");
-  });
-
-  test("follow the threads as the stream changes them", () => {
-    const { rerender } = render(<Overview entry={entryOf(threads())} />);
-    expect(counter("waiting").getAttribute("data-value")).toBe("2");
-
-    rerender(
-      <Overview
-        entry={entryOf(
-          threads().map((thread) =>
-            thread.id === "q1" ? makeThread({ id: "q1", status: "working" }) : thread,
-          ),
-        )}
-      />,
-    );
-
-    expect(counter("waiting").getAttribute("data-value")).toBe("1");
-    expect(counter("running").getAttribute("data-value")).toBe("2");
-  });
-
-  test("count the project's threads, not only the ones a search shows", () => {
-    render(<Overview entry={entryOf(threads())} />);
-
-    fireEvent.change(screen.getByTestId("thread-search"), {
-      target: { value: "nothing like this" },
-    });
-
-    expect(counter("waiting").getAttribute("data-value")).toBe("2");
-  });
-});
-
 describe("before there is anything to group", () => {
   test("says it is loading while the threads are fetched", () => {
     render(<Overview entry={entryOf([], { threadsLoaded: false })} />);
 
     expect(screen.getByTestId("threads-loading")).toBeTruthy();
     expect(screen.queryByTestId("threads-error")).toBeNull();
-    expect(screen.queryByTestId("overview-counters")).toBeNull();
   });
 
   test("says why the threads did not load instead of loading forever, and fetches them again on Try again", () => {

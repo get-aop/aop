@@ -88,10 +88,8 @@ describe("project home", () => {
     expect(
       screen.getAllByTestId("thread-group").map((group) => group.getAttribute("data-status")),
     ).toEqual(["waiting-on-you", "working", "idle"]);
-    expect(
-      screen.getByTestId("overview-counters").querySelector('[data-counter="waiting"]')
-        ?.textContent,
-    ).toContain("1");
+    expect(screen.getByTestId("project-attention").getAttribute("data-waiting")).toBe("1");
+    expect(screen.queryByTestId("overview-counters")).toBeNull();
   });
 
   test("a new thread on the stream appears as a card, and a finished one moves", () => {

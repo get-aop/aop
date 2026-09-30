@@ -11,8 +11,6 @@ import {
   attentionSentence,
   groupThreads,
   matchesThreadSearch,
-  type OverviewCounters,
-  overviewCounters,
   THREAD_STATUS_LABEL,
 } from "./selectors";
 import { ThreadCard } from "./ThreadCard";
@@ -102,11 +100,10 @@ const OverviewBody = ({
       threads.filter((thread) => !hidden.has(thread.status) && matchesThreadSearch(thread, query)),
     [threads, query, hidden],
   );
-  const counters = useMemo(() => overviewCounters(threads), [threads]);
 
   return (
     <div data-testid="thread-overview" className="flex flex-col gap-4 px-4 pb-6 pt-3">
-      <Greeting waiting={attentionOf(threads).waiting} counters={counters} />
+      <Greeting waiting={attentionOf(threads).waiting} />
       {filters.searchOpen ? <SearchBox query={query} onChange={filters.setQuery} /> : null}
       <ResultCount shown={visible.length} total={threads.length} filters={filters} />
       {visible.length === 0 ? (
@@ -204,12 +201,12 @@ const SearchBox = ({ query, onChange }: { query: string; onChange: (query: strin
   );
 };
 
-/** "Welcome back." and, under it, how many threads wait on the person, then the project in five numbers. */
-const Greeting = ({ waiting, counters }: { waiting: number; counters: OverviewCounters }) => (
+/** "Welcome back." and, under it, how many threads wait on the person; the groups below carry the rest of the counts. */
+const Greeting = ({ waiting }: { waiting: number }) => (
   <div className="flex flex-col gap-1 px-1">
     <h2
       data-testid="overview-greeting"
-      className="text-[26px] font-semibold leading-tight text-text"
+      className="font-display text-[32px] font-normal leading-tight tracking-[-0.01em] text-text"
     >
       Welcome back.
     </h2>
@@ -220,7 +217,6 @@ const Greeting = ({ waiting, counters }: { waiting: number; counters: OverviewCo
     >
       {attentionSentence(waiting)}
     </p>
-    <Counters counters={counters} />
   </div>
 );
 
@@ -261,37 +257,4 @@ const GroupSection = ({
     </h2>
     {open ? <div className="flex flex-col gap-0.5 pt-1">{children}</div> : null}
   </section>
-);
-
-const COUNTERS: { key: keyof OverviewCounters; label: string }[] = [
-  { key: "waiting", label: "Waiting on you" },
-  { key: "running", label: "Running" },
-  { key: "readyForReview", label: "Ready for review" },
-  { key: "openPullRequests", label: "Open pull requests" },
-  { key: "resolved", label: "Resolved" },
-];
-
-/** The project in five numbers: what needs the person, what runs, what waits, what is open, what is done. */
-const Counters = ({ counters }: { counters: OverviewCounters }) => (
-  <dl data-testid="overview-counters" className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-    {COUNTERS.map(({ key, label }) => (
-      <div
-        key={key}
-        data-testid="overview-counter"
-        data-counter={key}
-        data-value={counters[key]}
-        className="flex items-baseline gap-1.5"
-      >
-        <dd
-          className={cn(
-            "text-[13px] font-semibold tabular-nums text-text-muted",
-            key === "waiting" && counters.waiting > 0 && "text-waiting",
-          )}
-        >
-          {counters[key]}
-        </dd>
-        <dt className="text-[11.5px] text-text-subtle">{label}</dt>
-      </div>
-    ))}
-  </dl>
 );
