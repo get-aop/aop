@@ -6,6 +6,10 @@ const ROOT = join(import.meta.dirname, "../..");
 const readReleaseWorkflow = (): Promise<string> =>
   readFile(join(ROOT, ".github/workflows/release.yml"), "utf8");
 
+// A tag push, or a dispatch that turned "publish" on. Pull requests and build-only dispatches are not.
+const PUBLISHING_RUN =
+  "github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)";
+
 describe("release wiring", () => {
   test("exposes package scripts for local DMG and Windows desktop installer builds", async () => {
     const pkg = await Bun.file(join(ROOT, "package.json")).json();
@@ -40,16 +44,23 @@ describe("release wiring", () => {
     expect(releaseWorkflow).not.toContain("[self-hosted, windows]");
   });
 
-  test("builds every artifact on a pull request but publishes only from a tag or dispatch", async () => {
+  test("builds every artifact on a pull request or a build-only dispatch but publishes only from a tag or a publish dispatch", async () => {
     const releaseWorkflow = await readReleaseWorkflow();
     const releaseJob = releaseWorkflow.slice(releaseWorkflow.indexOf("\n  release:"));
 
     expect(releaseWorkflow).toContain("pull_request:");
-    expect(releaseJob).toContain("if: github.event_name != 'pull_request'");
+    // A dispatch builds only, unless the person turns "publish" on.
+    expect(releaseWorkflow).toMatch(
+      /workflow_dispatch:\n {4}inputs:[\s\S]*?publish:\n(?: {8}.*\n)*? {8}type: boolean\n {8}default: false/,
+    );
+    expect(releaseJob).toContain(`if: ${PUBLISHING_RUN}`);
     // Only the publishing job may write; everything a pull request reaches is read-only.
     expect(releaseWorkflow.match(/contents: write/g)).toHaveLength(1);
     expect(releaseJob).toContain("contents: write");
     expect(releaseWorkflow).toContain("permissions:\n  contents: read");
+    // The cloud secrets exist only in the job that never runs for a build-only run.
+    const beforeRelease = releaseWorkflow.slice(0, releaseWorkflow.indexOf("\n  release:"));
+    expect(beforeRelease).not.toContain("CLOUDFLARE");
   });
 
   test("packages macOS with certificate import, signing, and notarization on macos-latest", async () => {
@@ -67,16 +78,18 @@ describe("release wiring", () => {
     expect(releaseWorkflow).not.toContain("rust-toolchain");
   });
 
-  test("reads signing secrets only for a release with AOP_SIGN_RELEASES on, never for a pull request", async () => {
+  test("reads signing secrets only for a release with AOP_SIGN_RELEASES on, never for a pull request or a build-only dispatch", async () => {
     const releaseWorkflow = await readReleaseWorkflow();
     const secretLines = releaseWorkflow
       .split("\n")
       .filter((line) => /secrets\.(AOP_MACOS|APPLE|AOP_WINDOWS)/.test(line));
 
-    const switchExpression =
-      "{{ github.event_name != 'pull_request' && vars.AOP_SIGN_RELEASES == 'true' }}";
+    const switchExpression = `{{ (${PUBLISHING_RUN}) && vars.AOP_SIGN_RELEASES == 'true' }}`;
 
-    expect(releaseWorkflow).toContain(`SIGN_RELEASE: $${switchExpression}`);
+    expect(releaseWorkflow.match(/SIGN_RELEASE: \$\{\{.*\}\}/g)).toEqual([
+      `SIGN_RELEASE: $${switchExpression}`,
+      `SIGN_RELEASE: $${switchExpression}`,
+    ]);
     expect(secretLines.length).toBeGreaterThan(0);
     // Every signing secret is behind the switch, so a pull request build cannot notarize or sign.
     for (const line of secretLines) {

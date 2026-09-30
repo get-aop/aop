@@ -35,11 +35,21 @@ The workflow (`.github/workflows/release.yml`) runs these jobs:
 2. `package-macos` builds both DMGs on `macos-latest`.
 3. `package-windows` builds the NSIS installer on `windows-latest`. It needs no host binary.
 4. `assemble` downloads everything, fails if any file is missing or if an `aop-windows-x64.exe` appears, and writes `checksums.sha256`.
-5. `release` (tag pushes and manual runs only) creates the GitHub Release and runs `scripts/release/deploy-r2.sh`.
+5. `release` (tag pushes, and manual runs with `publish` on) creates the GitHub Release and runs `scripts/release/deploy-r2.sh`.
 
 On a pull request that touches the release files, jobs 1 to 4 run and stop. Nothing is published, and the assembled files are kept for a day as the `release-all` workflow artifact, so a change to the packaging is checked before it merges.
 
-To rebuild a release by hand, run the workflow from the Actions tab (`workflow_dispatch`), optionally with a `release_ref`.
+To rebuild and publish a release by hand, run the workflow from the Actions tab (`workflow_dispatch`) with `publish` on, optionally with a `release_ref`.
+
+### Build installers without releasing
+
+To get the installers for any branch, tag or commit without publishing anything, run the workflow from the Actions tab (`workflow_dispatch`) with `publish` left off (its default) and `release_ref` set to the ref. Or from a terminal:
+
+```bash
+gh workflow run release.yml --ref main -f publish=false
+```
+
+This runs jobs 1 to 4 and stops, like a pull request: no GitHub Release, no R2 upload, no signing or notarization, and no Apple or Cloudflare secret is read. When it finishes, open the run and download the `release-all` artifact, which holds every file including `aop-windows-x64-setup.exe` and `checksums.sha256`. The artifact is kept for one day. The version in the file names is the one in the root `package.json` of the ref.
 
 ### What `deploy-r2.sh` publishes
 

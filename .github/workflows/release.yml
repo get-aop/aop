@@ -7,14 +7,15 @@ name: Release
 #     aop-windows-x64-setup.exe.
 # Windows has no host, CLI or server build.
 #
-# On a pull request the workflow builds and checks every artifact and stops there: nothing is
-# published. Publishing (GitHub Release + Cloudflare R2) runs only for a v* tag push or a manual
-# dispatch.
+# On a pull request, and on a manual dispatch with "publish" off (the default), the workflow builds
+# and checks every artifact and stops there: nothing is published, nothing is signed, and the
+# files stay as the release-all workflow artifact. Publishing (GitHub Release + Cloudflare R2)
+# runs only for a v* tag push or a dispatch with "publish" on.
 #
 # Builds are UNSIGNED for now (decided for issue 342; signing is not settled). The signing secrets
-# are only read when the repository variable AOP_SIGN_RELEASES is "true" AND the run is a release
-# (never a pull request), so setting a secret alone does not turn signing on. To sign, set the
-# variable and make sure these secrets exist; no workflow change is needed:
+# are only read when the repository variable AOP_SIGN_RELEASES is "true" AND the run publishes (a
+# tag push or a dispatch with publish on; never a pull request or a build-only dispatch), so
+# setting a secret alone does not turn signing on. To sign, set the variable and make sure these secrets exist; no workflow change is needed:
 #   macOS:   AOP_MACOS_CERTIFICATE_P12_BASE64, AOP_MACOS_CERTIFICATE_PASSWORD,
 #            AOP_MACOS_SIGN_IDENTITY, AOP_MACOS_NOTARIZE, APPLE_ID, APPLE_TEAM_ID,
 #            APPLE_APP_SPECIFIC_PASSWORD
@@ -29,6 +30,11 @@ on:
         description: Git ref whose source should be packaged
         required: false
         type: string
+      publish:
+        description: Publish the GitHub Release and deploy to R2. Leave off to only build the artifacts.
+        required: false
+        type: boolean
+        default: false
   pull_request:
     paths:
       - ".github/workflows/release.yml"
@@ -85,7 +91,7 @@ jobs:
     needs: build
     runs-on: macos-latest
     env:
-      SIGN_RELEASE: ${{ github.event_name != 'pull_request' && vars.AOP_SIGN_RELEASES == 'true' }}
+      SIGN_RELEASE: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && vars.AOP_SIGN_RELEASES == 'true' }}
     steps:
       - uses: actions/checkout@v7.0.0
         with:
@@ -153,7 +159,7 @@ jobs:
     needs: build
     runs-on: windows-latest
     env:
-      SIGN_RELEASE: ${{ github.event_name != 'pull_request' && vars.AOP_SIGN_RELEASES == 'true' }}
+      SIGN_RELEASE: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && vars.AOP_SIGN_RELEASES == 'true' }}
     steps:
       - uses: actions/checkout@v7.0.0
         with:
@@ -249,9 +255,9 @@ jobs:
             dist/release/checksums.sha256
           retention-days: 1
 
-  # Never runs for a pull request.
+  # Never runs for a pull request or a build-only dispatch.
   release:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     needs: [build, assemble]
     runs-on: ubuntu-latest
     permissions:
