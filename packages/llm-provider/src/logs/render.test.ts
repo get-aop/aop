@@ -9,10 +9,14 @@ describe("renderCompactLogLines", () => {
         index: 0,
         raw: "{}",
         event: {
-          type: "text",
-          part: { text: "  Working  \nStep 1 / 2\nTokens: 3\nUsage: small\nDone  " },
+          type: "assistant",
+          message: {
+            content: [
+              { type: "text", text: "  Working  \nStep 1 / 2\nTokens: 3\nUsage: small\nDone  " },
+            ],
+          },
         },
-        provider: "opencode",
+        provider: "claude-code",
       },
     ];
 
@@ -40,32 +44,18 @@ describe("renderCompactLogLines", () => {
       {
         index: 0,
         raw: "{}",
-        event: {
-          type: "tool_use",
-          part: {
-            tool: "bash",
-            state: {
-              status: "completed",
-              input: { command: "npm test" },
-            },
-          },
-        },
-        provider: "opencode",
+        event: { type: "tool_use", name: "Bash", input: { command: "npm test" } },
+        provider: "claude-code",
       },
       {
         index: 1,
         raw: "{}",
         event: {
           type: "tool_use",
-          part: {
-            tool: "bash",
-            state: {
-              status: "completed",
-              input: { command: "npm test", description: "Run all tests" },
-            },
-          },
+          name: "Bash",
+          input: { command: "npm test", description: "Run all tests" },
         },
-        provider: "opencode",
+        provider: "claude-code",
       },
     ];
 
@@ -185,35 +175,6 @@ describe("renderCompactLogLines", () => {
     expect(lines.map((line) => line.content)).toEqual(["Reading startup skill", "Done"]);
   });
 
-  test("joins consecutive Grok streaming text chunks", () => {
-    const entries: ParsedRawLogEntry[] = [
-      {
-        index: 0,
-        raw: "{}",
-        event: { type: "thought", data: "private reasoning" },
-        provider: "grok-build",
-      },
-      {
-        index: 1,
-        raw: "{}",
-        event: { type: "text", data: "Running" },
-        provider: "grok-build",
-      },
-      {
-        index: 2,
-        raw: "{}",
-        event: { type: "text", data: " checks" },
-        provider: "grok-build",
-      },
-    ];
-
-    const lines = renderCompactLogLines(entries, {
-      timestamp: "2026-01-01T00:00:00.000Z",
-    });
-
-    expect(lines.map((line) => line.content)).toEqual(["Running checks"]);
-  });
-
   test("renders errors to stderr", () => {
     const entries: ParsedRawLogEntry[] = [
       {
@@ -223,7 +184,7 @@ describe("renderCompactLogLines", () => {
           type: "error",
           error: "fatal error",
         },
-        provider: "opencode",
+        provider: "claude-code",
       },
     ];
 

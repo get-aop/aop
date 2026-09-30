@@ -28,10 +28,8 @@ export type ProgressChunk =
  * Parse one JSONL line from a chat runtime log into a progressive chunk.
  *
  * Runtimes differ:
- * - Grok: token-sized `{type:"thought"|"text", data}`
  * - Codex: `item.started` / `item.completed` (tools + agent_message)
  * - Claude: `assistant` messages with thinking/text/tool_use blocks
- * - OpenCode: `{type:"text", part:{text}}` and tool_use parts
  * - Pi: message_update thinking_end/text_end and content blocks
  */
 export const parseStreamProgressLine = (line: string): ProgressChunk | null =>
@@ -54,10 +52,7 @@ const extractProgressChunks = (event: Record<string, unknown>): ProgressChunk[] 
 
   const chunk =
     extractClaudeTaskLifecycle(event) ??
-    extractGrokToken(event) ??
     extractCodexItem(event) ??
-    extractOpenCodeText(event) ??
-    extractOpenCodeTool(event) ??
     extractPiToolExecution(event) ??
     extractPiUpdate(event) ??
     extractPiMessage(event) ??
@@ -115,14 +110,6 @@ const claudeTaskItemId = (event: Record<string, unknown>): string | undefined =>
 const stringField = (event: Record<string, unknown>, key: string): string => {
   const value = event[key];
   return typeof value === "string" ? value.trim() : "";
-};
-
-const extractGrokToken = (event: Record<string, unknown>): ProgressChunk | null => {
-  const type = stringType(event);
-  if ((type === "thought" || type === "text") && typeof event.data === "string" && event.data) {
-    return { kind: type, data: event.data };
-  }
-  return null;
 };
 
 const CODEX_ITEM_EVENTS = new Set(["item.started", "item.completed", "item.updated"]);
@@ -222,49 +209,6 @@ const truncateToolResult = (value: string, max = 8_000): string | undefined => {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 };
 
-const extractOpenCodeText = (event: Record<string, unknown>): ProgressChunk | null => {
-  if (stringType(event) !== "text" || !isRecord(event.part)) return null;
-  const text = event.part.text;
-  if (typeof text === "string" && text.trim()) return { kind: "text", data: text };
-  return null;
-};
-
-/**
- * OpenCode `run --format json` tool events:
- * `{ type:"tool_use", part:{ tool:"bash", state:{ status, input:{command}, title } } }`
- */
-const extractOpenCodeTool = (event: Record<string, unknown>): ProgressChunk | null => {
-  if (stringType(event) !== "tool_use" || !isRecord(event.part)) return null;
-  return mapOpenCodeToolPart(event.part);
-};
-
-const mapOpenCodeToolPart = (part: Record<string, unknown>): ProgressChunk => {
-  const tool = typeof part.tool === "string" ? part.tool : "Tool";
-  const state = isRecord(part.state) ? part.state : {};
-  const status = typeof state.status === "string" ? state.status.toLowerCase() : "";
-  const label = openCodeToolLabel(tool, state);
-  const callId = typeof part.callID === "string" ? part.callID : undefined;
-  const failed = isFailureStatus(status);
-  const done = failed || isSuccessStatus(status);
-
-  if (isShellToolName(tool)) {
-    return shellPhaseChunk(done, label, callId, failed ? 1 : readExitCode(state));
-  }
-  if (done) return { kind: "tool", phase: "done", name: label, failed };
-  return { kind: "tool", phase: "start", name: label };
-};
-
-const openCodeToolLabel = (tool: string, state: Record<string, unknown>): string => {
-  const input = isRecord(state.input) ? state.input : {};
-  if (typeof input.command === "string" && input.command.trim()) {
-    return shortenCommand(input.command);
-  }
-  if (typeof state.title === "string" && state.title.trim()) return state.title.trim();
-  if (typeof input.path === "string") return `${humanizeToolName(tool)} ${input.path}`;
-  if (typeof input.filePath === "string") return `${humanizeToolName(tool)} ${input.filePath}`;
-  return humanizeToolName(tool);
-};
-
 const isShellToolName = (tool: string): boolean => {
   const t = tool.toLowerCase().replace(/[_-]+/g, "");
   return (
@@ -276,30 +220,6 @@ const isShellToolName = (tool: string): boolean => {
     t === "execcommand" ||
     t === "runterminalcmd"
   );
-};
-
-const isFailureStatus = (status: string): boolean =>
-  status === "error" || status === "failed" || status === "failure";
-
-const isSuccessStatus = (status: string): boolean =>
-  status === "completed" || status === "complete" || status === "done" || status === "success";
-
-const shellPhaseChunk = (
-  done: boolean,
-  command: string,
-  itemId: string | undefined,
-  exitCode: number | null,
-): ProgressChunk =>
-  done
-    ? { kind: "command", phase: "done", command, itemId, exitCode }
-    : { kind: "command", phase: "start", command, itemId };
-
-const readExitCode = (state: Record<string, unknown>): number | null => {
-  const meta = isRecord(state.metadata) ? state.metadata : null;
-  if (meta && typeof meta.exit === "number") return meta.exit;
-  if (typeof state.exit === "number") return state.exit;
-  if (typeof state.exit_code === "number") return state.exit_code;
-  return 0;
 };
 
 const extractPiUpdate = (event: Record<string, unknown>): ProgressChunk | null => {

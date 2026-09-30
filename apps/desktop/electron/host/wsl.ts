@@ -8,7 +8,7 @@ import type { CommandOutput, CommandRunner, CommandSpec, HostPlatform } from "./
 
 const execFileAsync = promisify(execFile);
 const WSL_USER_CLI_PATH_SETUP =
-  'for aop_cli_bin_dir in "$HOME/.local/bin" "$HOME/.opencode/bin" "$HOME/.bun/bin" "$HOME/.npm-global/bin" "$HOME/.npm/bin" "$HOME/.volta/bin" "$HOME/.asdf/shims" "$HOME/.local/share/pnpm" "$HOME/.local/share/mise/shims" "$HOME/.yarn/bin" "$HOME"/.nvm/versions/node/*/bin "$HOME"/.local/share/fnm/node-versions/*/installation/bin; do [ -d "$aop_cli_bin_dir" ] && PATH="$aop_cli_bin_dir:$PATH"; done; export PATH';
+  'for aop_cli_bin_dir in "$HOME/.local/bin" "$HOME/.bun/bin" "$HOME/.npm-global/bin" "$HOME/.npm/bin" "$HOME/.volta/bin" "$HOME/.asdf/shims" "$HOME/.local/share/pnpm" "$HOME/.local/share/mise/shims" "$HOME/.yarn/bin" "$HOME"/.nvm/versions/node/*/bin "$HOME"/.local/share/fnm/node-versions/*/installation/bin; do [ -d "$aop_cli_bin_dir" ] && PATH="$aop_cli_bin_dir:$PATH"; done; export PATH';
 
 export type ExecHostMode = { kind: "native" } | { kind: "wsl"; distro: string };
 

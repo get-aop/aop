@@ -37,7 +37,7 @@ export const guiSafePathFor = (platform: HostPlatform, environment: PathEnvironm
 };
 
 const unixPaths = ({ home }: PathEnvironment): string[] => [
-  ...(home ? [`${home}/.local/bin`, `${home}/.opencode/bin`, `${home}/.bun/bin`] : []),
+  ...(home ? [`${home}/.local/bin`, `${home}/.bun/bin`] : []),
   "/opt/homebrew/bin",
   "/usr/local/bin",
   "/usr/bin",
@@ -48,9 +48,7 @@ const unixPaths = ({ home }: PathEnvironment): string[] => [
 
 const windowsPaths = ({ localAppData, userProfile }: PathEnvironment): string[] => [
   ...(localAppData ? [`${localAppData}\\Microsoft\\WinGet\\Links`] : []),
-  ...(userProfile
-    ? [`${userProfile}\\.local\\bin`, `${userProfile}\\.bun\\bin`, `${userProfile}\\.opencode\\bin`]
-    : []),
+  ...(userProfile ? [`${userProfile}\\.local\\bin`, `${userProfile}\\.bun\\bin`] : []),
   "C:\\Program Files\\Git\\cmd",
   "C:\\Program Files\\GitHub CLI",
 ];

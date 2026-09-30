@@ -11,17 +11,6 @@ import {
 } from "./stream-progress.ts";
 
 describe("parseStreamProgressLine", () => {
-  test("parses Grok thought and text tokens", () => {
-    expect(parseStreamProgressLine(JSON.stringify({ type: "thought", data: "The" }))).toEqual({
-      kind: "thought",
-      data: "The",
-    });
-    expect(parseStreamProgressLine(JSON.stringify({ type: "text", data: "Hey" }))).toEqual({
-      kind: "text",
-      data: "Hey",
-    });
-  });
-
   test("parses Codex agent_message items as text", () => {
     expect(
       parseStreamProgressLine(
@@ -295,41 +284,6 @@ describe("parseStreamProgressLine", () => {
       command: "Agent",
       detail: "Lifecycle ownership traced",
       status: "done",
-      exitCode: 0,
-    });
-  });
-
-  test("parses OpenCode text parts", () => {
-    expect(
-      parseStreamProgressLine(
-        JSON.stringify({ type: "text", part: { text: "Looking at the shell." } }),
-      ),
-    ).toEqual({ kind: "text", data: "Looking at the shell." });
-  });
-
-  test("parses OpenCode bash tool_use as command rows", () => {
-    expect(
-      parseStreamProgressLine(
-        JSON.stringify({
-          type: "tool_use",
-          part: {
-            type: "tool",
-            tool: "bash",
-            callID: "call_7cb4",
-            state: {
-              status: "completed",
-              input: { command: "echo hello-from-opencode" },
-              metadata: { exit: 0 },
-              title: "echo hello-from-opencode",
-            },
-          },
-        }),
-      ),
-    ).toEqual({
-      kind: "command",
-      phase: "done",
-      command: "echo hello-from-opencode",
-      itemId: "call_7cb4",
       exitCode: 0,
     });
   });
@@ -698,7 +652,7 @@ describe("createStreamProgressAccumulator", () => {
     expect(snap.thinking).toBe(`${first}\n\n${second}`);
   });
 
-  test("concatenates Grok-style thought then text tokens", () => {
+  test("concatenates token-sized thought then text chunks", () => {
     const acc = createStreamProgressAccumulator();
     acc.apply({ kind: "thought", data: "Hello " });
     acc.apply({ kind: "thought", data: "world" });
@@ -709,7 +663,7 @@ describe("createStreamProgressAccumulator", () => {
     expect(end.content).toBe("Hey there");
   });
 
-  test("stacks intermediate status text when a new Grok text run starts after tools/thinking", () => {
+  test("stacks intermediate status text when a new text run starts after tools/thinking", () => {
     const acc = createStreamProgressAccumulator();
     acc.apply({ kind: "thought", data: "planning" });
     acc.apply({ kind: "text", data: "I'll inspect the layout…" });
@@ -918,10 +872,10 @@ describe("startLogProgressTail", () => {
       pollIntervalMs: 15,
     });
 
-    await appendFile(logFilePath, `${JSON.stringify({ type: "thought", data: "Think" })}\n`);
+    await appendFile(logFilePath, `${claudeThought("Think")}\n`);
     await waitFor(() => snapshots.some((s) => s.thinking === "Think"), 2000);
 
-    await appendFile(logFilePath, `${JSON.stringify({ type: "text", data: "Hi" })}\n`);
+    await appendFile(logFilePath, `${claudeText("Hi")}\n`);
     await waitFor(() => snapshots.some((s) => s.content === "Hi"), 2000);
 
     await stop();
@@ -955,8 +909,8 @@ describe("startLogProgressTail", () => {
     await appendFile(
       logFilePath,
       `${[
-        JSON.stringify({ type: "thought", data: "Plan" }),
-        JSON.stringify({ type: "text", data: "Answer" }),
+        claudeThought("Plan"),
+        claudeText("Answer"),
         JSON.stringify({
           type: "item.started",
           item: {
@@ -1013,15 +967,21 @@ describe("startLogProgressTail", () => {
       pollIntervalMs: 5,
     });
 
-    await appendFile(logFilePath, `${JSON.stringify({ type: "text", data: "Partial" })}`);
+    await appendFile(logFilePath, claudeText("Partial"));
     await Bun.sleep(20);
     expect(snapshots).toHaveLength(0);
 
     await stop();
-    expect(rawLines).toEqual([JSON.stringify({ type: "text", data: "Partial" })]);
+    expect(rawLines).toEqual([claudeText("Partial")]);
     expect(snapshots).toEqual([{ content: "Partial" }]);
   });
 });
+
+const claudeThought = (thinking: string): string =>
+  JSON.stringify({ type: "assistant", message: { content: [{ type: "thinking", thinking }] } });
+
+const claudeText = (text: string): string =>
+  JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text }] } });
 
 const waitFor = async (predicate: () => boolean, timeoutMs: number): Promise<void> => {
   const start = Date.now();

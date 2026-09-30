@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -85,18 +84,13 @@ import {
   recordChatRunPid,
   stopOrphanedChatRunProcess,
 } from "./run-process.ts";
-import {
-  allocateFreshRuntimeSession,
-  persistActiveRuntimeSession,
-  retireStaleRuntimeSession,
-} from "./runtime-binding.ts";
+import { persistActiveRuntimeSession, retireStaleRuntimeSession } from "./runtime-binding.ts";
 import { RUNTIME_DELEGATION_EXECUTION_CONTRACT } from "./runtime-delegation-contract.ts";
 import {
   activeSessionRunIds,
   type CreateProviderFn,
   createSessionRunLogPath,
   interruptSessionRun,
-  isGrokRuntime,
   isSessionRunActive,
   type RuntimeRunResult,
   registerPendingSessionRun,
@@ -105,7 +99,7 @@ import {
   type SessionRunRegistration,
   sessionRunPhase,
 } from "./runtime-engine.ts";
-import { resolveChatRuntimeTimeoutPolicy } from "./runtime-timeout-policy.ts";
+import { CHAT_RUNTIME_TIMEOUT_POLICY } from "./runtime-timeout-policy.ts";
 import {
   publishAssistantProgress,
   publishChatSessionEvent,
@@ -709,7 +703,7 @@ const acceptIdleSessionMessage = async (
     );
     transferredRegistration = true;
     // Accept immediately; finish the assistant reply in the background so multi-minute
-    // Grok/Codex runs do not hit Bun.serve idleTimeout (502 / request failed).
+    // Multi-minute runs must not hit Bun.serve idleTimeout (502 / request failed).
     const sessionDto = await sessionDtoFor(
       ctx,
       prepared.session,
@@ -1223,7 +1217,7 @@ const resolveRuntimeConfigurationPatch = async (
   options: { strictModel?: boolean; strictEffort?: boolean } = {},
 ) => {
   const configuration = await runtimeConfigurations.get(input.runtimeConfigurationId ?? "");
-  if (!configuration || configuration.driver === "custom") {
+  if (!configuration) {
     return { success: false as const, error: { code: "RUNTIME_CONFIGURATION_NOT_FOUND" as const } };
   }
 
@@ -1712,7 +1706,6 @@ const runAndPublishAssistantReply = async (input: {
             errorMessage: null,
             failureKind: null,
             runtimeSessionState: reply.runtimeSessionState,
-            bindingPolicy: reply.bindingPolicy,
           }
         : {
             status: "interrupted",
@@ -1720,7 +1713,6 @@ const runAndPublishAssistantReply = async (input: {
             errorMessage: null,
             failureKind: null,
             runtimeSessionState: reply.runtimeSessionState,
-            bindingPolicy: reply.bindingPolicy,
           }
       : reply.failed
         ? {
@@ -2017,9 +2009,6 @@ const prepareRuntimeSend = async (
     currentUserMessageId: messageId,
     currentPrompt: baseRuntimePrompt,
   });
-  const allocatedSessionId =
-    !session.runtime_session_id && isGrokRuntime(session.runtime) ? randomUUID() : null;
-  const timeoutPolicy = resolveChatRuntimeTimeoutPolicy(session.runtime);
 
   let prepared: { session: ChatSession; userMessage: ChatMessage; run: ChatRun };
   try {
@@ -2034,8 +2023,7 @@ const prepareRuntimeSend = async (
       displayText,
       workspacePath,
       contextStrategy: context.strategy,
-      allocatedSessionId,
-      timeoutPolicy: timeoutPolicy.policyName,
+      timeoutPolicy: CHAT_RUNTIME_TIMEOUT_POLICY.policyName,
       now,
       action: null,
     });
@@ -2097,7 +2085,6 @@ const persistPreparedSend = async (
     displayText: string;
     workspacePath: string;
     contextStrategy: ChatContextStrategy;
-    allocatedSessionId: string | null;
     timeoutPolicy: string;
     now: string;
     action: ChatActionPayload | null;
@@ -2134,7 +2121,7 @@ const persistPreparedSend = async (
         runtime: input.session.runtime,
         log_file_path: input.logFilePath,
         status: "running",
-        runtime_session_id: input.allocatedSessionId ?? input.session.runtime_session_id,
+        runtime_session_id: input.session.runtime_session_id,
         resume_session_id: input.session.runtime_session_id,
         failure_kind: null,
         interruption_kind: null,
@@ -2142,7 +2129,7 @@ const persistPreparedSend = async (
         workspace_path: input.workspacePath,
         timeout_policy: input.timeoutPolicy,
         retry_of_run_id: null,
-        runtime_session_state: runtimeSessionState(input),
+        runtime_session_state: input.session.runtime_session_id ? "confirmed" : null,
         error_message: null,
         created_at: input.now,
         updated_at: input.now,
@@ -2179,14 +2166,6 @@ const persistPreparedSend = async (
     ]);
     return { session, userMessage, run };
   });
-
-const runtimeSessionState = (input: {
-  allocatedSessionId: string | null;
-  session: ChatSession;
-}): "allocated" | "confirmed" | null => {
-  if (input.allocatedSessionId) return "allocated";
-  return input.session.runtime_session_id ? "confirmed" : null;
-};
 
 const resolveCurrentSessionRuntimeConfiguration = async (
   ctx: LocalServerContext,
@@ -2226,7 +2205,6 @@ interface AssistantReply {
   interruptionKind?: ChatRunInterruptionKind;
   failureKind?: ChatRunFailureKind | null;
   runtimeSessionState?: ChatRun["runtime_session_state"];
-  bindingPolicy?: "clear";
   activity: AssistantActivity | null;
   artifacts?: StoredChatArtifact[];
 }
@@ -2314,7 +2292,6 @@ const toAssistantReply = (
     interruptionKind: run.interruptionKind,
     failureKind: run.failureKind ?? null,
     runtimeSessionState: run.runtimeSessionState,
-    bindingPolicy: run.bindingPolicy,
     activity: finalizeAssistantActivity(activity, run),
     artifacts: run.artifacts ?? [],
   };
@@ -2464,51 +2441,14 @@ const runMainRuntimeReply = async (
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,
     onProgress: input.onProgress,
-    newSessionId:
-      input.chatRun?.runtime_session_state === "allocated" && !session.runtime_session_id
-        ? (input.chatRun.runtime_session_id ?? undefined)
-        : undefined,
     onRuntimeSession: input.chatRun
       ? (sessionId) => persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId)
       : undefined,
     onSpawn: chatRunPidRecorder(ctx, input.chatRun),
   });
-  if (shouldRetrySilentGrokResume(session, run, input.chatRun)) {
-    const staleRuntimeSessionId = session.runtime_session_id;
-    if (!staleRuntimeSessionId || !input.chatRun) return run;
-    await retireStaleRuntimeSession(ctx, input.chatRun.id, staleRuntimeSessionId);
-    const freshSessionId = randomUUID();
-    await allocateFreshRuntimeSession(ctx, input.chatRun.id, freshSessionId);
-    const freshSession = { ...session, runtime_session_id: null };
-    const freshContext = await prepareConversationPrompt({
-      ctx,
-      session: freshSession,
-      currentUserMessageId: input.userMessageId,
-      currentPrompt: runtimePrompt,
-    });
-    return runSessionPrompt({
-      session: freshSession,
-      repoPath,
-      prompt: composeRuntimePrompt(freshContext.prompt, input.runtimePromptPrefix),
-      registration: input.registration,
-      allowedDirectories,
-      logFilePath: input.logFilePath,
-      createProviderFn: input.createProviderFn,
-      onProgress: input.onProgress,
-      newSessionId: freshSessionId,
-      onRuntimeSession: (sessionId) =>
-        persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId),
-      onSpawn: chatRunPidRecorder(ctx, input.chatRun),
-    });
-  }
   if (!run.staleRuntimeSessionId || !input.chatRun) return run;
 
   await retireStaleRuntimeSession(ctx, input.chatRun.id, run.staleRuntimeSessionId);
-  const freshSessionId = await allocateReplacementGrokSession(
-    ctx,
-    input.chatRun.id,
-    session.runtime,
-  );
   const freshSession = { ...session, runtime_session_id: null };
   const freshContext = await prepareConversationPrompt({
     ctx,
@@ -2525,7 +2465,6 @@ const runMainRuntimeReply = async (
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,
     onProgress: input.onProgress,
-    newSessionId: freshSessionId,
     onRuntimeSession: (sessionId) =>
       persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId),
     onSpawn: chatRunPidRecorder(ctx, input.chatRun),
@@ -2538,30 +2477,6 @@ const chatRunPidRecorder = (
   chatRun: ChatRun | undefined,
 ): ((pid: number) => Promise<void>) | undefined =>
   chatRun ? (pid) => recordChatRunPid(ctx, chatRun.id, pid) : undefined;
-
-const allocateReplacementGrokSession = async (
-  ctx: LocalServerContext,
-  runId: string,
-  runtime: string,
-): Promise<string | undefined> => {
-  if (!isGrokRuntime(runtime)) return undefined;
-  const sessionId = randomUUID();
-  await allocateFreshRuntimeSession(ctx, runId, sessionId);
-  return sessionId;
-};
-
-const shouldRetrySilentGrokResume = (
-  session: ChatSession,
-  run: RuntimeRunResult,
-  chatRun: ChatRun | undefined,
-): boolean =>
-  Boolean(
-    chatRun &&
-      isGrokRuntime(session.runtime) &&
-      session.runtime_session_id &&
-      run.failed &&
-      run.failureKind === "startup_timeout",
-  );
 
 const loadCurrentUserText = async (
   ctx: LocalServerContext,
@@ -2665,10 +2580,6 @@ const runRuntimeDelegation = async (input: {
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,
     onProgress: input.onProgress,
-    newSessionId:
-      input.chatRun?.runtime_session_state === "allocated" && !input.session.runtime_session_id
-        ? (input.chatRun.runtime_session_id ?? undefined)
-        : undefined,
     onRuntimeSession: input.chatRun
       ? (sessionId) => persistActiveRuntimeSession(input.ctx, input.chatRun?.id ?? "", sessionId)
       : undefined,
@@ -2996,7 +2907,7 @@ const resolveControlSettingsFromCatalog = (
   return {
     model,
     reasoning,
-    fastMode: command.fastMode === true && command.provider === "codex-cli",
+    fastMode: false,
     runtimeConfigurationId: null,
     runtimeAlias: null,
   };
@@ -3049,7 +2960,7 @@ const buildControlSpecialistPrompt = (
   context: string,
 ): string =>
   [
-    `You are the dedicated ${controlProviderLabel(command.provider)} ${command.capability} control operator for an AOP orchestration.`,
+    `You are the dedicated Claude ${command.capability} control operator for an AOP orchestration.`,
     `Complete the control task using your native ${command.capability} capability.`,
     "Return a concise factual result for the orchestrating runtime, including relevant outcomes and blockers.",
     "## Compact orchestration context",
@@ -3064,11 +2975,11 @@ const buildControlHandoffPrompt = (
   result: string,
 ): string =>
   [
-    `A dedicated ${controlProviderLabel(command.provider)} control session completed the requested ${command.capability} work.`,
+    `A dedicated Claude control session completed the requested ${command.capability} work.`,
     "Use its result as orchestration evidence and give the user the next useful answer. Do not claim you directly performed the control action.",
     "## Original request",
     request,
-    `## ${controlProviderLabel(command.provider)} control result`,
+    "## Claude control result",
     result,
   ].join("\n\n");
 
@@ -3078,16 +2989,13 @@ const buildControlFailureHandoffPrompt = (
   error: string,
 ): string =>
   [
-    `A dedicated ${controlProviderLabel(command.provider)} ${command.capability} control attempt failed.`,
+    `A dedicated Claude ${command.capability} control attempt failed.`,
     "Explain the failure honestly and help the user choose a safe next step. Do not claim the control action completed.",
     "## Original request",
     request,
-    `## ${controlProviderLabel(command.provider)} control error`,
+    "## Claude control error",
     error,
   ].join("\n\n");
-
-const controlProviderLabel = (provider: ControlCommand["provider"]): string =>
-  provider === "claude-code" ? "Claude" : "Codex";
 
 const publishControlProgress = (sessionId: string, progress: StreamProgressSnapshot): void => {
   publishAssistantProgress(sessionId, progress);

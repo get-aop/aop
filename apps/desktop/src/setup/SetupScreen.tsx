@@ -34,13 +34,10 @@ import { useSetupTheme } from "./useSetupTheme";
 
 /** Static agent metadata; commands/descriptions mirror the Rust installer registry. */
 const AGENT_META: Record<RuntimeId, { name: string; tagline: string }> = {
-  codex: { name: "Codex", tagline: "OpenAI" },
   claude: { name: "Claude Code", tagline: "Anthropic" },
-  opencode: { name: "OpenCode", tagline: "Open source" },
-  pi: { name: "Pi", tagline: "Pi.dev" },
 };
 
-const RUNTIME_IDS: RuntimeId[] = ["codex", "claude", "opencode", "pi"];
+const RUNTIME_IDS: RuntimeId[] = ["claude"];
 
 interface InstallState {
   which: string;
@@ -617,7 +614,7 @@ interface RuntimeCardBuildInput {
 const buildRuntimeCard = (input: RuntimeCardBuildInput): RuntimeCardProps => {
   const ready = input.runtimeReq?.status === "ready";
   const installing = isRuntimeInstall(input.install);
-  const recommendedId = input.runtimes.find((runtime) => runtime.recommended)?.id ?? "codex";
+  const recommendedId = input.runtimes.find((runtime) => runtime.recommended)?.id ?? "claude";
   const readyName = readyRuntimeName(input.runtimes);
 
   return {
@@ -657,7 +654,7 @@ const buildAgentTile = (
     id,
     name: AGENT_META[id].name,
     tagline: AGENT_META[id].tagline,
-    tint: runtimeTint(id),
+    tint: RUNTIME_TINTS[id],
     recommended: recommendedId === id,
     ready: agentReady,
     selectedActive,
@@ -777,20 +774,12 @@ const selectedRuntimeIsReady = (runtimes: RuntimeRequirement[], id: RuntimeId): 
 const initialRuntime = (state: DesktopSetupState): RuntimeId => {
   const ready = state.runtimes.find((runtime) => runtime.status === "ready")?.id;
   if (ready) return ready;
-  return state.runtimes.find((runtime) => runtime.recommended)?.id ?? "codex";
+  return state.runtimes.find((runtime) => runtime.recommended)?.id ?? "claude";
 };
 
-const runtimeTint = (id: RuntimeId): string =>
-  id === "codex"
-    ? "var(--teal)"
-    : id === "claude"
-      ? "var(--amber)"
-      : id === "opencode"
-        ? "var(--lav)"
-        : "var(--bad)";
+const RUNTIME_TINTS: Record<RuntimeId, string> = { claude: "var(--amber)" };
 
-const isRuntimeId = (key: string): boolean =>
-  key === "codex" || key === "claude" || key === "opencode" || key === "pi";
+const isRuntimeId = (key: string): boolean => key in RUNTIME_TINTS;
 
 const installKey = (action: SetupAction): string => {
   if (action.runtimeId) return action.runtimeId;

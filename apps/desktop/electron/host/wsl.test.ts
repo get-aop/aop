@@ -48,15 +48,15 @@ describe("Electron WSL host support", () => {
 
   test("adds common Linux user bins while dropping Windows environment values", () => {
     const argv = wslRunnerArgv("Ubuntu", {
-      program: "pi",
+      program: "claude",
       args: ["--version"],
       env: { PATH: "C:\\Windows" },
     });
 
-    expect(argv[5]).toContain("$HOME/.opencode/bin");
+    expect(argv[5]).toContain("$HOME/.bun/bin");
     expect(argv[5]).toContain("$HOME/.npm-global/bin");
     expect(argv[5]).not.toContain("C:\\Windows");
-    expect(argv[5]).toEndWith("exec 'pi' '--version'");
+    expect(argv[5]).toEndWith("exec 'claude' '--version'");
   });
 
   test("keeps a selected distro or chooses the default", () => {

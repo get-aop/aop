@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { ChatActionPayload } from "@aop/common";
 import { generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
@@ -22,7 +21,7 @@ import {
   ownsSessionRunRegistration,
   type SessionRunRegistration,
 } from "./runtime-engine.ts";
-import { resolveChatRuntimeTimeoutPolicy } from "./runtime-timeout-policy.ts";
+import { CHAT_RUNTIME_TIMEOUT_POLICY } from "./runtime-timeout-policy.ts";
 import { nextChatTurnIndex } from "./turn-order.ts";
 import { resolveSessionWorkspaceBinding } from "./workspace-binding.ts";
 
@@ -216,11 +215,6 @@ export const claimNextQueuedSteer = async (
     currentUserMessageId: queued.id,
     currentPrompt: basePrompt,
   });
-  const allocatedSessionId =
-    !session.runtime_session_id && (session.runtime === "grok-build" || session.runtime === "grok")
-      ? randomUUID()
-      : null;
-  const timeoutPolicy = resolveChatRuntimeTimeoutPolicy(session.runtime);
 
   try {
     const claimed = await persistQueuedRun(ctx, {
@@ -230,10 +224,9 @@ export const claimNextQueuedSteer = async (
       runId,
       assistantMessageId,
       logFilePath,
-      allocatedSessionId,
       contextStrategy: context.strategy,
       workspacePath,
-      timeoutPolicy: timeoutPolicy.policyName,
+      timeoutPolicy: CHAT_RUNTIME_TIMEOUT_POLICY.policyName,
     });
 
     if (!claimed) return { success: false, reason: "BUSY" };
@@ -288,7 +281,6 @@ const persistQueuedRun = async (
     runId: string;
     assistantMessageId: string;
     logFilePath: string;
-    allocatedSessionId: string | null;
     contextStrategy: ChatRun["context_strategy"];
     workspacePath: string;
     timeoutPolicy: string;
@@ -314,7 +306,7 @@ const persistQueuedRun = async (
         runtime: input.session.runtime,
         log_file_path: input.logFilePath,
         status: "running",
-        runtime_session_id: input.allocatedSessionId ?? input.session.runtime_session_id,
+        runtime_session_id: input.session.runtime_session_id,
         resume_session_id: input.session.runtime_session_id,
         failure_kind: null,
         interruption_kind: null,
@@ -322,7 +314,7 @@ const persistQueuedRun = async (
         workspace_path: input.workspacePath,
         timeout_policy: input.timeoutPolicy,
         retry_of_run_id: null,
-        runtime_session_state: queuedRuntimeSessionState(input),
+        runtime_session_state: input.session.runtime_session_id ? "confirmed" : null,
         error_message: null,
         created_at: claimedAt,
         updated_at: claimedAt,
@@ -349,14 +341,6 @@ const persistQueuedRun = async (
     ]);
     return { run, userMessage };
   });
-
-const queuedRuntimeSessionState = (input: {
-  allocatedSessionId: string | null;
-  session: ChatSession;
-}): "allocated" | "confirmed" | null => {
-  if (input.allocatedSessionId) return "allocated";
-  return input.session.runtime_session_id ? "confirmed" : null;
-};
 
 const isQueuedRunConflict = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : String(error);
@@ -394,7 +378,6 @@ export const cancelQueuedSteers = async (
 
   const session = await ctx.chatSessionRepository.getById(sessionId);
   const workspacePath = session ? await resolveSessionWorkspaceBinding(ctx, session) : null;
-  const timeoutPolicy = resolveChatRuntimeTimeoutPolicy(runtime);
 
   const now = new Date().toISOString();
   const rows = await Promise.all(
@@ -414,7 +397,7 @@ export const cancelQueuedSteers = async (
         ? ("native_resume" as const)
         : ("aop_history" as const),
       workspace_path: workspacePath,
-      timeout_policy: timeoutPolicy.policyName,
+      timeout_policy: CHAT_RUNTIME_TIMEOUT_POLICY.policyName,
       retry_of_run_id: null,
       runtime_session_state: session?.runtime_session_id ? ("confirmed" as const) : null,
       error_message: null,

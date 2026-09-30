@@ -7,6 +7,7 @@ import {
 import type { LocalServerContext } from "../context.ts";
 import { pruneOldBackgroundTasks } from "./background-task-retention.ts";
 import {
+  assistantTextEvent,
   buildBackgroundTaskContent,
   extractBackgroundTaskRows,
 } from "./background-task-tracker.ts";
@@ -262,7 +263,7 @@ const readHostLogProgress = async (logFilePath: string): Promise<StreamProgressS
 };
 
 const writeBackgroundTaskLog = async (logFilePath: string, content: string): Promise<void> => {
-  await writeFile(logFilePath, `${JSON.stringify({ type: "text", data: content })}\n`, "utf8");
+  await writeFile(logFilePath, `${JSON.stringify(assistantTextEvent(content))}\n`, "utf8");
 };
 
 const phaseForRow = (

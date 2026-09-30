@@ -46,26 +46,6 @@ export const persistActiveRuntimeSession = async (
   });
 };
 
-export const allocateFreshRuntimeSession = async (
-  ctx: LocalServerContext,
-  runId: string,
-  runtimeSessionId: string,
-): Promise<void> => {
-  const now = new Date().toISOString();
-  await ctx.db
-    .updateTable("chat_runs")
-    .set({
-      runtime_session_id: runtimeSessionId,
-      runtime_session_state: "allocated",
-      updated_at: now,
-    })
-    .where("id", "=", runId)
-    .where("status", "=", "running")
-    .where("runtime_session_id", "is", null)
-    .returning("id")
-    .executeTakeFirstOrThrow();
-};
-
 export const retireStaleRuntimeSession = async (
   ctx: LocalServerContext,
   runId: string,

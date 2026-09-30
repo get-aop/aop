@@ -90,7 +90,7 @@ clear_local_server_port()`);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("AOP preflight checks failed.");
     expect(result.stderr).toContain("No supported agent runtime found");
-    expect(result.stderr).toContain("claude, opencode, codex, or pi");
+    expect(result.stderr).toContain("Claude Code (claude)");
     expect(result.output).not.toContain("Downloading");
   });
 
@@ -99,7 +99,7 @@ clear_local_server_port()`);
       uname: unameStub(),
       git: successStub(),
       gh: ghStub({ authenticated: true }),
-      pi: successStub(),
+      claude: successStub(),
     });
 
     const result = await runInstaller(binDir);

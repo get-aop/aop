@@ -12,9 +12,7 @@ describe("controlCommandLabel", () => {
   test("returns provider + capability descriptions without technical ids", () => {
     expect(CONTROL_COMMANDS.map(controlCommandLabel)).toEqual([
       "Claude Browser",
-      "Codex Browser",
       "Claude Computer",
-      "Codex Computer",
     ]);
   });
 });
@@ -28,49 +26,44 @@ describe("parseControlCommand", () => {
   });
 
   test("parses model and thinking payload from the control marker", () => {
-    expect(parseControlCommand("$CX_BROWSER_USE[gpt-5.5;high] inspect the page")).toMatchObject({
+    expect(
+      parseControlCommand("$CC_BROWSER_USE[claude-opus-4-8;high] inspect the page"),
+    ).toMatchObject({
       command: {
-        provider: "codex-cli",
+        provider: "claude-code",
         capability: "browser",
-        model: "gpt-5.5",
+        model: "claude-opus-4-8",
         reasoning: "high",
       },
       prompt: "inspect the page",
     });
   });
 
-  test("parses fast mode from the optional third payload field", () => {
+  test("keeps the fast flag only when a runtime configuration is bound", () => {
     expect(
-      parseControlCommand("$CX_COMPUTER_USE[gpt-5.5;medium;fast] open Settings"),
+      parseControlCommand("$CC_COMPUTER_USE[claude-opus-5;medium;fast;cfg:rtprov_x] open Settings"),
     ).toMatchObject({
-      command: {
-        provider: "codex-cli",
-        capability: "computer",
-        model: "gpt-5.5",
-        reasoning: "medium",
-        fastMode: true,
-      },
+      command: { provider: "claude-code", capability: "computer", fastMode: true },
     });
+    expect(
+      parseControlCommand("$CC_COMPUTER_USE[claude-opus-5;medium;fast] open Settings"),
+    ).not.toHaveProperty("command.fastMode");
   });
 
-  test("parses a Codex computer command placed after the request", () => {
-    expect(parseControlCommand("Open System Settings $CX_COMPUTER_USE")).toEqual({
-      command: { provider: "codex-cli", capability: "computer" },
+  test("parses a Claude computer command placed after the request", () => {
+    expect(parseControlCommand("Open System Settings $CC_COMPUTER_USE")).toEqual({
+      command: { provider: "claude-code", capability: "computer" },
       prompt: "Open System Settings",
     });
   });
 
-  test.each([
-    ["$CX_BROWSER_USE inspect the page", "codex-cli", "browser"],
-    ["$CC_COMPUTER_USE open System Settings", "claude-code", "computer"],
-  ])("parses %s", (prompt, provider, capability) => {
-    expect(parseControlCommand(prompt)).toMatchObject({
-      command: { provider, capability },
-    });
+  test("does not recognize the removed Codex control commands", () => {
+    expect(parseControlCommand("$CX_BROWSER_USE inspect the page")).toBeNull();
+    expect(parseControlCommand("$CX_COMPUTER_USE open System Settings")).toBeNull();
   });
 
   test("rejects competing control commands", () => {
-    expect(parseControlCommand("$CC_BROWSER_USE $CX_BROWSER_USE Compare both results")).toEqual({
+    expect(parseControlCommand("$CC_BROWSER_USE $CC_COMPUTER_USE Compare both results")).toEqual({
       error: "Use one computer or browser control command per message.",
     });
   });
@@ -83,14 +76,14 @@ describe("parseControlCommand", () => {
 describe("control command selection helpers", () => {
   test("formats and rewrites markers with model and thinking", () => {
     const selection = {
-      id: "CX_BROWSER_USE" as const,
-      model: "gpt-5.5",
+      id: "CC_BROWSER_USE" as const,
+      model: "claude-opus-4-8",
       reasoning: "high" as const,
       fastMode: false,
     };
-    expect(formatControlCommandMarker(selection)).toBe("$CX_BROWSER_USE[gpt-5.5;high]");
-    expect(rewriteControlCommandMarker("check billing $CX_BROWSER_USE", selection)).toBe(
-      "check billing $CX_BROWSER_USE[gpt-5.5;high]",
+    expect(formatControlCommandMarker(selection)).toBe("$CC_BROWSER_USE[claude-opus-4-8;high]");
+    expect(rewriteControlCommandMarker("check billing $CC_BROWSER_USE", selection)).toBe(
+      "check billing $CC_BROWSER_USE[claude-opus-4-8;high]",
     );
   });
 
@@ -164,30 +157,29 @@ describe("control command selection helpers", () => {
       fastMode: false,
       runtimeConfigurationId: "rtprov_claude_personal",
     });
-    // Preferring a codex session config must not leak into Claude control.
+    // An unknown preferred configuration falls back to the first runnable one.
     expect(
-      defaultControlSelection("CC_BROWSER_USE", configs, "rtprov_work_codex")
-        ?.runtimeConfigurationId,
+      defaultControlSelection("CC_BROWSER_USE", configs, "rtprov_unknown")?.runtimeConfigurationId,
     ).toBe("rtprov_claude_code");
   });
 
   test("round-trips runtime configuration id on control markers", () => {
     const marker = formatControlCommandMarker({
-      id: "CX_BROWSER_USE",
-      model: "gpt-5.5",
+      id: "CC_BROWSER_USE",
+      model: "claude-opus-5",
       reasoning: "high",
       fastMode: true,
-      runtimeConfigurationId: "rtprov_work_codex",
+      runtimeConfigurationId: "rtprov_claude_personal",
     });
-    expect(marker).toBe("$CX_BROWSER_USE[gpt-5.5;high;fast;cfg:rtprov_work_codex]");
+    expect(marker).toBe("$CC_BROWSER_USE[claude-opus-5;high;fast;cfg:rtprov_claude_personal]");
     expect(parseControlCommand(`inspect ${marker}`)).toMatchObject({
       command: {
-        provider: "codex-cli",
+        provider: "claude-code",
         capability: "browser",
-        model: "gpt-5.5",
+        model: "claude-opus-5",
         reasoning: "high",
         fastMode: true,
-        runtimeConfigurationId: "rtprov_work_codex",
+        runtimeConfigurationId: "rtprov_claude_personal",
       },
       prompt: "inspect",
     });

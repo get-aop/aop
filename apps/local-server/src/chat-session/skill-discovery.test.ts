@@ -20,7 +20,7 @@ describe("skill-discovery", () => {
 
   test("returns empty list for non-claude runtimes", async () => {
     expect(await discoverRuntimeSkills("codex-cli", "/tmp")).toEqual([]);
-    expect(await discoverRuntimeSkills("grok-build", "/tmp")).toEqual([]);
+    expect(await discoverRuntimeSkills("pi", "/tmp")).toEqual([]);
   });
 
   test("discovers skills from the Claude config directory used by the runtime", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { sanitizeGrokSessionId, sanitizeSessionId } from "./session-id.ts";
+import { sanitizeSessionId } from "./session-id.ts";
 
 describe("sanitizeSessionId", () => {
   test("accepts real-world session id shapes", () => {
@@ -26,15 +26,5 @@ describe("sanitizeSessionId", () => {
   test("rejects AOP record ids", () => {
     expect(sanitizeSessionId("isess_01kxmsfkf7exxrgvv1qsfjzyrh")).toBeUndefined();
     expect(sanitizeSessionId("crun_01kxmxetvae00b7h0x5hrsevqw")).toBeUndefined();
-  });
-});
-
-describe("sanitizeGrokSessionId", () => {
-  test("accepts UUID session ids and rejects broader provider ids", () => {
-    expect(sanitizeGrokSessionId("0198c0a8-7d3e-7e96-a8b2-3f1f0c9d4e5f")).toBe(
-      "0198c0a8-7d3e-7e96-a8b2-3f1f0c9d4e5f",
-    );
-    expect(sanitizeGrokSessionId("thread_abc123XYZ")).toBeUndefined();
-    expect(sanitizeGrokSessionId("not-a-uuid")).toBeUndefined();
   });
 });

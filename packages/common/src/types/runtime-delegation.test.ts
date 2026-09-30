@@ -12,7 +12,7 @@ describe("parseRuntimeDelegation", () => {
       "Fix this:",
       "    if (ready) {",
       "\t\trun();",
-      "    } $DELEGATE_CODEX[gpt-5.5;high]",
+      "    } $DELEGATE_CLAUDE[claude-opus-4-8;high]",
     ].join("\n");
 
     expect(parseRuntimeDelegation(prompt)).toMatchObject({
@@ -20,32 +20,18 @@ describe("parseRuntimeDelegation", () => {
     });
   });
 
-  test("parses every canonical runtime marker case-insensitively", () => {
+  test("parses the Claude marker case-insensitively", () => {
     expect(parseRuntimeDelegation("Investigate this $delegate_claude")).toMatchObject({
       runtime: "claude-code",
       prompt: "Investigate this",
     });
-    expect(parseRuntimeDelegation("$DELEGATE_OPENCODE investigate")).toMatchObject({
-      runtime: "opencode",
-    });
-    expect(parseRuntimeDelegation("$DELEGATE_GROK investigate")).toMatchObject({
-      runtime: "grok-build",
-    });
-    expect(parseRuntimeDelegation("$DELEGATE_CODEX investigate")).toMatchObject({
-      runtime: "codex-cli",
-    });
-    expect(parseRuntimeDelegation("$DELEGATE_PI investigate")).toMatchObject({ runtime: "pi" });
-    expect(parseRuntimeDelegation("$DELEGATE_OMP investigate")).toMatchObject({
-      runtime: "pi",
-      runtimeAlias: "omp",
-    });
   });
 
-  test("rejects multiple delegates and ignores ordinary runtime words", () => {
+  test("ignores ordinary runtime words and markers of runtimes outside the catalog", () => {
     expect(parseRuntimeDelegation("Ask claude about codex")).toBeNull();
-    expect(parseRuntimeDelegation("$DELEGATE_CLAUDE $DELEGATE_PI compare")).toEqual({
-      error: "Choose one delegated runtime per message.",
-    });
+    for (const marker of ["CODEX", "PI", "OMP", "OPENCODE", "GROK"]) {
+      expect(parseRuntimeDelegation(`$DELEGATE_${marker} investigate`)).toBeNull();
+    }
   });
 
   test("parses model and thinking from the marker payload", () => {
@@ -58,24 +44,26 @@ describe("parseRuntimeDelegation", () => {
       prompt: "Fix tests",
     });
     expect(
-      parseRuntimeDelegation("$DELEGATE_OPENCODE[openai/gpt-5.6-sol;extra-high] review the diff"),
+      parseRuntimeDelegation("$DELEGATE_CLAUDE[claude-sonnet-4-6;extra-high] review the diff"),
     ).toMatchObject({
-      runtime: "opencode",
-      model: "openai/gpt-5.6-sol",
+      runtime: "claude-code",
+      model: "claude-sonnet-4-6",
       reasoning: "extra-high",
       prompt: "review the diff",
     });
   });
 
   test("drops invalid payload values instead of failing the delegation", () => {
-    const badModel = parseRuntimeDelegation("$DELEGATE_CODEX[not a model!!;high] fix it");
-    expect(badModel).toMatchObject({ runtime: "codex-cli", prompt: "fix it" });
+    const badModel = parseRuntimeDelegation("$DELEGATE_CLAUDE[not a model!!;high] fix it");
+    expect(badModel).toMatchObject({ runtime: "claude-code", prompt: "fix it" });
     expect(badModel && "model" in badModel ? badModel.model : undefined).toBeUndefined();
 
-    const badReasoning = parseRuntimeDelegation("$DELEGATE_CODEX[gpt-5.5;warp-speed] fix it");
+    const badReasoning = parseRuntimeDelegation(
+      "$DELEGATE_CLAUDE[claude-opus-4-8;warp-speed] fix it",
+    );
     expect(badReasoning).toMatchObject({
-      runtime: "codex-cli",
-      model: "gpt-5.5",
+      runtime: "claude-code",
+      model: "claude-opus-4-8",
       prompt: "fix it",
     });
     expect(
@@ -84,8 +72,8 @@ describe("parseRuntimeDelegation", () => {
   });
 
   test("keeps plain markers working without a payload", () => {
-    const plain = parseRuntimeDelegation("$DELEGATE_GROK check ci");
-    expect(plain).toMatchObject({ runtime: "grok-build", prompt: "check ci" });
+    const plain = parseRuntimeDelegation("$DELEGATE_CLAUDE check ci");
+    expect(plain).toMatchObject({ runtime: "claude-code", prompt: "check ci" });
     expect(plain && "model" in plain ? plain.model : undefined).toBeUndefined();
   });
 
@@ -106,27 +94,27 @@ describe("parseRuntimeDelegation", () => {
 
   test("round-trips optional Fast mode without breaking older markers", () => {
     const withFast = formatRuntimeDelegationMarker({
-      id: "codex",
-      model: "gpt-5.5",
+      id: "claude",
+      model: "claude-opus-5",
       reasoning: "high",
       fastMode: true,
     });
-    expect(withFast).toBe("$DELEGATE_CODEX[gpt-5.5;high;fast]");
+    expect(withFast).toBe("$DELEGATE_CLAUDE[claude-opus-5;high;fast]");
     expect(parseRuntimeDelegation(`ship it ${withFast}`)).toMatchObject({
-      runtime: "codex-cli",
-      model: "gpt-5.5",
+      runtime: "claude-code",
+      model: "claude-opus-5",
       reasoning: "high",
       fastMode: true,
       prompt: "ship it",
     });
 
     const withoutFast = formatRuntimeDelegationMarker({
-      id: "codex",
-      model: "gpt-5.5",
+      id: "claude",
+      model: "claude-opus-5",
       reasoning: "high",
       fastMode: false,
     });
-    expect(withoutFast).toBe("$DELEGATE_CODEX[gpt-5.5;high]");
+    expect(withoutFast).toBe("$DELEGATE_CLAUDE[claude-opus-5;high]");
     const parsed = parseRuntimeDelegation(withoutFast);
     expect(parsed && "fastMode" in parsed ? parsed.fastMode : undefined).toBeUndefined();
   });
@@ -204,19 +192,21 @@ describe("parseRuntimeDelegation", () => {
     });
 
     const withFastAndConfig = formatRuntimeDelegationMarker({
-      id: "codex",
-      model: "gpt-5.5",
+      id: "claude",
+      model: "claude-opus-5",
       reasoning: "high",
       fastMode: true,
-      runtimeConfigurationId: "rtprov_work_codex",
+      runtimeConfigurationId: "rtprov_work_claude",
     });
-    expect(withFastAndConfig).toBe("$DELEGATE_CODEX[gpt-5.5;high;fast;cfg:rtprov_work_codex]");
+    expect(withFastAndConfig).toBe(
+      "$DELEGATE_CLAUDE[claude-opus-5;high;fast;cfg:rtprov_work_claude]",
+    );
     expect(parseRuntimeDelegation(withFastAndConfig)).toMatchObject({
-      runtime: "codex-cli",
-      model: "gpt-5.5",
+      runtime: "claude-code",
+      model: "claude-opus-5",
       reasoning: "high",
       fastMode: true,
-      runtimeConfigurationId: "rtprov_work_codex",
+      runtimeConfigurationId: "rtprov_work_claude",
     });
   });
 });

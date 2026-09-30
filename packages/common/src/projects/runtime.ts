@@ -2,10 +2,11 @@ import { z } from "zod";
 import { SAFE_CUSTOM_RUNTIME_MODEL_PATTERN } from "../types/workflow-runtime.ts";
 
 /**
- * The agent CLIs a Project can drive. Exactly these three; the ids match the adapter ids the
- * runtime layer already uses, so a value here can be handed to an adapter unchanged.
+ * The agent CLIs a Project can drive: the runtime catalog. Phase 1 is Claude Code only; the id
+ * matches the adapter id the runtime layer uses, so a value here can be handed to an adapter
+ * unchanged. The Codex and PI adapters exist but stay out of this list until Phase 2.
  */
-export const CliProviderSchema = z.enum(["claude-code", "codex-cli", "pi"]);
+export const CliProviderSchema = z.enum(["claude-code"]);
 export type CliProvider = z.infer<typeof CliProviderSchema>;
 
 /** Normalized effort scale; each adapter maps it onto its own CLI's flag. */

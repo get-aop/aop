@@ -62,7 +62,7 @@ Definitions live in SQLite (builder UI + built-in catalog in `workflow-engine/bu
 
 ### Workers
 
-Worker seats map to the `agent` domain plus task assignment. Workers are created and assigned from chat (worker card, assignment cards) and through the MCP tools; there is no Workers page. Legacy Hermes import API paths remain for older rows.
+Worker seats map to the `agent` domain plus task assignment. Workers are created and assigned from chat (worker card, assignment cards) and through the MCP tools; there is no Workers page.
 
 ### Data paths
 

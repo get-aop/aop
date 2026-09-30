@@ -11,7 +11,7 @@ import { makeProject, rejectedPaths } from "./test-utils.ts";
 
 describe("ProjectSchema", () => {
   test("accepts a project, keeping null model and effort as use-default", () => {
-    const useDefaults = { provider: "codex-cli" as const, model: null, effort: null };
+    const useDefaults = { provider: "claude-code" as const, model: null, effort: null };
     const project = ProjectSchema.parse(makeProject({ coordinator: useDefaults }));
     expect(project.coordinator).toEqual(useDefaults);
     expect(project.thread.model).toBe("claude-opus-5");
@@ -58,10 +58,12 @@ describe("ProjectSchema", () => {
   });
 
   test("rejects a coordinator or thread runtime on a provider AOP does not drive", () => {
-    const coordinator = { provider: "grok-build", model: null, effort: null };
-    expect(rejectedPaths(ProjectSchema, makeProject({ coordinator }))).toEqual([
-      "coordinator.provider",
-    ]);
+    for (const provider of ["codex-cli", "pi", "grok-build", "opencode"]) {
+      const coordinator = { provider, model: null, effort: null };
+      expect(rejectedPaths(ProjectSchema, makeProject({ coordinator }))).toEqual([
+        "coordinator.provider",
+      ]);
+    }
     const thread = { provider: "claude-code", model: null, effort: "turbo" };
     expect(rejectedPaths(ProjectSchema, makeProject({ thread }))).toEqual(["thread.effort"]);
   });

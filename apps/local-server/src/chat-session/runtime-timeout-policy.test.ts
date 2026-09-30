@@ -1,22 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildChatRuntimeTimeoutFacts,
-  resolveChatRuntimeTimeoutPolicy,
+  CHAT_RUNTIME_TIMEOUT_POLICY,
 } from "./runtime-timeout-policy.ts";
 
-describe("resolveChatRuntimeTimeoutPolicy", () => {
-  test("allows Grok a slow start", () => {
-    expect(resolveChatRuntimeTimeoutPolicy("grok-build")).toEqual({
-      startupTimeoutMs: 120_000,
-      policyName: "grok_slow_start_v1",
-    });
-    expect(resolveChatRuntimeTimeoutPolicy("grok")).toEqual(
-      resolveChatRuntimeTimeoutPolicy("grok-build"),
-    );
-  });
-
-  test("uses the default policy for other providers", () => {
-    expect(resolveChatRuntimeTimeoutPolicy("codex-cli")).toEqual({
+describe("chat runtime timeout policy", () => {
+  test("uses one startup deadline for every runtime", () => {
+    expect(CHAT_RUNTIME_TIMEOUT_POLICY).toEqual({
       startupTimeoutMs: 30_000,
       policyName: "default_v1",
     });
@@ -25,19 +15,19 @@ describe("resolveChatRuntimeTimeoutPolicy", () => {
   test("builds prompt-free structured timeout facts", () => {
     expect(
       buildChatRuntimeTimeoutFacts({
-        runtime: "grok-build",
+        runtime: "claude-code",
         launch: "resume",
         phase: "startup",
-        elapsedMs: 120_500,
+        elapsedMs: 30_500,
         outputBytes: 0,
         sessionIdKnown: true,
       }),
     ).toEqual({
-      runtime: "grok-build",
+      runtime: "claude-code",
       launch: "resume",
-      policyName: "grok_slow_start_v1",
+      policyName: "default_v1",
       phase: "startup",
-      elapsedMs: 120_500,
+      elapsedMs: 30_500,
       outputBytes: 0,
       sessionIdKnown: true,
     });

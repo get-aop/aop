@@ -1,6 +1,6 @@
 export type SetupRequirementId = "wsl" | "git" | "github-cli" | "runtime";
 
-export type RuntimeId = "codex" | "claude" | "opencode" | "pi";
+export type RuntimeId = "claude";
 
 export type SetupRequirementStatus = "ready" | "missing" | "needs-auth" | "installing" | "failed";
 

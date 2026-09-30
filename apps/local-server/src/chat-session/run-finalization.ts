@@ -14,7 +14,6 @@ import {
   toDelegationDto,
 } from "./delegation-runs.ts";
 import { encodeMessageContent, type StoredChatArtifact } from "./message-images.ts";
-import { isGrokRuntime } from "./runtime-engine.ts";
 
 type SessionBindingPolicy = "preserve" | "set" | "clear";
 
@@ -30,8 +29,6 @@ export type FinalizeChatRunOutcome = {
 const EMPTY_OUTPUT_FAILURE_KINDS = new Set<ChatRunFailureKind>(["startup_timeout", "empty_output"]);
 const SECOND_EMPTY_OUTPUT_MESSAGE =
   "AOP reset the runtime session because the runtime produced no response twice. The next message will start a fresh runtime session.";
-const GROK_RESUME_SILENCE_RESET_MESSAGE =
-  "AOP reset the runtime session because Grok produced no response while resuming. The next message will start a fresh runtime session.";
 
 export const persistFinalizedChatRun = async (
   trx: Transaction<Database>,
@@ -190,14 +187,6 @@ const resolveEmptyOutputBindingDecision = async (
   assistantText: string;
   errorMessage: string | null;
 }> => {
-  if (isGrokRuntime(current.runtime)) {
-    return {
-      bindingPolicy: "clear",
-      assistantText: GROK_RESUME_SILENCE_RESET_MESSAGE,
-      errorMessage: GROK_RESUME_SILENCE_RESET_MESSAGE,
-    };
-  }
-
   const preceding = await trx
     .selectFrom("chat_runs")
     .select(["failure_kind", "status", "resume_session_id"])

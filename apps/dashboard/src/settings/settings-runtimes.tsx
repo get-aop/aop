@@ -30,7 +30,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/ui/empty";
 import { Field, FieldDescription, FieldLabel } from "@/ui/field";
 import { Input } from "@/ui/input";
 import { RuntimeProviderIcon } from "@/ui/provider-icon";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Textarea } from "@/ui/textarea";
 import {
   cloneRuntimeConfigurationProvider,
@@ -45,15 +44,6 @@ import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
 /** Mirrors @aop/common SAFE_CUSTOM_RUNTIME_MODEL_PATTERN (not re-exported). */
 const SAFE_CUSTOM_RUNTIME_MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]{0,199}$/;
 
-const DRIVERS: Array<{ value: RuntimeDriver; label: string }> = [
-  { value: "custom", label: "Custom" },
-  { value: "claude-code", label: "Claude Code" },
-  { value: "codex-cli", label: "Codex CLI" },
-  { value: "grok-build", label: "Grok Build" },
-  { value: "pi", label: "Pi" },
-  { value: "opencode", label: "OpenCode" },
-];
-
 interface RuntimeDraft {
   id?: string;
   name: string;
@@ -65,7 +55,7 @@ interface RuntimeDraft {
 const emptyDraft = (): RuntimeDraft => ({
   name: "",
   command: "",
-  driver: "custom",
+  driver: "claude-code",
   models: "",
 });
 
@@ -89,8 +79,8 @@ export const SettingsRuntimes = () => {
     void reload();
   }, [reload]);
 
-  // The built-in runtimes (Claude Code, Codex CLI, Grok Build, OpenCode, Pi)
-  // are fixed defaults inside AOP; the settings page only manages custom ones.
+  // Claude Code is the only built-in runtime and is fixed inside AOP; the settings page only
+  // manages custom commands that speak its dialect.
   const customProviders = providers?.filter((provider) => !provider.builtIn) ?? null;
 
   const parseModels = (modelsText: string): RuntimeConfigurationModelInput[] =>
@@ -195,8 +185,9 @@ export const SettingsRuntimes = () => {
         </Button>
       </div>
       <p className="text-[12px] text-text-subtle">
-        Custom provider commands and their curated model catalogs. The built-in runtimes are fixed
-        inside AOP; effort and Fast remain usage-time choices in the composer.
+        Custom Claude Code commands (a wrapper or alias) and their model lists. Claude Code is the
+        only built-in runtime and is fixed inside AOP; effort and Fast remain usage-time choices in
+        the composer.
       </p>
 
       {customProviders === null ? (
@@ -206,7 +197,7 @@ export const SettingsRuntimes = () => {
           <EmptyHeader>
             <EmptyTitle>No custom runtimes</EmptyTitle>
             <EmptyDescription>
-              Add a custom runtime to extend the built-in catalog.
+              Add a custom runtime to bind another Claude Code command.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -292,25 +283,7 @@ export const SettingsRuntimes = () => {
                   value={draft.command}
                   onChange={(event) => setDraft({ ...draft, command: event.target.value })}
                 />
-                <FieldDescription>A single executable token (e.g. claude-code).</FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="runtime-driver">Driver</FieldLabel>
-                <Select
-                  value={draft.driver}
-                  onValueChange={(value) => setDraft({ ...draft, driver: value as RuntimeDriver })}
-                >
-                  <SelectTrigger id="runtime-driver" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DRIVERS.map((driver) => (
-                      <SelectItem key={driver.value} value={driver.value}>
-                        {driver.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FieldDescription>A single executable token (e.g. claude).</FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="runtime-models">Models</FieldLabel>

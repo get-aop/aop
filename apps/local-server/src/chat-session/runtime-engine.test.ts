@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { LLMProvider, RunOptions, RunResult } from "@aop/llm-provider";
 import type { ChatSession } from "../db/schema.ts";
@@ -67,18 +67,15 @@ describe("runSessionPrompt", () => {
     process.env.AOP_MCP_URL = previousMcpUrl;
   });
 
-  test("creates OpenCode Sessions providers with the selected model", async () => {
+  test("creates the provider named by the session runtime", async () => {
     let providerKey = "";
     const provider: LLMProvider = {
-      name: "opencode",
+      name: "claude-code",
       run: async () => ({ exitCode: 0 }),
     };
 
     await runSessionPrompt({
-      session: session({
-        runtime: "opencode",
-        model: "openai/gpt-5.6-sol-fast",
-      }),
+      session: session({ runtime: "claude-code", model: "claude-opus-4-8" }),
       repoPath: "/tmp/repo",
       prompt: "hello",
       createProviderFn: (key) => {
@@ -87,7 +84,7 @@ describe("runSessionPrompt", () => {
       },
     });
 
-    expect(providerKey).toBe("opencode:openai/gpt-5.6-sol-fast");
+    expect(providerKey).toBe("claude-code");
   });
 
   test("passes resume, model, effort, alias, log path, and session callback through the provider seam", async () => {
@@ -216,34 +213,6 @@ describe("runSessionPrompt", () => {
     expect(result.text).not.toContain("Finished via");
   });
 
-  test("accepts completed Grok output after cleaning up a stuck headless process", async () => {
-    const provider: LLMProvider = {
-      name: "grok-build",
-      run: async (options) => {
-        await writeFile(
-          options.logFilePath ?? "",
-          `${JSON.stringify({ type: "text", data: "Delegation complete" })}\n`,
-        );
-        return {
-          exitCode: 143,
-          sessionId: "completed-grok-session",
-          completedFromSessionEvent: true,
-        } satisfies RunResult;
-      },
-    };
-
-    const result = await runSessionPrompt({
-      session: session({ runtime: "grok-build" }),
-      repoPath: "/tmp/repo",
-      prompt: "hello",
-      createProviderFn: () => provider,
-    });
-
-    expect(result.failed).toBeUndefined();
-    expect(result.text).toBe("Delegation complete");
-    expect(result.runtimeSessionId).toBe("completed-grok-session");
-  });
-
   test("classifies provider startup timeout as startup_timeout failure", async () => {
     const provider: LLMProvider = {
       name: "fixture",
@@ -260,29 +229,6 @@ describe("runSessionPrompt", () => {
     expect(result.failed).toBe(true);
     expect(result.startupTimedOut).toBe(true);
     expect(result.failureKind).toBe("startup_timeout");
-  });
-
-  test("uses the Grok slow-start policy and passes a preallocated fresh id", async () => {
-    let options: RunOptions | undefined;
-    const provider: LLMProvider = {
-      name: "grok-build",
-      run: async (next) => {
-        options = next;
-        return { exitCode: 1, startupTimedOut: true };
-      },
-    };
-
-    await runSessionPrompt({
-      session: session({ runtime: "grok-build" }),
-      repoPath: "/tmp/repo",
-      prompt: "hello",
-      newSessionId: "0198c0a8-7d3e-7e96-a8b2-3f1f0c9d4e5f",
-      createProviderFn: () => provider,
-    });
-
-    expect(options?.newSessionId).toBe("0198c0a8-7d3e-7e96-a8b2-3f1f0c9d4e5f");
-    expect(options?.resumeSessionId).toBeUndefined();
-    expect(options?.startupTimeoutMs).toBe(120_000);
   });
 
   test("discovers a runtime id from the active log before provider exit", async () => {
@@ -331,13 +277,13 @@ describe("runSessionPrompt", () => {
         return { exitCode: 0 };
       },
     };
-    const activeSession = session({ runtime: "codex-cli" });
+    const activeSession = session({ runtime: "claude-code" });
 
     await runSessionPrompt({
       session: activeSession,
       repoPath: "/tmp/repo",
       prompt: "Inspect the page",
-      control: { provider: "codex-cli", capability: "browser" },
+      control: { provider: "claude-code", capability: "browser" },
       createProviderFn: () => provider,
     });
     await runSessionPrompt({
@@ -357,16 +303,16 @@ describe("runSessionPrompt", () => {
     { capability: "computer" as const, label: "computer" },
     { capability: "browser" as const, label: "browser" },
   ])(
-    "terminates leftover $label-control helpers after a successful Codex turn",
+    "terminates leftover $label-control helpers after a successful Claude turn",
     async ({ capability }) => {
       // Control turns spawn native helpers (computer_use mouse agent / Playwright MCP)
-      // that can outlive `codex exec`. Interrupt already reaps the tree; normal
+      // that can outlive the CLI. Interrupt already reaps the tree; normal
       // completion must do the same so the desktop/browser session does not stick.
       const dir = await mkdtemp(join(tmpdir(), `aop-${capability}-control-cleanup-`));
       const pidFile = join(dir, "child.pid");
       let childPid = 0;
       const provider: LLMProvider = {
-        name: "codex-cli",
+        name: "claude-code",
         run: async (options) => {
           expect(options.browserControl).toBe(capability === "browser");
           expect(options.computerControl).toBe(capability === "computer");
@@ -394,10 +340,10 @@ describe("runSessionPrompt", () => {
 
       try {
         await runSessionPrompt({
-          session: session({ id: `isess_${capability}_cleanup`, runtime: "codex-cli" }),
+          session: session({ id: `isess_${capability}_cleanup`, runtime: "claude-code" }),
           repoPath: dir,
           prompt: capability === "browser" ? "Inspect the page" : "Open System Settings",
-          control: { provider: "codex-cli", capability },
+          control: { provider: "claude-code", capability },
           createProviderFn: () => provider,
         });
         childPid = Number.parseInt(await readFile(pidFile, "utf8"), 10);
@@ -746,7 +692,7 @@ describe("runSessionPrompt", () => {
       finishProvider = resolve;
     });
     const provider = {
-      name: "grok-build",
+      name: "claude-code",
       interruptSignal: "SIGINT",
       run: async (options: RunOptions) => {
         await options.onSpawn?.(77_777);
@@ -756,14 +702,14 @@ describe("runSessionPrompt", () => {
     } as LLMProvider;
     const kill = mockSignalsToExitedProcess();
     const run = runSessionPrompt({
-      session: session({ id: "isess_graceful_grok", runtime: "grok-build" }),
+      session: session({ id: "isess_graceful", runtime: "claude-code" }),
       repoPath: "/tmp/repo",
       prompt: "hello",
       createProviderFn: () => provider,
     });
     await providerStarted;
 
-    interruptSessionRun("isess_graceful_grok");
+    interruptSessionRun("isess_graceful");
     // Descendant discovery is async now (non-blocking ps), so allow the scan
     // to complete before asserting the root was signaled.
     await Bun.sleep(250);
@@ -774,51 +720,9 @@ describe("runSessionPrompt", () => {
     kill.mockRestore();
   });
 
-  test("rejects a persisted Grok session with an unfinished tool before spawning", async () => {
-    const runtimeSessionId = crypto.randomUUID();
-    const repoPath = join(tmpdir(), `aop-unsafe-grok-${crypto.randomUUID()}`);
-    const sessionDir = join(
-      homedir(),
-      ".grok",
-      "sessions",
-      encodeURIComponent(repoPath),
-      runtimeSessionId,
-    );
-    await mkdir(sessionDir, { recursive: true });
-    await writeFile(
-      join(sessionDir, "events.jsonl"),
-      `${JSON.stringify({ type: "turn_started" })}\n${JSON.stringify({
-        type: "tool_started",
-        tool_name: "get_command_or_subagent_output",
-      })}\n`,
-    );
-    let spawned = false;
-    const provider: LLMProvider = {
-      name: "grok-build",
-      run: async () => {
-        spawned = true;
-        return { exitCode: 0 };
-      },
-    };
-
-    const result = await runSessionPrompt({
-      session: session({ runtime: "grok-build", runtime_session_id: runtimeSessionId }),
-      repoPath,
-      prompt: "continue",
-      createProviderFn: () => provider,
-    });
-
-    expect(spawned).toBe(false);
-    expect(result.staleRuntimeSessionId).toBe(runtimeSessionId);
-    await rm(join(homedir(), ".grok", "sessions", encodeURIComponent(repoPath)), {
-      recursive: true,
-      force: true,
-    });
-  });
-
   test("unwraps provider errors that prefix a JSON payload", async () => {
     const provider: LLMProvider = {
-      name: "grok-build",
+      name: "claude-code",
       run: async (options) => {
         if (!options.logFilePath) throw new Error("expected logFilePath");
         await mkdir(dirname(options.logFilePath), { recursive: true });
@@ -835,7 +739,7 @@ describe("runSessionPrompt", () => {
     };
 
     const result = await runSessionPrompt({
-      session: session({ runtime: "grok-build", model: "grok-4.5" }),
+      session: session({ runtime: "claude-code" }),
       repoPath: "/tmp/repo",
       prompt: "hello",
       createProviderFn: () => provider,
@@ -880,20 +784,27 @@ describe("runSessionPrompt", () => {
     expect(result.text).not.toContain("Finished via");
   });
 
-  test("concatenates a single Grok text run from streaming tokens", async () => {
+  test("keeps only the final assistant message in the reply (drops status narration)", async () => {
     const provider: LLMProvider = {
-      name: "grok-build",
+      name: "claude-code",
       run: async (options) => {
         if (!options.logFilePath) throw new Error("expected logFilePath");
         await mkdir(dirname(options.logFilePath), { recursive: true });
         await writeFile(
           options.logFilePath,
           [
-            JSON.stringify({ type: "thought", data: "thinking" }),
-            JSON.stringify({ type: "text", data: "Finished via " }),
-            JSON.stringify({ type: "text", data: "should not be the fallback — " }),
-            JSON.stringify({ type: "text", data: "real grok reply." }),
-            JSON.stringify({ type: "end" }),
+            JSON.stringify({
+              type: "assistant",
+              message: {
+                content: [{ type: "text", text: "I'll inspect the session rail layout…" }],
+              },
+            }),
+            JSON.stringify({
+              type: "assistant",
+              message: {
+                content: [{ type: "text", text: "### After\n\n**plus** on each repo folder." }],
+              },
+            }),
           ].join("\n"),
         );
         return { exitCode: 0 } satisfies RunResult;
@@ -901,38 +812,7 @@ describe("runSessionPrompt", () => {
     };
 
     const result = await runSessionPrompt({
-      session: session({ runtime: "grok-build", model: "grok-4.5" }),
-      repoPath: "/tmp/repo",
-      prompt: "hey",
-      createProviderFn: () => provider,
-    });
-
-    expect(result.text).toBe("Finished via should not be the fallback — real grok reply.");
-    expect(result.failed).toBeUndefined();
-  });
-
-  test("keeps only the last Grok text run in the final reply (drops status narration)", async () => {
-    const provider: LLMProvider = {
-      name: "grok-build",
-      run: async (options) => {
-        if (!options.logFilePath) throw new Error("expected logFilePath");
-        await mkdir(dirname(options.logFilePath), { recursive: true });
-        await writeFile(
-          options.logFilePath,
-          [
-            JSON.stringify({ type: "thought", data: "planning the change" }),
-            JSON.stringify({ type: "text", data: "I'll inspect the session rail layout…" }),
-            JSON.stringify({ type: "thought", data: "done inspecting, write the summary" }),
-            JSON.stringify({ type: "text", data: "### After\n\n**plus** on each repo folder." }),
-            JSON.stringify({ type: "end" }),
-          ].join("\n"),
-        );
-        return { exitCode: 0 } satisfies RunResult;
-      },
-    };
-
-    const result = await runSessionPrompt({
-      session: session({ runtime: "grok-build", model: "grok-4.5" }),
+      session: session({ runtime: "claude-code" }),
       repoPath: "/tmp/repo",
       prompt: "move the button",
       createProviderFn: () => provider,
@@ -946,7 +826,7 @@ describe("runSessionPrompt", () => {
   test("emits onProgress as the provider log grows with thought and text", async () => {
     const progress: Array<{ thinking: string; content: string }> = [];
     const provider: LLMProvider = {
-      name: "grok-build",
+      name: "claude-code",
       run: async (options) => {
         if (!options.logFilePath) throw new Error("expected logFilePath");
         await mkdir(dirname(options.logFilePath), { recursive: true });
@@ -956,12 +836,18 @@ describe("runSessionPrompt", () => {
         await Bun.sleep(120);
         await appendFile(
           options.logFilePath,
-          `${JSON.stringify({ type: "thought", data: "Planning" })}\n`,
+          `${JSON.stringify({
+            type: "assistant",
+            message: { content: [{ type: "thinking", thinking: "Planning" }] },
+          })}\n`,
         );
         await Bun.sleep(120);
         await appendFile(
           options.logFilePath,
-          `${JSON.stringify({ type: "text", data: "Done" })}\n`,
+          `${JSON.stringify({
+            type: "assistant",
+            message: { content: [{ type: "text", text: "Done" }] },
+          })}\n`,
         );
         // Final drain happens when the tail stops after run resolves.
         await Bun.sleep(120);
@@ -970,7 +856,7 @@ describe("runSessionPrompt", () => {
     };
 
     const result = await runSessionPrompt({
-      session: session({ runtime: "grok-build", model: "grok-4.5" }),
+      session: session({ runtime: "claude-code" }),
       repoPath: "/tmp/repo",
       prompt: "hey",
       createProviderFn: () => provider,
@@ -1264,10 +1150,10 @@ describe("readAssistantTextFromLog", () => {
       // Force the bounded path with a small budget (production uses CHAT_MAX_LOG_BYTES).
       const budget = 256;
       const noise = `${"n".repeat(budget)}\n`;
-      const answer = `${JSON.stringify({ type: "text", data: "bounded answer" })}\n`;
+      const answer = `${JSON.stringify({ type: "result", subtype: "success", result: "bounded answer" })}\n`;
       await writeFile(logFilePath, `${noise}${answer}`);
       expect((await Bun.file(logFilePath).arrayBuffer()).byteLength).toBeGreaterThan(budget);
-      const text = await readAssistantTextFromLog("codex-cli", logFilePath, budget);
+      const text = await readAssistantTextFromLog(logFilePath, budget);
       expect(text).toContain("bounded answer");
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -1276,7 +1162,6 @@ describe("readAssistantTextFromLog", () => {
 
   test("returns empty string for a missing log file", async () => {
     const text = await readAssistantTextFromLog(
-      "codex-cli",
       join(tmpdir(), `missing-chat-log-${Date.now()}.jsonl`),
     );
     expect(text).toBe("");

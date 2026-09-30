@@ -203,7 +203,7 @@ curl -fsSL https://getaop.com/install.sh | sh
 ## How the Install Script Works
 
 1. Detects OS (`uname -s`) and arch (`uname -m`)
-2. Runs preflight checks for `git`, authenticated `gh`, and at least one runtime CLI (`claude`, `opencode`, `codex`, or `pi`)
+2. Runs preflight checks for `git`, authenticated `gh`, and the `claude` runtime CLI (Claude Code is the only Phase 1 runtime)
 3. Fetches latest version from `https://getaop.com/latest/version`
 4. Downloads binary, runtime assets, and `checksums.sha256`
 5. Verifies checksums and installs to `/usr/local/bin/aop` (or `~/.local/bin/aop` if no write access)

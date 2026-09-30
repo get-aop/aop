@@ -63,7 +63,7 @@ export type ChatMessageDisposition = "immediate" | "queued" | "steered" | "retry
 export type ChatRunStatus = "running" | "completed" | "failed" | "interrupted" | "cancelled";
 export type ChatRunInterruptionKind = "steer" | "abort" | "reset" | "output_limit";
 export type ChatContextStrategy = "fresh" | "native_resume" | "aop_history";
-export type ChatRuntimeSessionState = "allocated" | "confirmed";
+export type ChatRuntimeSessionState = "confirmed";
 
 /** What a project session is: the project's coordinator chat or one of its threads. */
 export type ChatSessionKind = "coordinator" | "thread";

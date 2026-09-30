@@ -59,7 +59,7 @@ class FakeExecHost implements ExecHost {
     const entry = this.scripts.get(`command:${name}`);
     if (entry) return entry.exit === 0;
     // Default: present for known tools
-    return ["rsync", "git", "claude", "codex", "opencode"].includes(name);
+    return ["rsync", "git", "claude"].includes(name);
   }
 }
 
@@ -112,7 +112,7 @@ describe("exec-hosts service", () => {
     });
     // Override commandExists for CLI probes
     fake.commandExists = async (name: string) =>
-      name === "rsync" || name === "git" || name === "claude" || name === "codex";
+      name === "rsync" || name === "git" || name === "claude";
 
     const service = createExecHostsService(ctx, {
       createProbeHost: () => fake,
@@ -124,9 +124,7 @@ describe("exec-hosts service", () => {
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     expect(result.rsync).toBe(true);
     expect(result.git).toBe(true);
-    expect(result.clis.map((c) => c.id)).toContain("claude-code");
-    expect(result.clis.map((c) => c.id)).toContain("codex-cli");
-    expect(result.clis.map((c) => c.id)).toContain("opencode");
+    expect(result.clis.map((c) => c.id)).toEqual(["claude-code"]);
     const claude = result.clis.find((c) => c.id === "claude-code");
     expect(claude?.installed).toBe(true);
   });

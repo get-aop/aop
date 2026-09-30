@@ -11,14 +11,13 @@ import {
   getWorkflowThinkingOptions,
   isAllowedWorkflowRuntimeModel,
   isSafeCustomRuntimeModel,
-  isWorkflowRuntimeProvider,
   supportsFastMode,
   WORKFLOW_THINKING_OPTIONS,
   type WorkflowRuntimeProvider,
   type WorkflowRuntimeReasoning,
 } from "./workflow-runtime.ts";
 
-export type RuntimeDelegationId = "claude" | "opencode" | "grok" | "codex" | "pi" | "omp";
+export type RuntimeDelegationId = "claude";
 
 export interface RuntimeDelegation {
   id: RuntimeDelegationId;
@@ -46,11 +45,6 @@ export interface RuntimeDelegationSelection {
 
 export const RUNTIME_DELEGATIONS: readonly RuntimeDelegation[] = [
   { id: "claude", label: "Claude", runtime: "claude-code", runtimeAlias: null },
-  { id: "opencode", label: "OpenCode", runtime: "opencode", runtimeAlias: null },
-  { id: "grok", label: "Grok", runtime: "grok-build", runtimeAlias: null },
-  { id: "codex", label: "Codex", runtime: "codex-cli", runtimeAlias: null },
-  { id: "pi", label: "Pi", runtime: "pi", runtimeAlias: null },
-  { id: "omp", label: "OMP", runtime: "pi", runtimeAlias: "omp" },
 ] as const;
 
 export type ParseRuntimeDelegationResult =
@@ -66,7 +60,7 @@ export type ParseRuntimeDelegationResult =
 // Optional third/fourth payload slots: Fast mode and/or cfg:<runtimeConfigurationId>.
 // Older markers with model;reasoning remain valid.
 const RUNTIME_DELEGATION_PATTERN =
-  /\$DELEGATE_(CLAUDE|OPENCODE|GROK|CODEX|PI|OMP)\b(?:\[([^;\]]+);([^;\]]+)(?:;([^;\]]+))?(?:;([^;\]]+))?\])?/gi;
+  /\$DELEGATE_(CLAUDE)\b(?:\[([^;\]]+);([^;\]]+)(?:;([^;\]]+))?(?:;([^;\]]+))?\])?/gi;
 
 const CONFIG_ID_PREFIX = "cfg:";
 
@@ -103,16 +97,10 @@ export const formatRuntimeDelegationMarker = (selection: RuntimeDelegationSelect
   return `$DELEGATE_${selection.id.toUpperCase()}[${parts.join(";")}]`;
 };
 
-/** Map a runtime configuration driver/command onto a built-in delegation id. */
+/** Map a runtime configuration driver onto a built-in delegation id. */
 export const runtimeConfigurationToDelegationId = (
-  configuration: Pick<RuntimeConfigurationProvider, "driver" | "command">,
+  configuration: Pick<RuntimeConfigurationProvider, "driver">,
 ): RuntimeDelegationId | null => {
-  if (!isWorkflowRuntimeProvider(configuration.driver)) return null;
-  if (configuration.driver === "pi") {
-    const command = configuration.command.trim().toLowerCase();
-    if (command === "omp" || command.endsWith("/omp")) return "omp";
-    return "pi";
-  }
   const match = RUNTIME_DELEGATIONS.find(
     (item) => item.runtime === configuration.driver && item.runtimeAlias === null,
   );

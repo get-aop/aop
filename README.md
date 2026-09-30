@@ -1,6 +1,6 @@
 # AOP
 
-AOP is being rebuilt around **Projects**. In the new design, a project is one long-running conversation with a coordinator. You state the goal and the coordinator splits the work into **threads**. Each thread is its own coding-agent session on Claude Code, Codex CLI, or PI, works on its own git branch, and reports back to the coordinator.
+AOP is being rebuilt around **Projects**. In the new design, a project is one long-running conversation with a coordinator. You state the goal and the coordinator splits the work into **threads**. Each thread is its own coding-agent session on Claude Code, works on its own git branch, and reports back to the coordinator.
 
 The AOP host runs on your own machine and is reached over Tailscale. Every computer you use, through the macOS and Windows desktop apps or a browser, syncs to that one host: the same projects, threads, memory, and settings everywhere, with nothing to set up twice. There is no hosted AOP service.
 
@@ -10,7 +10,7 @@ AOP is alpha software, and this repository is in the middle of the rewrite. The 
 
 ## What stays
 
-- **Three runtimes.** Claude Code, Codex CLI, and PI are the supported agent CLIs. Install and authenticate the ones you want on the host; see [Runtimes](./docs/RUNTIMES.md).
+- **One runtime.** Claude Code is the supported agent CLI in Phase 1; the Codex CLI and PI adapters stay in the tree but are not exposed until Phase 2. Install and authenticate Claude Code on the host; see [Runtimes](./docs/RUNTIMES.md).
 - **Git and pull requests.** The worktree, branch, and pull-request flow runs through the GitHub CLI and is kept as the way finished work lands; see [GitHub-native session workflow](./docs/session-github-workflow.md).
 - **Your machine.** The server keeps its state under `~/.aop/` on the host and runs as a background launchd or systemd user service, so closing a client does not stop work.
 
@@ -32,7 +32,7 @@ To remove it, run `./uninstall`. It stops the service and unlinks the CLI, and i
 
 | Guide | What it covers |
 | --- | --- |
-| [Runtimes](./docs/RUNTIMES.md) | The three supported agent CLIs and where their state lives |
+| [Runtimes](./docs/RUNTIMES.md) | The supported agent CLI and where its state lives |
 | [MCP](./docs/MCP.md) | Tools that MCP-capable runtimes can call, and how the endpoint is authenticated |
 | [Pull requests](./docs/session-github-workflow.md) | Worktree, pull request, checks, and merge flow |
 | [CLI](./apps/cli/README.md) | Commands of the `aop` HTTP client |

@@ -143,12 +143,15 @@ describe("delegation run registry", () => {
   test("completed finish replaces stale throttled activity with the final log output", async () => {
     const { ctx, run } = await setup();
     const logFilePath = join(tmpdir(), `aop-delegation-final-${crypto.randomUUID()}.jsonl`);
-    // Grok-style log: thoughts stream during the run, the answer lands at the end.
+    // Claude-style log: thinking streams during the run, the answer lands at the end.
     await writeFile(
       logFilePath,
       `${[
-        JSON.stringify({ type: "thought", data: "pondering" }),
-        JSON.stringify({ type: "result", subtype: "success", result: "GROK_OK" }),
+        JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "thinking", thinking: "pondering" }] },
+        }),
+        JSON.stringify({ type: "result", subtype: "success", result: "FINAL_OK" }),
       ].join("\n")}\n`,
     );
     const started = await startDelegationRun(ctx, run, delegationSpec({ logFilePath }));
@@ -157,7 +160,7 @@ describe("delegation run registry", () => {
     await finishDelegationRun(ctx, run.id, started.id, { status: "completed" });
 
     const stored = await delegationRunsOf(ctx, run.id);
-    expect(stored[0]).toMatchObject({ status: "completed", activity: "GROK_OK" });
+    expect(stored[0]).toMatchObject({ status: "completed", activity: "FINAL_OK" });
     await rm(logFilePath, { force: true });
   });
 

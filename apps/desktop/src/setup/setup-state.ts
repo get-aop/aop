@@ -13,14 +13,11 @@ const RUNTIME_REQUIREMENT: SetupRequirement = {
   id: "runtime",
   status: "missing",
   label: "Agent runtime",
-  message: "Install and sign in to Codex, Claude Code, OpenCode, or Pi.",
+  message: "Install and sign in to Claude Code.",
 };
 
 const RUNTIME_LABELS: Record<RuntimeId, string> = {
   claude: "Claude Code",
-  codex: "Codex",
-  opencode: "OpenCode",
-  pi: "Pi",
 };
 
 export const resolveSetupState = (

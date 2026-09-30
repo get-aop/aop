@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createProviderUpdateService, resolveProviderUpdateCommand } from "./provider-updates.ts";
 
 describe("provider CLI updates", () => {
-  test("uses the installer that owns each resolved CLI", () => {
+  test("uses the installer that owns the resolved CLI", () => {
     expect(
       resolveProviderUpdateCommand(
         "claude-code",
@@ -12,18 +12,11 @@ describe("provider CLI updates", () => {
     ).toEqual(["/Users/test/.local/bin/claude", "update"]);
     expect(
       resolveProviderUpdateCommand(
-        "opencode",
-        "/Users/test/.opencode/bin/opencode",
-        "/Users/test/.opencode/bin/opencode",
+        "claude-code",
+        "/Users/test/.bun/bin/claude",
+        "/Users/test/.bun/install/global/node_modules/@anthropic-ai/claude-code/cli.js",
       ),
-    ).toEqual(["/Users/test/.opencode/bin/opencode", "upgrade"]);
-    expect(
-      resolveProviderUpdateCommand(
-        "codex-cli",
-        "/opt/homebrew/bin/codex",
-        "/opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js",
-      ),
-    ).toEqual(["npm", "install", "-g", "@openai/codex@latest"]);
+    ).toEqual(["bun", "install", "-g", "@anthropic-ai/claude-code@latest"]);
     expect(
       resolveProviderUpdateCommand(
         "claude-code",
@@ -33,12 +26,11 @@ describe("provider CLI updates", () => {
     ).toEqual(["brew", "upgrade", "claude-code"]);
   });
 
-  test("updates every installed supported CLI in one background job", async () => {
+  test("updates the installed CLI in one background job and tracks only claude-code", async () => {
     const commands: string[][] = [];
     const service = createProviderUpdateService({
-      which: (command) => (command === "pi" ? null : `/bin/${command}`),
-      realpath: async (path) =>
-        path === "/bin/codex" ? "/usr/local/lib/node_modules/@openai/codex/bin/codex.js" : path,
+      which: (command) => `/bin/${command}`,
+      realpath: async (path) => path,
       run: async (command) => {
         commands.push(command);
         return { exitCode: 0, stdout: "updated", stderr: "" };
@@ -48,19 +40,27 @@ describe("provider CLI updates", () => {
     expect(await service.startAll()).toEqual({ accepted: true });
     await service.waitForIdle();
 
-    expect(commands).toEqual([
-      ["/bin/claude", "update"],
-      ["npm", "install", "-g", "@openai/codex@latest"],
-      ["/bin/grok", "update"],
-      ["/bin/opencode", "upgrade"],
-    ]);
-    expect(service.getStates()).toMatchObject({
-      "claude-code": { status: "succeeded" },
-      "codex-cli": { status: "succeeded" },
-      "grok-build": { status: "succeeded" },
-      opencode: { status: "succeeded" },
-      pi: { status: "skipped" },
+    expect(commands).toEqual([["/bin/claude", "update"]]);
+    expect(Object.keys(service.getStates())).toEqual(["claude-code"]);
+    expect(service.getStates()["claude-code"]).toMatchObject({ status: "succeeded" });
+  });
+
+  test("skips the update when the CLI is not installed", async () => {
+    const commands: string[][] = [];
+    const service = createProviderUpdateService({
+      which: () => null,
+      realpath: async (path) => path,
+      run: async (command) => {
+        commands.push(command);
+        return { exitCode: 0, stdout: "", stderr: "" };
+      },
     });
+
+    await service.startAll();
+    await service.waitForIdle();
+
+    expect(commands).toEqual([]);
+    expect(service.getStates()["claude-code"]).toMatchObject({ status: "skipped" });
   });
 
   test("keeps terminal state available after the browser reconnects", async () => {

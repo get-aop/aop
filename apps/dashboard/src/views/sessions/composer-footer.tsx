@@ -44,7 +44,6 @@ interface ComposerFooterProps {
   effortLabel: string;
   effortOptions: Array<{ value: string; label: string }>;
   accessMode: ChatRuntimeAccessMode;
-  showAccessMode: boolean;
   connected: boolean;
   assistantActive: boolean;
   aborting: boolean;
@@ -110,7 +109,7 @@ export function ComposerFooter(props: ComposerFooterProps) {
           <>
             <ComposerSeparator />
             <EffortMenu {...props} />
-            {props.showAccessMode ? <AccessModeMenu {...props} /> : null}
+            <AccessModeMenu {...props} />
             {props.supportsFastMode ? <FastModeToggle {...props} /> : null}
           </>
         )}
@@ -310,24 +309,20 @@ function CompactControlsMenu(props: ComposerFooterProps) {
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
-        {props.showAccessMode ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Runtime mode</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={props.accessMode}
-              onValueChange={(value) => {
-                if (isRuntimeAccessMode(value)) props.onAccessModeChange?.(value);
-              }}
-            >
-              {ACCESS_MODE_OPTIONS.map((option) => (
-                <DropdownMenuRadioItem key={option.value} value={option.value}>
-                  {option.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </>
-        ) : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Runtime mode</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={props.accessMode}
+          onValueChange={(value) => {
+            if (isRuntimeAccessMode(value)) props.onAccessModeChange?.(value);
+          }}
+        >
+          {ACCESS_MODE_OPTIONS.map((option) => (
+            <DropdownMenuRadioItem key={option.value} value={option.value}>
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
         {props.supportsFastMode ? (
           <>
             <DropdownMenuSeparator />

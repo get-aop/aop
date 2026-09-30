@@ -37,10 +37,10 @@ describe("App", () => {
 
     await waitFor(() => expect(view.getByText("Let's get AOP ready")).toBeDefined());
     await act(async () => {
-      fireEvent.click(view.getByRole("button", { name: "Install Codex" }));
+      fireEvent.click(view.getByRole("button", { name: "Install Claude Code" }));
     });
     await waitFor(() =>
-      expect(backend.openSetupGuide).toHaveBeenCalledWith("install-runtime-codex"),
+      expect(backend.openSetupGuide).toHaveBeenCalledWith("install-runtime-claude"),
     );
     expect(backend.runSetupAction).not.toHaveBeenCalled();
     expect(backend.startAopSidecar).not.toHaveBeenCalled();
@@ -129,7 +129,7 @@ describe("App", () => {
 
     await waitFor(() => expect(view.getByText("Let's get AOP ready")).toBeDefined());
     await act(async () => {
-      fireEvent.click(view.getByRole("button", { name: "Install Codex" }));
+      fireEvent.click(view.getByRole("button", { name: "Install Claude Code" }));
     });
     await waitFor(() => expect(view.getByText("Could not open installation guide")).toBeDefined());
     expect(backend.startAopSidecar).not.toHaveBeenCalled();
@@ -189,20 +189,20 @@ const blockedState = (): DesktopSetupState => ({
       message: "Install and sign in to one.",
       actions: [
         {
-          id: "install-runtime-codex",
-          label: "Install Codex",
+          id: "install-runtime-claude",
+          label: "Install Claude Code",
           requirementId: "runtime",
           requiresConsent: false,
-          runtimeId: "codex",
+          runtimeId: "claude",
         },
       ],
     },
   ],
   runtimes: [
     {
-      id: "codex",
+      id: "claude",
       status: "missing",
-      label: "Codex",
+      label: "Claude Code",
       message: "Not installed.",
       recommended: true,
     },
@@ -215,10 +215,21 @@ const healthyState = (): DesktopSetupState => ({
   requirements: [
     { id: "git", status: "ready", label: "Git", message: "Git is installed." },
     { id: "github-cli", status: "ready", label: "GitHub CLI", message: "Authenticated." },
-    { id: "runtime", status: "ready", label: "Agent runtime", message: "Codex is available." },
+    {
+      id: "runtime",
+      status: "ready",
+      label: "Agent runtime",
+      message: "Claude Code is available.",
+    },
   ],
   runtimes: [
-    { id: "codex", status: "ready", label: "Codex", message: "Installed.", recommended: true },
+    {
+      id: "claude",
+      status: "ready",
+      label: "Claude Code",
+      message: "Installed.",
+      recommended: true,
+    },
   ],
 });
 

@@ -2,11 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   extractToolDescription,
   formatToolInput,
-  getOpenCodeToolContext,
   normalizeToolName,
   summarizeToolArguments,
 } from "./tools";
-import type { RawProviderEvent } from "./types";
 
 describe("normalizeToolName", () => {
   test("returns Tool for empty string", () => {
@@ -217,131 +215,5 @@ describe("formatToolInput", () => {
     const longCommand = "a".repeat(300);
     const result = formatToolInput("bash", { command: longCommand });
     expect(result.length).toBeLessThanOrEqual(201);
-  });
-});
-
-describe("getOpenCodeToolContext", () => {
-  test("returns null for non-tool_use events", () => {
-    expect(getOpenCodeToolContext({ type: "text" })).toBeNull();
-    expect(getOpenCodeToolContext({ type: "assistant" })).toBeNull();
-  });
-
-  test("returns null when part is not a record", () => {
-    expect(getOpenCodeToolContext({ type: "tool_use", part: "string" })).toBeNull();
-    expect(getOpenCodeToolContext({ type: "tool_use", part: null })).toBeNull();
-  });
-
-  test("extracts basic tool context", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: {
-          input: { command: "ls" },
-        },
-      },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result).toEqual({
-      toolName: "bash",
-      input: { command: "ls" },
-      description: undefined,
-      status: undefined,
-      message: undefined,
-    });
-  });
-
-  test("defaults to Tool when tool name missing", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: { state: {} },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result?.toolName).toBe("Tool");
-  });
-
-  test("extracts description from input and state", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: {
-          input: { command: "ls", description: "List files" },
-        },
-      },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result?.description).toBe("List files");
-  });
-
-  test("extracts status from state", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { status: "completed", input: {} },
-      },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result?.status).toBe("completed");
-  });
-
-  test("extracts error message from state", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { error: "Command failed", input: {} },
-      },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result?.message).toBe("Command failed");
-  });
-
-  test("prefers error over message in state", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: {
-          error: "Error msg",
-          message: "Regular msg",
-          input: {},
-        },
-      },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result?.message).toBe("Error msg");
-  });
-
-  test("falls back to message when no error", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { message: "Info msg", input: {} },
-      },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result?.message).toBe("Info msg");
-  });
-
-  test("handles missing state", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: { tool: "bash" },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result?.input).toEqual({});
-    expect(result?.status).toBeUndefined();
-  });
-
-  test("handles non-record state", () => {
-    const event: RawProviderEvent = {
-      type: "tool_use",
-      part: { tool: "bash", state: "string" },
-    };
-    const result = getOpenCodeToolContext(event);
-    expect(result?.input).toEqual({});
   });
 });

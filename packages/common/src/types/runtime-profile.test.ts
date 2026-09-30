@@ -5,43 +5,56 @@ import {
   RuntimeProfilePatchSchema,
 } from "./runtime-profile.ts";
 
+const claudeProfile = {
+  name: "Work Claude",
+  baseProvider: "claude-code",
+  command: "cpe",
+  model: "claude-opus-5",
+  reasoning: "extra-high",
+  fastMode: true,
+} as const;
+
 describe("runtime profiles", () => {
-  test("normalizes a valid Codex profile", () => {
-    expect(
-      RuntimeProfileInputSchema.parse({
-        name: "  Work Codex  ",
-        baseProvider: "codex-cli",
-        command: "cdx",
-        model: "vendor/custom-model:v2",
-        reasoning: "extra-high",
-        fastMode: true,
-      }),
-    ).toEqual({
-      name: "Work Codex",
-      baseProvider: "codex-cli",
-      command: "cdx",
-      model: "vendor/custom-model:v2",
-      reasoning: "extra-high",
-      fastMode: true,
-    });
+  test("normalizes a valid Claude profile", () => {
+    expect(RuntimeProfileInputSchema.parse({ ...claudeProfile, name: "  Work Claude  " })).toEqual(
+      claudeProfile,
+    );
   });
 
-  test("rejects shell commands and fast mode outside Codex", () => {
+  test("rejects shell commands", () => {
     expect(
       RuntimeProfileInputSchema.safeParse({
-        name: "Unsafe",
-        baseProvider: "claude-code",
+        ...claudeProfile,
         command: "claude --dangerously-skip-permissions",
-        model: "claude-opus-4-8",
-        reasoning: "high",
-        fastMode: true,
       }).success,
     ).toBe(false);
   });
 
+  test("rejects fast mode on a model without it", () => {
+    expect(
+      RuntimeProfileInputSchema.safeParse({ ...claudeProfile, model: "claude-opus-4-8" }).success,
+    ).toBe(false);
+    expect(
+      RuntimeProfileInputSchema.safeParse({
+        ...claudeProfile,
+        model: "claude-opus-4-8",
+        fastMode: false,
+      }).success,
+    ).toBe(true);
+  });
+
+  test("rejects a provider outside the catalog", () => {
+    for (const baseProvider of ["codex-cli", "pi", "grok-build", "opencode"]) {
+      expect(
+        RuntimeProfileInputSchema.safeParse({ ...claudeProfile, baseProvider, fastMode: false })
+          .success,
+      ).toBe(false);
+    }
+  });
+
   test("accepts partial profile patches", () => {
-    expect(RuntimeProfilePatchSchema.parse({ model: "gpt-5.5" })).toEqual({
-      model: "gpt-5.5",
+    expect(RuntimeProfilePatchSchema.parse({ model: "claude-opus-5" })).toEqual({
+      model: "claude-opus-5",
     });
     expect(RuntimeProfilePatchSchema.safeParse({}).success).toBe(false);
   });
@@ -50,33 +63,26 @@ describe("runtime profiles", () => {
     expect(
       applyRuntimeProfile({
         id: "rprof_test",
-        name: "Work Codex",
-        baseProvider: "codex-cli",
-        command: "cdx",
-        model: "vendor/custom-model:v2",
+        ...claudeProfile,
         reasoning: "high",
-        fastMode: true,
         createdAt: "now",
         updatedAt: "now",
       }),
     ).toEqual({
-      provider: "codex-cli",
-      model: "vendor/custom-model:v2",
+      provider: "claude-code",
+      model: "claude-opus-5",
       reasoning: "high",
       fastMode: true,
       ultracode: false,
-      runtimeAlias: "cdx",
+      runtimeAlias: "cpe",
     });
   });
 
   test("accepts optional execHostId and threads it through applyRuntimeProfile", () => {
     expect(
       RuntimeProfileInputSchema.parse({
-        name: "Remote Codex",
-        baseProvider: "codex-cli",
-        command: "codex",
-        model: "gpt-5.5",
-        reasoning: "high",
+        ...claudeProfile,
+        command: "claude",
         fastMode: false,
         execHostId: "ehost_desktop",
       }),
@@ -85,18 +91,15 @@ describe("runtime profiles", () => {
     expect(
       applyRuntimeProfile({
         id: "rprof_remote",
-        name: "Remote Codex",
-        baseProvider: "codex-cli",
-        command: "codex",
-        model: "gpt-5.5",
-        reasoning: "high",
+        ...claudeProfile,
+        command: "claude",
         fastMode: false,
         execHostId: "ehost_desktop",
         createdAt: "now",
         updatedAt: "now",
       }),
     ).toMatchObject({
-      provider: "codex-cli",
+      provider: "claude-code",
       execHostId: "ehost_desktop",
     });
   });

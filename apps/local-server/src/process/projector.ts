@@ -238,12 +238,11 @@ const isPiSessionCompleteEvent = (event: RawProviderEvent): boolean => {
   return type === "agent_end";
 };
 
-type RunRuntime = "claude-code" | "codex-cli" | "opencode" | "pi";
+type RunRuntime = "claude-code" | "codex-cli" | "pi";
 
 const RUNTIME_LABELS: Record<RunRuntime, string> = {
   "claude-code": "Claude Code",
   "codex-cli": "Codex CLI",
-  opencode: "OpenCode",
   pi: "Pi",
 };
 
@@ -251,7 +250,6 @@ const RUNTIME_LABELS: Record<RunRuntime, string> = {
 const resolveRuntime = (provider: string): RunRuntime => {
   if (provider === "claude-code") return "claude-code";
   if (provider === "codex" || provider === "codex-cli") return "codex-cli";
-  if (provider === "opencode" || provider.startsWith("opencode:")) return "opencode";
   return "pi";
 };
 

@@ -42,8 +42,8 @@ const claudePersonal: RuntimeConfigurationProvider = {
 describe("runtime configuration selection", () => {
   test("maps a saved Claude Code configuration to its runtime execution settings", () => {
     const agent: StepAgent = {
-      provider: "codex-cli",
-      model: "gpt-5.5",
+      provider: "claude-code",
+      model: "claude-opus-5",
       reasoning: "extra-high",
       fastMode: true,
     };

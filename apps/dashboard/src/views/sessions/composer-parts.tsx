@@ -65,7 +65,7 @@ export const ComposerToolbar = ({
   const runtime = getRuntimeUi(props.runtime);
   const runtimeLabel = props.runtimeConfigurationName ?? runtime.label;
   const modelLabel = `${runtimeLabel} ${getModelLabel(props.model)}`;
-  const effortLabel = getEffortLabel(props.runtime, props.effort, props.model);
+  const effortLabel = getEffortLabel(props.runtime, props.effort);
   const configuration = props.runtimeConfigurations?.find(
     (item) => item.id === props.sessionRuntimeConfigurationId,
   );
@@ -74,11 +74,8 @@ export const ComposerToolbar = ({
     (option) => !configuredModel || configuredModel.thinkingLevels.includes(option.value),
   ).map((option) => ({
     value: option.value,
-    label: getEffortLabel(props.runtime, option.value, props.model),
+    label: getEffortLabel(props.runtime, option.value),
   }));
-  const showAccessMode = configuration
-    ? configuration.driver !== "custom"
-    : props.runtime !== "custom";
 
   return (
     <div className="flex min-w-0 items-end">
@@ -93,7 +90,6 @@ export const ComposerToolbar = ({
           effortLabel={effortLabel}
           effortOptions={effortOptions}
           accessMode={props.runtimeAccessMode ?? "full-access"}
-          showAccessMode={showAccessMode}
           connected={connected}
           assistantActive={props.assistantActive === true}
           aborting={props.aborting === true}

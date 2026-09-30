@@ -5,7 +5,7 @@ import { hasValidMcpAccess } from "./auth.ts";
 import { callAopMcpTool, listAopMcpTools, type McpToolResult } from "./tools.ts";
 
 /** Runtimes whose CLI can host the AOP MCP server. */
-export const MCP_CAPABLE_RUNTIMES = new Set(["claude-code", "codex-cli", "grok-build", "grok"]);
+export const MCP_CAPABLE_RUNTIMES = new Set(["claude-code", "codex-cli"]);
 
 export const isMcpCapableRuntime = (runtime: string): boolean => MCP_CAPABLE_RUNTIMES.has(runtime);
 

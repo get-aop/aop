@@ -290,7 +290,7 @@ describe("SessionsPage composer drafts", () => {
 
   test("confirms before retrying a send that would interrupt an active tool", async () => {
     sendChatMessage.mockImplementationOnce(async () => {
-      throw Object.assign(new Error("Grok is running a tool. Confirm before interrupting it."), {
+      throw Object.assign(new Error("Claude is running a tool. Confirm before interrupting it."), {
         status: 409,
         code: "TOOL_INTERRUPT_CONFIRMATION_REQUIRED",
       });
@@ -420,8 +420,7 @@ describe("SessionsPage composer drafts", () => {
   });
 
   test("toggles and persists fast mode from the lightning button", async () => {
-    firstSession().runtime = "codex-cli";
-    firstSession().model = "gpt-5.6";
+    firstSession().model = "claude-opus-5";
     render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 
     const fastMode = await screen.findByTestId("composer-fast-mode");
@@ -434,8 +433,7 @@ describe("SessionsPage composer drafts", () => {
   });
 
   test("restores fast mode and reports the error when persistence fails", async () => {
-    firstSession().runtime = "codex-cli";
-    firstSession().model = "gpt-5.6";
+    firstSession().model = "claude-opus-5";
     updateSessionError = new Error("Could not update fast mode");
     render(<SessionsPage repos={[{ id: "repo-1", name: "aop-mono", path: "/tmp/aop-mono" }]} />);
 

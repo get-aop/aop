@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CliProviderSchema } from "../projects/runtime.ts";
 import type { StepAgent } from "../protocol/index.ts";
 import {
   applyWorkflowRuntimeProviderDefaults,
@@ -7,10 +8,8 @@ import {
   getDefaultWorkflowRuntimeReasoning,
   getWorkflowModelOptions,
   getWorkflowThinkingOptions,
-  isWorkflowRuntimeProvider,
   SAFE_CUSTOM_RUNTIME_MODEL_PATTERN,
   supportsFastMode,
-  supportsThinkingLevel,
   WORKFLOW_RUNTIME_OPTIONS,
   type WorkflowRuntimeProvider,
   type WorkflowRuntimeReasoning,
@@ -19,14 +18,8 @@ import {
 export const RuntimeThinkingLevelSchema = z.enum(["low", "medium", "high", "extra-high", "max"]);
 export type RuntimeThinkingLevel = z.infer<typeof RuntimeThinkingLevelSchema>;
 
-export const RuntimeDriverSchema = z.enum([
-  "claude-code",
-  "codex-cli",
-  "grok-build",
-  "opencode",
-  "pi",
-  "custom",
-]);
+/** The adapter a configuration's command speaks; the runtime catalog decides which exist. */
+export const RuntimeDriverSchema = CliProviderSchema;
 export type RuntimeDriver = z.infer<typeof RuntimeDriverSchema>;
 
 export const RuntimeConfigurationProviderInputSchema = z.object({
@@ -35,7 +28,7 @@ export const RuntimeConfigurationProviderInputSchema = z.object({
     .string()
     .trim()
     .regex(/^[A-Za-z0-9._/-]+$/, "Executable must be a single command token"),
-  driver: RuntimeDriverSchema.default("custom"),
+  driver: RuntimeDriverSchema.default("claude-code"),
 });
 export type RuntimeConfigurationProviderInput = z.infer<
   typeof RuntimeConfigurationProviderInputSchema
@@ -79,22 +72,17 @@ export interface BuiltInRuntimeConfiguration
 
 const RUNTIME_COMMANDS: Record<WorkflowRuntimeProvider, string> = {
   "claude-code": "claude",
-  "codex-cli": "codex",
-  "grok-build": "grok",
-  opencode: "opencode",
-  pi: "pi",
 };
 
 /** Default Fast capability for a built-in runtime driver (not per-model). */
-export const runtimeSupportsFastMode = (driver: RuntimeDriver | WorkflowRuntimeProvider): boolean =>
-  driver === "claude-code" || driver === "codex-cli" || driver === "pi";
+export const runtimeSupportsFastMode = (driver: RuntimeDriver): boolean =>
+  getWorkflowModelOptions(driver).some((model) => supportsFastMode(driver, model));
 
 export const runtimeConfigurationSupportsFastMode = (
   configuration: Pick<RuntimeConfigurationProvider, "builtIn" | "driver" | "supportsFastMode">,
   model: string,
 ): boolean => {
-  if (configuration.driver !== "claude-code") return configuration.supportsFastMode;
-  if (!supportsFastMode("claude-code", model)) return false;
+  if (!supportsFastMode(configuration.driver, model)) return false;
   return configuration.builtIn || configuration.supportsFastMode;
 };
 
@@ -108,9 +96,7 @@ export const BUILT_IN_RUNTIME_CONFIGURATIONS: BuiltInRuntimeConfiguration[] =
     models: getWorkflowModelOptions(provider).map((model) => ({
       description: formatWorkflowRuntimeModelLabel(model),
       model,
-      thinkingLevels: supportsThinkingLevel(provider, model)
-        ? getWorkflowThinkingOptions(provider, model).map((option) => option.value)
-        : [],
+      thinkingLevels: getWorkflowThinkingOptions(provider, model).map((option) => option.value),
     })),
   }));
 
@@ -118,8 +104,6 @@ export const applyRuntimeConfigurationToAgent = (
   agent: StepAgent,
   configuration: RuntimeConfigurationProvider,
 ): StepAgent | null => {
-  if (!isWorkflowRuntimeProvider(configuration.driver)) return null;
-
   const defaults = applyWorkflowRuntimeProviderDefaults(agent, configuration.driver);
   const model = getDefaultRuntimeConfigurationModel(configuration.models);
   if (!model) return null;
@@ -182,15 +166,13 @@ export const findRuntimeConfiguration = (
   configurations: RuntimeConfigurationProvider[] | undefined,
   options: {
     preferredId?: string;
-    driver?: RuntimeDriver | WorkflowRuntimeProvider;
-    /** Additional filter (e.g. PI vs OMP via command mapping). */
+    driver?: RuntimeDriver;
+    /** Additional filter on the configuration. */
     match?: (configuration: RuntimeConfigurationProvider) => boolean;
   } = {},
 ): RuntimeConfigurationProvider | undefined => {
   if (!configurations?.length) return undefined;
-  const runnable = configurations.filter(
-    (item) => item.models.length > 0 && item.driver !== "custom",
-  );
+  const runnable = configurations.filter((item) => item.models.length > 0);
 
   if (options.preferredId) {
     // Exact id wins when it still has models. Callers must only pass preferred ids that

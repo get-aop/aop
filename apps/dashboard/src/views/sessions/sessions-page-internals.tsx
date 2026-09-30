@@ -1,7 +1,9 @@
 import {
+  isWorkflowRuntimeProvider,
   type RuntimeConfigurationProvider,
   type RuntimeProfile,
   runtimeConfigurationSupportsFastMode,
+  supportsFastMode,
 } from "@aop/common";
 import { useCallback, useState } from "react";
 import type { ChatSessionDetail, ChatSessionSummary, SessionGitStatus } from "../../api/client";
@@ -151,7 +153,9 @@ export const sessionSupportsFastMode = (
 ): boolean => {
   const configuration = configurations.find((item) => item.id === session.runtimeConfigurationId);
   if (configuration) return runtimeConfigurationSupportsFastMode(configuration, session.model);
-  return session.runtime === "codex-cli" || session.runtime === "pi";
+  return (
+    isWorkflowRuntimeProvider(session.runtime) && supportsFastMode(session.runtime, session.model)
+  );
 };
 
 export const runtimeConfigurationNameMap = (

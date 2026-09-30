@@ -76,8 +76,8 @@ describe("Protocol Types", () => {
         attempt: 1,
         iteration: 0,
         agent: {
-          provider: "codex-cli",
-          model: "gpt-5.5",
+          provider: "claude-code",
+          model: "claude-opus-5",
           reasoning: "high",
           fastMode: true,
           browserControl: true,
@@ -91,8 +91,8 @@ describe("Protocol Types", () => {
         expect(result.data.attempt).toBe(1);
         expect(result.data.iteration).toBe(0);
         expect(result.data.agent).toEqual({
-          provider: "codex-cli",
-          model: "gpt-5.5",
+          provider: "claude-code",
+          model: "claude-opus-5",
           reasoning: "high",
           fastMode: true,
           browserControl: true,
@@ -122,54 +122,23 @@ describe("Protocol Types", () => {
       }
     });
 
-    test("validates an OpenCode step command", () => {
+    test("accepts a runtime alias for the Claude Code adapter", () => {
       const result = StepCommandSchema.safeParse({
-        id: "step_opencode",
+        id: "step_alias",
         type: "implement",
         promptTemplate: "Implement the task",
         attempt: 1,
         iteration: 0,
         agent: {
-          provider: "opencode",
-          model: "opencode-go/kimi-k2.7-code",
+          provider: "claude-code",
+          model: "claude-opus-4-8",
           reasoning: "high",
+          runtimeAlias: "claude-work",
         },
       });
 
       expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.agent).toEqual({
-          provider: "opencode",
-          model: "opencode-go/kimi-k2.7-code",
-          reasoning: "high",
-        });
-      }
-    });
-
-    test("validates a Grok Build step command with a runtime alias", () => {
-      const result = StepCommandSchema.safeParse({
-        id: "step_grok",
-        type: "implement",
-        promptTemplate: "Implement the task",
-        attempt: 1,
-        iteration: 0,
-        agent: {
-          provider: "grok-build",
-          model: "grok-4.5",
-          reasoning: "high",
-          runtimeAlias: "grok-work",
-        },
-      });
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.agent).toEqual({
-          provider: "grok-build",
-          model: "grok-4.5",
-          reasoning: "high",
-          runtimeAlias: "grok-work",
-        });
-      }
+      if (result.success) expect(result.data.agent?.runtimeAlias).toBe("claude-work");
     });
 
     test("rejects runtime aliases that contain flags or spaces", () => {
@@ -180,39 +149,31 @@ describe("Protocol Types", () => {
         attempt: 1,
         iteration: 0,
         agent: {
-          provider: "codex-cli",
-          model: "gpt-5.5",
+          provider: "claude-code",
+          model: "claude-opus-4-8",
           reasoning: "medium",
-          runtimeAlias: "cdx --profile work",
+          runtimeAlias: "claude --profile work",
         },
       });
 
       expect(result.success).toBe(false);
     });
 
-    test("validates a Pi step command", () => {
-      const result = StepCommandSchema.safeParse({
-        id: "step_pi",
-        type: "review",
-        promptTemplate: "Review the implementation",
-        attempt: 1,
-        iteration: 0,
-        agent: {
-          provider: "pi",
-          model: "openai-codex/gpt-5.5",
-          reasoning: "extra-high",
-        },
-      });
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.agent).toEqual({
-          provider: "pi",
-          model: "openai-codex/gpt-5.5",
-          reasoning: "extra-high",
+    test.each(["codex-cli", "pi", "grok-build", "opencode"])(
+      "rejects a step command agent on the %s provider, which is outside the catalog",
+      (provider) => {
+        const result = StepCommandSchema.safeParse({
+          id: "step_other_provider",
+          type: "implement",
+          promptTemplate: "Implement the task",
+          attempt: 1,
+          iteration: 0,
+          agent: { provider, model: "some-model", reasoning: "high" },
         });
-      }
-    });
+
+        expect(result.success).toBe(false);
+      },
+    );
   });
 
   describe("TaskReadyResponse", () => {

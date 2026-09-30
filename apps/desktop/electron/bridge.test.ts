@@ -8,8 +8,8 @@ describe("Electron preload bridge", () => {
     const bridge = createDesktopBridge(invoke);
 
     await bridge.getSetupState();
-    await bridge.runSetupAction("install-runtime-codex");
-    await bridge.openSetupGuide("install-runtime-codex");
+    await bridge.runSetupAction("install-runtime-claude");
+    await bridge.openSetupGuide("install-runtime-claude");
     await bridge.startAopSidecar();
     await bridge.getSidecarState();
     await bridge.openLogsFolder();
@@ -20,7 +20,11 @@ describe("Electron preload bridge", () => {
     await bridge.setZoom(1.2);
 
     expect(invoke).toHaveBeenNthCalledWith(1, IPC_CHANNELS.getSetupState);
-    expect(invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.runSetupAction, "install-runtime-codex");
+    expect(invoke).toHaveBeenNthCalledWith(
+      2,
+      IPC_CHANNELS.runSetupAction,
+      "install-runtime-claude",
+    );
     expect(invoke).toHaveBeenNthCalledWith(10, IPC_CHANNELS.setExecHost, "wsl:Ubuntu");
     expect(invoke).toHaveBeenNthCalledWith(11, IPC_CHANNELS.setZoom, 1.2);
   });

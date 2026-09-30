@@ -65,8 +65,8 @@ describe("sessions-runtime", () => {
     expect(parseMessageSegments("codex please fix the flaky test")).toEqual([
       { kind: "text", text: "codex please fix the flaky test" },
     ]);
-    expect(parseMessageSegments("use OpenCode for this")).toEqual([
-      { kind: "text", text: "use OpenCode for this" },
+    expect(parseMessageSegments("use claude for this")).toEqual([
+      { kind: "text", text: "use claude for this" },
     ]);
   });
 

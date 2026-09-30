@@ -1,9 +1,4 @@
-import {
-  extractToolDescription,
-  formatToolInput,
-  getOpenCodeToolContext,
-  normalizeToolName,
-} from "./tools";
+import { extractToolDescription, formatToolInput, normalizeToolName } from "./tools";
 import type { NormalizedLogEvent, ParsedRawLogEntry, RawProviderEvent } from "./types";
 
 interface ContentBlock {
@@ -164,79 +159,6 @@ const normalizeCodexEvent = (entry: ParsedRawLogEntry): NormalizedLogEvent[] => 
   return [{ kind: "noise", provider, reason: "codex-unhandled" }];
 };
 
-const OPEN_CODE_SUCCESS_STATUSES = ["completed", "complete", "done", "success"];
-const OPEN_CODE_FAILURE_STATUSES = ["error", "failed", "failure"];
-
-const normalizeOpenCodeToolEvent = (
-  provider: ParsedRawLogEntry["provider"],
-  tool: NonNullable<ReturnType<typeof getOpenCodeToolContext>>,
-): NormalizedLogEvent[] => {
-  const toolName = normalizeToolName(tool.toolName);
-  const status = tool.status?.toLowerCase();
-
-  if (status && OPEN_CODE_SUCCESS_STATUSES.includes(status)) {
-    return [
-      {
-        kind: "tool_started",
-        provider,
-        toolName,
-        primaryInput: formatToolInput(toolName, tool.input),
-        description: tool.description,
-      },
-    ];
-  }
-
-  if (status && OPEN_CODE_FAILURE_STATUSES.includes(status)) {
-    return [
-      {
-        kind: "tool_completed",
-        provider,
-        toolName,
-        success: false,
-        message: tool.message ?? `${toolName} failed`,
-      },
-    ];
-  }
-
-  return [
-    {
-      kind: "tool_started",
-      provider,
-      toolName,
-      primaryInput: formatToolInput(toolName, tool.input),
-      description: tool.description,
-    },
-  ];
-};
-
-const normalizeOpenCodeEvent = (entry: ParsedRawLogEntry): NormalizedLogEvent[] => {
-  const { event, provider } = entry;
-
-  if (event.type === "text" && isRecord(event.part) && typeof event.part.text === "string") {
-    return toTextLines(event.part.text).map((text) => ({ kind: "assistant_text", provider, text }));
-  }
-
-  const tool = getOpenCodeToolContext(event);
-  if (tool) return normalizeOpenCodeToolEvent(provider, tool);
-
-  const resultEvents = normalizeResultEvent(provider, event);
-  if (resultEvents.length > 0) return resultEvents;
-
-  return [{ kind: "noise", provider, reason: "opencode-unhandled" }];
-};
-
-const normalizeGrokBuildEvent = (entry: ParsedRawLogEntry): NormalizedLogEvent[] => {
-  const { event, provider } = entry;
-  const text = extractGrokTextChunk(event);
-
-  if (text.trim().length > 0) {
-    return toTextLines(text).map((line) => ({ kind: "assistant_text", provider, text: line }));
-  }
-
-  const type = String(event.type ?? "unknown");
-  return [{ kind: "noise", provider, reason: `grok-${type}` }];
-};
-
 const normalizePiRuntimeToolExecutionEvent = (entry: ParsedRawLogEntry): NormalizedLogEvent[] => {
   const { event, provider } = entry;
   const type = String(event.type ?? "");
@@ -308,12 +230,6 @@ export const normalizeRawEvent = (entry: ParsedRawLogEntry): NormalizedLogEvent[
     case "codex":
     case "codex-cli":
       return normalizeCodexEvent(entry);
-    case "opencode":
-      return normalizeOpenCodeEvent(entry);
-    case "grok-build":
-      return normalizeGrokBuildEvent(entry);
-    case "openclaw":
-      return normalizeClaudeEvent(entry);
     case "pi":
       return normalizePiRuntimeEvent(entry);
     case "claude-code":
@@ -341,40 +257,8 @@ const normalizePiRuntimeEvent = (entry: ParsedRawLogEntry): NormalizedLogEvent[]
   return normalizeClaudeEvent(entry);
 };
 
-export const normalizeRawEvents = (entries: ParsedRawLogEntry[]): NormalizedLogEvent[] => {
-  const normalized: NormalizedLogEvent[] = [];
-  let grokText = "";
-
-  const flushGrokText = () => {
-    if (grokText.trim().length > 0) {
-      normalized.push(
-        ...toTextLines(grokText).map((text) => ({
-          kind: "assistant_text" as const,
-          provider: "grok-build" as const,
-          text,
-        })),
-      );
-    }
-    grokText = "";
-  };
-
-  for (const entry of entries) {
-    if (
-      entry.provider === "grok-build" &&
-      entry.event.type === "text" &&
-      typeof entry.event.data === "string"
-    ) {
-      grokText += entry.event.data;
-      continue;
-    }
-
-    flushGrokText();
-    normalized.push(...normalizeRawEvent(entry));
-  }
-
-  flushGrokText();
-  return normalized;
-};
+export const normalizeRawEvents = (entries: ParsedRawLogEntry[]): NormalizedLogEvent[] =>
+  entries.flatMap(normalizeRawEvent);
 
 const extractCompletedCodexMessageText = (event: RawProviderEvent): string => {
   if (
@@ -392,22 +276,6 @@ const extractCompletedCodexMessageText = (event: RawProviderEvent): string => {
 const extractTurnCompletedText = (event: RawProviderEvent): string => {
   if (event.type === "turn.completed" && typeof event["last-assistant-message"] === "string") {
     return event["last-assistant-message"];
-  }
-
-  return "";
-};
-
-const extractTextPart = (event: RawProviderEvent): string => {
-  if (event.type === "text" && isRecord(event.part) && typeof event.part.text === "string") {
-    return event.part.text;
-  }
-
-  return "";
-};
-
-const extractGrokTextChunk = (event: RawProviderEvent): string => {
-  if (event.type === "text" && typeof event.data === "string") {
-    return event.data;
   }
 
   return "";
@@ -475,8 +343,6 @@ export const extractAssistantTextFromRawEvent = (event: RawProviderEvent): strin
   return (
     extractCompletedCodexMessageText(event) ||
     extractTurnCompletedText(event) ||
-    extractTextPart(event) ||
-    extractGrokTextChunk(event) ||
     extractResultSuccessText(event) ||
     extractPiAssistantMessageText(event) ||
     extractClaudeAssistantMessageText(event)
@@ -499,16 +365,8 @@ const hasTopLevelFailure = (event: RawProviderEvent): boolean => {
   return hasFailureSubtype(event.status);
 };
 
-const hasToolUseFailure = (event: RawProviderEvent): boolean => {
-  if (event.type !== "tool_use" || !isRecord(event.part) || !isRecord(event.part.state)) {
-    return false;
-  }
-
-  return hasFailureSubtype(event.part.state.status) || event.part.state.error !== undefined;
-};
-
 export const isFailureMarker = (event: RawProviderEvent): boolean => {
-  return hasTopLevelFailure(event) || hasToolUseFailure(event) || event.error !== undefined;
+  return hasTopLevelFailure(event) || event.error !== undefined;
 };
 
 const failureMessage = (event: RawProviderEvent): string => {

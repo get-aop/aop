@@ -1,5 +1,3 @@
-import type { RawProviderEvent } from "./types";
-
 type ToolFormatter = (input: Record<string, unknown>) => string;
 
 const TOOL_NAME_MAP: Record<string, string> = {
@@ -144,37 +142,4 @@ export const extractToolDescription = (
 
 export const formatToolInput = (name: string, input: Record<string, unknown>): string => {
   return summarizeToolArguments(name, input, 200);
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-};
-
-export const getOpenCodeToolContext = (
-  event: RawProviderEvent,
-): {
-  toolName: string;
-  input: Record<string, unknown>;
-  description?: string;
-  status?: string;
-  message?: string;
-} | null => {
-  if (event.type !== "tool_use" || !isRecord(event.part)) return null;
-
-  const part = event.part;
-  const state = isRecord(part.state) ? part.state : {};
-  const input = isRecord(state.input) ? state.input : {};
-
-  return {
-    toolName: typeof part.tool === "string" ? part.tool : "Tool",
-    input,
-    description: extractToolDescription(input, state),
-    status: typeof state.status === "string" ? state.status : undefined,
-    message:
-      typeof state.error === "string"
-        ? state.error
-        : typeof state.message === "string"
-          ? state.message
-          : undefined,
-  };
 };

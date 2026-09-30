@@ -1,15 +1,6 @@
 export type RawProviderEvent = Record<string, unknown>;
 
-export type LogProvider =
-  | "claude-code"
-  | "codex"
-  | "codex-cli"
-  | "grok-build"
-  | "hermes"
-  | "pi"
-  | "opencode"
-  | "openclaw"
-  | "unknown";
+export type LogProvider = "claude-code" | "codex" | "codex-cli" | "pi" | "unknown";
 
 export interface ParsedRawLogEntry {
   index: number;

@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { CliProviderSchema } from "../projects/runtime.ts";
 import type { StepAgent } from "../protocol/index.ts";
-import { SAFE_CUSTOM_RUNTIME_MODEL_PATTERN } from "./workflow-runtime.ts";
+import { SAFE_CUSTOM_RUNTIME_MODEL_PATTERN, supportsFastMode } from "./workflow-runtime.ts";
 
 const RuntimeProfileFieldsSchema = z.object({
   name: z.string().trim().min(1).max(60),
-  baseProvider: z.enum(["claude-code", "codex-cli", "grok-build", "opencode", "pi"]),
+  baseProvider: CliProviderSchema,
   command: z
     .string()
     .trim()
@@ -23,11 +24,11 @@ const RuntimeProfileFieldsSchema = z.object({
 });
 
 export const RuntimeProfileInputSchema = RuntimeProfileFieldsSchema.superRefine((profile, ctx) => {
-  if (profile.fastMode && profile.baseProvider !== "codex-cli") {
+  if (profile.fastMode && !supportsFastMode(profile.baseProvider, profile.model)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["fastMode"],
-      message: "Fast mode is only available for Codex CLI",
+      message: "Fast mode is not available for this model",
     });
   }
 });

@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   extractAssistantSignalTextFromRawJsonl,
   extractFinalAssistantTextFromRawJsonl,
-  extractLastGrokTextRunFromRawJsonl,
   extractPlanMarkdownFromRawJsonl,
   inferRunOutcomeFromRawJsonl,
   parseRawJsonlContent,
@@ -45,19 +44,6 @@ describe("logs parser", () => {
     expect(parsed.entries[0]?.provider).toBe("codex");
   });
 
-  test("detects synthetic openclaw json events", () => {
-    const content = JSON.stringify({
-      provider: "openclaw",
-      type: "result",
-      subtype: "success",
-      result: "done",
-    });
-
-    const parsed = parseRawJsonlContent(content);
-    expect(parsed.entries).toHaveLength(1);
-    expect(parsed.entries[0]?.provider).toBe("openclaw");
-  });
-
   test("detects Pi runtime json events", () => {
     const content = JSON.stringify({
       provider: "pi",
@@ -82,14 +68,6 @@ describe("logs parser", () => {
     expect(parsed.entries).toHaveLength(1);
     expect(parsed.entries[0]?.provider).toBe("pi");
   });
-
-  test("detects provider-less Grok streaming token events", () => {
-    const content = JSON.stringify({ type: "text", data: "Finished" });
-
-    const parsed = parseRawJsonlContent(content);
-    expect(parsed.entries).toHaveLength(1);
-    expect(parsed.entries[0]?.provider).toBe("grok-build");
-  });
 });
 
 describe("logs renderer", () => {
@@ -97,26 +75,18 @@ describe("logs renderer", () => {
     const content = [
       JSON.stringify({
         type: "tool_use",
-        part: {
-          tool: "bash",
-          state: {
-            input: {
-              command: "cat docs/tasks/cli-greeting-command/task.md",
-              description: "Read task document",
-            },
-          },
+        name: "Bash",
+        input: {
+          command: "cat docs/tasks/cli-greeting-command/task.md",
+          description: "Read task document",
         },
       }),
       JSON.stringify({
         type: "tool_use",
-        part: {
-          tool: "bash",
-          state: {
-            input: {
-              command: "ls docs/tasks/cli-greeting-command",
-              description: "List task folder files",
-            },
-          },
+        name: "Bash",
+        input: {
+          command: "ls docs/tasks/cli-greeting-command",
+          description: "List task folder files",
         },
       }),
     ].join("\n");
@@ -130,8 +100,8 @@ describe("logs renderer", () => {
 
   test("suppresses token/cost noise from assistant text", () => {
     const content = JSON.stringify({
-      type: "text",
-      part: { text: "Working\nTokens: 210\nCost: 0.01\nDone" },
+      type: "assistant",
+      message: { content: [{ type: "text", text: "Working\nTokens: 210\nCost: 0.01\nDone" }] },
     });
     const lines = renderCompactLogLines(parseRawJsonlContent(content), {
       timestamp: "2026-01-01T00:00:00.000Z",
@@ -186,28 +156,15 @@ describe("logs renderer", () => {
       },
     ]);
   });
-
-  test("renders Grok streaming text chunks instead of an empty log view", () => {
-    const content = [
-      JSON.stringify({ type: "thought", data: "private reasoning" }),
-      JSON.stringify({ type: "text", data: "Running" }),
-      JSON.stringify({ type: "text", data: " checks" }),
-    ].join("\n");
-
-    const lines = renderCompactLogLines(parseRawJsonlContent(content), {
-      timestamp: "2026-01-01T00:00:00.000Z",
-    });
-
-    expect(lines.map((line) => line.content)).toEqual(["Running checks"]);
-    expect(lines.map((line) => line.content)).not.toContain("private reasoning");
-  });
 });
 
 describe("logs extraction and inference", () => {
-  test("extracts signal text from opencode text events", () => {
+  test("extracts signal text from claude assistant events", () => {
     const content = JSON.stringify({
-      type: "text",
-      part: { text: "Finished <aop>ALL_TASKS_DONE</aop>" },
+      type: "assistant",
+      message: {
+        content: [{ type: "text", text: "Finished <aop>ALL_TASKS_DONE</aop>" }],
+      },
     });
 
     const extracted = extractAssistantSignalTextFromRawJsonl(content, {
@@ -252,50 +209,23 @@ describe("logs extraction and inference", () => {
     expect(extracted.text).not.toContain("private reasoning");
   });
 
-  test("extracts workflow signals from Grok streaming text chunks", () => {
+  test("final-message extraction keeps only the last claude assistant message", () => {
     const content = [
-      JSON.stringify({ type: "thought", data: "I should report the result" }),
-      JSON.stringify({ type: "text", data: "All checks passed. " }),
-      JSON.stringify({ type: "text", data: "<aop>" }),
-      JSON.stringify({ type: "text", data: "TESTS_PASS" }),
-      JSON.stringify({ type: "text", data: "</aop>" }),
-      JSON.stringify({ type: "end" }),
-    ].join("\n");
-
-    const extracted = extractAssistantSignalTextFromRawJsonl(content, {
-      requireCompleteLine: true,
-    });
-
-    expect(extracted.isComplete).toBe(true);
-    expect(extracted.text).toContain("<aop>TESTS_PASS</aop>");
-    expect(extracted.text).not.toContain("I should report");
-  });
-
-  test("last Grok text run drops intermediate status narration", () => {
-    const content = [
-      JSON.stringify({ type: "thought", data: "planning" }),
-      JSON.stringify({ type: "text", data: "I'll inspect the layout first." }),
-      JSON.stringify({ type: "thought", data: "now write the answer" }),
-      JSON.stringify({ type: "text", data: "### After\n\nUse **plus** on the folder." }),
-      JSON.stringify({ type: "end" }),
-    ].join("\n");
-
-    const extracted = extractLastGrokTextRunFromRawJsonl(content, {
-      requireCompleteLine: true,
-    });
-
-    expect(extracted.isComplete).toBe(true);
-    expect(extracted.text).toBe("### After\n\nUse **plus** on the folder.");
-    expect(extracted.text).not.toContain("I'll inspect");
-  });
-
-  test("final-message extraction keeps only the last opencode text message", () => {
-    const content = [
-      JSON.stringify({ type: "text", part: { text: "I'll inspect the dashboard shell first." } }),
-      JSON.stringify({ type: "text", part: { text: "The sidebar is a single component." } }),
       JSON.stringify({
-        type: "text",
-        part: { text: "**Recommended Plan**\n\n1. Add helpers.\n2. Update shell." },
+        type: "assistant",
+        message: { content: [{ type: "text", text: "I'll inspect the dashboard shell first." }] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "The sidebar is a single component." }] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "text", text: "**Recommended Plan**\n\n1. Add helpers.\n2. Update shell." },
+          ],
+        },
       }),
     ].join("\n");
 
@@ -309,7 +239,6 @@ describe("logs extraction and inference", () => {
   test("renders AOP CLI prompt capture events", () => {
     const content = JSON.stringify({
       type: "aop_cli_prompt",
-      provider: "opencode",
       prompt: "Let's make a plan for the task below\n\nCreate a sidebar button",
     });
 
@@ -386,7 +315,7 @@ describe("logs extraction and inference", () => {
 
   test("final-message extraction blocks on a trailing partial line", () => {
     const extracted = extractFinalAssistantTextFromRawJsonl(
-      '{"type":"text","part":{"text":"## Plan"}}\n{"type":"text","part":',
+      '{"type":"result","subtype":"success","result":"## Plan"}\n{"type":"assistant","message":',
       { requireCompleteLine: true },
     );
 
@@ -473,11 +402,14 @@ describe("logs extraction and inference", () => {
     expect(extracted.text).toBe(plan.trim());
   });
 
-  test("plan extraction keeps the final opencode message as the plan", () => {
+  test("plan extraction keeps the final codex message as the plan", () => {
     const plan = `**Recommended Plan**\n\n${"1. Add helpers and update the shell with tests.\n".repeat(10)}`;
     const content = [
-      JSON.stringify({ type: "text", part: { text: "Inspecting the dashboard first." } }),
-      JSON.stringify({ type: "text", part: { text: plan } }),
+      JSON.stringify({
+        type: "item.completed",
+        item: { type: "agent_message", text: "Inspecting the dashboard first." },
+      }),
+      JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: plan } }),
     ].join("\n");
 
     const extracted = extractPlanMarkdownFromRawJsonl(content);
@@ -506,7 +438,7 @@ describe("logs extraction and inference", () => {
 
   test("plan extraction blocks on a trailing partial line", () => {
     const extracted = extractPlanMarkdownFromRawJsonl(
-      '{"type":"text","part":{"text":"## Plan"}}\n{"type":"text","part":',
+      '{"type":"result","subtype":"success","result":"## Plan"}\n{"type":"assistant","message":',
       { requireCompleteLine: true },
     );
 
@@ -516,7 +448,7 @@ describe("logs extraction and inference", () => {
 
   test("blocks signal extraction when trailing line is partial", () => {
     const extracted = extractAssistantSignalTextFromRawJsonl(
-      '{"type":"text","part":{"text":"<aop>ALL_TASKS_DONE</aop>"',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"<aop>ALL_TASKS_DONE</aop>"',
       { requireCompleteLine: true },
     );
 
@@ -538,11 +470,11 @@ describe("logs extraction and inference", () => {
 
   test("infers implicit success for parsable stream without result", () => {
     const content = [
+      JSON.stringify({ type: "tool_use", name: "Bash", input: { command: "ls" } }),
       JSON.stringify({
-        type: "tool_use",
-        part: { tool: "bash", state: { input: { command: "ls" } } },
+        type: "assistant",
+        message: { content: [{ type: "text", text: "done" }] },
       }),
-      JSON.stringify({ type: "text", part: { text: "done" } }),
     ].join("\n");
 
     const inferred = inferRunOutcomeFromRawJsonl(content);
@@ -558,8 +490,11 @@ describe("logs extraction and inference", () => {
 
   test("returns unknown when trailing partial line exists", () => {
     const content = [
-      JSON.stringify({ type: "text", part: { text: "ok" } }),
-      '{"type":"text","part":',
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "ok" }] },
+      }),
+      '{"type":"assistant","message":',
     ].join("\n");
 
     const inferred = inferRunOutcomeFromRawJsonl(content, { requireCompleteLine: true });

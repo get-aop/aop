@@ -46,7 +46,7 @@ const customRuntime: RuntimeConfigurationProvider = {
   id: "rtprov_custom_1",
   name: "my-claude",
   command: "my-claude-bin",
-  driver: "custom",
+  driver: "claude-code",
   builtIn: false,
   position: 1,
   supportsFastMode: false,

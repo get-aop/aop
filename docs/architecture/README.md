@@ -15,10 +15,8 @@ AOP owns product state: registered repositories, worker memberships, task packag
 | Runtime | Provider id | Process shape |
 | --- | --- | --- |
 | Claude Code | `claude-code` | `claude` stream-json session |
-| Codex CLI | `codex-cli` | `codex exec --json` with resume support |
-| Grok | `grok-build` | `grok` runtime adapter |
-| OpenCode | `opencode` | `opencode run --format json` |
-| Pi | `pi` | `pi --mode json --print` with resumable follow-up |
+
+Phase 1 exposes Claude Code only. The Codex CLI (`codex-cli`) and Pi (`pi`) adapters remain in `packages/llm-provider` but are not in the runtime catalog, provider lists or pickers until Phase 2.
 
 Each adapter launches a detached process, ingests JSONL events, and persists a runtime session id when available. See [Runtimes](../RUNTIMES.md) for configuration and capabilities.
 
@@ -44,9 +42,6 @@ Task detail streams current logs through SSE and reads historical execution even
 | Task package | `~/.aop/repos/<repo-id>/tasks/<slug>/` |
 | Task worktree | `~/.aop/worktrees/<repo-id>/<task-id>/` |
 | Live step logs | `~/.aop/logs/<step-id>.jsonl` before SQLite flush |
-| Codex auth/session home | `~/.aop/codex-home` |
-| OpenCode state | `~/.aop/opencode` |
-| Pi sessions | `~/.aop/pi-sessions` |
 
 Repository removal resets AOP-owned repository data. Runtime authentication homes are deliberately preserved so agent logins survive a factory reset.
 

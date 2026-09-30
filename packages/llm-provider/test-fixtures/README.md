@@ -2,7 +2,7 @@
 
 `fake-cli.ts` is a standalone executable that stands in for `claude` so the real adapters, the real spawn and detach path, and the real log tail can be exercised without a model, credentials or spend. It speaks Claude Code's `--output-format stream-json` dialect. It is test tooling: nothing under `src/` imports it and it is not part of the package build.
 
-Why not `E2EFixtureProvider`: that one replaces the provider, so it never spawns a process and cannot exercise pids, detach, kill, resume, streaming or a crash. The fake replaces only the executable, so everything from `ClaudeCodeProvider.run()` down is production code.
+The fake replaces only the executable, so everything from `ClaudeCodeProvider.run()` down is production code: the real spawn and detach path, pids, kill, resume, streaming and crash handling.
 
 ## Point an adapter at it
 
@@ -19,7 +19,7 @@ await new ClaudeCodeProvider().run({
 });
 ```
 
-Through the app, the alias comes from a runtime configuration provider whose `command` is the same path. Chat sessions copy it into `runtime_alias` and pass it to the adapter:
+Through the app, the alias comes from a runtime configuration provider whose `command` is the same path and whose `driver` is `claude-code` (the only driver, and the default when omitted). Chat sessions copy it into `runtime_alias` and pass it to the adapter:
 
 ```bash
 curl -X POST "$API/api/runtime-configuration/providers" -H 'content-type: application/json' \

@@ -22,7 +22,9 @@ describe("delegation wiring", () => {
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Fix the flaky test $DELEGATE_CODEX[gpt-5.4;extra-high]" }),
+      body: JSON.stringify({
+        content: "Fix the flaky test $DELEGATE_CLAUDE[claude-sonnet-4-6;extra-high]",
+      }),
     });
     await waitForPendingChatReplies();
 
@@ -30,9 +32,9 @@ describe("delegation wiring", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       kind: "delegation",
-      label: "Codex",
-      runtime: "codex-cli",
-      model: "gpt-5.4",
+      label: "Claude",
+      runtime: "claude-code",
+      model: "claude-sonnet-4-6",
       reasoning: "extra-high",
       status: "completed",
       error: null,
@@ -65,7 +67,9 @@ describe("delegation wiring", () => {
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Fix the flaky test $DELEGATE_CODEX[gpt-5.4;extra-high]" }),
+      body: JSON.stringify({
+        content: "Fix the flaky test $DELEGATE_CLAUDE[claude-sonnet-4-6;extra-high]",
+      }),
     });
     await waitForPendingChatReplies();
 
@@ -134,7 +138,7 @@ describe("delegation wiring", () => {
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Review this $DELEGATE_GROK" }),
+      body: JSON.stringify({ content: "Review this $DELEGATE_CLAUDE" }),
     });
     await waitForPendingChatReplies();
 
@@ -151,7 +155,9 @@ describe("delegation wiring", () => {
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Fix the flaky test $DELEGATE_CODEX[gpt-5.4;extra-high]" }),
+      body: JSON.stringify({
+        content: "Fix the flaky test $DELEGATE_CLAUDE[claude-sonnet-4-6;extra-high]",
+      }),
     });
     await waitForPendingChatReplies();
 
@@ -169,8 +175,8 @@ describe("delegation wiring", () => {
     expect(activeBody.delegations[0]).toMatchObject({
       sessionId: session.id,
       status: "completed",
-      runtime: "codex-cli",
-      model: "gpt-5.4",
+      runtime: "claude-code",
+      model: "claude-sonnet-4-6",
     });
     expect(activeBody.delegations[0]?.sessionTitle).toBeTruthy();
 
@@ -256,11 +262,11 @@ describe("delegation wiring", () => {
       .executeTakeFirstOrThrow()) as ChatRun;
     const entry = await startDelegationRun(ctx, hostRun, {
       kind: "delegation",
-      label: "Codex",
-      runtime: "codex-cli",
+      label: "Claude",
+      runtime: "claude-code",
       runtimeAlias: null,
       runtimeConfigurationId: null,
-      model: "gpt-5.5",
+      model: "claude-sonnet-4-6",
       reasoning: "high",
       fastMode: false,
       logFilePath: "/tmp/relay-delegate.jsonl",

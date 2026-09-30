@@ -22,7 +22,7 @@ What you expected to happen.
 - AOP version: (e.g. 0.9.31, or `main` source build)
 - Install method: installer (`curl | sh`) / source / AOP Desktop
 - OS: (e.g. macOS 15, Ubuntu 24.04, Windows 11)
-- Runtime(s) in use: (claude-code / codex-cli / grok-build / opencode / pi)
+- Runtime in use: claude-code
 
 **Logs**
 Attach or paste the relevant portion of `~/.aop/logs/` (or the dashboard's

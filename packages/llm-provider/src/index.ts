@@ -21,7 +21,6 @@ export {
   extractAssistantTextFromRawEvent,
   extractFinalAssistantTextFromEntries,
   extractFinalAssistantTextFromRawJsonl,
-  extractLastGrokTextRunFromRawJsonl,
   extractPlanMarkdownFromEntries,
   extractPlanMarkdownFromRawJsonl,
   extractRuntimeSessionIdFromRawJsonl,
@@ -49,19 +48,6 @@ export {
 export { createProvider } from "./provider-factory";
 export { ClaudeCodeProvider } from "./providers/claude-code";
 export { CodexCliProvider } from "./providers/codex-cli";
-export { E2EFixtureProvider } from "./providers/e2e-fixture";
-export type { GrokJournalTail } from "./providers/grok-build";
-export {
-  GrokBuildProvider,
-  hasUnfinishedGrokTools,
-  startGrokJournalTail,
-} from "./providers/grok-build";
-export {
-  buildOpenClawResultLog,
-  getOpenClawRawLogPaths,
-  OpenClawProvider,
-} from "./providers/openclaw";
-export { OpenCodeProvider } from "./providers/opencode";
 export { PiProvider } from "./providers/pi";
 export { sanitizeSessionId } from "./session-id";
 export type {
@@ -70,5 +56,4 @@ export type {
   RunMode,
   RunOptions,
   RunResult,
-  RunToolProgress,
 } from "./types";

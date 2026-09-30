@@ -113,9 +113,11 @@ describe("ThreadSchema", () => {
     });
   });
 
-  test("rejects a runtime that is not one of the three CLIs", () => {
-    const thread = makeThread({ runtime: makeRuntimeSelection({ provider: "opencode" }) });
-    expect(rejectedPaths(ThreadSchema, thread)).toEqual(["runtime.provider"]);
+  test("rejects a runtime outside the Claude Code catalog", () => {
+    for (const provider of ["codex-cli", "pi", "opencode"]) {
+      const thread = makeThread({ runtime: makeRuntimeSelection({ provider }) });
+      expect(rejectedPaths(ThreadSchema, thread)).toEqual(["runtime.provider"]);
+    }
   });
 
   test("rejects a target other than the host", () => {

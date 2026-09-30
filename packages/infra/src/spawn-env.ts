@@ -45,7 +45,6 @@ const buildFallbackPaths = (): string[] => {
     `${home}/.local/bin`,
     `${home}/.local/share/pnpm`,
     `${home}/.local/share/pnpm/nodejs_current/bin`,
-    `${home}/.opencode/bin`,
     `${home}/.bun/bin`,
     `${home}/bin`,
   ];

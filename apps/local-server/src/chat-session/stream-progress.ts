@@ -85,7 +85,7 @@ export const createStreamProgressAccumulator = () => {
         if (thinking.endsWith(chunk.data)) return;
         // Reasoning segments separated by tool/text runs are paragraphs; direct
         // concatenation produced run-on text ("…error.The model…"). Token-sized
-        // streams (Grok) have no interruption and keep concatenating directly.
+        // streams have no interruption and keep concatenating directly.
         thinking =
           thinking && newThoughtSegment ? `${thinking}\n\n${chunk.data}` : thinking + chunk.data;
         newThoughtSegment = false;
@@ -259,7 +259,7 @@ export const createStreamProgressAccumulator = () => {
 const mergeTextChunk = (content: string, lastFullText: string, data: string): string => {
   if (lastFullText && data.startsWith(lastFullText)) return data;
   if (data.length > 40 && content && data.includes(content.slice(0, 20))) return data;
-  // OpenCode sometimes re-sends cumulative text with slight whitespace differences.
+  // Some runtimes re-send cumulative text with slight whitespace differences.
   if (content && data.length > content.length && data.includes(content.trim().slice(0, 30))) {
     return data;
   }

@@ -8,22 +8,22 @@ const { RuntimeProfilePicker } = await import("./RuntimeProfilePicker");
 
 const profiles = [
   {
-    id: "rprof_codex",
-    name: "Work Codex",
-    baseProvider: "codex-cli" as const,
-    command: "cdx",
-    model: "gpt-5.5",
+    id: "rprof_work",
+    name: "Work Claude",
+    baseProvider: "claude-code" as const,
+    command: "cpe",
+    model: "claude-opus-5",
     reasoning: "high" as const,
     fastMode: true,
     createdAt: "now",
     updatedAt: "now",
   },
   {
-    id: "rprof_pi",
-    name: "Work PI",
-    baseProvider: "pi" as const,
-    command: "pi",
-    model: "openai-codex/gpt-5.5",
+    id: "rprof_personal",
+    name: "Personal Claude",
+    baseProvider: "claude-code" as const,
+    command: "claude-personal",
+    model: "claude-sonnet-4-6",
     reasoning: "medium" as const,
     fastMode: false,
     createdAt: "now",
@@ -39,8 +39,8 @@ describe("RuntimeProfilePicker", () => {
     const trigger = screen.getByRole("combobox", { name: "Apply profile" });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
     fireEvent.click(trigger);
-    expect(screen.queryByRole("option", { name: "Work PI" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("option", { name: "Work Codex" }));
+    expect(screen.queryByRole("option", { name: "Personal Claude" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("option", { name: "Work Claude" }));
     expect(onApply).toHaveBeenCalledWith(profiles[0]);
   });
 });

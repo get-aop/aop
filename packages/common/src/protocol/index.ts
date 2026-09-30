@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CliProviderSchema } from "../projects/runtime.ts";
 import type { TaskStatus } from "../types/task";
 
 export const ExecutionStatus = {
@@ -107,7 +108,7 @@ const RuntimeAliasSchema = z
   .optional();
 
 export const StepAgentSchema = z.object({
-  provider: z.enum(["claude-code", "codex-cli", "grok-build", "pi", "opencode"]),
+  provider: CliProviderSchema,
   runtimeConfigurationId: z.string().min(1).optional(),
   model: z.string(),
   reasoning: z.enum(["low", "medium", "high", "extra-high", "max"]),

@@ -9,12 +9,8 @@ const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
 };
 
 const detectProvider = (event: RawProviderEvent): LogProvider => {
-  if (event.provider === "openclaw") return "openclaw";
-  if (event.provider === "grok-build" || event.provider === "grok") return "grok-build";
   if (event.provider === "pi") return "pi";
   if (isPiRuntimeEvent(event)) return "pi";
-  if ("part" in event) return "opencode";
-  if (isGrokBuildEvent(event)) return "grok-build";
   if (isCodexEvent(event)) return "codex";
 
   const type = typeof event.type === "string" ? event.type : "";
@@ -39,12 +35,6 @@ const isPiRuntimeEvent = (event: RawProviderEvent): boolean => {
     "turn_end",
     "turn_start",
   ].includes(type);
-};
-
-const isGrokBuildEvent = (event: RawProviderEvent): boolean => {
-  const type = typeof event.type === "string" ? event.type : "";
-  if (type === "end") return true;
-  return (type === "text" || type === "thought") && typeof event.data === "string";
 };
 
 const isCodexEvent = (event: RawProviderEvent): boolean => {

@@ -354,208 +354,6 @@ describe("normalizeRawEvent - claude-code provider", () => {
   });
 });
 
-describe("normalizeRawEvent - hermes provider", () => {
-  const createEntry = (event: RawProviderEvent): ParsedRawLogEntry => ({
-    index: 0,
-    raw: JSON.stringify(event),
-    event,
-    provider: "hermes",
-  });
-
-  test("normalizes assistant message text", () => {
-    const entry = createEntry({
-      provider: "hermes",
-      type: "assistant",
-      message: "Implemented the task\n<aop>TASK_COMPLETE</aop>",
-    });
-
-    expect(normalizeRawEvent(entry)).toEqual([
-      {
-        kind: "assistant_text",
-        provider: "hermes",
-        text: "Implemented the task",
-      },
-      {
-        kind: "assistant_text",
-        provider: "hermes",
-        text: "<aop>TASK_COMPLETE</aop>",
-      },
-    ]);
-  });
-
-  test("extracts assistant text from hermes assistant events", () => {
-    const result = extractAssistantTextFromRawEvent({
-      provider: "hermes",
-      type: "assistant",
-      message: "Hello from Hermes",
-    });
-
-    expect(result).toBe("Hello from Hermes");
-  });
-});
-
-describe("normalizeRawEvent - opencode provider", () => {
-  const createEntry = (event: RawProviderEvent): ParsedRawLogEntry => ({
-    index: 0,
-    raw: JSON.stringify(event),
-    event,
-    provider: "opencode",
-  });
-
-  test("normalizes text event", () => {
-    const entry = createEntry({
-      type: "text",
-      part: { text: "Processing\nDone" },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result).toHaveLength(2);
-    expect(result[0]).toEqual({
-      kind: "assistant_text",
-      provider: "opencode",
-      text: "Processing",
-    });
-    // biome-ignore lint/style/noNonNullAssertion: test verified length
-    expect((result[1]! as AssistantText | ResultSuccess | ErrorEvent).text).toBe("Done");
-  });
-
-  test("ignores text event without part.text", () => {
-    const entry = createEntry({
-      type: "text",
-      part: { data: "something" },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]?.kind).toBe("noise");
-  });
-
-  test("normalizes tool_use with success status", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: {
-          status: "completed",
-          input: { command: "ls" },
-        },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]).toMatchObject({
-      kind: "tool_started",
-      toolName: "Bash",
-      primaryInput: "ls",
-    });
-  });
-
-  test("normalizes tool_use with complete status", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { status: "complete", input: {} },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]?.kind).toBe("tool_started");
-  });
-
-  test("normalizes tool_use with done status", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { status: "done", input: {} },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]?.kind).toBe("tool_started");
-  });
-
-  test("normalizes tool_use with success status", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { status: "success", input: {} },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]?.kind).toBe("tool_started");
-  });
-
-  test("normalizes tool_use with error status as error", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: {
-          status: "error",
-          message: "Command failed",
-          input: {},
-        },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]).toMatchObject({
-      kind: "error",
-      text: "Command failed",
-    });
-  });
-
-  test("normalizes tool_use with failed status as error", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { status: "failed", input: {} },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]).toMatchObject({
-      kind: "error",
-      text: "Unknown error",
-    });
-  });
-
-  test("normalizes tool_use with failure status as error", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { status: "failure", input: {} },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]).toMatchObject({
-      kind: "error",
-      text: "Unknown error",
-    });
-  });
-
-  test("normalizes tool_use without status as started", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        tool: "bash",
-        state: { input: { command: "ls" } },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]?.kind).toBe("tool_started");
-  });
-
-  test("returns noise for unhandled opencode event", () => {
-    const entry = createEntry({
-      type: "unknown",
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]).toEqual({
-      kind: "noise",
-      provider: "opencode",
-      reason: "opencode-unhandled",
-    });
-  });
-});
-
 describe("normalizeRawEvent - unknown provider", () => {
   test("uses claude-code normalization for unknown provider", () => {
     const entry: ParsedRawLogEntry = {
@@ -659,39 +457,6 @@ describe("normalizeRawEvent - failure markers", () => {
     });
     const result = normalizeRawEvent(entry);
     expect(result[0]?.kind).toBe("error");
-  });
-
-  test("detects tool_use with error in state", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        state: {
-          status: "error",
-          error: "Tool failed",
-        },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]).toMatchObject({
-      kind: "error",
-      text: "Tool failed",
-    });
-  });
-
-  test("detects tool_use with error field in state", () => {
-    const entry = createEntry({
-      type: "tool_use",
-      part: {
-        state: {
-          error: "Tool error",
-        },
-      },
-    });
-    const result = normalizeRawEvent(entry);
-    expect(result[0]).toMatchObject({
-      kind: "error",
-      text: "Tool error",
-    });
   });
 
   test("detects top-level error field", () => {
@@ -824,14 +589,6 @@ describe("normalizeRawEvents", () => {
 });
 
 describe("extractAssistantTextFromRawEvent", () => {
-  test("extracts text from opencode text event", () => {
-    const event: RawProviderEvent = {
-      type: "text",
-      part: { text: "Hello" },
-    };
-    expect(extractAssistantTextFromRawEvent(event)).toBe("Hello");
-  });
-
   test("extracts from result success event", () => {
     const event: RawProviderEvent = {
       type: "result",
@@ -935,29 +692,6 @@ describe("normalizeRawEvent - edge cases", () => {
     // This will be caught by failure marker, so it becomes an error
     expect(result[0]?.kind).toBe("error");
   });
-
-  test("normalizes opencode tool failure status directly", () => {
-    // Test the normalizeOpenCodeToolEvent failure path
-    const entry: ParsedRawLogEntry = {
-      index: 0,
-      raw: "{}",
-      event: {
-        type: "tool_use",
-        part: {
-          tool: "bash",
-          state: {
-            status: "error",
-            message: "Command failed",
-            input: {},
-          },
-        },
-      },
-      provider: "opencode",
-    };
-    const result = normalizeRawEvent(entry);
-    // This will be caught by failure marker first
-    expect(result[0]?.kind).toBe("error");
-  });
 });
 
 describe("isFailureMarker", () => {
@@ -991,28 +725,6 @@ describe("isFailureMarker", () => {
     expect(isFailureMarker({ type: "event", error: "Something failed" })).toBe(true);
   });
 
-  test("detects tool_use failure", () => {
-    expect(
-      isFailureMarker({
-        type: "tool_use",
-        part: {
-          state: { status: "error" },
-        },
-      }),
-    ).toBe(true);
-  });
-
-  test("detects tool_use with error field", () => {
-    expect(
-      isFailureMarker({
-        type: "tool_use",
-        part: {
-          state: { error: "Tool failed" },
-        },
-      }),
-    ).toBe(true);
-  });
-
   test("returns false for success events", () => {
     expect(isFailureMarker({ type: "assistant", message: "ok" })).toBe(false);
     expect(isFailureMarker({ type: "result", subtype: "success" })).toBe(false);
@@ -1020,14 +732,9 @@ describe("isFailureMarker", () => {
   });
 
   test("returns false for non-failure tool_use", () => {
-    expect(
-      isFailureMarker({
-        type: "tool_use",
-        part: {
-          state: { status: "success" },
-        },
-      }),
-    ).toBe(false);
+    expect(isFailureMarker({ type: "tool_use", name: "Bash", input: { command: "ls" } })).toBe(
+      false,
+    );
   });
 
   test("handles missing fields gracefully", () => {

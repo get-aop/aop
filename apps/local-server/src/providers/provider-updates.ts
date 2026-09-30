@@ -1,7 +1,8 @@
 import { realpath } from "node:fs/promises";
+import type { CliProvider } from "@aop/common";
 import { buildSpawnEnv } from "@aop/infra";
 
-export type ProviderUpdateId = "claude-code" | "codex-cli" | "grok-build" | "opencode" | "pi";
+export type ProviderUpdateId = CliProvider;
 
 export type ProviderUpdateStatus =
   | "idle"
@@ -51,34 +52,6 @@ const PROVIDERS: ProviderUpdateDefinition[] = [
     npmPackage: "@anthropic-ai/claude-code",
     brewFormula: "claude-code",
     nativeArgs: ["update"],
-  },
-  {
-    id: "codex-cli",
-    command: "codex",
-    npmPackage: "@openai/codex",
-    brewFormula: "codex",
-    nativeArgs: null,
-  },
-  {
-    id: "grok-build",
-    command: "grok",
-    npmPackage: "@xai-official/grok",
-    brewFormula: null,
-    nativeArgs: ["update"],
-  },
-  {
-    id: "opencode",
-    command: "opencode",
-    npmPackage: "opencode-ai",
-    brewFormula: "anomalyco/tap/opencode",
-    nativeArgs: ["upgrade"],
-  },
-  {
-    id: "pi",
-    command: "pi",
-    npmPackage: "@earendil-works/pi-coding-agent",
-    brewFormula: null,
-    nativeArgs: ["update", "--self"],
   },
 ];
 

@@ -129,7 +129,7 @@ run_preflight_checks() {
   if ! has_supported_runtime_cli; then
     issues="${issues}
   - No supported agent runtime found.
-    Fix: install and sign in to at least one of: claude, opencode, codex, or pi"
+    Fix: install and sign in to Claude Code (claude)"
   fi
 
   if [ -n "$issues" ]; then
@@ -150,10 +150,7 @@ run_preflight_checks() {
 }
 
 has_supported_runtime_cli() {
-  command -v claude >/dev/null 2>&1 ||
-    command -v opencode >/dev/null 2>&1 ||
-    command -v codex >/dev/null 2>&1 ||
-    command -v pi >/dev/null 2>&1
+  command -v claude >/dev/null 2>&1
 }
 
 # --- Linux Dependencies ---

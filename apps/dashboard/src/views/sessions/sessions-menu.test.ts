@@ -279,9 +279,9 @@ describe("configurationItems", () => {
       builders({
         menu: { kind: "cconfig" },
         active: detail({
-          runtime: "pi",
-          runtimeConfigurationId: "pi",
-          model: "vendor/custom-sol",
+          runtime: "claude-code",
+          runtimeConfigurationId: "claude-work",
+          model: "claude-opus-5",
           fastMode: true,
         }),
         onFastMode: (value) => {
@@ -289,19 +289,19 @@ describe("configurationItems", () => {
         },
         runtimeConfigurations: [
           {
-            id: "pi",
-            name: "PI",
-            command: "pi",
-            driver: "pi",
-            builtIn: true,
+            id: "claude-work",
+            name: "Claude Work",
+            command: "claude-work",
+            driver: "claude-code",
+            builtIn: false,
             position: 0,
             supportsFastMode: true,
             models: [
               {
-                id: "rtmodel_pi_custom",
-                providerId: "pi",
-                description: "Sol (team)",
-                model: "vendor/custom-sol",
+                id: "rtmodel_work_opus",
+                providerId: "claude-work",
+                description: "Opus 5 (team)",
+                model: "claude-opus-5",
                 thinkingLevels: ["low", "medium", "high"] as Array<
                   "low" | "medium" | "high" | "extra-high" | "max"
                 >,
@@ -373,26 +373,26 @@ describe("configurationItems", () => {
       builders({
         menu: { kind: "cconfig" },
         active: detail({
-          runtime: "pi",
-          runtimeConfigurationId: "pi",
-          model: "openai-codex/gpt-5.6-sol",
+          runtime: "claude-code",
+          runtimeConfigurationId: "claude-work",
+          model: "claude-opus-4-8",
           reasoningEffort: "high",
         }),
         runtimeConfigurations: [
           {
-            id: "pi",
-            name: "PI",
-            command: "pi",
-            driver: "pi",
-            builtIn: true,
+            id: "claude-work",
+            name: "Claude Work",
+            command: "claude-work",
+            driver: "claude-code",
+            builtIn: false,
             position: 0,
-            supportsFastMode: true,
+            supportsFastMode: false,
             models: [
               {
-                id: "rtmodel_pi_sol",
-                providerId: "pi",
-                description: "GPT 5.6 Sol",
-                model: "openai-codex/gpt-5.6-sol",
+                id: "rtmodel_work_opus",
+                providerId: "claude-work",
+                description: "Opus 4.8",
+                model: "claude-opus-4-8",
                 thinkingLevels: ["low", "medium", "high"] as Array<
                   "low" | "medium" | "high" | "extra-high" | "max"
                 >,

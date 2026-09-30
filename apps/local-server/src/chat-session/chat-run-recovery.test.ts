@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import * as fsPromises from "node:fs/promises";
-import { appendFile, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ChatRun } from "../db/schema.ts";
@@ -8,16 +8,8 @@ import { detectChatRunTerminalState, waitForChatRunTerminal } from "./chat-run-r
 
 describe("detectChatRunTerminalState", () => {
   test.each([
-    [
-      "grok-build",
-      [
-        { type: "text", data: "Done" },
-        { type: "end", stopReason: "EndTurn" },
-      ],
-    ],
     ["codex-cli", [{ type: "turn.completed", "last-assistant-message": "Done" }]],
     ["claude-code", [{ type: "result", subtype: "success", result: "Done" }]],
-    ["opencode", [{ type: "step_finish", part: { reason: "stop" } }]],
     ["pi", [{ type: "agent_end", messages: [] }]],
   ])("detects %s terminal success", (runtime, events) => {
     expect(detectChatRunTerminalState(runtime, jsonl(events))).toBe("succeeded");
@@ -45,10 +37,8 @@ describe("detectChatRunTerminalState", () => {
   });
 
   test("keeps partial or non-terminal logs running", () => {
-    expect(detectChatRunTerminalState("grok-build", '{"type":"end"')).toBe("running");
-    expect(detectChatRunTerminalState("grok-build", jsonl([{ type: "text", data: "wait" }]))).toBe(
-      "running",
-    );
+    expect(detectChatRunTerminalState("claude-code", '{"type":"result"')).toBe("running");
+    expect(detectChatRunTerminalState("claude-code", jsonl(claudeWorking("wait")))).toBe("running");
   });
 
   test("does not recover an unsafe runtime session id from a log", async () => {
@@ -57,8 +47,8 @@ describe("detectChatRunTerminalState", () => {
     await writeFile(
       logFilePath,
       jsonl([
-        { type: "text", data: "Done" },
-        { type: "end", stopReason: "EndTurn", sessionId: "--unsafe-resume" },
+        ...claudeWorking("Done"),
+        { type: "result", subtype: "success", result: "Done", session_id: "--unsafe-resume" },
       ]),
     );
 
@@ -75,7 +65,7 @@ describe("detectChatRunTerminalState", () => {
   test("fails recovered success terminal without assistant text as empty_output", async () => {
     const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-empty-"));
     const logFilePath = join(dir, "run.jsonl");
-    await writeFile(logFilePath, jsonl([{ type: "end", stopReason: "EndTurn" }]));
+    await writeFile(logFilePath, jsonl([{ type: "result", subtype: "success" }]));
 
     const recovered = await waitForChatRunTerminal({
       run: runningRun(logFilePath),
@@ -130,88 +120,26 @@ describe("detectChatRunTerminalState", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("marks an allocated Grok session confirmed after valid recovered activity", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-confirmed-"));
+  test("forwards log progress while recovering a detached run", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-progress-"));
     const logFilePath = join(dir, "run.jsonl");
-    await writeFile(
-      logFilePath,
-      jsonl([
-        { type: "thought", data: "working" },
-        { type: "text", data: "Done" },
-        { type: "end", stopReason: "EndTurn" },
-      ]),
-    );
-
-    const recovered = await waitForChatRunTerminal({
-      run: runningRun(logFilePath, {
-        runtime_session_id: "0198c0a8-7d3e-7e96-a8b2-3f1f0c9d4e5f",
-        runtime_session_state: "allocated",
-      }),
-      pollIntervalMs: 1,
-    });
-
-    expect(recovered.runtimeSessionId).toBe("0198c0a8-7d3e-7e96-a8b2-3f1f0c9d4e5f");
-    expect(recovered.runtimeSessionState).toBe("confirmed");
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  test("forwards native Grok progress while recovering a detached run", async () => {
-    const home = await mkdtemp(join(tmpdir(), "aop-chat-recovery-grok-home-"));
-    const cwd = "/tmp/project";
-    const runtimeSessionId = crypto.randomUUID();
-    const sessionDir = join(home, ".grok", "sessions", encodeURIComponent(cwd), runtimeSessionId);
-    const logFilePath = join(home, "run.jsonl");
-    await mkdir(sessionDir, { recursive: true });
-    await Promise.all([
-      writeFile(join(sessionDir, "events.jsonl"), ""),
-      writeFile(join(sessionDir, "updates.jsonl"), ""),
-      writeFile(logFilePath, ""),
-    ]);
-    const snapshots: Array<{ commands: number; detail?: string }> = [];
+    await writeFile(logFilePath, `${jsonl(claudeWorking("Polling attempt 12"))}\n`);
+    const contents: string[] = [];
     const recovery = waitForChatRunTerminal({
-      run: runningRun(logFilePath, {
-        workspace_path: cwd,
-        runtime_session_id: runtimeSessionId,
-        runtime_session_state: "confirmed",
-      }),
-      grokHome: home,
+      run: runningRun(logFilePath),
       pollIntervalMs: 10,
-      startupTimeoutMs: 350,
-      onProgress: (progress) => {
-        const commands = progress.commandGroups.flatMap((group) => group.commands);
-        snapshots.push({ commands: commands.length, detail: commands.at(-1)?.detail });
-      },
+      startupTimeoutMs: 5_000,
+      onProgress: (progress) => contents.push(progress.content),
     });
 
-    await appendFile(
-      join(sessionDir, "updates.jsonl"),
-      `${JSON.stringify({
-        params: {
-          update: {
-            sessionUpdate: "tool_call_update",
-            toolCallId: "recovered-call",
-            status: "in_progress",
-            content: [{ content: { text: "Polling attempt 12" } }],
-          },
-        },
-      })}\n`,
-    );
-    await waitFor(
-      () => snapshots.some((snapshot) => snapshot.detail === "Polling attempt 12"),
-      2_000,
-    );
-    await Bun.sleep(150);
+    await waitFor(() => contents.some((content) => content.includes("Polling attempt 12")), 2_000);
     await appendFile(
       logFilePath,
-      `\n${jsonl([
-        { type: "text", data: "Done" },
-        { type: "end", stopReason: "EndTurn" },
-      ])}`,
+      `${jsonl([{ type: "result", subtype: "success", result: "Done" }])}\n`,
     );
 
     expect((await recovery).status).toBe("completed");
-    expect(snapshots.some((snapshot) => snapshot.commands === 1)).toBe(true);
-    await rm(home, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true });
   });
 
   test("stops a recovery watcher immediately when shutdown aborts it", async () => {
@@ -235,7 +163,7 @@ describe("detectChatRunTerminalState", () => {
     const dir = await mkdtemp(join(tmpdir(), "aop-chat-recovery-quiet-"));
     const logFilePath = join(dir, "partial.jsonl");
     let now = Date.parse("2026-07-12T00:00:00.000Z");
-    await writeFile(logFilePath, jsonl([{ type: "text", data: "still working" }]));
+    await writeFile(logFilePath, jsonl(claudeWorking("still working")));
     // Align file mtime with fake clock so staleness is measured against injected time.
     const epochSeconds = now / 1000;
     await utimes(logFilePath, epochSeconds, epochSeconds);
@@ -258,8 +186,8 @@ describe("detectChatRunTerminalState", () => {
     await appendFile(
       logFilePath,
       `\n${jsonl([
-        { type: "text", data: "finished eventually" },
-        { type: "end", stopReason: "EndTurn" },
+        ...claudeWorking("finished eventually"),
+        { type: "result", subtype: "success", result: "finished eventually" },
       ])}`,
     );
 
@@ -354,8 +282,8 @@ describe("detectChatRunTerminalState", () => {
     await writeFile(
       logFilePath,
       jsonl([
-        { type: "text", data: "late output" },
-        { type: "end", stopReason: "EndTurn" },
+        ...claudeWorking("late output"),
+        { type: "result", subtype: "success", result: "late output" },
       ]),
     );
 
@@ -371,8 +299,8 @@ describe("detectChatRunTerminalState", () => {
     await writeFile(
       logFilePath,
       jsonl([
-        { type: "text", data: "recovered after read error" },
-        { type: "end", stopReason: "EndTurn" },
+        ...claudeWorking("recovered after read error"),
+        { type: "result", subtype: "success", result: "recovered after read error" },
       ]),
     );
 
@@ -408,6 +336,11 @@ describe("detectChatRunTerminalState", () => {
 const jsonl = (events: unknown[]): string =>
   events.map((event) => JSON.stringify(event)).join("\n");
 
+/** A Claude assistant message that has not yet ended its turn. */
+const claudeWorking = (text: string) => [
+  { type: "assistant", message: { content: [{ type: "text", text }] } },
+];
+
 const runningRun = (logFilePath: string, overrides: Partial<ChatRun> = {}): ChatRun => {
   const now = new Date().toISOString();
   return {
@@ -415,7 +348,7 @@ const runningRun = (logFilePath: string, overrides: Partial<ChatRun> = {}): Chat
     session_id: "isess_1",
     user_message_id: "smsg_user",
     assistant_message_id: "smsg_assistant",
-    runtime: "grok-build",
+    runtime: "claude-code",
     log_file_path: logFilePath,
     status: "running",
     runtime_session_id: null,
@@ -424,7 +357,7 @@ const runningRun = (logFilePath: string, overrides: Partial<ChatRun> = {}): Chat
     interruption_kind: null,
     context_strategy: "fresh",
     workspace_path: "/tmp/repo",
-    timeout_policy: "grok_slow_start_v1",
+    timeout_policy: "default_v1",
     retry_of_run_id: null,
     runtime_session_state: null,
     error_message: null,

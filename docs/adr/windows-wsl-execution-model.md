@@ -5,7 +5,7 @@
 
 ## Context
 
-On Windows, the coding agents AOP orchestrates (`claude`, `codex`, `opencode`) and the
+On Windows, the coding agents AOP orchestrates (`claude`, `codex`) and the
 `gh` CLI are most often installed **inside a WSL distro**, not on native Windows. The
 desktop app and `local-server` runtime must work for both native-Windows and WSL users.
 There are two ways to reach the Linux-installed tools:

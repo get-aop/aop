@@ -65,27 +65,6 @@ describe("extractUsageFromRawJsonl", () => {
     });
   });
 
-  test("extracts usage from an OpenCode finish event", () => {
-    const content = JSON.stringify({
-      type: "finish",
-      reason: "stop",
-      usage: {
-        input_tokens: 800,
-        output_tokens: 400,
-      },
-    });
-
-    const usage = extractUsageFromRawJsonl(content);
-    expect(usage).toEqual({
-      inputTokens: 800,
-      outputTokens: 400,
-      totalTokens: 1200,
-      costUsd: undefined,
-      provider: "opencode",
-      model: undefined,
-    });
-  });
-
   test("extracts usage from a Pi agent_end event with model info", () => {
     const content = JSON.stringify({
       type: "agent_end",

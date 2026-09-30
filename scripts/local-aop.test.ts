@@ -73,7 +73,6 @@ describe("buildLocalAopStartCommand", () => {
     expect(command).toContain('AOP_LOCAL_SERVER_URL="http://127.0.0.1:25350"');
     expect(command).toContain("AOP_DASHBOARD_PORT=25360");
     expect(command).toContain('AOP_DASHBOARD_URL="http://127.0.0.1:25360"');
-    expect(command).toContain('AOP_TEST_MODE="false"');
     expect(command).toContain('"/Users/marcelo/.bun/bin/bun" run dev');
   });
 });

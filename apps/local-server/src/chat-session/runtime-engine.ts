@@ -8,15 +8,12 @@ import {
   createProvider,
   extractAssistantSignalTextFromRawJsonl,
   extractFinalAssistantTextFromRawJsonl,
-  extractLastGrokTextRunFromRawJsonl,
   extractRuntimeSessionIdFromRawJsonl,
-  hasUnfinishedGrokTools,
   type LLMProvider,
   listDescendantPids,
   needsControlProcessCleanup,
   parseRawJsonlContent,
   type RunOptions,
-  type RunToolProgress,
   terminateProcessTree,
 } from "@aop/llm-provider";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
@@ -30,7 +27,7 @@ import {
 } from "./runtime-session-tail.ts";
 import {
   buildChatRuntimeTimeoutFacts,
-  resolveChatRuntimeTimeoutPolicy,
+  CHAT_RUNTIME_TIMEOUT_POLICY,
 } from "./runtime-timeout-policy.ts";
 import {
   type ActiveRunHandle,
@@ -39,12 +36,7 @@ import {
   releaseSessionRunExecution,
   type SessionRunRegistration,
 } from "./session-run-lifecycle.ts";
-import {
-  createStreamProgressAccumulator,
-  type StreamProgressListener,
-  type StreamProgressSnapshot,
-  startLogProgressTail,
-} from "./stream-progress.ts";
+import { type StreamProgressListener, startLogProgressTail } from "./stream-progress.ts";
 
 export {
   type ActiveRunPhase,
@@ -52,7 +44,6 @@ export {
   interruptSessionRun,
   isSessionRunActive,
   isSessionRunInterrupted,
-  isSessionToolActive,
   ownsSessionRunRegistration,
   registerPendingSessionRun,
   releaseSessionRunRegistration,
@@ -150,8 +141,6 @@ export interface RuntimeRunResult {
   /** Native binding rejected by the provider and requiring an orchestrated fresh launch. */
   staleRuntimeSessionId?: string;
   runtimeSessionState?: ChatRuntimeSessionState;
-  /** Clear the chat binding while retaining the run's runtime id for diagnostics. */
-  bindingPolicy?: "clear";
 }
 
 export interface ChatFileArtifact {
@@ -174,7 +163,6 @@ export const runSessionPrompt = async (input: {
   logFilePath?: string;
   createProviderFn?: CreateProviderFn;
   onProgress?: StreamProgressListener;
-  newSessionId?: string;
   onRuntimeSession?: (sessionId: string) => Promise<void> | void;
   /** Receives the spawned CLI's pid (best effort: a failure does not stop the run). */
   onSpawn?: (pid: number) => Promise<void> | void;
@@ -197,21 +185,6 @@ export const runSessionPrompt = async (input: {
   const artifactTracker = await startMarkdownArtifactTracker(repoPath);
   try {
     if (owner.interrupted) return interruptedRunResult(handle, session.runtime_session_id);
-    if (
-      isGrokRuntime(session.runtime) &&
-      session.runtime_session_id &&
-      (await hasUnfinishedGrokTools({
-        cwd: repoPath,
-        sessionId: session.runtime_session_id,
-      }))
-    ) {
-      return {
-        text: "The saved Grok session ended during a tool call. Rebuilding context in a fresh session.",
-        runtimeSessionId: session.runtime_session_id,
-        staleRuntimeSessionId: session.runtime_session_id,
-        failed: true,
-      };
-    }
 
     const result = await executeProviderRun(
       session,
@@ -222,7 +195,6 @@ export const runSessionPrompt = async (input: {
       input.logFilePath,
       input.createProviderFn,
       input.onProgress,
-      input.newSessionId,
       input.onRuntimeSession,
       input.onSpawn,
       handle,
@@ -391,7 +363,6 @@ const executeProviderRun = async (
   durableLogFilePath: string | undefined,
   createProviderFn: CreateProviderFn | undefined,
   onProgress: StreamProgressListener | undefined,
-  newSessionId: string | undefined,
   onRuntimeSession: ((sessionId: string) => Promise<void> | void) | undefined,
   onSpawn: ((pid: number) => Promise<void> | void) | undefined,
   handle: ActiveRunHandle,
@@ -405,11 +376,6 @@ const executeProviderRun = async (
   let resolveInterrupt: ((result: RuntimeRunResult) => void) | undefined;
   let providerSettled: Promise<void> | null = null;
   let interruptionStarted = false;
-  let logProgress = emptyProgressSnapshot();
-  let nativeProgress = emptyProgressSnapshot();
-  const nativeAccumulator = createStreamProgressAccumulator();
-  const activeNativeTools = new Set<string>();
-  const nativeToolNames = new Map<string, string>();
   const reportedRuntimeSessionIds = new Set<string>();
   const runtimeSessionReports = new Map<string, Promise<void>>();
   if (capturedSessionId) reportedRuntimeSessionIds.add(capturedSessionId);
@@ -439,26 +405,6 @@ const executeProviderRun = async (
       });
     runtimeSessionReports.set(id, report);
     await report;
-  };
-
-  const emitProgress = () => {
-    onProgress?.(mergeProgressSnapshots(logProgress, nativeProgress));
-  };
-  const onNativeToolProgress = (event: RunToolProgress) => {
-    if (event.phase === "done") activeNativeTools.delete(event.id);
-    else activeNativeTools.add(event.id);
-    handle.nativeToolActive = activeNativeTools.size > 0;
-    if (!onProgress) return;
-    if (event.name) nativeToolNames.set(event.id, event.name);
-    nativeProgress = nativeAccumulator.apply({
-      kind: "command",
-      phase: event.phase,
-      command: event.name ?? nativeToolNames.get(event.id) ?? "Tool",
-      itemId: `native_${event.id}`,
-      detail: event.detail,
-      exitCode: event.phase === "done" ? (event.failed ? 1 : 0) : undefined,
-    });
-    emitProgress();
   };
 
   // Wire interrupt before any await so early steers still resolve the race.
@@ -509,8 +455,6 @@ const executeProviderRun = async (
     });
     if (onProgress) {
       const inspectSessionLine = createRuntimeSessionLineInspector({
-        runtime: session.runtime,
-        newSessionId,
         onSession: captureRuntimeSession,
       });
       stopTail = startLogProgressTail({
@@ -518,17 +462,11 @@ const executeProviderRun = async (
         onLine: async (line) => {
           await inspectSessionLine(line);
         },
-        onProgress: (progress) => {
-          logProgress = progress;
-          handle.logToolActive = hasRunningTool(progress);
-          emitProgress();
-        },
+        onProgress,
       });
     } else {
       stopSessionTail = startRuntimeSessionTail({
-        runtime: session.runtime,
         logFilePath,
-        newSessionId,
         onSession: captureRuntimeSession,
       });
     }
@@ -543,8 +481,6 @@ const executeProviderRun = async (
       provider,
       handle,
       captureRuntimeSession,
-      newSessionId,
-      onNativeToolProgress,
       onSpawn,
       getCapturedSessionId: () => capturedSessionId,
       setProviderSettled: (settled) => {
@@ -573,7 +509,7 @@ const prepareProviderLaunch = async (input: {
     return interruptedRunResult(input.handle, input.capturedSessionId);
   }
   const factory = input.createProviderFn ?? createProvider;
-  const provider = factory(resolveSessionProviderKey(input.session));
+  const provider = factory(input.session.runtime);
   if (input.handle.owner.interrupted) {
     return interruptedRunResult(input.handle, input.capturedSessionId);
   }
@@ -596,8 +532,6 @@ const raceProviderAgainstInterrupt = async (input: {
   provider: LLMProvider;
   handle: ActiveRunHandle;
   captureRuntimeSession: (id: string) => Promise<void>;
-  newSessionId: string | undefined;
-  onNativeToolProgress: (event: RunToolProgress) => void;
   onSpawn: ((pid: number) => Promise<void> | void) | undefined;
   getCapturedSessionId: () => string | null;
   setProviderSettled: (settled: Promise<void>) => void;
@@ -620,8 +554,6 @@ const raceProviderAgainstInterrupt = async (input: {
       input.handle.phase = input.handle.owner.interrupted ? "cancelling" : "running";
       await reportSpawnedPid(input.onSpawn, pid, input.session.id);
     },
-    input.newSessionId,
-    input.onNativeToolProgress,
   );
   const providerPromise = completeProviderRun({
     runtime: input.session.runtime,
@@ -766,9 +698,6 @@ const interruptedRunResult = (
   interrupted: true,
   aborted: handle.owner.interruptReason !== "steer",
   interruptionKind: handle.owner.interruptReason,
-  ...(isGrokRuntime(handle.owner.runtime) && handle.owner.interruptedDuringTool
-    ? { bindingPolicy: "clear" as const }
-    : {}),
 });
 
 const stopProvider = async (
@@ -1036,11 +965,8 @@ const buildRunOptions = (
   logFilePath: string,
   allowedDirectories?: string[],
   onSpawn?: (pid: number) => Promise<void>,
-  newSessionId?: string,
-  onToolProgress?: (event: RunToolProgress) => void,
 ): RunOptions => {
   const nativeControl = control?.provider === session.runtime ? control : undefined;
-  const timeoutPolicy = resolveChatRuntimeTimeoutPolicy(session.runtime);
   return {
     prompt,
     cwd: repoPath,
@@ -1053,46 +979,18 @@ const buildRunOptions = (
     computerControl: nativeControl?.capability === "computer",
     runtimeAlias: session.runtime_alias ?? undefined,
     resumeSessionId: session.runtime_session_id ?? undefined,
-    newSessionId,
     logFilePath,
     onSession,
     onSpawn,
-    onToolProgress,
     allowedDirectories,
     mcpServerUrl: resolveAopMcpUrl(session.runtime, session.id),
-    startupTimeoutMs: timeoutPolicy.startupTimeoutMs,
+    startupTimeoutMs: CHAT_RUNTIME_TIMEOUT_POLICY.startupTimeoutMs,
     env: {
       AOP_CHAT_SESSION_ID: session.id,
       AOP_CHAT_WORKSPACE_PATH: repoPath,
     },
   };
 };
-
-const emptyProgressSnapshot = (): StreamProgressSnapshot => ({
-  thinking: "",
-  content: "",
-  commandGroups: [],
-});
-
-const mergeProgressSnapshots = (
-  logProgress: StreamProgressSnapshot,
-  nativeProgress: StreamProgressSnapshot,
-): StreamProgressSnapshot => ({
-  thinking: logProgress.thinking,
-  content: logProgress.content,
-  commandGroups: [
-    ...logProgress.commandGroups,
-    ...nativeProgress.commandGroups.map((group) => ({
-      ...group,
-      id: `native_${group.id}`,
-    })),
-  ],
-});
-
-const hasRunningTool = (progress: StreamProgressSnapshot): boolean =>
-  progress.commandGroups.some((group) =>
-    group.commands.some((command) => command.status === "running"),
-  );
 
 /** Per-provider capability flag: only MCP-capable CLIs receive the aop endpoint. */
 export const resolveAopMcpUrl = (runtime: string, chatSessionId: string): string | undefined => {
@@ -1121,14 +1019,13 @@ const interpretRunResult = async (
   result: {
     exitCode: number;
     sessionId?: string;
-    completedFromSessionEvent?: boolean;
     timedOut?: boolean;
     startupTimedOut?: boolean;
   },
   logFilePath: string,
   capturedSessionId: string | null,
 ): Promise<RuntimeRunResult> => {
-  if (!result.completedFromSessionEvent && result.startupTimedOut) {
+  if (result.startupTimedOut) {
     return {
       text: "The runtime produced no output before the startup deadline. Try again, or reset the runtime session.",
       runtimeSessionId: capturedSessionId,
@@ -1138,7 +1035,7 @@ const interpretRunResult = async (
     };
   }
 
-  if (!result.completedFromSessionEvent && result.timedOut) {
+  if (result.timedOut) {
     return {
       text: "The runtime stopped responding (inactivity timeout). Try again, or switch model/effort.",
       runtimeSessionId: capturedSessionId,
@@ -1147,7 +1044,7 @@ const interpretRunResult = async (
     };
   }
 
-  if (!result.completedFromSessionEvent && result.exitCode !== 0) {
+  if (result.exitCode !== 0) {
     const providerError = await readRuntimeErrorFromLog(logFilePath, runtime);
     return {
       text:
@@ -1158,7 +1055,7 @@ const interpretRunResult = async (
     };
   }
 
-  const text = await readAssistantTextFromLog(runtime, logFilePath);
+  const text = await readAssistantTextFromLog(logFilePath);
   if (!text.trim()) {
     return {
       text: "The runtime finished without producing a response. Try again, or reset the runtime session.",
@@ -1170,9 +1067,6 @@ const interpretRunResult = async (
 
   return { text, runtimeSessionId: capturedSessionId };
 };
-
-const resolveSessionProviderKey = (session: ChatSession): string =>
-  session.runtime === "opencode" ? `opencode:${session.model}` : session.runtime;
 
 const readRuntimeErrorFromLog = async (
   logFilePath: string,
@@ -1225,29 +1119,16 @@ const errorMessageFromText = (value: string): string | null => {
 };
 
 /**
- * Prefer the deliverable answer only — not intermediate status narration.
- * Grok emits status lines and the final reply as separate text runs split by
- * thought/tool events; keep the last run. Other providers use final-message
- * extraction (last complete assistant message).
+ * Prefer the deliverable answer only, not intermediate status narration: final-message
+ * extraction keeps the last complete assistant message.
  */
 export const readAssistantTextFromLog = async (
-  runtime: string,
   logFilePath: string,
   /** Test seam; production uses CHAT_MAX_LOG_BYTES. */
   maxBytes: number = CHAT_MAX_LOG_BYTES,
 ): Promise<string> => {
   const content = (await readBoundedUtf8File(logFilePath, maxBytes)) ?? "";
   if (!content.trim()) return "";
-
-  if (isGrokRuntime(runtime)) {
-    const lastRun = extractLastGrokTextRunFromRawJsonl(content, {
-      requireCompleteLine: false,
-    }).text.trim();
-    if (lastRun) return lastRun;
-    return extractAssistantSignalTextFromRawJsonl(content, {
-      requireCompleteLine: false,
-    }).text.trim();
-  }
 
   const finalText = extractFinalAssistantTextFromRawJsonl(content, {
     requireCompleteLine: false,
@@ -1258,9 +1139,6 @@ export const readAssistantTextFromLog = async (
     requireCompleteLine: false,
   }).text.trim();
 };
-
-export const isGrokRuntime = (runtime: string): boolean =>
-  runtime === "grok-build" || runtime === "grok";
 
 export const createSessionRunLogPath = async (sessionId: string): Promise<string> => {
   const dir = join(aopPaths.logs(), "chat-sessions", sessionId);

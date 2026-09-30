@@ -1,10 +1,7 @@
 import { type FileHandle, open } from "node:fs/promises";
-import { extractRuntimeSessionIdFromRawJsonl, parseRawJsonlContent } from "@aop/llm-provider";
-import { isProviderFailureEvent } from "./provider-event-classifier.ts";
+import { extractRuntimeSessionIdFromRawJsonl } from "@aop/llm-provider";
 
 interface RuntimeSessionLineInspectorInput {
-  runtime: string;
-  newSessionId?: string;
   onSession: (sessionId: string) => Promise<void> | void;
 }
 
@@ -16,9 +13,7 @@ export const createRuntimeSessionLineInspector = (input: RuntimeSessionLineInspe
     if (!line.trim()) return Boolean(reportedSessionId);
     if (reportedSessionId) return true;
     if (inFlight) return inFlight;
-    const discovered = extractRuntimeSessionIdFromRawJsonl(line);
-    const sessionId =
-      discovered ?? confirmedPreallocatedGrokId(input.runtime, input.newSessionId, line);
+    const sessionId = extractRuntimeSessionIdFromRawJsonl(line);
     if (!sessionId) return false;
     inFlight = Promise.resolve(input.onSession(sessionId))
       .then(() => {
@@ -33,9 +28,7 @@ export const createRuntimeSessionLineInspector = (input: RuntimeSessionLineInspe
 };
 
 export const startRuntimeSessionTail = (input: {
-  runtime: string;
   logFilePath: string;
-  newSessionId?: string;
   onSession: (sessionId: string) => Promise<void> | void;
   pollIntervalMs?: number;
 }): (() => Promise<void>) => {
@@ -80,18 +73,6 @@ export const startRuntimeSessionTail = (input: {
     stopped = true;
     await loop;
   };
-};
-
-const confirmedPreallocatedGrokId = (
-  runtime: string,
-  newSessionId: string | undefined,
-  line: string,
-): string | null => {
-  if (!newSessionId || (runtime !== "grok-build" && runtime !== "grok")) return null;
-  const event = parseRawJsonlContent(line).entries[0]?.event;
-  if (!event) return null;
-  if (isProviderFailureEvent(runtime, event)) return null;
-  return newSessionId;
 };
 
 const readNewBytes = async (

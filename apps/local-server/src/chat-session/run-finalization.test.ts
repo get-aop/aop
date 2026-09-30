@@ -52,28 +52,25 @@ describe("persistFinalizedChatRun", () => {
     });
   });
 
-  test("does not bind an unconfirmed preallocated id after failure", async () => {
+  test("does not bind an unconfirmed runtime id after failure", async () => {
     const { db, run } = await setupRun({
-      runtime: "grok-build",
-      runtime_session_id: "allocated-grok-id",
-      runtime_session_state: "allocated",
+      runtime: "claude-code",
+      runtime_session_id: "unconfirmed-id",
     });
 
-    await db.transaction().execute((trx) =>
-      persistFinalizedChatRun(
-        trx,
-        run,
-        "Runtime failed",
-        null,
-        "allocated-grok-id",
-        {
-          status: "failed",
-          errorMessage: "Runtime failed",
-          runtimeSessionState: "allocated",
-        },
-        null,
-      ),
-    );
+    await db
+      .transaction()
+      .execute((trx) =>
+        persistFinalizedChatRun(
+          trx,
+          run,
+          "Runtime failed",
+          null,
+          "unconfirmed-id",
+          { status: "failed", errorMessage: "Runtime failed" },
+          null,
+        ),
+      );
 
     const session = await db
       .selectFrom("chat_sessions")

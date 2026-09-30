@@ -16,29 +16,11 @@ const readyProbe = (): SetupProbeState => ({
   },
   runtimes: [
     {
-      id: "codex",
-      status: "ready",
-      label: "Codex",
-      message: "Codex CLI is installed.",
-      recommended: true,
-    },
-    {
       id: "claude",
-      status: "missing",
+      status: "ready",
       label: "Claude Code",
-      message: "Claude Code is not installed.",
-    },
-    {
-      id: "opencode",
-      status: "missing",
-      label: "OpenCode",
-      message: "OpenCode is not installed.",
-    },
-    {
-      id: "pi",
-      status: "missing",
-      label: "Pi",
-      message: "Pi is not installed.",
+      message: "Claude Code is installed.",
+      recommended: true,
     },
   ],
 });
@@ -100,7 +82,7 @@ describe("desktop setup gate", () => {
     expect(shouldEnterDashboard(state)).toBe(false);
   });
 
-  test("recommends Codex when no runtime is installed", () => {
+  test("recommends Claude Code when no runtime is installed", () => {
     const probe = readyProbe();
     probe.runtimes = probe.runtimes.map((runtime) => ({
       ...runtime,
@@ -111,11 +93,11 @@ describe("desktop setup gate", () => {
     const state = resolveSetupState(probe);
 
     expect(getRecommendedRuntimeAction(state)).toEqual({
-      id: "install-runtime-codex",
-      label: "Install Codex",
+      id: "install-runtime-claude",
+      label: "Install Claude Code",
       requirementId: "runtime",
       requiresConsent: false,
-      runtimeId: "codex",
+      runtimeId: "claude",
     });
   });
 });

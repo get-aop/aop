@@ -19,7 +19,7 @@ import { request } from "./request";
 export type ProviderCapabilitySupport = "yes" | "no" | "partial";
 
 export interface ProviderCapabilityEntry {
-  id: "claude-code" | "codex-cli" | "grok-build" | "opencode" | "pi";
+  id: "claude-code";
   label: string;
   roleFit: string;
   version: string | null;

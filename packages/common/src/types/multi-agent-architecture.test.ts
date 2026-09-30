@@ -148,7 +148,9 @@ describe("multi-agent architecture", () => {
     expect(markdown).toContain("The selected runtime CLI owns model/provider access");
     expect(markdown).toContain("Global concurrent tasks: `max_concurrent_tasks`, default 5");
     expect(markdown).toContain("One worker runs at most one task at a time");
-    expect(markdown).toContain("| OpenCode | `opencode` |");
+    expect(markdown).toContain("| Claude Code | `claude-code` |");
+    expect(markdown).not.toContain("`opencode`");
+    expect(markdown).not.toContain("`grok-build`");
     expect(markdown).toContain("~/.aop/repos/<repo-id>/tasks/<slug>/");
     expect(markdown).not.toContain("## Pi-Backed Workers");
     expect(markdown).not.toContain("GET-");

@@ -120,10 +120,6 @@ describe("app", () => {
       expect(res.status).toBe(200);
       expect(body.providers.map((provider: { id: string }) => provider.id)).toEqual([
         "claude-code",
-        "codex-cli",
-        "grok-build",
-        "opencode",
-        "pi",
       ]);
       expect(body.providers[0].readinessProbe).toHaveProperty("cliInstalled");
       expect(body.providers[0].readinessProbe).toHaveProperty("versionDetected");

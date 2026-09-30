@@ -20,7 +20,7 @@ describe("Electron desktop setup detection", () => {
       "git --version": success("git version 2.45.0"),
       "gh --version": success("gh version 2.49.0"),
       "gh auth status -h github.com": success("Logged in"),
-      "codex --version": success("codex 1.2.3"),
+      "claude --version": success("claude 2.1.0"),
     });
 
     const state = await collectSetupState(runner, "unix");
@@ -36,7 +36,7 @@ describe("Electron desktop setup detection", () => {
       "install-browser-runtime",
     );
     expect(state.automationActions?.map((action) => action.id)).toContain(
-      "install-codex-browser-plugins",
+      "install-claude-browser-extension",
     );
   });
 
@@ -44,7 +44,7 @@ describe("Electron desktop setup detection", () => {
     const runner = createRunner({
       "git --version": success("git version 2.45.0"),
       "gh --version": success("gh version 2.49.0"),
-      "codex --version": success("codex 1.2.3"),
+      "claude --version": success("claude 2.1.0"),
     });
 
     const state = await collectSetupState(runner, "unix");
@@ -54,7 +54,7 @@ describe("Electron desktop setup detection", () => {
     expect(state.blockingRequirements).toEqual([]);
   });
 
-  test("recommends Codex and exposes every runtime guide when none is installed", async () => {
+  test("recommends Claude Code and exposes its guide when none is installed", async () => {
     const runner = createRunner({
       "git --version": success("git version 2.45.0"),
       "gh --version": success("gh version 2.49.0"),
@@ -65,17 +65,15 @@ describe("Electron desktop setup detection", () => {
 
     expect(state.ready).toBe(false);
     expect(state.blockingRequirements).toEqual(["runtime"]);
-    expect(state.runtimes[0]).toMatchObject({ id: "codex", recommended: true });
-    expect(state.runtimes[3]?.id).toBe("pi");
+    expect(state.runtimes).toEqual([
+      expect.objectContaining({ id: "claude", recommended: true, status: "missing" }),
+    ]);
     expect(state.requirements[2]?.actions?.map((action) => action.id)).toEqual([
-      "install-runtime-codex",
       "install-runtime-claude",
-      "install-runtime-opencode",
-      "install-runtime-pi",
     ]);
     expect(state.requirements[2]?.actions?.[0]).toMatchObject({
       requiresConsent: false,
-      commandPreview: expect.stringContaining("codex/cli"),
+      commandPreview: expect.stringContaining("code.claude.com"),
     });
   });
 });

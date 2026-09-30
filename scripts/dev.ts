@@ -178,10 +178,6 @@ const startLocalServer = (): ProcessHandle => {
   log.info("Starting AOP local server...");
   const proc = Bun.spawn(["bun", "run", "--watch", "./src/run.ts"], {
     cwd: "./apps/local-server",
-    env: {
-      ...process.env,
-      AOP_TEST_MODE: process.env.AOP_TEST_MODE ?? "true",
-    },
     stdout: "inherit",
     stderr: "inherit",
   });

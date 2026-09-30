@@ -19,11 +19,11 @@ import {
   type WorkflowRuntimeReasoning,
 } from "./workflow-runtime.ts";
 
-export type ControlProvider = "claude-code" | "codex-cli";
+export type ControlProvider = "claude-code";
 export type ControlCapability = "browser" | "computer";
 
 export interface ControlCommand {
-  id: "CC_BROWSER_USE" | "CX_BROWSER_USE" | "CC_COMPUTER_USE" | "CX_COMPUTER_USE";
+  id: "CC_BROWSER_USE" | "CC_COMPUTER_USE";
   provider: ControlProvider;
   capability: ControlCapability;
 }
@@ -40,18 +40,13 @@ export interface ControlCommandSelection {
 
 export const CONTROL_COMMANDS: readonly ControlCommand[] = [
   { id: "CC_BROWSER_USE", provider: "claude-code", capability: "browser" },
-  { id: "CX_BROWSER_USE", provider: "codex-cli", capability: "browser" },
   { id: "CC_COMPUTER_USE", provider: "claude-code", capability: "computer" },
-  { id: "CX_COMPUTER_USE", provider: "codex-cli", capability: "computer" },
 ];
 
 /** Human-readable label for menus and typeahead (e.g. "Claude Browser"). */
-export const controlCommandLabel = (
-  command: Pick<ControlCommand, "provider" | "capability">,
-): string => {
-  const providerLabel = command.provider === "claude-code" ? "Claude" : "Codex";
+export const controlCommandLabel = (command: Pick<ControlCommand, "capability">): string => {
   const capabilityLabel = command.capability === "browser" ? "Browser" : "Computer";
-  return `${providerLabel} ${capabilityLabel}`;
+  return `Claude ${capabilityLabel}`;
 };
 
 export type ParseControlCommandResult =
@@ -66,9 +61,9 @@ export type ParseControlCommandResult =
     }
   | { error: string };
 
-// `$CX_BROWSER_USE` or `$CX_BROWSER_USE[model;reasoning]` or with fast and/or cfg:<id>
+// `$CC_BROWSER_USE` or `$CC_BROWSER_USE[model;reasoning]` or with fast and/or cfg:<id>
 const CONTROL_COMMAND_PATTERN =
-  /\$(CC_BROWSER_USE|CX_BROWSER_USE|CC_COMPUTER_USE|CX_COMPUTER_USE)\b(?:\[([^;\]]+);([^;\]]+)(?:;([^;\]]+))?(?:;([^;\]]+))?\])?/gi;
+  /\$(CC_BROWSER_USE|CC_COMPUTER_USE)\b(?:\[([^;\]]+);([^;\]]+)(?:;([^;\]]+))?(?:;([^;\]]+))?\])?/gi;
 
 const CONFIG_ID_PREFIX = "cfg:";
 
@@ -261,7 +256,7 @@ const parseControlPayload = (
     ...(extras.runtimeConfigurationId
       ? { runtimeConfigurationId: extras.runtimeConfigurationId }
       : {}),
-    ...(shouldKeepControlFast(provider, extras) ? { fastMode: true as const } : {}),
+    ...(extras.fastMode && extras.runtimeConfigurationId ? { fastMode: true as const } : {}),
   };
 };
 
@@ -283,15 +278,6 @@ const parseControlReasoning = (
   const reasoning = reasoningValue?.trim() ?? "";
   if (!WORKFLOW_THINKING_OPTIONS.some((option) => option.value === reasoning)) return undefined;
   return reasoning as WorkflowRuntimeReasoning;
-};
-
-const shouldKeepControlFast = (
-  provider: ControlProvider,
-  extras: { fastMode: boolean; runtimeConfigurationId?: string },
-): boolean => {
-  if (!extras.fastMode) return false;
-  // Keep Fast when a config is bound; catalog Fast only for codex without config.
-  return Boolean(extras.runtimeConfigurationId) || provider === "codex-cli";
 };
 
 const parseControlExtraSlots = (

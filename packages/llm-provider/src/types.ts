@@ -12,20 +12,10 @@ export {
 export type RunIsolation = "hermetic" | "open";
 export type RunAccessMode = "approval-required" | "auto-accept-edits" | "auto" | "full-access";
 
-export interface RunToolProgress {
-  id: string;
-  phase: "start" | "update" | "done";
-  name?: string;
-  detail?: string;
-  failed?: boolean;
-}
-
 export interface RunOptions {
   prompt: string;
   cwd?: string;
   resumeSessionId?: string;
-  /** Provider-native ID assigned before starting a fresh session. */
-  newSessionId?: string;
   model?: string;
   reasoningEffort?: string;
   /** Optional executable alias for CLI providers, e.g. cdx instead of codex. */
@@ -50,8 +40,6 @@ export interface RunOptions {
   onSpawn?: (pid: number) => void | Promise<void>;
   /** Called when the provider discovers the runtime session id. */
   onSession?: (sessionId: string) => void | Promise<void>;
-  /** Provider-native tool lifecycle and output updates unavailable on primary stdout. */
-  onToolProgress?: (event: RunToolProgress) => void;
   /** Environment variables to merge with process.env when spawning */
   env?: Record<string, string>;
   /** Path to a file where stdout should be redirected instead of piped */
@@ -84,8 +72,6 @@ export interface RunResult {
   exitCode: number;
   pid?: number;
   sessionId?: string;
-  /** Grok persisted a completed turn even though its headless process required cleanup. */
-  completedFromSessionEvent?: boolean;
   /** True if the process was killed due to inactivity timeout */
   timedOut?: boolean;
   /** True if the process was killed because no non-empty log output arrived before startupTimeoutMs */

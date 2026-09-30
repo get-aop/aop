@@ -9,7 +9,7 @@ describe("Electron host platform support", () => {
         path: "/usr/bin:/bin",
       }),
     ).toBe(
-      "/home/u/.local/bin:/home/u/.opencode/bin:/home/u/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+      "/home/u/.local/bin:/home/u/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
     );
   });
 

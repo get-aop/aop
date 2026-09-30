@@ -5,9 +5,6 @@ const GUIDE_URLS = {
   "install-git": "https://git-scm.com/install/mac",
   "install-github-cli": "https://cli.github.com/",
   "install-runtime-claude": "https://code.claude.com/docs/en/quickstart#step-1-install-claude-code",
-  "install-runtime-codex": "https://learn.chatgpt.com/docs/codex/cli?surface=cli#getting-started",
-  "install-runtime-opencode": "https://opencode.ai/docs/",
-  "install-runtime-pi": "https://pi.dev/docs/latest/quickstart",
 } as const;
 
 export interface InstallerTooling {
@@ -70,24 +67,6 @@ const unixAutomationPlan = (actionId: string): SetupActionPlan => {
       "Installs the pinned Chromium runtime used by AOP browser automation.",
     );
   }
-  if (actionId === "install-codex-browser-plugins") {
-    return commandPlan(
-      actionId,
-      "Install Codex browser extensions",
-      shellCommand(
-        "codex plugin add browser@openai-bundled && codex plugin add chrome@openai-bundled",
-      ),
-      "Installs Codex's Browser and signed-in Chrome plugins.",
-    );
-  }
-  if (actionId === "install-codex-computer-plugin") {
-    return commandPlan(
-      actionId,
-      "Install Codex computer control",
-      command("codex", ["plugin", "add", "computer-use@openai-bundled"]),
-      "Installs Codex's macOS Computer Use plugin.",
-    );
-  }
   if (actionId === "install-claude-browser-extension") {
     return commandPlan(
       actionId,
@@ -107,20 +86,6 @@ const windowsAutomationPlan = (actionId: string): SetupActionPlan => {
       actionId,
       "Install browser automation in WSL",
       "Open the selected WSL distro and run `bunx -y playwright@1.62.1 install chromium`.",
-    );
-  }
-  if (actionId === "install-codex-browser-plugins") {
-    return manualPlan(
-      actionId,
-      "Install Codex browser plugin in WSL",
-      "Open the selected WSL distro and run `codex plugin add browser@openai-bundled`. Host Chrome forwarding is unavailable through WSL.",
-    );
-  }
-  if (actionId === "install-codex-computer-plugin") {
-    return manualPlan(
-      actionId,
-      "Codex computer control unavailable",
-      "Codex CLI computer control is macOS-only. AOP cannot forward Windows desktop control through WSL.",
     );
   }
   if (actionId === "install-claude-browser-extension") {
@@ -186,10 +151,7 @@ const actionTitle = (actionId: string): string => {
   const titles: Record<string, string> = {
     "install-git": "Install Git",
     "install-github-cli": "Install GitHub CLI",
-    "install-runtime-codex": "Install Codex",
     "install-runtime-claude": "Install Claude Code",
-    "install-runtime-opencode": "Install OpenCode",
-    "install-runtime-pi": "Install Pi",
   };
   return titles[actionId] ?? actionId;
 };

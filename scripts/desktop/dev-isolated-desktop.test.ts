@@ -19,7 +19,6 @@ describe("buildIsolatedDesktopDevPlan", () => {
     expect(plan.env.AOP_DESKTOP_DASHBOARD_PORT).toBe("25370");
     expect(plan.env.AOP_DESKTOP_DASHBOARD_DEV).toBe("1");
     expect(plan.env.AOP_LOCAL_SERVER_URL).toBe("http://127.0.0.1:25360");
-    expect(plan.env.AOP_TEST_MODE).toBe("false");
   });
 
   test("allows explicit ports for local debugging", () => {

@@ -3,7 +3,6 @@ export {
   extractAssistantSignalTextFromRawJsonl,
   extractFinalAssistantTextFromEntries,
   extractFinalAssistantTextFromRawJsonl,
-  extractLastGrokTextRunFromRawJsonl,
   extractPlanMarkdownFromEntries,
   extractPlanMarkdownFromRawJsonl,
   inferRunOutcomeFromEntries,
@@ -21,7 +20,6 @@ export { extractRuntimeSessionIdFromRawJsonl } from "./runtime-session";
 export {
   extractToolDescription,
   formatToolInput,
-  getOpenCodeToolContext,
   normalizeToolName,
   summarizeToolArguments,
 } from "./tools";

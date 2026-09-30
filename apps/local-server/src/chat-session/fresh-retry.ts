@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatMessage, ChatRun, ChatSession } from "../db/schema.ts";
@@ -10,8 +9,8 @@ import {
   type StoredChatDocument,
   type StoredChatImage,
 } from "./message-images.ts";
-import { createSessionRunLogPath, isGrokRuntime } from "./runtime-engine.ts";
-import { resolveChatRuntimeTimeoutPolicy } from "./runtime-timeout-policy.ts";
+import { createSessionRunLogPath } from "./runtime-engine.ts";
+import { CHAT_RUNTIME_TIMEOUT_POLICY } from "./runtime-timeout-policy.ts";
 import { nextChatTurnIndex } from "./turn-order.ts";
 import { resolveSessionWorkspaceBinding } from "./workspace-binding.ts";
 
@@ -179,8 +178,6 @@ const persistFreshRetry = async (
     workspacePath: string;
   },
 ): Promise<ChatRun | null> => {
-  const allocatedSessionId = isGrokRuntime(input.session.runtime) ? randomUUID() : null;
-  const timeoutPolicy = resolveChatRuntimeTimeoutPolicy(input.session.runtime);
   const logFilePath = await createSessionRunLogPath(input.session.id);
   const now = new Date().toISOString();
   try {
@@ -209,15 +206,15 @@ const persistFreshRetry = async (
           runtime: input.session.runtime,
           log_file_path: logFilePath,
           status: "running",
-          runtime_session_id: allocatedSessionId,
+          runtime_session_id: null,
           resume_session_id: null,
           failure_kind: null,
           interruption_kind: null,
           context_strategy: "aop_history",
           workspace_path: input.workspacePath,
-          timeout_policy: timeoutPolicy.policyName,
+          timeout_policy: CHAT_RUNTIME_TIMEOUT_POLICY.policyName,
           retry_of_run_id: input.originalRunId,
-          runtime_session_state: allocatedSessionId ? "allocated" : null,
+          runtime_session_state: null,
           error_message: null,
           created_at: now,
           updated_at: now,

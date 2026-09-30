@@ -53,7 +53,7 @@ const readyRunner = (extra: Record<string, CommandOutput> = {}): RecordingRunner
     "git --version": success("git version 2.45.0"),
     "gh --version": success("gh version 2.49.0"),
     "gh auth status -h github.com": success("Logged in"),
-    "codex --version": success("codex 1.2.3"),
+    "claude --version": success("claude 2.1.0"),
     ...extra,
   };
   return {

@@ -75,43 +75,11 @@ const scanEntriesForOutcomeSignals = (entries: ParsedRawLogEntry[]) => {
   };
 };
 
-const extractAssistantSignalText = (entries: ParsedRawLogEntry[]): string => {
-  const chunks: string[] = [];
-  let grokBuffer = "";
-
-  const flushGrokBuffer = () => {
-    if (grokBuffer.trim().length > 0) {
-      chunks.push(grokBuffer);
-    }
-    grokBuffer = "";
-  };
-
-  for (const entry of entries) {
-    if (isGrokTextChunk(entry)) {
-      grokBuffer += entry.event.data;
-      continue;
-    }
-
-    flushGrokBuffer();
-    const text = extractAssistantTextFromRawEvent(entry.event);
-    if (text.trim().length > 0) {
-      chunks.push(text);
-    }
-  }
-
-  flushGrokBuffer();
-  return chunks.join("\n");
-};
-
-const isGrokTextChunk = (
-  entry: ParsedRawLogEntry,
-): entry is ParsedRawLogEntry & { event: RawProviderEvent & { data: string } } => {
-  return (
-    entry.provider === "grok-build" &&
-    entry.event.type === "text" &&
-    typeof entry.event.data === "string"
-  );
-};
+const extractAssistantSignalText = (entries: ParsedRawLogEntry[]): string =>
+  entries
+    .map((entry) => extractAssistantTextFromRawEvent(entry.event))
+    .filter((text) => text.trim().length > 0)
+    .join("\n");
 
 export const inferRunOutcomeFromEntries = (
   input: ParsedRawJsonl | ParsedRawLogEntry[],
@@ -190,49 +158,6 @@ export const extractAssistantSignalTextFromRawJsonl = (
 };
 
 /**
- * Grok streams many small `{type:"text",data}` tokens. Status narration
- * ("I'll inspect…") and the deliverable answer are separate runs broken by
- * `thought` / tool events. Chat final replies should keep only the last run.
- */
-export const extractLastGrokTextRunFromRawJsonl = (
-  content: string,
-  options: AssistantTextOptions = {},
-): AssistantSignalText => {
-  const parsed = parseRawJsonlContent(content);
-  const trailingPartial = hasTrailingPartial(parsed);
-  const requireCompleteLine = options.requireCompleteLine ?? true;
-
-  if (requireCompleteLine && trailingPartial) {
-    return { text: "", isComplete: false, hasTrailingPartial: true };
-  }
-
-  const runs = extractGrokTextRuns(resolveEntries(parsed));
-  const text = runs.length > 0 ? (runs[runs.length - 1] ?? "") : "";
-  return { text, isComplete: true, hasTrailingPartial: trailingPartial };
-};
-
-const extractGrokTextRuns = (entries: ParsedRawLogEntry[]): string[] => {
-  const runs: string[] = [];
-  let buffer = "";
-
-  const flush = () => {
-    const trimmed = buffer.trim();
-    if (trimmed.length > 0) runs.push(trimmed);
-    buffer = "";
-  };
-
-  for (const entry of entries) {
-    if (isGrokTextChunk(entry)) {
-      buffer += entry.event.data;
-      continue;
-    }
-    flush();
-  }
-  flush();
-  return runs;
-};
-
-/**
  * Returns only the final assistant message instead of the whole transcript.
  *
  * Plan mode emits several assistant messages (early "thinking out loud"
@@ -240,7 +165,7 @@ const extractGrokTextRuns = (entries: ParsedRawLogEntry[]): string[] => {
  * the plan, so we walk the raw events in reverse and return the last complete
  * assistant message. Each raw event already carries a full message, and
  * `extractAssistantTextFromRawEvent` resolves it per provider (e.g. codex
- * `turn.completed.last-assistant-message`, opencode `text`, claude `result`),
+ * `turn.completed.last-assistant-message`, claude `result`),
  * so no provider-specific final-message signal is lost.
  */
 export const extractFinalAssistantTextFromEntries = (
@@ -298,9 +223,8 @@ const PLAN_FILE_PATH_PATTERN = /[/\\]plans[/\\][^/\\]+\.md$/;
  * Where the plan lands differs per provider. Claude Code's plan-mode protocol
  * delivers it as a tool artifact — the `ExitPlanMode` input and/or a `Write`
  * into the harness `plans/` directory — and ends the turn with a short
- * hand-off message, so the final assistant text is never the plan. opencode
- * (`--agent plan`) and codex answer in chat, so the final message normally is
- * the plan. We therefore prefer the largest tool artifact over the final
+ * hand-off message, so the final assistant text is never the plan. Codex
+ * answers in chat, so the final message normally is the plan. We therefore prefer the largest tool artifact over the final
  * message, and when both are implausibly short we salvage the longest
  * assistant message (e.g. a model that printed the plan mid-turn and closed
  * with "the document above is the deliverable").

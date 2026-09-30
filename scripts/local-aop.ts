@@ -121,7 +121,6 @@ export const buildLocalAopStartCommand = (input: StartCommandInput): string => {
     `AOP_LOCAL_SERVER_URL=${shellQuote(serverUrl)}`,
     `AOP_DASHBOARD_PORT=${input.dashboardPort}`,
     `AOP_DASHBOARD_URL=${shellQuote(dashboardUrl)}`,
-    `AOP_TEST_MODE=${shellQuote("false")}`,
     `PATH=${shellQuote(pathValue)}`,
   ].join(" ");
 

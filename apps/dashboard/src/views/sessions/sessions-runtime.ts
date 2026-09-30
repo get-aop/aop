@@ -23,34 +23,6 @@ export const RUNTIME_UI: Record<WorkflowRuntimeProvider, RuntimeUiMeta> = {
     glyph: "CL",
     color: "var(--color-favorite)",
   },
-  "codex-cli": {
-    key: "codex-cli",
-    label: WORKFLOW_RUNTIME_LABELS["codex-cli"],
-    cmd: "codex",
-    glyph: "CX",
-    color: "var(--color-running)",
-  },
-  "grok-build": {
-    key: "grok-build",
-    label: WORKFLOW_RUNTIME_LABELS["grok-build"],
-    cmd: "grok",
-    glyph: "GX",
-    color: "var(--color-queued)",
-  },
-  opencode: {
-    key: "opencode",
-    label: WORKFLOW_RUNTIME_LABELS.opencode,
-    cmd: "opencode",
-    glyph: "OC",
-    color: "var(--color-blocked)",
-  },
-  pi: {
-    key: "pi",
-    label: WORKFLOW_RUNTIME_LABELS.pi,
-    cmd: "pi",
-    glyph: "PI",
-    color: "var(--color-ok)",
-  },
 };
 
 export const RUNTIME_LIST = Object.values(RUNTIME_UI);
@@ -63,11 +35,10 @@ export const getEffectiveCmd = (runtime: string, alias: string | null | undefine
 
 export const getModelLabel = (model: string): string => formatWorkflowRuntimeModelLabel(model);
 
-export const getEffortLabel = (runtime: string, effort: string, model = ""): string =>
+export const getEffortLabel = (runtime: string, effort: string): string =>
   getWorkflowThinkingLabel(
     runtime as WorkflowRuntimeProvider,
     effort as Parameters<typeof getWorkflowThinkingLabel>[1],
-    model,
   );
 
 export const modelOptionsFor = (runtime: string): readonly string[] =>

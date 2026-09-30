@@ -145,46 +145,24 @@ describe("ChatComposer context chips and typeahead", () => {
         ],
       },
       {
-        id: "rtprov_codex",
-        name: "Codex",
-        command: "codex",
-        driver: "codex-cli",
-        builtIn: true,
-        position: 1,
-        supportsFastMode: true,
-        models: [
-          {
-            id: "rtmodel_gpt",
-            providerId: "rtprov_codex",
-            description: "GPT-5.5",
-            model: "gpt-5.5",
-            thinkingLevels: ["low", "medium", "high"],
-            builtIn: true,
-            position: 0,
-            isDefault: true,
-            defaultThinkingLevel: "medium",
-          },
-        ],
-      },
-      {
-        id: "rtprov_custom",
-        name: "Custom E2E",
-        command: "custom-e2e",
-        driver: "custom",
+        id: "rtprov_claude_personal",
+        name: "Claude Personal",
+        command: "claude-personal",
+        driver: "claude-code",
         builtIn: false,
-        position: 2,
+        position: 1,
         supportsFastMode: false,
         models: [
           {
-            id: "rtmodel_custom",
-            providerId: "rtprov_custom",
-            description: "Custom model",
-            model: "custom-model",
-            thinkingLevels: [],
+            id: "rtmodel_sonnet",
+            providerId: "rtprov_claude_personal",
+            description: "Sonnet 4.6",
+            model: "claude-sonnet-4-6",
+            thinkingLevels: ["low", "medium", "high"],
             builtIn: false,
             position: 0,
             isDefault: true,
-            defaultThinkingLevel: null,
+            defaultThinkingLevel: "medium",
           },
         ],
       },
@@ -222,11 +200,11 @@ describe("ChatComposer context chips and typeahead", () => {
         .getByRole("button", { name: "Claude Code" })
         .querySelector('[data-provider-icon="claude-code"]'),
     ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Custom E2E" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Claude Personal" })).toBeTruthy();
     const searchInput = screen.getByPlaceholderText("Search models...");
-    fireEvent.change(searchInput, { target: { value: "GPT-5.5" } });
+    fireEvent.change(searchInput, { target: { value: "Sonnet" } });
     expect(screen.queryByTestId("model-picker-sidebar")).toBeNull();
-    expect(screen.getByRole("option", { name: /GPT-5.5/ })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /Sonnet 4.6/ })).toBeTruthy();
     fireEvent.change(searchInput, { target: { value: "" } });
     expect(screen.getByTestId("model-picker-sidebar")).toBeTruthy();
     const modelOption = screen.getByRole("option", { name: /Opus 4.8/ });
@@ -283,54 +261,12 @@ describe("ChatComposer context chips and typeahead", () => {
     expect(onEffortChange).toHaveBeenCalledWith("high");
   });
 
-  test("shows access controls for every built-in runtime driver", () => {
-    const drivers = ["claude-code", "codex-cli", "grok-build", "opencode", "pi"] as const;
-
-    for (const [position, driver] of drivers.entries()) {
-      const id = `rtprov_${driver}`;
-      const runtime: RuntimeConfigurationProvider = {
-        id,
-        name: driver,
-        command: driver,
-        driver,
-        builtIn: true,
-        position,
-        supportsFastMode: false,
-        models: [
-          {
-            id: `rtmodel_${driver}`,
-            providerId: id,
-            description: `${driver} model`,
-            model: `${driver}-model`,
-            thinkingLevels: ["medium"],
-            builtIn: true,
-            position: 0,
-            isDefault: true,
-            defaultThinkingLevel: "medium",
-          },
-        ],
-      };
-
-      render(
-        <ChatComposer
-          {...baseProps}
-          runtime={driver}
-          model={`${driver}-model`}
-          sessionRuntimeConfigurationId={id}
-          runtimeConfigurations={[runtime]}
-        />,
-      );
-      expect(screen.getByLabelText("Runtime mode")).toBeTruthy();
-      cleanup();
-    }
-  });
-
-  test("hides access controls for a custom runtime", () => {
+  test("shows access controls for a custom Claude Code command", () => {
     const customRuntime: RuntimeConfigurationProvider = {
       id: "rtprov_custom",
       name: "My custom runtime",
       command: "my-runtime",
-      driver: "custom",
+      driver: "claude-code",
       builtIn: false,
       position: 0,
       supportsFastMode: false,
@@ -352,7 +288,6 @@ describe("ChatComposer context chips and typeahead", () => {
     render(
       <ChatComposer
         {...baseProps}
-        runtime="custom"
         model="custom-model"
         runtimeConfigurationName="My custom runtime"
         sessionRuntimeConfigurationId={customRuntime.id}
@@ -360,8 +295,7 @@ describe("ChatComposer context chips and typeahead", () => {
       />,
     );
 
-    expect(screen.queryByLabelText("Runtime mode")).toBeNull();
-    expect(screen.queryByText("Full access")).toBeNull();
+    expect(screen.getByLabelText("Runtime mode")).toBeTruthy();
   });
 
   test("uses the scira rounded composer surface, ghost controls, and circular send action", () => {

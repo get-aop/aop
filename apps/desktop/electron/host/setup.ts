@@ -143,12 +143,7 @@ const detectGithubCli = async (
 };
 
 const detectRuntimes = async (runner: CommandRunner): Promise<RuntimeRequirement[]> =>
-  Promise.all([
-    detectRuntime(runner, "codex", "codex", "Codex", true),
-    detectRuntime(runner, "claude", "claude", "Claude Code", false),
-    detectRuntime(runner, "opencode", "opencode", "OpenCode", false),
-    detectRuntime(runner, "pi", "pi", "Pi", false),
-  ]);
+  Promise.all([detectRuntime(runner, "claude", "claude", "Claude Code", true)]);
 
 const detectRuntime = async (
   runner: CommandRunner,
@@ -187,7 +182,7 @@ const buildRuntimeRequirement = (
     id: "runtime",
     status: "missing",
     label: "Agent runtime",
-    message: "Install and sign in to Codex, Claude Code, OpenCode, or Pi.",
+    message: "Install and sign in to Claude Code.",
     actions: runtimes.map((runtime) => runtimeInstallAction(runtime.id, platform, tooling)),
   };
 };
@@ -197,11 +192,9 @@ const buildAutomationActions = (
   platform: HostPlatform,
   tooling: InstallerTooling,
 ): SetupAction[] => {
-  const hasCodex = runtimeReady(runtimes, "codex");
-  const hasClaude = runtimeReady(runtimes, "claude");
-  if (!hasCodex && !hasClaude) return [];
+  if (!runtimeReady(runtimes, "claude")) return [];
 
-  const actions = [
+  return [
     buildSetupAction(
       "install-browser-runtime",
       "Install browser automation",
@@ -209,44 +202,15 @@ const buildAutomationActions = (
       platform,
       tooling,
     ),
+    buildSetupAction(
+      "install-claude-browser-extension",
+      "Open Claude browser extension",
+      "runtime",
+      platform,
+      tooling,
+      "claude",
+    ),
   ];
-  if (hasCodex) {
-    actions.push(
-      buildSetupAction(
-        "install-codex-browser-plugins",
-        "Install Codex browser extensions",
-        "runtime",
-        platform,
-        tooling,
-        "codex",
-      ),
-    );
-    if (platform === "unix") {
-      actions.push(
-        buildSetupAction(
-          "install-codex-computer-plugin",
-          "Install Codex computer control",
-          "runtime",
-          platform,
-          tooling,
-          "codex",
-        ),
-      );
-    }
-  }
-  if (hasClaude) {
-    actions.push(
-      buildSetupAction(
-        "install-claude-browser-extension",
-        "Open Claude browser extension",
-        "runtime",
-        platform,
-        tooling,
-        "claude",
-      ),
-    );
-  }
-  return actions;
 };
 
 const runtimeInstallAction = (
@@ -255,10 +219,7 @@ const runtimeInstallAction = (
   tooling: InstallerTooling,
 ): SetupAction => {
   const actions: Record<RuntimeId, [string, string]> = {
-    codex: ["install-runtime-codex", "Install Codex"],
     claude: ["install-runtime-claude", "Install Claude Code"],
-    opencode: ["install-runtime-opencode", "Install OpenCode"],
-    pi: ["install-runtime-pi", "Install Pi"],
   };
   const [id, label] = actions[runtimeId];
   return buildSetupAction(id, label, "runtime", platform, tooling, runtimeId);
@@ -291,13 +252,8 @@ const actionDescription = (id: string, platform: HostPlatform): string | undefin
     "install-git": "Opens the official Git installation guide.",
     "install-github-cli": "Opens the official GitHub CLI page.",
     "auth-github-cli": "Starts GitHub CLI authentication for github.com.",
-    "install-runtime-codex": "Opens the official Codex CLI getting-started guide.",
     "install-runtime-claude": "Opens the official Claude Code quickstart.",
-    "install-runtime-opencode": "Opens the official OpenCode documentation.",
-    "install-runtime-pi": "Opens the official Pi quickstart.",
     "install-browser-runtime": `Installs Chromium for AOP's Playwright fallback${platform === "windows" ? " inside WSL" : ""}.`,
-    "install-codex-browser-plugins": "Installs Codex browser plugins.",
-    "install-codex-computer-plugin": "Installs Codex's bundled macOS Computer Use plugin.",
     "install-claude-browser-extension": "Opens Anthropic's official Claude extension.",
   };
   return descriptions[id];
@@ -310,14 +266,7 @@ const command = (program: string, args: string[]): CommandSpec => ({
 });
 
 const isGuideAction = (id: string): boolean =>
-  [
-    "install-git",
-    "install-github-cli",
-    "install-runtime-codex",
-    "install-runtime-claude",
-    "install-runtime-opencode",
-    "install-runtime-pi",
-  ].includes(id);
+  ["install-git", "install-github-cli", "install-runtime-claude"].includes(id);
 
 const runtimeReady = (runtimes: RuntimeRequirement[], id: RuntimeId): boolean =>
   runtimes.some((runtime) => runtime.id === id && runtime.status === "ready");

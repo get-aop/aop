@@ -1,10 +1,6 @@
 import { stat } from "node:fs/promises";
 import { getLogger } from "@aop/infra";
-import {
-  extractRuntimeSessionIdFromRawJsonl,
-  parseRawJsonlContent,
-  startGrokJournalTail,
-} from "@aop/llm-provider";
+import { extractRuntimeSessionIdFromRawJsonl, parseRawJsonlContent } from "@aop/llm-provider";
 import type { ChatRun, ChatRunFailureKind, ChatRuntimeSessionState } from "../db/schema.ts";
 import { isProviderFailureEvent, isProviderSuccessEvent } from "./provider-event-classifier.ts";
 import {
@@ -14,14 +10,9 @@ import {
 } from "./runtime-engine.ts";
 import {
   buildChatRuntimeTimeoutFacts,
-  resolveChatRuntimeTimeoutPolicy,
+  CHAT_RUNTIME_TIMEOUT_POLICY,
 } from "./runtime-timeout-policy.ts";
-import {
-  createStreamProgressAccumulator,
-  type StreamProgressListener,
-  type StreamProgressSnapshot,
-  startLogProgressTail,
-} from "./stream-progress.ts";
+import { type StreamProgressListener, startLogProgressTail } from "./stream-progress.ts";
 
 export type ChatRunTerminalState = "running" | "succeeded" | "failed";
 const recoveryLogger = getLogger("aop", "chat-runtime-recovery");
@@ -57,34 +48,18 @@ export const waitForChatRunTerminal = async (input: {
   pollIntervalMs?: number;
   startupTimeoutMs?: number;
   getNow?: () => number;
-  grokHome?: string;
   signal?: AbortSignal;
 }): Promise<RecoveredChatRun> => {
-  let logProgress = emptyProgress();
-  let nativeProgress = emptyProgress();
-  let lastNativeActivityAt = 0;
-  const emitProgress = () => input.onProgress?.(mergeProgress(logProgress, nativeProgress));
   const stopTail = input.onProgress
     ? startLogProgressTail({
         logFilePath: input.run.log_file_path,
-        onProgress: (progress) => {
-          logProgress = progress;
-          emitProgress();
-        },
+        onProgress: input.onProgress,
       })
     : undefined;
-  const nativeTail = startRecoveredGrokJournalTail(input, (progress) => {
-    nativeProgress = progress;
-    lastNativeActivityAt = Date.now();
-    emitProgress();
-  });
   try {
-    return await pollUntilChatRunTerminal({
-      ...input,
-      getLastNativeActivityAt: () => lastNativeActivityAt,
-    });
+    return await pollUntilChatRunTerminal(input);
   } finally {
-    await Promise.all([stopTail?.(), nativeTail?.stop()]);
+    await stopTail?.();
   }
 };
 
@@ -94,12 +69,10 @@ const pollUntilChatRunTerminal = async (input: {
   pollIntervalMs?: number;
   startupTimeoutMs?: number;
   getNow?: () => number;
-  getLastNativeActivityAt?: () => number;
   signal?: AbortSignal;
 }): Promise<RecoveredChatRun> => {
   const pollIntervalMs = input.pollIntervalMs ?? 250;
-  const policy = resolveChatRuntimeTimeoutPolicy(input.run.runtime);
-  const startupTimeoutMs = input.startupTimeoutMs ?? policy.startupTimeoutMs;
+  const startupTimeoutMs = input.startupTimeoutMs ?? CHAT_RUNTIME_TIMEOUT_POLICY.startupTimeoutMs;
   const getNow = input.getNow ?? Date.now;
   const runStartedAt = parseActivityTime(input.run.created_at);
   let lastActivityAt = parseActivityTime(input.run.updated_at);
@@ -120,7 +93,6 @@ const pollUntilChatRunTerminal = async (input: {
       runStartedAt,
       startupTimeoutMs,
       getNow,
-      getLastNativeActivityAt: input.getLastNativeActivityAt,
     });
     lastLogSignature = poll.lastLogSignature;
     content = poll.content;
@@ -157,7 +129,6 @@ const pollRecoveryOnce = async (input: {
   runStartedAt: number;
   startupTimeoutMs: number;
   getNow: () => number;
-  getLastNativeActivityAt?: () => number;
 }): Promise<{
   lastLogSignature: string;
   content: string;
@@ -182,12 +153,8 @@ const pollRecoveryOnce = async (input: {
     }
   }
 
-  const sawOutput = input.sawOutput || hasRecoveredOutput(input, content);
-  const lastActivityAt = Math.max(
-    input.lastActivityAt,
-    snapshot?.modifiedAt ?? 0,
-    input.getLastNativeActivityAt?.() ?? 0,
-  );
+  const sawOutput = input.sawOutput || content.trim().length > 0;
+  const lastActivityAt = Math.max(input.lastActivityAt, snapshot?.modifiedAt ?? 0);
   return {
     lastLogSignature,
     content,
@@ -217,65 +184,6 @@ const readChangedRecoveryLog = async (
   if (content === null) return null;
   return { content, modifiedAt: fileStat.mtimeMs, signature };
 };
-
-const hasRecoveredOutput = (
-  input: { getLastNativeActivityAt?: () => number },
-  content: string,
-): boolean => content.trim().length > 0 || (input.getLastNativeActivityAt?.() ?? 0) > 0;
-
-const startRecoveredGrokJournalTail = (
-  input: {
-    run: ChatRun;
-    onProgress?: StreamProgressListener;
-    grokHome?: string;
-  },
-  onProgress: (progress: StreamProgressSnapshot) => void,
-) => {
-  const sessionId = input.run.runtime_session_id ?? input.run.resume_session_id;
-  if (
-    input.run.runtime !== "grok-build" ||
-    !input.onProgress ||
-    !input.run.workspace_path ||
-    !sessionId
-  ) {
-    return undefined;
-  }
-  const accumulator = createStreamProgressAccumulator();
-  const toolNames = new Map<string, string>();
-  return startGrokJournalTail({
-    cwd: input.run.workspace_path,
-    sessionId,
-    home: input.grokHome,
-    onToolProgress: (event) => {
-      if (event.name) toolNames.set(event.id, event.name);
-      onProgress(
-        accumulator.apply({
-          kind: "command",
-          phase: event.phase,
-          command: event.name ?? toolNames.get(event.id) ?? "Tool",
-          itemId: `native_${event.id}`,
-          detail: event.detail,
-          exitCode: event.phase === "done" ? (event.failed ? 1 : 0) : undefined,
-        }),
-      );
-    },
-  });
-};
-
-const emptyProgress = (): StreamProgressSnapshot => ({
-  thinking: "",
-  content: "",
-  commandGroups: [],
-});
-
-const mergeProgress = (
-  logProgress: StreamProgressSnapshot,
-  nativeProgress: StreamProgressSnapshot,
-): StreamProgressSnapshot => ({
-  thinking: logProgress.thinking,
-  content: logProgress.content,
-  commandGroups: [...logProgress.commandGroups, ...nativeProgress.commandGroups],
-});
 
 const recoveryTimeoutResult = (input: {
   run: ChatRun;
@@ -321,7 +229,7 @@ const logRecoveryTimeout = (
 const terminalResult = async (run: ChatRun, content: string): Promise<RecoveredChatRun | null> => {
   const terminal = detectChatRunTerminalState(run.runtime, content);
   const runtimeSessionId = resolveRecoveredSessionId(run, content);
-  const runtimeSessionState = resolveRecoveredSessionState(run, content, runtimeSessionId);
+  const runtimeSessionState = run.runtime_session_state;
   if (terminal === "failed") {
     return {
       status: "failed",
@@ -333,7 +241,7 @@ const terminalResult = async (run: ChatRun, content: string): Promise<RecoveredC
   }
   if (terminal !== "succeeded") return null;
 
-  const text = await readAssistantTextFromLog(run.runtime, run.log_file_path);
+  const text = await readAssistantTextFromLog(run.log_file_path);
   if (!text.trim()) {
     return {
       status: "failed",
@@ -363,12 +271,11 @@ const processExitedResult = (run: ChatRun, content: string): RecoveredChatRun =>
     runId: run.id,
     pid: run.pid,
   });
-  const runtimeSessionId = resolveRecoveredSessionId(run, content);
   return {
     status: "failed",
     text: "The runtime process exited without a final response. Try again, or reset the runtime session.",
-    runtimeSessionId,
-    runtimeSessionState: resolveRecoveredSessionState(run, content, runtimeSessionId),
+    runtimeSessionId: resolveRecoveredSessionId(run, content),
+    runtimeSessionState: run.runtime_session_state,
     failureKind: null,
   };
 };
@@ -377,11 +284,7 @@ const startupTimeoutResult = (run: ChatRun, content: string): RecoveredChatRun =
   status: "failed",
   text: "The runtime produced no output before the startup deadline. Try again, or reset the runtime session.",
   runtimeSessionId: resolveRecoveredSessionId(run, content),
-  runtimeSessionState: resolveRecoveredSessionState(
-    run,
-    content,
-    resolveRecoveredSessionId(run, content),
-  ),
+  runtimeSessionState: run.runtime_session_state,
   failureKind: "startup_timeout",
 });
 
@@ -393,18 +296,4 @@ const resolveRecoveredSessionId = (run: ChatRun, content: string): string | null
     );
   }
   return logSessionId ?? run.runtime_session_id ?? run.resume_session_id;
-};
-
-const resolveRecoveredSessionState = (
-  run: ChatRun,
-  content: string,
-  runtimeSessionId: string | null,
-): ChatRuntimeSessionState | null => {
-  if (!runtimeSessionId || run.runtime_session_state !== "allocated") {
-    return run.runtime_session_state;
-  }
-  const hasValidActivity = parseRawJsonlContent(content).entries.some(
-    ({ event }) => !isProviderFailureEvent(run.runtime, event),
-  );
-  return hasValidActivity ? "confirmed" : "allocated";
 };

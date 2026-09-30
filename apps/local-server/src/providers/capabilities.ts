@@ -15,7 +15,7 @@ export type ProviderCapabilitySupport = "yes" | "no" | "partial";
 type ProviderCapabilityId = ProviderUpdateId;
 
 /** CLI ids probed when testing a remote execution host. */
-export type ProbedProviderCliId = "claude-code" | "codex-cli" | "opencode";
+export type ProbedProviderCliId = ProviderCapabilityId;
 
 export interface ProviderCapabilityEntry {
   id: ProviderCapabilityId;
@@ -57,12 +57,8 @@ export interface ProviderCliProbe {
   authenticated: boolean;
 }
 
-const CLI_COMMANDS: Partial<Record<ProviderCapabilityId, string>> = {
+const CLI_COMMANDS: Record<ProviderCapabilityId, string> = {
   "claude-code": "claude",
-  "codex-cli": "codex",
-  "grok-build": "grok",
-  opencode: "opencode",
-  pi: "pi",
 };
 
 const VERSION_TIMEOUT_MS = 1_500;
@@ -93,59 +89,6 @@ const STATIC_PROVIDER_CAPABILITIES: Array<
       liveFollowUp: "yes",
     },
   },
-  {
-    id: "codex-cli",
-    label: "Codex CLI",
-    roleFit: "Good command-line executor for bounded implementation and verification loops.",
-    capabilities: {
-      structuredJsonl: "yes",
-      resumeSupport: "partial",
-      usageReporting: "partial",
-      nativePlanMode: "no",
-      permissionSandboxFlags: "yes",
-      liveFollowUp: "partial",
-    },
-  },
-  {
-    id: "grok-build",
-    label: "Grok",
-    roleFit: "Useful for Grok-backed implementation and review work with local xAI auth.",
-    capabilities: {
-      structuredJsonl: "yes",
-      resumeSupport: "yes",
-      usageReporting: "partial",
-      nativePlanMode: "no",
-      permissionSandboxFlags: "partial",
-      liveFollowUp: "yes",
-    },
-  },
-  {
-    id: "opencode",
-    label: "OpenCode",
-    roleFit:
-      "Best current fit for AOP loop execution with logs, resume, plan mode, and safety flags.",
-    capabilities: {
-      structuredJsonl: "yes",
-      resumeSupport: "yes",
-      usageReporting: "partial",
-      nativePlanMode: "yes",
-      permissionSandboxFlags: "yes",
-      liveFollowUp: "yes",
-    },
-  },
-  {
-    id: "pi",
-    label: "Pi",
-    roleFit: "Remote worker/profile integration; useful where the runtime owns execution details.",
-    capabilities: {
-      structuredJsonl: "partial",
-      resumeSupport: "no",
-      usageReporting: "partial",
-      nativePlanMode: "no",
-      permissionSandboxFlags: "no",
-      liveFollowUp: "partial",
-    },
-  },
 ];
 
 const withReadinessProbe = async (
@@ -154,15 +97,6 @@ const withReadinessProbe = async (
   updateState: ProviderUpdateState,
 ): Promise<ProviderCapabilityEntry> => {
   const command = CLI_COMMANDS[entry.id];
-  if (!command) {
-    return {
-      ...entry,
-      version: null,
-      updateState,
-      readinessProbe: emptyReadinessProbe(),
-    };
-  }
-
   const cliInstalled = await doctor.commandExists(command);
   const version = cliInstalled ? await doctor.readVersion(command) : null;
   const versionDetected = Boolean(version);
@@ -187,17 +121,6 @@ const withReadinessProbe = async (
   };
 };
 
-const emptyReadinessProbe = (): ProviderCapabilityEntry["readinessProbe"] => ({
-  cliInstalled: false,
-  authenticated: false,
-  versionDetected: false,
-  canSpawn: false,
-  canResume: false,
-  canWriteLogs: false,
-  canReportUsage: false,
-  supportsConfiguredSafetyFlags: false,
-});
-
 const isSupported = (support: ProviderCapabilitySupport): boolean => support !== "no";
 
 export const createDefaultProviderDoctor = (): ProviderDoctor =>
@@ -215,7 +138,7 @@ export const createProviderDoctorForHost = (host: ExecHost): ProviderDoctor => {
 
     hasAuth: async (providerId) =>
       remote
-        ? remoteAuthExists(host, getAuthPathSuffixes(providerId))
+        ? remoteAuthExists(host, AUTH_PATH_SUFFIXES[providerId])
         : getLocalAuthPaths(providerId).some((path) => existsSync(path)),
 
     canWriteLog: async (providerId) => {
@@ -237,13 +160,10 @@ export const createProviderDoctorForHost = (host: ExecHost): ProviderDoctor => {
 
 /** Compact CLI probe used by execution-host Test connection. */
 export const probeProviderClis = async (doctor: ProviderDoctor): Promise<ProviderCliProbe[]> => {
-  const ids: ProbedProviderCliId[] = ["claude-code", "codex-cli", "opencode"];
+  const ids = Object.keys(CLI_COMMANDS) as ProbedProviderCliId[];
   return Promise.all(
     ids.map(async (id) => {
       const command = CLI_COMMANDS[id];
-      if (!command) {
-        return { id, installed: false, version: null, authenticated: false };
-      }
       const installed = await doctor.commandExists(command);
       const version = installed ? await doctor.readVersion(command) : null;
       const authenticated = installed && Boolean(await doctor.hasAuth(id));
@@ -290,24 +210,9 @@ const remoteAuthExists = async (host: ExecHost, suffixes: string[]): Promise<boo
 };
 
 /** Home-relative auth locations; local probes join homedir(), remote probes use "$HOME". */
-const getAuthPathSuffixes = (providerId: ProviderCapabilityId): string[] => {
-  if (providerId === "claude-code") {
-    return [".claude.json", ".claude", ".config/claude"];
-  }
-  if (providerId === "codex-cli") {
-    return [".codex/auth.json"];
-  }
-  if (providerId === "opencode") {
-    return [".local/share/opencode/auth.json", ".config/opencode/opencode.json"];
-  }
-  return [];
+const AUTH_PATH_SUFFIXES: Record<ProviderCapabilityId, string[]> = {
+  "claude-code": [".claude.json", ".claude", ".config/claude"],
 };
 
-const getLocalAuthPaths = (providerId: ProviderCapabilityId): string[] => {
-  const home = homedir();
-  const paths = getAuthPathSuffixes(providerId).map((suffix) => join(home, suffix));
-  if (providerId === "codex-cli" && process.env.CODEX_HOME) {
-    paths.unshift(join(process.env.CODEX_HOME, "auth.json"));
-  }
-  return paths;
-};
+const getLocalAuthPaths = (providerId: ProviderCapabilityId): string[] =>
+  AUTH_PATH_SUFFIXES[providerId].map((suffix) => join(homedir(), suffix));

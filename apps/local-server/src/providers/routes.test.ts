@@ -32,7 +32,6 @@ describe("provider routes", () => {
 
   test("returns updater state without re-running provider doctor probes", async () => {
     let capabilityLoads = 0;
-    const idle = { status: "idle", startedAt: null, finishedAt: null, message: null } as const;
     const states = {
       "claude-code": {
         status: "running",
@@ -40,10 +39,6 @@ describe("provider routes", () => {
         finishedAt: null,
         message: null,
       },
-      "codex-cli": idle,
-      "grok-build": idle,
-      opencode: idle,
-      pi: idle,
     } satisfies ReturnType<ProviderUpdateService["getStates"]>;
     const app = new Hono().route(
       "/api",

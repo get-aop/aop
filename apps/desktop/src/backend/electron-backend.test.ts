@@ -11,8 +11,8 @@ describe("createElectronBackend", () => {
     const backend = createElectronBackend(bridge);
 
     await expect(backend.getSetupState()).resolves.toEqual(setup);
-    await expect(backend.runSetupAction("install-runtime-codex")).resolves.toEqual(setup);
-    await backend.openSetupGuide("install-runtime-codex");
+    await expect(backend.runSetupAction("install-runtime-claude")).resolves.toEqual(setup);
+    await backend.openSetupGuide("install-runtime-claude");
     await expect(backend.startAopSidecar()).resolves.toEqual(sidecar);
     await expect(backend.getSidecarState()).resolves.toEqual(sidecar);
     await backend.openLogsFolder();
@@ -21,8 +21,8 @@ describe("createElectronBackend", () => {
     await expect(backend.getExecHost()).resolves.toBe("native");
     await backend.setExecHost("wsl:Ubuntu");
 
-    expect(bridge.runSetupAction).toHaveBeenCalledWith("install-runtime-codex");
-    expect(bridge.openSetupGuide).toHaveBeenCalledWith("install-runtime-codex");
+    expect(bridge.runSetupAction).toHaveBeenCalledWith("install-runtime-claude");
+    expect(bridge.openSetupGuide).toHaveBeenCalledWith("install-runtime-claude");
     expect(bridge.setExecHost).toHaveBeenCalledWith("wsl:Ubuntu");
   });
 });

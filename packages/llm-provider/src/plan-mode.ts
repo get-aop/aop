@@ -10,7 +10,7 @@ export class UnsupportedPlanModeError extends Error {
   }
 }
 
-const PLAN_MODE_PROVIDERS = new Set(["claude-code", "codex-cli", "grok-build", "opencode"]);
+const PLAN_MODE_PROVIDERS = new Set(["claude-code", "codex-cli"]);
 
 export const supportsNativePlanMode = (providerName: string): boolean =>
   PLAN_MODE_PROVIDERS.has(providerName);

@@ -6,7 +6,7 @@ import {
 
 export const isRunnableRuntimeConfiguration = (
   configuration: RuntimeConfigurationProvider,
-): boolean => configuration.driver !== "custom" && configuration.models.length > 0;
+): boolean => configuration.models.length > 0;
 
 export const selectedRuntimeConfiguration = (
   agent: StepAgent,

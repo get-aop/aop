@@ -150,7 +150,6 @@ const inferProviderFromEvent = (event: Record<string, unknown>): string | undefi
 
   if (type === "result" || type === "assistant") return "claude-code";
   if (type === "turn.completed" || type === "item.completed") return "codex-cli";
-  if (type === "finish" || type === "text" || type === "tool_use") return "opencode";
   if (type === "agent_end" || type === "message_end" || type === "tool_execution_end") {
     return "pi";
   }

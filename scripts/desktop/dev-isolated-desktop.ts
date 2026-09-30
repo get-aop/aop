@@ -61,7 +61,6 @@ export const buildIsolatedDesktopDevPlan = ({
       AOP_DESKTOP_LOCAL_SERVER_PORT: String(localServerPort),
       AOP_DESKTOP_DASHBOARD_PORT: String(dashboardPort),
       AOP_DESKTOP_DASHBOARD_DEV: "1",
-      AOP_TEST_MODE: "false",
       TMPDIR: tmpDir,
     },
   };

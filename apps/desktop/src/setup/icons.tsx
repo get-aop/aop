@@ -108,25 +108,11 @@ export const SpinnerIcon = ({ size = 16 }: IconProps): ReactElement => (
 
 /** Coding-agent glyph shown on each picker tile. */
 export const AgentMark = ({ id, size = 20 }: { id: string; size?: number }): ReactElement => {
-  if (id === "codex") {
-    return (
-      <Svg size={size} strokeWidth={1.9}>
-        <path d="M12 4.5v15M5.5 8l13 8M18.5 8l-13 8" />
-      </Svg>
-    );
-  }
   if (id === "claude") {
     return (
       <Svg size={size} strokeWidth={1.8}>
         <circle cx="12" cy="12" r="3" />
         <path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2" />
-      </Svg>
-    );
-  }
-  if (id === "pi") {
-    return (
-      <Svg size={size} strokeWidth={1.9}>
-        <path d="M6 8h12M9 8v9M15 8v9" />
       </Svg>
     );
   }

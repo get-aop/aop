@@ -17,9 +17,9 @@ const session = (overrides: Partial<ChatSession> = {}): ChatSession => ({
   repo_id: "repo_1",
   title: "Fix checkout flow",
   named: false,
-  runtime: "codex-cli",
+  runtime: "claude-code",
   runtime_configuration_id: null,
-  model: "gpt-5.4",
+  model: "claude-opus-5",
   reasoning_effort: "medium",
   runtime_alias: null,
   runtime_session_id: null,
@@ -60,22 +60,11 @@ const assistantMessage = (content: string, index = 1): ChatMessage => ({
   created_at: now,
 });
 
-/** Scripted provider that writes a codex-style JSONL log with the given assistant text. */
+/** Scripted provider that writes a Claude-style JSONL log with the given assistant text. */
 const logWritingProvider = (assistantText: string, exitCode = 0): LLMProvider => ({
-  name: "codex-cli",
+  name: "claude-code",
   async run(options: RunOptions): Promise<RunResult> {
-    if (options.logFilePath) {
-      const events = [
-        { type: "thread.started", thread_id: "draft-thread" },
-        { type: "item.completed", item: { type: "agent_message", text: assistantText } },
-        { type: "turn.completed", "last-assistant-message": assistantText },
-      ];
-      await mkdir(dirname(options.logFilePath), { recursive: true });
-      await writeFile(
-        options.logFilePath,
-        `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
-      );
-    }
+    if (options.logFilePath) await writeResultLog(options.logFilePath, assistantText);
     return { exitCode };
   },
 });
@@ -85,7 +74,7 @@ const capturingProvider = (
 ): LLMProvider & { calls: RunOptions[] } => {
   const calls: RunOptions[] = [];
   return {
-    name: "codex-cli",
+    name: "claude-code",
     calls,
     async run(options: RunOptions): Promise<RunResult> {
       calls.push(options);
@@ -143,26 +132,23 @@ describe("generatePullRequestDraft", () => {
     await runDraft({}, () => provider);
 
     expect(provider.calls[0]?.mode).toBe("plan");
-    expect(provider.calls[0]?.model).toBe("gpt-5.4");
+    expect(provider.calls[0]?.model).toBe("claude-opus-5");
     expect(provider.calls[0]?.reasoningEffort).toBe("medium");
     expect(provider.calls[0]?.isolation).toBe("hermetic");
   });
 
-  test("maps the opencode runtime to a prefixed provider key", async () => {
+  test("asks the provider factory for the session runtime", async () => {
     const provider = capturingProvider(async (options) => {
       await writeFixtureLog(options.logFilePath ?? "");
       return { exitCode: 0 };
     });
     const keys: string[] = [];
-    await runDraft(
-      { session: session({ runtime: "opencode", model: "openai/gpt-5.6" }) },
-      (key) => {
-        keys.push(key);
-        return provider;
-      },
-    );
+    await runDraft({}, (key) => {
+      keys.push(key);
+      return provider;
+    });
 
-    expect(keys).toEqual(["opencode:openai/gpt-5.6"]);
+    expect(keys).toEqual(["claude-code"]);
   });
 
   test("returns null without calling the runtime when there are no user messages", async () => {
@@ -188,7 +174,7 @@ describe("generatePullRequestDraft", () => {
 
   test("returns null when the runtime throws", async () => {
     const throwing = capturingProvider(async () => {
-      throw new Error("codex not installed");
+      throw new Error("claude not installed");
     });
     const draft = await runDraft({}, () => throwing);
     expect(draft).toBeNull();
@@ -233,13 +219,15 @@ describe("parsePullRequestDraft", () => {
   });
 });
 
-const writeFixtureLog = async (logFilePath: string): Promise<void> => {
-  const text = '{"title": "Fix checkout race", "body": "- Fixed the race"}';
+const writeResultLog = async (logFilePath: string, text: string): Promise<void> => {
   const events = [
-    { type: "thread.started", thread_id: "draft-thread" },
-    { type: "item.completed", item: { type: "agent_message", text } },
-    { type: "turn.completed", "last-assistant-message": text },
+    { type: "system", subtype: "init", session_id: "draft-session" },
+    { type: "assistant", message: { content: [{ type: "text", text }] } },
+    { type: "result", subtype: "success", result: text },
   ];
   await mkdir(dirname(logFilePath), { recursive: true });
   await writeFile(logFilePath, `${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
 };
+
+const writeFixtureLog = (logFilePath: string): Promise<void> =>
+  writeResultLog(logFilePath, '{"title": "Fix checkout race", "body": "- Fixed the race"}');

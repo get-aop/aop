@@ -4,7 +4,7 @@ import {
   createSessionRunLogPath,
   readAssistantTextFromLog,
 } from "../chat-session/runtime-engine.ts";
-import { resolveChatRuntimeTimeoutPolicy } from "../chat-session/runtime-timeout-policy.ts";
+import { CHAT_RUNTIME_TIMEOUT_POLICY } from "../chat-session/runtime-timeout-policy.ts";
 import type { ChatMessage, ChatSession } from "../db/schema.ts";
 
 export interface PullRequestDraft {
@@ -44,13 +44,9 @@ export const generatePullRequestDraft: GeneratePullRequestDraft = async (input) 
   const hasUserMessage = input.messages.some((message) => message.role === "user");
   if (!hasUserMessage) return null;
 
-  const providerKey =
-    input.session.runtime === "opencode"
-      ? `opencode:${input.session.model}`
-      : input.session.runtime;
+  const providerKey = input.session.runtime;
   const provider = input.createProviderFn?.(providerKey) ?? createProvider(providerKey);
   const logFilePath = await createSessionRunLogPath(input.session.id);
-  const timeoutPolicy = resolveChatRuntimeTimeoutPolicy(input.session.runtime);
 
   try {
     const result = await provider.run({
@@ -64,7 +60,7 @@ export const generatePullRequestDraft: GeneratePullRequestDraft = async (input) 
       fastMode: Boolean(input.session.fast_mode),
       runtimeAlias: input.session.runtime_alias ?? undefined,
       logFilePath,
-      startupTimeoutMs: timeoutPolicy.startupTimeoutMs,
+      startupTimeoutMs: CHAT_RUNTIME_TIMEOUT_POLICY.startupTimeoutMs,
       inactivityTimeoutMs: DRAFT_INACTIVITY_TIMEOUT_MS,
     });
     if (result.exitCode !== 0) {
@@ -74,7 +70,7 @@ export const generatePullRequestDraft: GeneratePullRequestDraft = async (input) 
       });
       return null;
     }
-    const text = await readAssistantTextFromLog(input.session.runtime, logFilePath);
+    const text = await readAssistantTextFromLog(logFilePath);
     return parsePullRequestDraft(text);
   } catch (error) {
     draftLogger.warn("PR draft generation failed; falling back to the session title", {

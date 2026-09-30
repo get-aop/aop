@@ -1,6 +1,8 @@
 import {
+  isWorkflowRuntimeProvider,
   type RuntimeConfigurationProvider,
   runtimeConfigurationSupportsFastMode,
+  supportsFastMode,
 } from "@aop/common";
 import { createElement, type ReactNode } from "react";
 import type { MenuListItem } from "@/ui/menu-panel";
@@ -213,7 +215,7 @@ const menuHeader = (id: string, label: string): MenuListItem => ({
 
 const runtimeItems = (args: MenuItemBuilders): MenuListItem[] => {
   const configurations = (args.runtimeConfigurations ?? []).filter(
-    (configuration) => configuration.driver !== "custom" && configuration.models.length > 0,
+    (configuration) => configuration.models.length > 0,
   );
   if (configurations.length > 0) {
     return configurations.map((configuration) => {
@@ -281,11 +283,7 @@ const effortItems = (args: MenuItemBuilders): MenuListItem[] => {
     : EFFORT_OPTIONS;
   return options.map((option) => ({
     id: option.value,
-    label: getEffortLabel(
-      args.active?.runtime ?? "claude-code",
-      option.value,
-      model?.model ?? args.active?.model,
-    ),
+    label: getEffortLabel(args.active?.runtime ?? "claude-code", option.value),
     check: args.active?.reasoningEffort === option.value,
     onSelect: () => args.onEffort(option.value),
   }));
@@ -317,10 +315,10 @@ const configurationFastItems = (
   configuration: RuntimeConfigurationProvider | undefined,
 ): MenuListItem[] => {
   if (!args.active || !args.onFastMode) return [];
-  const supportsFast =
-    (configuration &&
-      runtimeConfigurationSupportsFastMode(configuration, args.active.model ?? "")) ||
-    (!configuration && (args.active.runtime === "codex-cli" || args.active.runtime === "pi"));
+  const { runtime, model = "" } = args.active;
+  const supportsFast = configuration
+    ? runtimeConfigurationSupportsFastMode(configuration, model)
+    : isWorkflowRuntimeProvider(runtime) && supportsFastMode(runtime, model);
   if (!supportsFast) return [];
   return [
     menuHeader("header-fast", "FAST"),

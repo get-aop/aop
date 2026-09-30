@@ -24,10 +24,10 @@ describe("Electron desktop IPC", () => {
 
     await handlers.get(IPC_CHANNELS.runSetupAction)?.(
       event("app://aop/index.html"),
-      "install-runtime-codex",
+      "install-runtime-claude",
     );
 
-    expect(host.runSetupAction).toHaveBeenCalledWith("install-runtime-codex");
+    expect(host.runSetupAction).toHaveBeenCalledWith("install-runtime-claude");
   });
 
   test("allows dashboard zoom but validates its range", async () => {

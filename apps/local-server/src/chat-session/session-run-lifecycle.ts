@@ -8,7 +8,6 @@ export interface ActiveRunOwner {
   runtime: string;
   interrupted: boolean;
   interruptReason: InterruptReason;
-  interruptedDuringTool: boolean;
   releaseRequested: boolean;
   executions: Set<ActiveRunHandle>;
 }
@@ -18,8 +17,6 @@ export interface ActiveRunHandle {
   phase: Exclude<ActiveRunPhase, "pending">;
   kill: () => void;
   interruptSignal: NodeJS.Signals;
-  logToolActive: boolean;
-  nativeToolActive: boolean;
   pidReady: Promise<number>;
   resolvePid: (pid: number) => void;
   pid?: number;
@@ -75,16 +72,6 @@ export const releaseSessionRunRegistration = (registration: SessionRunRegistrati
 
 export const activeSessionRunIds = (): string[] => [...activeRuns.keys()];
 
-export const isSessionToolActive = (sessionId: string): boolean => {
-  const owner = activeRuns.get(sessionId);
-  return Boolean(
-    owner &&
-      [...owner.executions].some(
-        (execution) => execution.logToolActive || execution.nativeToolActive,
-      ),
-  );
-};
-
 /** Interrupt pending, spawning, or running work owned by this process. */
 export const interruptSessionRun = (
   sessionId: string,
@@ -100,9 +87,6 @@ export const interruptRunOwner = (owner: ActiveRunOwner, reason: InterruptReason
   if (owner.interrupted) return;
   owner.interrupted = true;
   owner.interruptReason = reason;
-  owner.interruptedDuringTool = [...owner.executions].some(
-    (execution) => execution.logToolActive || execution.nativeToolActive,
-  );
   for (const execution of owner.executions) {
     execution.phase = "cancelling";
     try {
@@ -147,7 +131,6 @@ const createActiveRunOwner = (runtime: string): ActiveRunOwner => ({
   runtime,
   interrupted: false,
   interruptReason: "steer",
-  interruptedDuringTool: false,
   releaseRequested: false,
   executions: new Set(),
 });
@@ -164,8 +147,6 @@ const createActiveRunHandle = (
     owner,
     phase,
     interruptSignal: "SIGTERM",
-    logToolActive: false,
-    nativeToolActive: false,
     pidReady,
     resolvePid,
     kill: () => {},

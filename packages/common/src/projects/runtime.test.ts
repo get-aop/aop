@@ -8,13 +8,16 @@ import {
 import { makeRuntimeSelection, parsed, rejectedPaths } from "./test-utils.ts";
 
 describe("CliProviderSchema", () => {
-  test.each(["claude-code", "codex-cli", "pi"])("accepts %s", (provider) => {
-    expect(CliProviderSchema.parse(provider)).toBe(provider);
+  test("accepts claude-code, the only Phase 1 runtime", () => {
+    expect(CliProviderSchema.parse("claude-code")).toBe("claude-code");
   });
 
-  test.each(["grok-build", "opencode", "hermes", "openclaw", ""])("rejects %p", (provider) => {
-    expect(CliProviderSchema.safeParse(provider).success).toBe(false);
-  });
+  test.each(["codex-cli", "pi", "grok-build", "opencode", "hermes", "openclaw", ""])(
+    "rejects %p",
+    (provider) => {
+      expect(CliProviderSchema.safeParse(provider).success).toBe(false);
+    },
+  );
 });
 
 describe("ReasoningEffortSchema", () => {
@@ -61,7 +64,7 @@ describe("RuntimeSelectionSchema", () => {
 
 describe("RuntimePreferenceSchema", () => {
   test("null model and effort mean use the provider default", () => {
-    const preference = { provider: "codex-cli", model: null, effort: null };
+    const preference = { provider: "claude-code", model: null, effort: null };
     expect(parsed(RuntimePreferenceSchema, preference)).toEqual(preference);
   });
 
@@ -70,7 +73,11 @@ describe("RuntimePreferenceSchema", () => {
       "provider",
     ]);
     expect(
-      rejectedPaths(RuntimePreferenceSchema, { provider: "pi", model: "-x", effort: null }),
+      rejectedPaths(RuntimePreferenceSchema, {
+        provider: "claude-code",
+        model: "-x",
+        effort: null,
+      }),
     ).toEqual(["model"]);
   });
 });

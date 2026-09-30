@@ -17,10 +17,7 @@ export interface AgentTileProps {
 }
 
 const RUNTIME_TINT: Record<string, string> = {
-  codex: "var(--teal)",
   claude: "var(--amber)",
-  opencode: "var(--lav)",
-  pi: "var(--bad)",
 };
 
 const tileBorder = (tile: AgentTileProps): string => {

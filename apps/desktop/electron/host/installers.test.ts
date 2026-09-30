@@ -4,7 +4,7 @@ import { createInstallerRegistry, setupGuideUrl } from "./installers";
 describe("Electron setup installer plans", () => {
   test("opens known setup guides and rejects unknown actions", () => {
     expect(setupGuideUrl("install-github-cli")).toBe("https://cli.github.com/");
-    expect(setupGuideUrl("install-runtime-codex")).toContain("codex/cli");
+    expect(setupGuideUrl("install-runtime-claude")).toContain("code.claude.com");
     expect(() => setupGuideUrl("install-everything")).toThrow("Unknown setup action");
   });
 

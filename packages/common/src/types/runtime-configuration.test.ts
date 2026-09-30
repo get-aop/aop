@@ -40,18 +40,18 @@ describe("runtime configuration", () => {
   test("allows models without configurable thinking", () => {
     expect(
       RuntimeConfigurationModelInputSchema.safeParse({
-        description: "Kimi",
-        model: "opencode-go/kimi-k2.7-code",
+        description: "Fake model",
+        model: "fake-model",
         thinkingLevels: [],
       }).success,
     ).toBe(true);
   });
 
-  test("allows bracketed vendor model ids like Kimi k3[1m]", () => {
+  test("allows bracketed context-window model ids like claude-opus-5[1m]", () => {
     expect(
       RuntimeConfigurationModelInputSchema.safeParse({
-        description: "Kimi K3 (1M)",
-        model: "k3[1m]",
+        description: "Opus 5 (1M)",
+        model: "claude-opus-5[1m]",
         thinkingLevels: [],
       }).success,
     ).toBe(true);
@@ -84,6 +84,21 @@ describe("runtime configuration", () => {
         driver: "claude-code",
       }).success,
     ).toBe(true);
+  });
+
+  test("defaults the driver to claude-code and rejects drivers outside the catalog", () => {
+    expect(
+      RuntimeConfigurationProviderInputSchema.parse({ name: "Work Claude", command: "cpe" }).driver,
+    ).toBe("claude-code");
+    for (const driver of ["codex-cli", "pi", "grok-build", "opencode", "custom"]) {
+      expect(
+        RuntimeConfigurationProviderInputSchema.safeParse({
+          name: "Other",
+          command: "other",
+          driver,
+        }).success,
+      ).toBe(false);
+    }
   });
 
   test("resolves the flagged default model before the first model", () => {
@@ -119,65 +134,68 @@ describe("runtime configuration", () => {
   });
 
   test("findRuntimeConfiguration prefers exact id then ordered driver/match filters", () => {
+    const model = (
+      providerId: string,
+      id: string,
+    ): RuntimeConfigurationProvider["models"][number] => ({
+      id,
+      providerId,
+      description: "Opus 5",
+      model: "claude-opus-5",
+      thinkingLevels: ["low", "high"],
+      builtIn: false,
+      position: 0,
+      isDefault: true,
+      defaultThinkingLevel: "high",
+    });
     const configurations: RuntimeConfigurationProvider[] = [
       {
-        id: "rtprov_pi",
-        name: "PI",
-        command: "pi",
-        driver: "pi",
+        id: "claude-code",
+        name: "Claude Code",
+        command: "claude",
+        driver: "claude-code",
         builtIn: true,
         position: 0,
         supportsFastMode: true,
-        models: [
-          {
-            id: "m1",
-            providerId: "rtprov_pi",
-            description: "Sol",
-            model: "openai-codex/gpt-5.6-sol",
-            thinkingLevels: ["low", "high"],
-            builtIn: true,
-            position: 0,
-            isDefault: true,
-            defaultThinkingLevel: "high",
-          },
-        ],
+        models: [model("claude-code", "m1")],
       },
       {
-        id: "rtprov_omp",
-        name: "OMP",
-        command: "omp",
-        driver: "pi",
+        id: "rtprov_cpe",
+        name: "CPE",
+        command: "cpe",
+        driver: "claude-code",
         builtIn: false,
         position: 1,
         supportsFastMode: false,
-        models: [
-          {
-            id: "m2",
-            providerId: "rtprov_omp",
-            description: "Sol OMP",
-            model: "openai-codex/gpt-5.6-sol",
-            thinkingLevels: ["medium"],
-            builtIn: false,
-            position: 0,
-            isDefault: true,
-            defaultThinkingLevel: "medium",
-          },
-        ],
+        models: [model("rtprov_cpe", "m2")],
+      },
+      {
+        id: "rtprov_empty",
+        name: "No models",
+        command: "empty",
+        driver: "claude-code",
+        builtIn: false,
+        position: 2,
+        supportsFastMode: false,
+        models: [],
       },
     ];
 
-    expect(findRuntimeConfiguration(configurations, { preferredId: "rtprov_omp" })?.id).toBe(
-      "rtprov_omp",
+    expect(findRuntimeConfiguration(configurations, { preferredId: "rtprov_cpe" })?.id).toBe(
+      "rtprov_cpe",
     );
-    expect(findRuntimeConfiguration(configurations, { driver: "pi" })?.id).toBe("rtprov_pi");
+    expect(findRuntimeConfiguration(configurations, { driver: "claude-code" })?.id).toBe(
+      "claude-code",
+    );
     expect(
       findRuntimeConfiguration(configurations, {
-        driver: "pi",
-        match: (item) => item.command === "omp",
+        driver: "claude-code",
+        match: (item) => item.command === "cpe",
       })?.id,
-    ).toBe("rtprov_omp");
-    expect(resolveConfiguredModelRecord(configurations[0], "missing")?.model).toBe(
-      "openai-codex/gpt-5.6-sol",
-    );
+    ).toBe("rtprov_cpe");
+    expect(
+      findRuntimeConfiguration(configurations, { match: (item) => item.id === "rtprov_empty" }),
+    ).toBeUndefined();
+    expect(resolveConfiguredModelRecord(configurations[0], "missing")?.model).toBe("claude-opus-5");
   });
 });

@@ -50,46 +50,25 @@ const blockedState = (): DesktopSetupState => ({
       message: "Install and sign in to one — you only need a single agent.",
       actions: [
         {
-          id: "install-runtime-codex",
-          label: "Install Codex",
-          requirementId: "runtime",
-          requiresConsent: false,
-          runtimeId: "codex",
-          description: "Installs the Codex CLI from OpenAI's official install script.",
-          commandPreview: "sh -lc curl -fsSL https://chatgpt.com/codex/install.sh | sh",
-        },
-        {
           id: "install-runtime-claude",
           label: "Install Claude Code",
           requirementId: "runtime",
           requiresConsent: false,
           runtimeId: "claude",
-        },
-        {
-          id: "install-runtime-opencode",
-          label: "Install OpenCode",
-          requirementId: "runtime",
-          requiresConsent: false,
-          runtimeId: "opencode",
+          description: "Opens the official Claude Code quickstart.",
+          commandPreview: "open https://code.claude.com/docs/en/quickstart",
         },
       ],
     },
   ],
   runtimes: [
     {
-      id: "codex",
-      status: "missing",
-      label: "Codex",
-      message: "Codex CLI is not installed.",
-      recommended: true,
-    },
-    {
       id: "claude",
       status: "missing",
       label: "Claude Code",
       message: "Claude Code is not installed.",
+      recommended: true,
     },
-    { id: "opencode", status: "missing", label: "OpenCode", message: "OpenCode is not installed." },
   ],
 });
 
@@ -99,32 +78,30 @@ const healthyState = (): DesktopSetupState => ({
   requirements: [
     { id: "git", status: "ready", label: "Git", message: "Installed and on your PATH." },
     { id: "github-cli", status: "ready", label: "GitHub CLI", message: "Authenticated and ready." },
-    { id: "runtime", status: "ready", label: "Agent runtime", message: "Codex is installed." },
+    {
+      id: "runtime",
+      status: "ready",
+      label: "Agent runtime",
+      message: "Claude Code is installed.",
+    },
   ],
   runtimes: [
     {
-      id: "codex",
+      id: "claude",
       status: "ready",
-      label: "Codex",
-      message: "Codex CLI is installed.",
+      label: "Claude Code",
+      message: "Claude Code is installed.",
       recommended: true,
     },
-    {
-      id: "claude",
-      status: "missing",
-      label: "Claude Code",
-      message: "Claude Code is not installed.",
-    },
-    { id: "opencode", status: "missing", label: "OpenCode", message: "OpenCode is not installed." },
   ],
   automationActions: [
     {
-      id: "install-codex-browser-plugins",
-      label: "Install Codex browser extensions",
+      id: "install-claude-browser-extension",
+      label: "Open Claude browser extension",
       requirementId: "runtime",
       requiresConsent: true,
       commandPreview:
-        "codex plugin add browser@openai-bundled && codex plugin add chrome@openai-bundled",
+        "open https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn",
     },
   ],
 });
@@ -223,8 +200,8 @@ describe("SetupScreen", () => {
     expect(view.getByText("Let's get AOP ready")).toBeDefined();
     expect(view.getByText("Git")).toBeDefined();
     expect(view.getByText("GitHub CLI")).toBeDefined();
-    expect(view.getByText("Codex")).toBeDefined();
-    expect(view.getByRole("button", { name: "Install Codex" })).toBeDefined();
+    expect(view.getByText("Claude Code")).toBeDefined();
+    expect(view.getByRole("button", { name: "Install Claude Code" })).toBeDefined();
     expect(view.getByRole("button", { name: "Sign in to GitHub" })).toBeDefined();
     expect(view.getByText(/Almost there/)).toBeDefined();
   });
@@ -281,9 +258,9 @@ describe("SetupScreen", () => {
     );
 
     await act(async () => {
-      fireEvent.click(view.getByRole("button", { name: "Install Codex" }));
+      fireEvent.click(view.getByRole("button", { name: "Install Claude Code" }));
     });
-    await waitFor(() => expect(openSetupGuide).toHaveBeenCalledWith("install-runtime-codex"));
+    await waitFor(() => expect(openSetupGuide).toHaveBeenCalledWith("install-runtime-claude"));
     expect(onRunAction).not.toHaveBeenCalled();
     expect(view.queryByRole("dialog")).toBeNull();
   });
@@ -309,7 +286,7 @@ describe("SetupScreen", () => {
     for (const [button, actionId] of [
       ["Install Git", "install-git"],
       ["Install GitHub CLI", "install-github-cli"],
-      ["Install Codex", "install-runtime-codex"],
+      ["Install Claude Code", "install-runtime-claude"],
     ] as const) {
       await act(async () => {
         fireEvent.click(view.getByRole("button", { name: button }));
@@ -318,18 +295,6 @@ describe("SetupScreen", () => {
       expect(view.queryByRole("dialog")).toBeNull();
     }
 
-    for (const [runtime, installButton, actionId] of [
-      [/^Claude Code/u, "Install Claude Code", "install-runtime-claude"],
-      [/^OpenCode/u, "Install OpenCode", "install-runtime-opencode"],
-      [/^Pi/u, "Install Pi", "install-runtime-pi"],
-    ] as const) {
-      fireEvent.click(view.getByRole("button", { name: runtime }));
-      await act(async () => {
-        fireEvent.click(view.getByRole("button", { name: installButton }));
-      });
-      expect(openSetupGuide).toHaveBeenLastCalledWith(actionId);
-      expect(view.queryByRole("dialog")).toBeNull();
-    }
     expect(onRunAction).not.toHaveBeenCalled();
   });
 
@@ -395,9 +360,11 @@ describe("SetupScreen", () => {
       />,
     );
 
-    fireEvent.click(view.getByRole("button", { name: "Install Codex browser extensions" }));
+    fireEvent.click(view.getByRole("button", { name: "Open Claude browser extension" }));
     fireEvent.click(view.getByRole("button", { name: /Approve & run/u }));
-    await waitFor(() => expect(onRunAction).toHaveBeenCalledWith("install-codex-browser-plugins"));
+    await waitFor(() =>
+      expect(onRunAction).toHaveBeenCalledWith("install-claude-browser-extension"),
+    );
   });
 
   test("quits setup when the user chooses not to continue", () => {
@@ -527,12 +494,7 @@ const installGuideState = (): DesktopSetupState =>
         status: "missing",
         label: "Agent runtime",
         message: "Install one runtime.",
-        actions: [
-          ["codex", "Codex"],
-          ["claude", "Claude Code"],
-          ["opencode", "OpenCode"],
-          ["pi", "Pi"],
-        ].map(([runtimeId, label]) => ({
+        actions: [["claude", "Claude Code"]].map(([runtimeId, label]) => ({
           id: `install-runtime-${runtimeId}`,
           label: `Install ${label}`,
           requirementId: "runtime",
@@ -542,9 +504,12 @@ const installGuideState = (): DesktopSetupState =>
       },
     ],
     runtimes: [
-      { id: "codex", status: "missing", label: "Codex", message: "Missing.", recommended: true },
-      { id: "claude", status: "missing", label: "Claude Code", message: "Missing." },
-      { id: "opencode", status: "missing", label: "OpenCode", message: "Missing." },
-      { id: "pi", status: "missing", label: "Pi", message: "Missing." },
+      {
+        id: "claude",
+        status: "missing",
+        label: "Claude Code",
+        message: "Missing.",
+        recommended: true,
+      },
     ],
   }) as unknown as DesktopSetupState;

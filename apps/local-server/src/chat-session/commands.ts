@@ -167,8 +167,6 @@ const runtimeDisplayCmd = (runtime: string, alias: string | null): string => {
   const labels: Record<string, string> = {
     "claude-code": "claude",
     "codex-cli": "codex",
-    "grok-build": "grok",
-    opencode: "opencode",
     pi: "pi",
   };
   return labels[runtime] ?? runtime;

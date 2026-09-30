@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
-import { appendFile, mkdir, realpath, rm, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { appendFile, mkdir, realpath, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   formatControlCommandMarker,
@@ -8,7 +8,7 @@ import {
   getWorkflowModelOptions,
 } from "@aop/common";
 import { aopPaths } from "@aop/infra";
-import { createProvider, type LLMProvider } from "@aop/llm-provider";
+import type { LLMProvider } from "@aop/llm-provider";
 import { Hono as HonoApp } from "hono";
 import { createCommandContext } from "../context.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
@@ -18,8 +18,30 @@ import { sessionRunPhase } from "./runtime-engine.ts";
 import type { ChatSessionServiceDeps } from "./service.ts";
 import { shutdownChatSessions, waitForPendingChatReplies } from "./service.ts";
 
+/** Write minimal assistant text so exit-0 fixtures are not classified as empty_output. */
+const writeFixtureAssistantLog = async (
+  logFilePath: string | undefined,
+  text = "fixture assistant reply",
+): Promise<void> => {
+  if (!logFilePath) return;
+  await mkdir(join(logFilePath, ".."), { recursive: true });
+  await writeFile(
+    logFilePath,
+    `${JSON.stringify({ type: "result", subtype: "success", result: text })}\n`,
+  );
+};
+
+/** In-process stand-in for a CLI that answers every turn; never spawns anything. */
+const fixtureProvider: LLMProvider = {
+  name: "claude-code",
+  run: async (options) => {
+    await writeFixtureAssistantLog(options.logFilePath);
+    return { exitCode: 0 };
+  },
+};
+
 const setupWithCtx = async (
-  createProviderFn: () => LLMProvider = () => createProvider("e2e-fixture"),
+  createProviderFn: () => LLMProvider = () => fixtureProvider,
   deps: Omit<ChatSessionServiceDeps, "createProviderFn"> = {},
 ) => {
   const db = await createTestDb();
@@ -40,7 +62,7 @@ const setupWithCtx = async (
 };
 
 const setup = async (
-  createProviderFn: () => LLMProvider = () => createProvider("e2e-fixture"),
+  createProviderFn: () => LLMProvider = () => fixtureProvider,
   deps: Omit<ChatSessionServiceDeps, "createProviderFn"> = {},
 ) => {
   const { db, app, repoPath } = await setupWithCtx(createProviderFn, deps);
@@ -52,17 +74,19 @@ const teardown = async (db: Awaited<ReturnType<typeof createTestDb>>) => {
   await db.destroy();
 };
 
-/** Write minimal assistant text so exit-0 fixtures are not classified as empty_output. */
-const writeFixtureAssistantLog = async (
-  logFilePath: string | undefined,
-  text = "fixture assistant reply",
+/**
+ * Sessions can only be created on the catalog's runtime. The specialist handoff of a control
+ * command is for sessions running on another runtime, so those tests write the column directly.
+ */
+const bindSessionToForeignRuntime = async (
+  db: Awaited<ReturnType<typeof createTestDb>>,
+  sessionId: string,
 ): Promise<void> => {
-  if (!logFilePath) return;
-  await mkdir(join(logFilePath, ".."), { recursive: true });
-  await writeFile(
-    logFilePath,
-    `${JSON.stringify({ type: "result", subtype: "success", result: text })}\n`,
-  );
+  await db
+    .updateTable("chat_sessions")
+    .set({ runtime: "codex-cli", runtime_configuration_id: null })
+    .where("id", "=", sessionId)
+    .execute();
 };
 
 const runGit = async (cwd: string, ...args: string[]): Promise<void> => {
@@ -557,7 +581,7 @@ describe("chat-session routes", () => {
         session_id: session.id,
         user_message_id: "smsg_orphaned_user",
         assistant_message_id: "smsg_orphaned_assistant",
-        runtime: "codex-cli",
+        runtime: "claude-code",
         log_file_path: join(repoPath, "orphaned-run.jsonl"),
         status: "running",
         runtime_session_id: "thread_before_restart",
@@ -653,12 +677,21 @@ describe("chat-session routes", () => {
   test("creates a session using the preferred runtime after reordering configuration", async () => {
     const { db, app, ctx } = await setupWithCtx();
     const runtimeConfigurations = createRuntimeConfigurationRepository(ctx.db);
+    const custom = await runtimeConfigurations.createProvider({
+      name: "Claude Personal",
+      command: "cpe",
+      driver: "claude-code",
+    });
+    await runtimeConfigurations.createModel(custom.id, {
+      description: "Sonnet 4.6",
+      model: "claude-sonnet-4-6",
+      thinkingLevels: ["low", "medium", "high"],
+    });
     const providers = await runtimeConfigurations.list();
-    const reorderedIds = [
-      "grok-build",
-      ...providers.map((provider) => provider.id).filter((id) => id !== "grok-build"),
-    ];
-    await runtimeConfigurations.reorderProviders(reorderedIds);
+    await runtimeConfigurations.reorderProviders([
+      custom.id,
+      ...providers.map((provider) => provider.id).filter((id) => id !== custom.id),
+    ]);
 
     const response = await app.request("/api/chat-sessions", {
       method: "POST",
@@ -677,10 +710,10 @@ describe("chat-session routes", () => {
       };
     };
 
-    expect(body.session.runtime).toBe("grok-build");
-    expect(body.session.runtimeConfigurationId).toBe("grok-build");
-    expect(body.session.model).toBe(getWorkflowModelOptions("grok-build")[0] ?? "");
-    expect(body.session.runtimeAlias).toBe("grok");
+    expect(body.session.runtime).toBe("claude-code");
+    expect(body.session.runtimeConfigurationId).toBe(custom.id);
+    expect(body.session.model).toBe("claude-sonnet-4-6");
+    expect(body.session.runtimeAlias).toBe("cpe");
     expect(["low", "medium", "high", "extra-high", "max"]).toContain(body.session.reasoningEffort);
 
     await teardown(db);
@@ -705,11 +738,7 @@ describe("chat-session routes", () => {
     });
     await waitForPendingChatReplies();
     captured.length = 0;
-    await app.request(`/api/chat-sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtime: "opencode" }),
-    });
+    await bindSessionToForeignRuntime(db, session.id);
 
     const response = await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
@@ -741,95 +770,6 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
-  test("delegates a Codex control command with model/thinking from the control marker", async () => {
-    const captured = [] as Parameters<LLMProvider["run"]>[0][];
-    const provider: LLMProvider = {
-      name: "codex-control-fixture",
-      run: async (options) => {
-        captured.push(options);
-        await writeFixtureAssistantLog(options.logFilePath);
-        return { exitCode: 0 };
-      },
-    };
-    const { db, app } = await setupWithCtx(() => provider);
-    const session = await createSession(app, "repo_chat_1");
-    await app.request(`/api/chat-sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtime: "pi" }),
-    });
-
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: "$CX_COMPUTER_USE[gpt-5.4;extra-high] Open System Settings",
-      }),
-    });
-    await waitForPendingChatReplies();
-
-    expect(captured).toHaveLength(2);
-    expect(captured[0]).toMatchObject({
-      model: "gpt-5.4",
-      reasoningEffort: "extra-high",
-      browserControl: false,
-      computerControl: true,
-      resumeSessionId: undefined,
-    });
-    expect(captured[1]?.prompt).toContain("Codex control result");
-
-    await teardown(db);
-  });
-
-  test("delegates an opted-in runtime request with compact context and resumes the orchestrator", async () => {
-    const providerKeys: string[] = [];
-    const captured = [] as Parameters<LLMProvider["run"]>[0][];
-    const provider: LLMProvider = {
-      name: "runtime-delegation-fixture",
-      run: async (options) => {
-        captured.push(options);
-        await writeFixtureAssistantLog(options.logFilePath);
-        return { exitCode: 0 };
-      },
-    };
-    const { db, app } = await setup((key?: string) => {
-      providerKeys.push(key ?? "");
-      return provider;
-    });
-    const session = await createSession(app, "repo_chat_1");
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "The regression is isolated to the billing service." }),
-    });
-    await waitForPendingChatReplies();
-    captured.length = 0;
-    providerKeys.length = 0;
-
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Ask for a second opinion $DELEGATE_OMP" }),
-    });
-    await waitForPendingChatReplies();
-
-    expect(providerKeys).toEqual(["pi", "claude-code"]);
-    expect(captured).toHaveLength(2);
-    expect(captured[0]).toMatchObject({ runtimeAlias: "omp", resumeSessionId: undefined });
-    expect(captured[0]?.prompt).toContain("The regression is isolated to the billing service.");
-    expect(captured[0]?.prompt).toContain("Ask for a second opinion");
-    // New sessions bind the first runtime configuration (Claude → command "claude").
-    expect(captured[1]?.runtimeAlias).toBe("claude");
-    expect(captured[1]?.prompt).toContain("OMP specialist result");
-    const detail = await app.request(`/api/chat-sessions/${session.id}`);
-    const body = (await detail.json()) as {
-      session: { messages: Array<{ role: string; content: string }> };
-    };
-    expect(body.session.messages.at(-2)?.content).toBe("Ask for a second opinion $DELEGATE_OMP");
-
-    await teardown(db);
-  });
-
   test("spawns the delegated specialist with the marker's model and thinking", async () => {
     const captured = [] as Parameters<LLMProvider["run"]>[0][];
     const provider: LLMProvider = {
@@ -847,20 +787,20 @@ describe("chat-session routes", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        content: "Fix the flaky test $DELEGATE_CODEX[gpt-5.4;extra-high]",
+        content: "Fix the flaky test $DELEGATE_CLAUDE[claude-sonnet-4-6;high]",
       }),
     });
     await waitForPendingChatReplies();
 
     expect(captured).toHaveLength(2);
-    expect(captured[0]).toMatchObject({ model: "gpt-5.4", reasoningEffort: "extra-high" });
+    expect(captured[0]).toMatchObject({ model: "claude-sonnet-4-6", reasoningEffort: "high" });
     const detail = await app.request(`/api/chat-sessions/${session.id}`);
     const body = (await detail.json()) as {
       session: { messages: Array<{ role: string; content: string }> };
     };
     // Transport markers stay on the stored message so the dashboard can render action badges.
     expect(body.session.messages.at(-2)?.content).toBe(
-      "Fix the flaky test $DELEGATE_CODEX[gpt-5.4;extra-high]",
+      "Fix the flaky test $DELEGATE_CLAUDE[claude-sonnet-4-6;high]",
     );
 
     await teardown(db);
@@ -971,67 +911,6 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
-  test("preallocates and confirms the main Grok session after a delegated handoff", async () => {
-    let call = 0;
-    let mainSessionId = "";
-    const provider: LLMProvider = {
-      name: "delegated-grok-handoff",
-      run: async (options) => {
-        call += 1;
-        if (call === 1) {
-          await writeFixtureAssistantLog(options.logFilePath, "Specialist result");
-          return { exitCode: 0 };
-        }
-        mainSessionId = options.newSessionId ?? "";
-        await options.onSession?.(mainSessionId);
-        if (options.logFilePath) {
-          await writeFile(
-            options.logFilePath,
-            [
-              JSON.stringify({ type: "text", data: "Handoff complete" }),
-              JSON.stringify({ type: "end", stopReason: "EndTurn" }),
-            ].join("\n"),
-          );
-        }
-        return { exitCode: 0, sessionId: mainSessionId };
-      },
-    };
-    const { db, app } = await setup(() => provider);
-    const session = await createSession(app, "repo_chat_1");
-    await db
-      .updateTable("chat_sessions")
-      .set({ runtime: "grok-build", model: "grok-4.5", runtime_configuration_id: null })
-      .where("id", "=", session.id)
-      .execute();
-
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Investigate the failure $DELEGATE_CLAUDE" }),
-    });
-    await waitForPendingChatReplies();
-
-    expect(mainSessionId).toMatch(/^[0-9a-f-]{36}$/);
-    const [storedSession, run] = await Promise.all([
-      db
-        .selectFrom("chat_sessions")
-        .select("runtime_session_id")
-        .where("id", "=", session.id)
-        .executeTakeFirstOrThrow(),
-      db
-        .selectFrom("chat_runs")
-        .select(["runtime_session_id", "runtime_session_state"])
-        .where("session_id", "=", session.id)
-        .executeTakeFirstOrThrow(),
-    ]);
-    expect(storedSession.runtime_session_id).toBe(mainSessionId);
-    expect(run).toEqual({
-      runtime_session_id: mainSessionId,
-      runtime_session_state: "confirmed",
-    });
-    await teardown(db);
-  });
-
   test("rejects Claude computer control without launching a detached provider", async () => {
     const captured = [] as Parameters<LLMProvider["run"]>[0][];
     const provider: LLMProvider = {
@@ -1078,11 +957,7 @@ describe("chat-session routes", () => {
     };
     const { db, app } = await setup(() => provider);
     const session = await createSession(app, "repo_chat_1");
-    await app.request(`/api/chat-sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtime: "opencode" }),
-    });
+    await bindSessionToForeignRuntime(db, session.id);
 
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
@@ -1110,22 +985,18 @@ describe("chat-session routes", () => {
       run: async (options) => {
         specialistStarted = true;
         await options.onSpawn?.(99_005);
-        await options.onSession?.("foreign-codex-thread");
+        await options.onSession?.("foreign-claude-thread");
         await new Promise<void>(() => {});
         return { exitCode: 0 };
       },
     };
     const { db, app } = await setup(() => provider);
     const session = await createSession(app, "repo_chat_1");
-    await app.request(`/api/chat-sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtime: "pi" }),
-    });
+    await bindSessionToForeignRuntime(db, session.id);
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "$CX_BROWSER_USE Inspect billing" }),
+      body: JSON.stringify({ content: "$CC_BROWSER_USE Inspect billing" }),
     });
     for (let attempt = 0; attempt < 50 && !specialistStarted; attempt++) await Bun.sleep(10);
 
@@ -1148,7 +1019,10 @@ describe("chat-session routes", () => {
         if (runCount === 1 && options.logFilePath) {
           await appendFile(
             options.logFilePath,
-            `${JSON.stringify({ type: "text", data: "Inspecting in specialist" })}\n`,
+            `${JSON.stringify({
+              type: "assistant",
+              message: { content: [{ type: "text", text: "Inspecting in specialist" }] },
+            })}\n`,
           );
           await Bun.sleep(120);
         }
@@ -1157,11 +1031,7 @@ describe("chat-session routes", () => {
     };
     const { db, app } = await setup(() => provider);
     const session = await createSession(app, "repo_chat_1");
-    await app.request(`/api/chat-sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtime: "opencode" }),
-    });
+    await bindSessionToForeignRuntime(db, session.id);
     const events: string[] = [];
     const { subscribeChatSession } = await import("./session-events.ts");
     const unsubscribe = subscribeChatSession(session.id, (event) => {
@@ -1310,9 +1180,9 @@ describe("chat-session routes", () => {
           id: "smsg_delegation_snippet",
           session_id: delegated.id,
           role: "user",
-          content: `Ask Codex to review this ${formatRuntimeDelegationMarker({
-            id: "codex",
-            model: "gpt-5.5",
+          content: `Ask Claude to review this ${formatRuntimeDelegationMarker({
+            id: "claude",
+            model: "claude-opus-5",
             reasoning: "medium",
             fastMode: true,
           })}`,
@@ -1324,8 +1194,8 @@ describe("chat-session routes", () => {
           session_id: controlled.id,
           role: "user",
           content: `${formatControlCommandMarker({
-            id: "CX_BROWSER_USE",
-            model: "gpt-5.5",
+            id: "CC_BROWSER_USE",
+            model: "claude-opus-5",
             reasoning: "medium",
             fastMode: true,
           })} Check the browser`,
@@ -1342,7 +1212,7 @@ describe("chat-session routes", () => {
     };
 
     expect(body.sessions.find((session) => session.id === delegated.id)?.snippet).toBe(
-      "Ask Codex to review this",
+      "Ask Claude to review this",
     );
     expect(body.sessions.find((session) => session.id === controlled.id)?.snippet).toBe(
       "Check the browser",
@@ -1374,7 +1244,7 @@ describe("chat-session routes", () => {
         session_id: session.id,
         user_message_id: "smsg_list_active_user",
         assistant_message_id: "smsg_list_active_assistant",
-        runtime: "codex-cli",
+        runtime: "claude-code",
         log_file_path: join(repoPath, "list-active.jsonl"),
         status: "running",
         runtime_session_id: null,
@@ -1689,15 +1559,22 @@ describe("chat-session routes", () => {
         session_id: session.id,
         user_message_id: userMessageId,
         assistant_message_id: assistantMessageId,
-        runtime: "grok-build",
+        runtime: "claude-code",
         log_file_path: logFilePath,
         status: "running",
-        runtime_session_id: "grok-session",
-        runtime_session_state: "allocated",
+        runtime_session_id: "claude-session",
+        runtime_session_state: "confirmed",
         error_message: null,
       })
       .execute();
-    await writeFile(logFilePath, `${JSON.stringify({ type: "text", data: "Recovered answer" })}\n`);
+    await writeFile(
+      logFilePath,
+      `${JSON.stringify({
+        type: "assistant",
+        session_id: "claude-session",
+        message: { content: [{ type: "text", text: "Recovered answer" }] },
+      })}\n`,
+    );
 
     const initial = await app.request(`/api/chat-sessions/${session.id}`);
     const initialBody = (await initial.json()) as { session: { assistantActive: boolean } };
@@ -1705,7 +1582,12 @@ describe("chat-session routes", () => {
 
     await appendFile(
       logFilePath,
-      `${JSON.stringify({ type: "end", stopReason: "EndTurn", sessionId: "grok-session" })}\n`,
+      `${JSON.stringify({
+        type: "result",
+        subtype: "success",
+        result: "Recovered answer",
+        session_id: "claude-session",
+      })}\n`,
     );
     await Promise.all([
       app.request(`/api/chat-sessions/${session.id}`),
@@ -1726,7 +1608,7 @@ describe("chat-session routes", () => {
       expect.objectContaining({ id: assistantMessageId, content: "Recovered answer" }),
     ]);
     expect(finalBody.session.assistantActive).toBe(false);
-    expect(finalBody.session.runtimeSessionId).toBe("grok-session");
+    expect(finalBody.session.runtimeSessionId).toBe("claude-session");
     expect(
       await db
         .selectFrom("chat_runs")
@@ -1761,7 +1643,7 @@ describe("chat-session routes", () => {
         session_id: session.id,
         user_message_id: "smsg_active_run_user",
         assistant_message_id: "smsg_active_run_assistant",
-        runtime: "grok-build",
+        runtime: "claude-code",
         log_file_path: join(repoPath, "still-running.jsonl"),
         status: "running",
         runtime_session_id: null,
@@ -2078,25 +1960,7 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
-  test.each([
-    [
-      "opencode",
-      [
-        { type: "text", part: { text: "continued" } },
-        { type: "step_finish", part: { reason: "stop" } },
-      ],
-    ],
-    [
-      "pi",
-      [
-        {
-          provider: "pi",
-          type: "agent_end",
-          messages: [{ role: "assistant", content: [{ type: "text", text: "continued" }] }],
-        },
-      ],
-    ],
-  ])("preserves AOP history for queued %s follow-ups", async (runtime, terminalEvents) => {
+  test("preserves AOP history for queued follow-ups when no runtime session is bound", async () => {
     let releaseFirst: (() => void) | undefined;
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve;
@@ -2104,7 +1968,7 @@ describe("chat-session routes", () => {
     let runCount = 0;
     const prompts: string[] = [];
     const provider: LLMProvider = {
-      name: `${runtime}-continuity-fixture`,
+      name: "continuity-fixture",
       run: async (options) => {
         runCount += 1;
         prompts.push(options.prompt);
@@ -2112,22 +1976,12 @@ describe("chat-session routes", () => {
           await options.onSpawn?.(99_003);
           await firstGate;
         }
-        if (options.logFilePath) {
-          await writeFile(
-            options.logFilePath,
-            `${terminalEvents.map((event) => JSON.stringify(event)).join("\n")}\n`,
-          );
-        }
+        await writeFixtureAssistantLog(options.logFilePath, "continued");
         return { exitCode: 0 };
       },
     };
     const { db, app } = await setup(() => provider);
     const session = await createSession(app, "repo_chat_1");
-    await db
-      .updateTable("chat_sessions")
-      .set({ runtime, model: "fixture-model", runtime_configuration_id: null })
-      .where("id", "=", session.id)
-      .execute();
 
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
@@ -2219,7 +2073,7 @@ describe("chat-session routes", () => {
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Review this $DELEGATE_GROK" }),
+      body: JSON.stringify({ content: "Review this $DELEGATE_CLAUDE" }),
     });
     await waitForPendingChatReplies();
     prompts.length = 0;
@@ -2351,99 +2205,44 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
-  test("preallocates and confirms a fresh Grok session before terminal output", async () => {
-    let capturedId = "";
-    const provider: LLMProvider = {
-      name: "grok-build",
-      run: async (options) => {
-        capturedId = options.newSessionId ?? "";
-        if (options.logFilePath) {
-          await writeFile(
-            options.logFilePath,
-            [
-              JSON.stringify({ type: "thought", data: "working" }),
-              JSON.stringify({ type: "text", data: "Done" }),
-              JSON.stringify({ type: "end", session_id: capturedId, stopReason: "EndTurn" }),
-            ].join("\n"),
-          );
-        }
-        return { exitCode: 0, sessionId: capturedId };
-      },
-    };
-    const { db, app } = await setup(() => provider);
-    const session = await createSession(app, "repo_chat_1");
-    await db
-      .updateTable("chat_sessions")
-      .set({ runtime: "grok-build", model: "grok-4.5", runtime_configuration_id: null })
-      .where("id", "=", session.id)
-      .execute();
-
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "hello" }),
-    });
-    await waitForPendingChatReplies();
-
-    expect(capturedId).toMatch(/^[0-9a-f-]{36}$/);
-    const run = await db
-      .selectFrom("chat_runs")
-      .select(["runtime_session_id", "runtime_session_state", "timeout_policy"])
-      .where("session_id", "=", session.id)
-      .executeTakeFirstOrThrow();
-    expect(run).toEqual({
-      runtime_session_id: capturedId,
-      runtime_session_state: "confirmed",
-      timeout_policy: "grok_slow_start_v1",
-    });
-    await teardown(db);
-  });
-
-  test("queues during an active Grok tool without interrupt confirmation", async () => {
+  test("resumes the bound native session for a queued follow-up after the active reply", async () => {
     let releaseFirst: (() => void) | undefined;
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
     let runCount = 0;
-    let allocatedId = "";
     const prompts: string[] = [];
     const resumeIds: Array<string | undefined> = [];
     const provider: LLMProvider = {
-      name: "grok-queue-continuity",
+      name: "queue-continuity-fixture",
       run: async (options) => {
         runCount += 1;
         prompts.push(options.prompt);
         resumeIds.push(options.resumeSessionId);
-        const sessionId = options.resumeSessionId ?? options.newSessionId ?? "";
         if (runCount === 1) {
-          allocatedId = sessionId;
           await options.onSpawn?.(99_004);
-          options.onToolProgress?.({
-            id: "call-active",
-            phase: "start",
-            name: "get_command_or_subagent_output",
-          });
+          await options.onSession?.("claude-session-1");
           await firstGate;
         }
         if (options.logFilePath) {
           await writeFile(
             options.logFilePath,
             [
-              JSON.stringify({ type: "text", data: `reply-${runCount}` }),
-              JSON.stringify({ type: "end", session_id: sessionId, stopReason: "EndTurn" }),
+              JSON.stringify({ type: "system", subtype: "init", session_id: "claude-session-1" }),
+              JSON.stringify({
+                type: "result",
+                subtype: "success",
+                result: `reply-${runCount}`,
+                session_id: "claude-session-1",
+              }),
             ].join("\n"),
           );
         }
-        return { exitCode: 0, sessionId };
+        return { exitCode: 0, sessionId: "claude-session-1" };
       },
     };
     const { db, app, repoPath } = await setup(() => provider);
     const session = await createSession(app, "repo_chat_1");
-    await db
-      .updateTable("chat_sessions")
-      .set({ runtime: "grok-build", model: "grok-4.5", runtime_configuration_id: null })
-      .where("id", "=", session.id)
-      .execute();
 
     await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
@@ -2451,7 +2250,6 @@ describe("chat-session routes", () => {
       body: JSON.stringify({ content: "Implement the new runtime continuity plan" }),
     });
     for (let attempt = 0; attempt < 100 && runCount === 0; attempt++) await Bun.sleep(10);
-    expect(allocatedId).toMatch(/^[0-9a-f-]{36}$/);
 
     const queued = await app.request(`/api/chat-sessions/${session.id}/messages`, {
       method: "POST",
@@ -2480,190 +2278,18 @@ describe("chat-session routes", () => {
     expect(runs[0]).toMatchObject({
       status: "completed",
       interruption_kind: null,
-      runtime_session_id: allocatedId,
+      runtime_session_id: "claude-session-1",
       workspace_path: await realpath(repoPath),
     });
     expect(runs[1]).toMatchObject({
       status: "completed",
       interruption_kind: null,
-      resume_session_id: allocatedId,
+      resume_session_id: "claude-session-1",
       workspace_path: await realpath(repoPath),
     });
-    expect(resumeIds[1]).toBe(allocatedId);
+    expect(resumeIds[1]).toBe("claude-session-1");
     expect(prompts[1]).toContain("Create the PR when finished");
     expect(prompts[1]).not.toContain("[assistant interrupted partial]");
-    await teardown(db);
-  });
-
-  test("automatically retries a silent Grok resume once with fresh AOP history", async () => {
-    const prompts: string[] = [];
-    const resumeIds: Array<string | undefined> = [];
-    const freshIds: Array<string | undefined> = [];
-    const provider: LLMProvider = {
-      name: "grok-build",
-      run: async (options) => {
-        prompts.push(options.prompt);
-        resumeIds.push(options.resumeSessionId);
-        freshIds.push(options.newSessionId);
-        if (options.resumeSessionId) return { exitCode: 1, startupTimedOut: true };
-        await writeFile(
-          options.logFilePath ?? "",
-          [
-            JSON.stringify({ type: "text", data: "Recovered automatically" }),
-            JSON.stringify({
-              type: "end",
-              session_id: options.newSessionId,
-              stopReason: "EndTurn",
-            }),
-          ].join("\n"),
-        );
-        return { exitCode: 0, sessionId: options.newSessionId };
-      },
-    };
-    const { db, app } = await setup(() => provider);
-    const session = await createSession(app, "repo_chat_1");
-    const historyCreatedAt = new Date(Date.now() - 1_000).toISOString();
-    await db
-      .insertInto("chat_messages")
-      .values({
-        id: "smsg_grok_silent_history",
-        session_id: session.id,
-        role: "user",
-        content: "Investigate the recurring Grok stall",
-        action: null,
-        created_at: historyCreatedAt,
-      })
-      .execute();
-    await db
-      .insertInto("chat_runs")
-      .values({
-        id: "crun_grok_silent_history",
-        session_id: session.id,
-        user_message_id: "smsg_grok_silent_history",
-        assistant_message_id: "smsg_grok_silent_history_assistant",
-        runtime: "grok-build",
-        log_file_path: join(tmpdir(), "grok-silent-history.jsonl"),
-        status: "completed",
-        runtime_session_id: "stale-grok-session",
-        resume_session_id: null,
-        failure_kind: null,
-        interruption_kind: null,
-        context_strategy: "fresh",
-        workspace_path: null,
-        timeout_policy: null,
-        retry_of_run_id: null,
-        runtime_session_state: "confirmed",
-        error_message: null,
-        created_at: historyCreatedAt,
-        updated_at: historyCreatedAt,
-      })
-      .execute();
-    await db
-      .updateTable("chat_sessions")
-      .set({
-        runtime: "grok-build",
-        model: "grok-4.5",
-        runtime_configuration_id: null,
-        runtime_session_id: "stale-grok-session",
-      })
-      .where("id", "=", session.id)
-      .execute();
-
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Continue the previous investigation" }),
-    });
-    await waitForPendingChatReplies();
-
-    expect(resumeIds).toEqual(["stale-grok-session", undefined]);
-    expect(freshIds[1]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(prompts[1]).toContain("<aop_conversation_context>");
-    expect(prompts[1]).toContain("Investigate the recurring Grok stall");
-    expect(prompts[1]).toContain("Continue the previous investigation");
-    const run = await db
-      .selectFrom("chat_runs")
-      .select(["status", "failure_kind", "context_strategy", "runtime_session_id"])
-      .where("session_id", "=", session.id)
-      .where("id", "!=", "crun_grok_silent_history")
-      .executeTakeFirstOrThrow();
-    expect(run).toMatchObject({
-      status: "completed",
-      failure_kind: null,
-      context_strategy: "aop_history",
-      runtime_session_id: freshIds[1],
-    });
-
-    await teardown(db);
-  });
-
-  test("skips an unsafe persisted Grok resume and preallocates a fresh session", async () => {
-    const staleSessionId = crypto.randomUUID();
-    const freshIds: Array<string | undefined> = [];
-    const resumeIds: Array<string | undefined> = [];
-    const provider: LLMProvider = {
-      name: "grok-build",
-      run: async (options) => {
-        freshIds.push(options.newSessionId);
-        resumeIds.push(options.resumeSessionId);
-        const sessionId = options.newSessionId ?? crypto.randomUUID();
-        await writeFile(
-          options.logFilePath ?? "",
-          [
-            JSON.stringify({ type: "text", data: "Continued safely" }),
-            JSON.stringify({ type: "end", session_id: sessionId, stopReason: "EndTurn" }),
-          ].join("\n"),
-        );
-        return { exitCode: 0, sessionId };
-      },
-    };
-    const { db, app, repoPath } = await setup(() => provider);
-    const session = await createSession(app, "repo_chat_1");
-    const resolvedRepoPath = await realpath(repoPath);
-    const journalRoot = join(homedir(), ".grok", "sessions", encodeURIComponent(resolvedRepoPath));
-    const sessionDir = join(journalRoot, staleSessionId);
-    await mkdir(sessionDir, { recursive: true });
-    await writeFile(
-      join(sessionDir, "events.jsonl"),
-      `${JSON.stringify({ type: "turn_started" })}\n${JSON.stringify({
-        type: "tool_started",
-        tool_name: "get_command_or_subagent_output",
-      })}\n`,
-    );
-    await db
-      .updateTable("chat_sessions")
-      .set({
-        runtime: "grok-build",
-        model: "grok-4.5",
-        runtime_configuration_id: null,
-        runtime_session_id: staleSessionId,
-      })
-      .where("id", "=", session.id)
-      .execute();
-
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "Continue without reusing the broken tool wait" }),
-    });
-    await waitForPendingChatReplies();
-
-    expect(resumeIds).toEqual([undefined]);
-    expect(freshIds[0]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(freshIds[0]).not.toBe(staleSessionId);
-    expect(
-      await db
-        .selectFrom("chat_runs")
-        .select(["status", "context_strategy", "runtime_session_id"])
-        .where("session_id", "=", session.id)
-        .executeTakeFirstOrThrow(),
-    ).toMatchObject({
-      status: "completed",
-      context_strategy: "aop_history",
-      runtime_session_id: freshIds[0],
-    });
-
-    await rm(journalRoot, { recursive: true, force: true });
     await teardown(db);
   });
 
@@ -2939,7 +2565,7 @@ describe("chat-session routes", () => {
         session_id: session.id,
         user_message_id: "smsg_active_runtime_user",
         assistant_message_id: "smsg_active_runtime_assistant",
-        runtime: "grok-build",
+        runtime: "claude-code",
         log_file_path: join(repoPath, "runtime-still-running.jsonl"),
         status: "running",
         runtime_session_id: null,
@@ -2952,7 +2578,7 @@ describe("chat-session routes", () => {
     const response = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtime: "codex-cli" }),
+      body: JSON.stringify({ runtime: "claude-code" }),
     });
 
     expect(response.status).toBe(409);
@@ -2999,7 +2625,7 @@ describe("chat-session routes", () => {
     const runtimeSwitch = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtime: "codex-cli" }),
+      body: JSON.stringify({ runtime: "claude-code" }),
     });
     expect(runtimeSwitch.status).toBe(200);
     const runtimeBody = (await runtimeSwitch.json()) as {
@@ -3009,14 +2635,14 @@ describe("chat-session routes", () => {
         runtimeSessionId: string | null;
       };
     };
-    expect(runtimeBody.session.runtime).toBe("codex-cli");
-    expect(runtimeBody.session.model).toBe(getWorkflowModelOptions("codex-cli")[0] ?? "");
+    expect(runtimeBody.session.runtime).toBe("claude-code");
+    expect(runtimeBody.session.model).toBe(getWorkflowModelOptions("claude-code")[0] ?? "");
     expect(runtimeBody.session.runtimeSessionId).toBeNull();
 
     const modelPatch = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: getWorkflowModelOptions("codex-cli")[1] ?? "" }),
+      body: JSON.stringify({ model: getWorkflowModelOptions("claude-code")[1] ?? "" }),
     });
     expect(modelPatch.status).toBe(200);
 
@@ -3089,10 +2715,10 @@ describe("chat-session routes", () => {
     await db
       .insertInto("runtime_profiles")
       .values({
-        id: "rprof_chat_codex",
-        name: "Work Codex",
-        base_provider: "codex-cli",
-        command: "cdx",
+        id: "rprof_chat_claude",
+        name: "Work Claude",
+        base_provider: "claude-code",
+        command: "cpe",
         model: "vendor/custom-model:v2",
         reasoning: "extra-high",
         fast_mode: true,
@@ -3102,14 +2728,14 @@ describe("chat-session routes", () => {
     const response = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtimeProfileId: "rprof_chat_codex" }),
+      body: JSON.stringify({ runtimeProfileId: "rprof_chat_claude" }),
     });
 
     expect(response.status).toBe(200);
     expect((await response.json()) as unknown).toMatchObject({
       session: {
-        runtime: "codex-cli",
-        runtimeAlias: "cdx",
+        runtime: "claude-code",
+        runtimeAlias: "cpe",
         model: "vendor/custom-model:v2",
         reasoningEffort: "extra-high",
         fastMode: true,
@@ -3148,7 +2774,7 @@ describe("chat-session routes", () => {
     const runtimeSwitch = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtime: "codex-cli" }),
+      body: JSON.stringify({ runtime: "claude-code" }),
     });
     expect(runtimeSwitch.status).toBe(200);
 
@@ -3176,19 +2802,25 @@ describe("chat-session routes", () => {
   test("applies the shared catalog default when selecting a built-in runtime configuration", async () => {
     const { db, app } = await setup();
     const session = await createSession(app, "repo_chat_1");
+    const [defaultModel, otherModel] = getWorkflowModelOptions("claude-code");
+    await app.request(`/api/chat-sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: otherModel }),
+    });
 
     const response = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtimeConfigurationId: "codex-cli" }),
+      body: JSON.stringify({ runtimeConfigurationId: "claude-code" }),
     });
 
     expect(response.status).toBe(200);
     expect((await response.json()) as unknown).toMatchObject({
       session: {
-        runtime: "codex-cli",
-        runtimeConfigurationId: "codex-cli",
-        model: getWorkflowModelOptions("codex-cli")[0],
+        runtime: "claude-code",
+        runtimeConfigurationId: "claude-code",
+        model: defaultModel,
       },
     });
 
@@ -3278,10 +2910,10 @@ describe("chat-session routes", () => {
     await db
       .insertInto("runtime_configuration_providers")
       .values({
-        id: "rtprov_grok_ordered",
-        name: "Ordered Grok",
-        command: "grok",
-        driver: "grok-build",
+        id: "rtprov_claude_ordered",
+        name: "Ordered Claude",
+        command: "claude-ordered",
+        driver: "claude-code",
         built_in: false,
       })
       .execute();
@@ -3289,19 +2921,19 @@ describe("chat-session routes", () => {
       .insertInto("runtime_configuration_models")
       .values([
         {
-          id: "rtmodel_composer_first",
-          provider_id: "rtprov_grok_ordered",
-          description: "Composer 2.5",
-          model: "grok-composer-2.5-fast",
+          id: "rtmodel_haiku_first",
+          provider_id: "rtprov_claude_ordered",
+          description: "Haiku 4.5",
+          model: "claude-haiku-4-5",
           thinking_levels: JSON.stringify([]),
           fast_mode: false,
           built_in: false,
         },
         {
-          id: "rtmodel_grok_second",
-          provider_id: "rtprov_grok_ordered",
-          description: "Grok 4.5",
-          model: "grok-4.5",
+          id: "rtmodel_sonnet_second",
+          provider_id: "rtprov_claude_ordered",
+          description: "Sonnet 4.6",
+          model: "claude-sonnet-4-6",
           thinking_levels: JSON.stringify(["low", "medium", "high"]),
           fast_mode: false,
           built_in: false,
@@ -3312,12 +2944,12 @@ describe("chat-session routes", () => {
     await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtimeConfigurationId: "rtprov_grok_ordered" }),
+      body: JSON.stringify({ runtimeConfigurationId: "rtprov_claude_ordered" }),
     });
     await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "grok-4.5" }),
+      body: JSON.stringify({ model: "claude-sonnet-4-6" }),
     });
     const effortResponse = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
@@ -3328,7 +2960,7 @@ describe("chat-session routes", () => {
     expect(effortResponse.status).toBe(200);
     expect((await effortResponse.json()) as unknown).toMatchObject({
       session: {
-        model: "grok-4.5",
+        model: "claude-sonnet-4-6",
         reasoningEffort: "high",
       },
     });
@@ -3358,10 +2990,10 @@ describe("chat-session routes", () => {
     await db
       .insertInto("runtime_configuration_providers")
       .values({
-        id: "rtprov_fast_codex",
-        name: "Fast Codex",
-        command: "codex",
-        driver: "codex-cli",
+        id: "rtprov_fast_claude",
+        name: "Fast Claude",
+        command: "claude-fast",
+        driver: "claude-code",
         built_in: false,
         supports_fast_mode: true,
       })
@@ -3369,10 +3001,10 @@ describe("chat-session routes", () => {
     await db
       .insertInto("runtime_configuration_models")
       .values({
-        id: "rtmodel_fast_codex",
-        provider_id: "rtprov_fast_codex",
-        description: "GPT 5.5",
-        model: "gpt-5.5",
+        id: "rtmodel_fast_claude",
+        provider_id: "rtprov_fast_claude",
+        description: "Opus 5",
+        model: "claude-opus-5",
         thinking_levels: JSON.stringify(["medium", "high"]),
         fast_mode: false,
         built_in: false,
@@ -3386,7 +3018,7 @@ describe("chat-session routes", () => {
         await app.request(`/api/chat-sessions/${session.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ runtimeConfigurationId: "rtprov_fast_codex" }),
+          body: JSON.stringify({ runtimeConfigurationId: "rtprov_fast_claude" }),
         })
       ).status,
     ).toBe(200);
@@ -3398,7 +3030,7 @@ describe("chat-session routes", () => {
     });
     expect(enable.status).toBe(200);
     expect((await enable.json()) as unknown).toMatchObject({
-      session: { fastMode: true, runtimeConfigurationId: "rtprov_fast_codex" },
+      session: { fastMode: true, runtimeConfigurationId: "rtprov_fast_claude" },
     });
 
     const disable = await app.request(`/api/chat-sessions/${session.id}`, {
@@ -3408,7 +3040,7 @@ describe("chat-session routes", () => {
     });
     expect(disable.status).toBe(200);
     expect((await disable.json()) as unknown).toMatchObject({
-      session: { fastMode: false, runtimeConfigurationId: "rtprov_fast_codex" },
+      session: { fastMode: false, runtimeConfigurationId: "rtprov_fast_claude" },
     });
     await teardown(db);
   });
@@ -3419,9 +3051,9 @@ describe("chat-session routes", () => {
     await db
       .updateTable("chat_sessions")
       .set({
-        runtime: "codex-cli",
-        runtime_configuration_id: "legacy-codex-cli",
-        model: "gpt-5.6",
+        runtime: "claude-code",
+        runtime_configuration_id: "legacy-claude-code",
+        model: "claude-opus-5",
         fast_mode: false,
       })
       .where("id", "=", session.id)
@@ -3443,7 +3075,7 @@ describe("chat-session routes", () => {
   test("resolves a saved runtime configuration again before each session run", async () => {
     let runOptions: Parameters<LLMProvider["run"]>[0] | undefined;
     const provider: LLMProvider = {
-      name: "codex-cli",
+      name: "claude-code",
       run: async (options) => {
         runOptions = options;
         await writeFixtureAssistantLog(options.logFilePath);
@@ -3455,20 +3087,20 @@ describe("chat-session routes", () => {
     await db
       .insertInto("runtime_configuration_providers")
       .values({
-        id: "rtprov_work_codex",
-        name: "Work Codex",
-        command: "codex-old",
-        driver: "codex-cli",
+        id: "rtprov_work_claude",
+        name: "Work Claude",
+        command: "claude-old",
+        driver: "claude-code",
         built_in: false,
       })
       .execute();
     await db
       .insertInto("runtime_configuration_models")
       .values({
-        id: "rtmodel_work_codex",
-        provider_id: "rtprov_work_codex",
-        description: "Work GPT",
-        model: "work/gpt-old",
+        id: "rtmodel_work_claude",
+        provider_id: "rtprov_work_claude",
+        description: "Work model",
+        model: "work/model-old",
         thinking_levels: JSON.stringify(["medium", "high"]),
         fast_mode: false,
         built_in: false,
@@ -3479,25 +3111,25 @@ describe("chat-session routes", () => {
         await app.request(`/api/chat-sessions/${session.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ runtimeConfigurationId: "rtprov_work_codex" }),
+          body: JSON.stringify({ runtimeConfigurationId: "rtprov_work_claude" }),
         })
       ).status,
     ).toBe(200);
     await db
       .updateTable("chat_sessions")
-      .set({ runtime_session_id: "codex-session-existing" })
+      .set({ runtime_session_id: "claude-session-existing" })
       .where("id", "=", session.id)
       .execute();
 
     await db
       .updateTable("runtime_configuration_providers")
-      .set({ command: "codex-current" })
-      .where("id", "=", "rtprov_work_codex")
+      .set({ command: "claude-current" })
+      .where("id", "=", "rtprov_work_claude")
       .execute();
     await db
       .updateTable("runtime_configuration_models")
-      .set({ model: "work/gpt-current", thinking_levels: JSON.stringify(["high"]) })
-      .where("id", "=", "rtmodel_work_codex")
+      .set({ model: "work/model-current", thinking_levels: JSON.stringify(["high"]) })
+      .where("id", "=", "rtmodel_work_claude")
       .execute();
 
     expect(
@@ -3512,13 +3144,13 @@ describe("chat-session routes", () => {
     await waitForPendingChatReplies();
 
     expect(runOptions).toMatchObject({
-      runtimeAlias: "codex-current",
-      model: "work/gpt-current",
+      runtimeAlias: "claude-current",
+      model: "work/model-current",
       reasoningEffort: "high",
       fastMode: false,
       browserControl: false,
       computerControl: false,
-      resumeSessionId: "codex-session-existing",
+      resumeSessionId: "claude-session-existing",
     });
     await teardown(db);
   });
@@ -3533,6 +3165,16 @@ describe("chat-session routes", () => {
       body: JSON.stringify({ runtime: "cursor-cli" }),
     });
     expect(badRuntime.status).toBe(400);
+
+    // Adapters that exist in the tree but are not in the catalog stay unselectable.
+    for (const runtime of ["codex-cli", "pi", "grok-build", "opencode"]) {
+      const outsideCatalog = await app.request(`/api/chat-sessions/${session.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runtime }),
+      });
+      expect(outsideCatalog.status).toBe(400);
+    }
 
     const badModel = await app.request(`/api/chat-sessions/${session.id}`, {
       method: "PATCH",
@@ -3830,7 +3472,7 @@ describe("chat-session routes", () => {
         session_id: session.id,
         user_message_id: "smsg_reset_user",
         assistant_message_id: "smsg_reset_assistant",
-        runtime: "codex-cli",
+        runtime: "claude-code",
         log_file_path: join(repoPath, "reset-orphan.jsonl"),
         status: "running",
         runtime_session_id: "orphan-bind",
@@ -4066,58 +3708,6 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
-  test("first Grok resume silence failure clears runtime binding", async () => {
-    const provider: LLMProvider = {
-      name: "grok-build",
-      run: async (options) => {
-        if (options.logFilePath) {
-          await mkdir(join(options.logFilePath, ".."), { recursive: true });
-          await writeFile(
-            options.logFilePath,
-            `${JSON.stringify({ type: "result", subtype: "success" })}\n`,
-          );
-        }
-        return { exitCode: 0 };
-      },
-    };
-    const { db, app } = await setup(() => provider);
-    const session = await createSession(app, "repo_chat_1");
-    // Bind fully to Grok (driver + configuration) so config re-apply does not flip back to Claude.
-    await db
-      .updateTable("chat_sessions")
-      .set({
-        runtime: "grok-build",
-        runtime_configuration_id: "grok-build",
-        runtime_session_id: "stale-grok-bind",
-        runtime_alias: "grok",
-      })
-      .where("id", "=", session.id)
-      .execute();
-
-    await app.request(`/api/chat-sessions/${session.id}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: "grok empty once" }),
-    });
-    await waitForPendingChatReplies();
-
-    const bound = await db
-      .selectFrom("chat_sessions")
-      .select(["runtime_session_id", "runtime"])
-      .where("id", "=", session.id)
-      .executeTakeFirstOrThrow();
-    expect(bound.runtime).toBe("grok-build");
-    expect(bound.runtime_session_id).toBeNull();
-
-    const detail = await app.request(`/api/chat-sessions/${session.id}`);
-    const body = (await detail.json()) as {
-      session: { messages: Array<{ content: string }> };
-    };
-    expect(body.session.messages.at(-1)?.content).toContain("Grok produced no response");
-
-    await teardown(db);
-  });
-
   test("second consecutive empty-output failure clears runtime binding", async () => {
     const provider: LLMProvider = {
       name: "empty-fixture",
@@ -4243,7 +3833,7 @@ describe("chat-session routes", () => {
         session_id: session.id,
         user_message_id: "smsg_prev_empty_user",
         assistant_message_id: "smsg_prev_empty_assistant",
-        runtime: "codex-cli",
+        runtime: "claude-code",
         log_file_path: join(repoPath, "prev-empty.jsonl"),
         status: "failed",
         runtime_session_id: "old-bind",

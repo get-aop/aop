@@ -309,10 +309,16 @@ const latestHostContentSnippet = (content: string, max = 600): string | null => 
   return `…${trimmed.slice(trimmed.length - max + 1)}`;
 };
 
+/** Claude-shaped assistant message: the dialect the progress parser reads back. */
+export const assistantTextEvent = (text: string) => ({
+  type: "assistant",
+  message: { content: [{ type: "text", text }] },
+});
+
 const writeBackgroundTaskLog = async (logFilePath: string, content: string): Promise<void> => {
   if (!logFilePath) return;
   // Single text event so readDelegationOutput rebuilds a clean snapshot after refresh.
-  await writeFile(logFilePath, `${JSON.stringify({ type: "text", data: content })}\n`, "utf8");
+  await writeFile(logFilePath, `${JSON.stringify(assistantTextEvent(content))}\n`, "utf8");
 };
 
 const backgroundTaskLabel = (row: StreamCommandRow): string => {

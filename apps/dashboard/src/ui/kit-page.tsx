@@ -149,7 +149,7 @@ export const KitPage = () => {
 
         <Section title="Provider icons">
           <Row>
-            {["pi", "claude-code", "codex-cli", "grok", "open-code"].map((r) => (
+            {["claude-code"].map((r) => (
               <span key={r} className="flex items-center gap-1.5 text-[12px] text-text-muted">
                 <RuntimeProviderIcon runtime={r} className="size-4" /> {r}
               </span>
