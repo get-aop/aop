@@ -146,6 +146,48 @@ describe("uninstallFromSource", () => {
     ]);
   });
 
+  test("leaves the servers of other checkouts and worktrees running", async () => {
+    const killProcess = mock<(pid: number) => Promise<void>>(async () => undefined);
+    const listProcesses = mock(async () => [
+      // A launchd service runs with a relative script and its checkout as the working directory.
+      { pid: 2001, command: "bun run apps/local-server/src/run.ts" },
+      { pid: 2002, command: "bun /repo/.claude/worktrees/a1/apps/local-server/src/run.ts" },
+      // Another checkout's dev server and verify stack; one shares a prefix with this checkout.
+      { pid: 3001, command: "bun run ./scripts/dev.ts" },
+      { pid: 3002, command: "bun /other/apps/local-server/src/run.ts" },
+      { pid: 3003, command: "bun /repo-two/apps/local-server/src/run.ts" },
+      { pid: 3004, command: "bun run --cwd=/repo-two ./scripts/dev.ts" },
+    ]);
+    const getProcessCwd = mock(async (pid: number) => {
+      switch (pid) {
+        case 2001:
+          return "/repo";
+        case 3001:
+          return "/other";
+        case 3003:
+          return "/repo-two/apps/local-server";
+        default:
+          return null;
+      }
+    });
+
+    await uninstallFromSource({
+      platform: "linux",
+      dependencies: {
+        removeDir: mock(async () => undefined),
+        removeFile: mock(async () => undefined),
+        run: mock(async () => undefined),
+        killProcess,
+        listProcesses,
+        getProcessCwd,
+      } satisfies Partial<UninstallDependencies>,
+      homeDir: "/home/marcelo",
+      workspaceDir: "/repo",
+    });
+
+    expect(killProcess.mock.calls.map(([pid]) => pid)).toEqual([2001, 2002]);
+  });
+
   test("continues when a discovered workspace process already exited before cleanup", async () => {
     const exitedProcess = Bun.spawn(["sh", "-c", "exit 0"], {
       stdout: "ignore",

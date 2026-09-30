@@ -199,18 +199,22 @@ const cleanupAopBunProcesses = async ({
   }
 };
 
+// A process belongs to this checkout when its command names a path inside it or it runs from
+// inside it. Matching a script name alone ("apps/local-server/src/run.ts") would also take the
+// servers of every other checkout and worktree on the machine, and a bare prefix test would take
+// "/repo-two" for "/repo".
 const isAopBunProcess = (command: string, cwd: string | null, workspaceDir: string): boolean => {
   if (!/\bbun(?:\.exe)?\b/.test(command)) {
     return false;
   }
 
-  return (
-    command.includes(workspaceDir) ||
-    isPathInWorkspace(cwd, workspaceDir) ||
-    command.includes("apps/local-server/src/run.ts") ||
-    command.includes("./scripts/dev.ts")
-  );
+  return commandNamesWorkspace(command, workspaceDir) || isPathInWorkspace(cwd, workspaceDir);
 };
+
+const commandNamesWorkspace = (command: string, workspaceDir: string): boolean =>
+  command
+    .split(/\s+/)
+    .some((argument) => isPathInWorkspace(argument.slice(argument.indexOf("=") + 1), workspaceDir));
 
 const isPathInWorkspace = (path: string | null, workspaceDir: string): boolean => {
   if (path === null) {
