@@ -100,6 +100,25 @@ describe("runFakeCli", () => {
     expect(run.events.at(-1)).toMatchObject({ result: "Waiting on your answer." });
   });
 
+  test("usage= sets the tokens the result reports for the model the adapter asked for", async () => {
+    const run = await play([
+      ...CLAUDE_ARGS,
+      "--model",
+      "fake-model",
+      "x [fake: usage=1200,340,5000,61000]",
+    ]);
+
+    expect(run.events.at(-1)).toMatchObject({
+      usage: {
+        input_tokens: 1200,
+        output_tokens: 340,
+        cache_creation_input_tokens: 5000,
+        cache_read_input_tokens: 61_000,
+      },
+      modelUsage: { "fake-model": { inputTokens: 1200, cacheReadInputTokens: 61_000 } },
+    });
+  });
+
   test("say replaces the default reply", async () => {
     const run = await play([...CLAUDE_ARGS, 'x [fake: say="custom answer"]']);
 

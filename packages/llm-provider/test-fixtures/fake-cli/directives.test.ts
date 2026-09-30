@@ -12,7 +12,24 @@ describe("parseDirectives", () => {
       failMessage: undefined,
       exitCode: undefined,
       crashAfter: undefined,
+      usage: { input: 10, output: 5, cacheWrite: 200, cacheRead: 4000 },
     });
+  });
+
+  test("reads the four token counts in order; omitted or non-numeric ones are 0", () => {
+    expect(parseDirectives("[fake: usage=1200,340,5000,61000]").usage).toEqual({
+      input: 1200,
+      output: 340,
+      cacheWrite: 5000,
+      cacheRead: 61_000,
+    });
+    expect(parseDirectives("[fake: usage=700,x]").usage).toEqual({
+      input: 700,
+      output: 0,
+      cacheWrite: 0,
+      cacheRead: 0,
+    });
+    expect(parseDirectives("[fake: usage]").usage.input).toBe(10);
   });
 
   test("reads timing, steps and the reply from a marker", () => {

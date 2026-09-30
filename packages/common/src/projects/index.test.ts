@@ -23,11 +23,13 @@ test("the package index exports the projects contract", () => {
       "ProjectSchema",
       "ProjectSettingsSchema",
       "ProjectStatusSchema",
+      "ProjectUsageSchema",
       "ReasoningEffortSchema",
       "RuntimePreferenceSchema",
       "RuntimeSelectionSchema",
       "THREAD_STATUSES",
       "ThreadSchema",
+      "UsageTotalsSchema",
       "UserMessageSchema",
     ]),
   );

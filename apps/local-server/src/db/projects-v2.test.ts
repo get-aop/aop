@@ -59,13 +59,14 @@ describe("migration v2 on a database file", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  test("a fresh file gets versions 1 and 2 and every thread column", async () => {
+  test("a fresh file gets every version and every thread column", async () => {
     const db = createDatabase(path);
     await runMigrations(db);
 
     expect((await listLedger(db)).map(({ version, name }) => ({ version, name }))).toEqual([
       { version: 1, name: "baseline" },
       { version: 2, name: "projects" },
+      { version: 3, name: "run-usage" },
     ]);
     expect(await listColumns(db, "chat_sessions")).toEqual(expect.arrayContaining(THREAD_COLUMNS));
     await db.destroy();
@@ -91,7 +92,7 @@ describe("migration v2 on a database file", () => {
     await runMigrations(db);
 
     const ledger = await listLedger(db);
-    expect(ledger.map((row) => row.version)).toEqual([1, 2]);
+    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3]);
     expect(ledger[0]).toEqual(ledgerV1[0]);
 
     const legacy = await db

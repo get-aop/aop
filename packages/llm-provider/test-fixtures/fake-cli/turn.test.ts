@@ -6,6 +6,7 @@ import type { TurnContext } from "./types";
 const ctx: TurnContext = {
   sessionId: "sess-9",
   cwd: "/work",
+  usage: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 },
   prompt: "ship it [fake: steps=1]\nsecond line",
   turn: 3,
   resumed: true,

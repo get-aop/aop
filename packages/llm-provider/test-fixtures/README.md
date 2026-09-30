@@ -50,8 +50,17 @@ Put `[fake: key=value ...]` anywhere in the prompt. The last marker wins. Withou
 | `fail[="<message>"]` | Ends with Claude's `error_during_execution` result and exit 1. |
 | `exit=<n>` | Exits with code `n` and no terminal event. Combined with `fail`, sets the failing exit code. |
 | `crash[=<k>]` | Writes `k` whole events (default 2), then half of the next line, then SIGKILLs itself. |
+| `usage=<in>,<out>,<cacheWrite>,<cacheRead>` | Tokens the turn reports as consumed. Omitted or non-numeric parts are 0. Without the key, or with a bare `usage`, the turn reports 10, 5, 200 and 4000. |
 
 Events are one JSON line each, written synchronously to stdout, so a log file tails and resumes exactly like the real CLI's.
+
+## Reported usage
+
+Every turn reports the tokens from `usage=` the way Claude Code does:
+
+- The `result` event carries `usage` (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`), `modelUsage` keyed by the model the adapter passed with `--model` (`fake-claude` when none) and `total_cost_usd`. A failed turn reports them too.
+- The cost is computed from the counts at Claude Opus list prices: $15, $75, $18.75 and $1.50 per million input, output, cache-write and cache-read tokens. For example, `usage=1000,200,3000,50000` costs $0.16125.
+- Assistant events carry the same `message.usage` under one message id per turn, so a turn that dies before its `result` (`crash`, `exit`, a Stop) still has usage in its log.
 
 ## Sessions and resume
 

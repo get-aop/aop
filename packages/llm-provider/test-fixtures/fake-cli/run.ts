@@ -46,6 +46,7 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
     sessionId: session.id,
     cwd: runtime.cwd,
     model: invocation.model,
+    usage: directives.usage,
     prompt: invocation.prompt,
     turn: session.turn,
     resumed: session.resumed,

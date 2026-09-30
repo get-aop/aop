@@ -1,9 +1,20 @@
 import { parseArgv } from "./argv";
-import type { AskUser, Beat, Dialect, Ending, Invocation, JsonLine, TurnContext } from "./types";
+import type {
+  AskUser,
+  Beat,
+  Dialect,
+  Ending,
+  Invocation,
+  JsonLine,
+  TokenUsage,
+  TurnContext,
+} from "./types";
 
 const DEFAULT_MODEL = "fake-claude";
-const USAGE = { input_tokens: 10, output_tokens: 5 };
 const NATIVE_ASK_TOOL = "AskUserQuestion";
+// USD per million tokens (Claude Opus list prices), so a fake turn has a cost that tests can
+// recompute from the token counts.
+const PRICE_PER_MILLION = { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 };
 
 /**
  * Claude Code as `ClaudeCodeProvider` drives it: `claude --output-format
@@ -144,16 +155,50 @@ const assistant = (ctx: TurnContext, content: JsonLine[]): JsonLine => ({
     model: ctx.model ?? DEFAULT_MODEL,
     content,
     stop_reason: null,
+    // Every assistant event of a turn shares one message id, so a reader that keeps the last
+    // usage per id sees the turn's usage once, also when the turn dies before its result.
+    usage: messageUsage(ctx.usage),
   },
   session_id: ctx.sessionId,
 });
 
-const result = (ctx: TurnContext, fields: JsonLine): JsonLine => ({
-  type: "result",
-  duration_ms: 1,
-  num_turns: ctx.turn,
-  session_id: ctx.sessionId,
-  total_cost_usd: 0,
-  usage: USAGE,
-  ...fields,
+const result = (ctx: TurnContext, fields: JsonLine): JsonLine => {
+  const costUsd = costOf(ctx.usage);
+  return {
+    type: "result",
+    duration_ms: 1,
+    num_turns: ctx.turn,
+    session_id: ctx.sessionId,
+    total_cost_usd: costUsd,
+    usage: messageUsage(ctx.usage),
+    // Claude Code's breakdown per model, keyed by model id, in camelCase.
+    modelUsage: {
+      [ctx.model ?? DEFAULT_MODEL]: {
+        inputTokens: ctx.usage.input,
+        outputTokens: ctx.usage.output,
+        cacheReadInputTokens: ctx.usage.cacheRead,
+        cacheCreationInputTokens: ctx.usage.cacheWrite,
+        webSearchRequests: 0,
+        costUSD: costUsd,
+      },
+    },
+    ...fields,
+  };
+};
+
+const messageUsage = (usage: TokenUsage): JsonLine => ({
+  input_tokens: usage.input,
+  output_tokens: usage.output,
+  cache_creation_input_tokens: usage.cacheWrite,
+  cache_read_input_tokens: usage.cacheRead,
 });
+
+const costOf = (usage: TokenUsage): number => {
+  const dollars =
+    (usage.input * PRICE_PER_MILLION.input +
+      usage.output * PRICE_PER_MILLION.output +
+      usage.cacheWrite * PRICE_PER_MILLION.cacheWrite +
+      usage.cacheRead * PRICE_PER_MILLION.cacheRead) /
+    1_000_000;
+  return Math.round(dollars * 1_000_000) / 1_000_000;
+};

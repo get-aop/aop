@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { RunUsageSchema, ThreadUsageSchema } from "@aop/common";
 import { aopPaths } from "@aop/infra";
 import { ClaudeCodeProvider, type LLMProvider } from "@aop/llm-provider";
 import { FAKE_CLI_PATH } from "@aop/llm-provider/test-fixtures";
@@ -10,6 +11,7 @@ import { createCommandContext } from "../context.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { isAgentProcess, isProcessAlive } from "../process/liveness.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import { createUsageRoutes } from "../usage/routes.ts";
 import { createChatSessionRoutes } from "./routes.ts";
 import { waitForPendingChatReplies } from "./service.ts";
 import { type ChatSessionEvent, subscribeChatSession } from "./session-events.ts";
@@ -325,6 +327,101 @@ describe("chat engine against the fake CLI", () => {
     expect(run.status).toBe("failed");
     expect(run.error_message).toContain("exited without a final response");
     await waitForPendingChatReplies();
+    await db.destroy();
+  });
+});
+
+describe("usage accounting against the fake CLI", () => {
+  const usageApi = (db: Awaited<ReturnType<typeof setup>>["db"]) => {
+    const app = new Hono().route("/api/usage", createUsageRoutes(createCommandContext(db)));
+    return async (path: string) => {
+      const response = await app.request(`/api/usage${path}`);
+      expect(response.status).toBe(200);
+      return response.json();
+    };
+  };
+
+  test("records what each turn reported, and a second turn adds to the first", async () => {
+    const { db, session, sendAndSettle } = await setup();
+    const read = usageApi(db);
+
+    await sendAndSettle("first [fake: usage=1200,340,5000,61000]");
+    const first = ThreadUsageSchema.parse(await read(`/threads/${session.id}`));
+    await sendAndSettle("second [fake: usage=100,50,0,2000]");
+    const both = ThreadUsageSchema.parse(await read(`/threads/${session.id}`));
+
+    // 1200 * $15 + 340 * $75 + 5000 * $18.75 + 61000 * $1.50, per million tokens.
+    expect(first.totals).toMatchObject({
+      inputTokens: 1200,
+      outputTokens: 340,
+      cacheWriteTokens: 5000,
+      cacheReadTokens: 61_000,
+      runs: 1,
+    });
+    expect(first.totals.costUsd).toBeCloseTo(0.228_75, 6);
+    expect(first.byModel.map((model) => [model.provider, model.model])).toEqual([
+      ["claude-code", "fake-model"],
+    ]);
+    expect(both.totals).toMatchObject({
+      inputTokens: 1300,
+      outputTokens: 390,
+      cacheWriteTokens: 5000,
+      cacheReadTokens: 63_000,
+      runs: 2,
+    });
+    expect(both.totals.costUsd).toBeCloseTo(0.237, 6);
+    await db.destroy();
+  });
+
+  test("each run has its own usage, readable by run id", async () => {
+    const { db, session, sendAndSettle } = await setup();
+    await sendAndSettle("one [fake: usage=10,1,0,0]");
+    await sendAndSettle("two [fake: usage=20,2,0,0]");
+
+    const runs = await db
+      .selectFrom("chat_runs")
+      .select("id")
+      .where("session_id", "=", session.id)
+      .orderBy("created_at")
+      .execute();
+    const [one, two] = await Promise.all(
+      runs.map(async ({ id }) => RunUsageSchema.parse(await usageApi(db)(`/runs/${id}`))),
+    );
+
+    expect(one).toMatchObject({ threadId: session.id, totals: { inputTokens: 10, runs: 1 } });
+    expect(two?.totals.inputTokens).toBe(20);
+    await db.destroy();
+  });
+
+  test("a turn that dies before its result still counts the messages it streamed", async () => {
+    const { db, session, sendAndSettle } = await setup();
+
+    const crashed = await sendAndSettle("break [fake: steps=2 crash=3 usage=700,80,0,9000]");
+
+    expect(crashed.messages[0]?.runStatus).toBe("failed");
+    const usage = ThreadUsageSchema.parse(await usageApi(db)(`/threads/${session.id}`));
+    expect(usage.totals).toEqual({
+      inputTokens: 700,
+      outputTokens: 80,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 9000,
+      costUsd: null,
+      runs: 1,
+    });
+    await db.destroy();
+  });
+
+  test("a turn stopped before it produced anything records no usage and breaks nothing", async () => {
+    const { db, session, send, abort, sendAndSettle } = await setup();
+
+    await send("long job [fake: steps=3 delay=30000]");
+    await waitForFakeInit(session.id);
+    await abort();
+    await waitForPendingChatReplies();
+    await sendAndSettle("carry on [fake: usage=5,5,0,0]");
+
+    const usage = ThreadUsageSchema.parse(await usageApi(db)(`/threads/${session.id}`));
+    expect(usage.totals).toMatchObject({ inputTokens: 5, runs: 1 });
     await db.destroy();
   });
 });

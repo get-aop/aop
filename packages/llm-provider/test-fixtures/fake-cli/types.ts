@@ -19,10 +19,20 @@ export type Ending =
   /** The CLI dies without a terminal event; only the exit code says what happened. */
   | { kind: "silent" };
 
+/** The four token buckets every CLI's usage event maps onto. */
+export interface TokenUsage {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+}
+
 export interface TurnContext {
   sessionId: string;
   cwd: string;
   model?: string;
+  /** What the turn reports as consumed; the dialect renders it in its own event shape. */
+  usage: TokenUsage;
   prompt: string;
   turn: number;
   resumed: boolean;

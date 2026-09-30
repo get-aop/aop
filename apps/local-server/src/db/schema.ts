@@ -2,6 +2,7 @@ import type { ChatRuntimeAccessMode, PullRequestState, ThreadStatus } from "@aop
 import type { Generated, Insertable, Selectable, Updateable } from "kysely";
 import type { ChatHistoryDatabase } from "./chat-history-schema.ts";
 import type { ProjectsDatabase } from "./projects-schema.ts";
+import type { UsageDatabase } from "./usage-schema.ts";
 
 export interface SettingsTable {
   key: string;
@@ -187,7 +188,7 @@ export interface SchemaMigrationsTable {
   applied_at: Generated<string>;
 }
 
-export interface Database extends ChatHistoryDatabase, ProjectsDatabase {
+export interface Database extends ChatHistoryDatabase, ProjectsDatabase, UsageDatabase {
   schema_migrations: SchemaMigrationsTable;
   settings: SettingsTable;
   runtime_profiles: RuntimeProfilesTable;

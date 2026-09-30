@@ -21,6 +21,7 @@ import { createRuntimeProfileRoutes } from "./runtime-profile/routes.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
 import { createUpdateRoutes } from "./updates/routes.ts";
+import { createUsageRoutes } from "./usage/routes.ts";
 
 const logger = getLogger("api");
 
@@ -129,6 +130,7 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/updates", createUpdateRoutes());
+  app.route("/api/usage", createUsageRoutes(ctx));
 
   if (dashboardStaticPath) {
     app.get("*", async (c) => {

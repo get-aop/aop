@@ -45,6 +45,7 @@ import {
   createRuntimeProfileRepository,
   type RuntimeProfileRepository,
 } from "../runtime-profile/repository.ts";
+import { createUsageService } from "../usage/service.ts";
 import { createBackgroundTaskTracker } from "./background-task-tracker.ts";
 import { waitForChatRunTerminal } from "./chat-run-recovery.ts";
 import { processCheckpointCleanupJobs } from "./checkpoint-cleanup-service.ts";
@@ -1851,6 +1852,8 @@ const finalizeChatRunAndPublish = async (
       ),
   );
   if (!finalized) return;
+  // Before the client hears the run is over, so a usage read after `assistant-final` sees it.
+  await createUsageService(ctx.db).recordRunUsage(run);
 
   if (action) {
   }

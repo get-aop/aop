@@ -63,3 +63,21 @@ export {
   ThreadStepSchema,
   ThreadTargetSchema,
 } from "./thread.ts";
+export type {
+  ModelUsage,
+  ProjectUsage,
+  ProjectUsageThread,
+  RunUsage,
+  ThreadUsage,
+  UsageTotals,
+  UsageWindow,
+} from "./usage.ts";
+export {
+  ModelUsageSchema,
+  ProjectUsageSchema,
+  ProjectUsageThreadSchema,
+  RunUsageSchema,
+  ThreadUsageSchema,
+  UsageTotalsSchema,
+  UsageWindowSchema,
+} from "./usage.ts";

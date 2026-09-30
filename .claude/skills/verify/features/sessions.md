@@ -8,6 +8,7 @@ Sessions is AOP's front door: a chat workbench per repository with a rail of ses
 - `sessions-clear` settles the current session and opens a fresh sibling with `/clear`.
 - `sessions-fake-chat` sends a message to the fake CLI runtime and watches a streamed reply. Needs `seed.ts --fake-runtime`.
 - `sessions-restart` crashes the server mid-turn, then stops the orphaned CLI or sees it die. Needs `seed.ts --fake-runtime`.
+- `sessions-usage` sends fake turns that report known token counts and reads them back through `/api/usage`. Needs `seed.ts --fake-runtime`. There is no usage UI yet; that is the Usage tab of the Projects revamp.
 
 ## How to get to it (user POV)
 
@@ -37,6 +38,16 @@ Preconditions: `bun $S/seed.ts --name <run> --fake-runtime`, then `curl -s <api>
 - **Question.** Send `pick one [fake: ask="Which one?" options="a|b"]`. The turn ends with `Waiting on your answer.`; the question is a tool call in the run log under `$AOP_HOME/logs/chat-sessions/<id>/`, and the dashboard has no card for it.
 - **More scripts.** `[fake: crash=3]` fails the run with `Runtime exited with code 137. Check that the CLI is installed and authenticated.` `[fake: delay=30000]` then **Stop** cancels the run (`Conversation stopped.`) and the next message resumes the session. Both were checked through the API and `apps/local-server/src/chat-session/fake-cli.test.ts`, not the UI. The full syntax is in `packages/llm-provider/test-fixtures/README.md`.
 - **Proof.** Screenshots mid-stream and after the reply, plus `curl -s <api>/api/chat-sessions/<id>` showing the messages and `runtimeSessionId`. State that the runtime was the fake CLI.
+
+## Usage accounting (`sessions-usage`)
+
+Every finished chat run stores what its log reported in `run_usage` (one row per run and model). Preconditions: the fake-runtime recipe above, a session open on the fake runtime.
+
+- **Send turns with known numbers.** In the composer send `first [fake: usage=1200,340,5000,61000]`, then `second [fake: usage=100,50,0,2000]` (the four numbers are input, output, cache write, cache read). Click the composer through `find` and `scroll_to` once the thread is taller than the viewport.
+- **Read them back.** `curl -s <api>/api/usage/threads/<session id>` returns totals `1300, 390, 5000, 63000`, cost `0.237` and `runs: 2`, and one `byModel` entry for `fake-model`. `curl -s <api>/api/usage/runs/<run id>` returns one turn (run ids: `sqlite3 "$AOP_DB_PATH" 'select id from chat_runs'`). `sqlite3 "$AOP_DB_PATH" 'select * from run_usage'` shows the rows. The fake prices a turn at Opus list prices, so the first turn costs `0.22875`.
+- **Restart.** `bun $S/verify-stack.ts restart-server --name <run>`, then read the thread again: same totals.
+- **A killed turn.** Send `break [fake: steps=2 crash=3 usage=700,80,0,9000]`. The run fails (`Runtime exited with code 137`) and the thread totals grow by 700, 80, 0, 9000 with no cost: the CLI died before its result, so the assistant messages it streamed are counted.
+- **A project.** No API creates projects yet. To exercise `/api/usage/projects/<id>`, insert a `projects` row and set `project_id`, `kind` (`thread` or `coordinator`), `state` (`idle`, threads only) and `last_activity_at` on the session rows with `sqlite3`; `since` and `until` narrow the window.
 
 ## Server crash during a turn (`sessions-restart`)
 

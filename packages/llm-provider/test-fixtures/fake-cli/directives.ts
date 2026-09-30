@@ -1,4 +1,4 @@
-import type { AskUser } from "./types";
+import type { AskUser, TokenUsage } from "./types";
 
 /** How one turn should behave. Every field is optional in the script text. */
 export interface Directives {
@@ -17,6 +17,8 @@ export interface Directives {
   exitCode?: number;
   /** Complete events written before the process is SIGKILLed mid-line. */
   crashAfter?: number;
+  /** Tokens the turn reports as consumed, so accounting can be asserted against known numbers. */
+  usage: TokenUsage;
 }
 
 const MARKER = /\[fake:([^\]]*)\]/g;
@@ -24,6 +26,7 @@ const TOKEN = /(\w+)(?:=(?:"([^"]*)"|(\S+)))?/g;
 const DEFAULT_ASK_TOOL = "aop_ask_user";
 const DEFAULT_FAIL_MESSAGE = "fake CLI failure";
 const DEFAULT_CRASH_AFTER = 2;
+const DEFAULT_USAGE: TokenUsage = { input: 10, output: 5, cacheWrite: 200, cacheRead: 4000 };
 
 /**
  * The last `[fake: key=value ...]` marker in the prompt wins, so a resumed
@@ -43,6 +46,7 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
     failMessage: readFailMessage(tokens),
     exitCode: optionalNumber(tokens.get("exit")),
     crashAfter: readCrashAfter(tokens),
+    usage: readUsage(tokens.get("usage")),
   };
 };
 
@@ -74,6 +78,16 @@ const readCrashAfter = (tokens: Map<string, string>): number | undefined => {
   const value = tokens.get("crash");
   if (value === undefined) return undefined;
   return toNumber(value, DEFAULT_CRASH_AFTER);
+};
+
+// `usage=<input>,<output>,<cacheWrite>,<cacheRead>`. A missing or non-numeric part is 0; no key,
+// or a bare `usage`, keeps the default.
+const readUsage = (value: string | undefined): TokenUsage => {
+  if (!value) return DEFAULT_USAGE;
+  const [input = 0, output = 0, cacheWrite = 0, cacheRead = 0] = value
+    .split(",")
+    .map((part) => toNumber(part, 0));
+  return { input, output, cacheWrite, cacheRead };
 };
 
 const optionalNumber = (value: string | undefined): number | undefined => {

@@ -6,6 +6,7 @@ import type { JsonLine, TurnContext } from "./types";
 const ctx: TurnContext = {
   sessionId: "sess-1",
   cwd: "/work",
+  usage: { input: 1000, output: 200, cacheWrite: 3000, cacheRead: 50_000 },
   prompt: "hi",
   turn: 1,
   resumed: false,
@@ -96,5 +97,52 @@ describe("claudeDialect events", () => {
 
   test("a silent ending emits no terminal event", () => {
     expect(claudeDialect.end({ kind: "silent" }, ctx)).toEqual([]);
+  });
+});
+
+describe("claudeDialect usage", () => {
+  const modelCtx: TurnContext = { ...ctx, model: "fake-model" };
+
+  test("the result reports the turn's tokens per model, with a cost derived from them", () => {
+    const result = claudeDialect.end({ kind: "success", text: "done" }, modelCtx).at(-1);
+
+    // 1000 * $15 + 200 * $75 + 3000 * $18.75 + 50000 * $1.50, per million tokens.
+    const cost = 0.161_25;
+    expect(result).toMatchObject({
+      type: "result",
+      total_cost_usd: cost,
+      usage: {
+        input_tokens: 1000,
+        output_tokens: 200,
+        cache_creation_input_tokens: 3000,
+        cache_read_input_tokens: 50_000,
+      },
+      modelUsage: {
+        "fake-model": {
+          inputTokens: 1000,
+          outputTokens: 200,
+          cacheCreationInputTokens: 3000,
+          cacheReadInputTokens: 50_000,
+          costUSD: cost,
+        },
+      },
+    });
+  });
+
+  test("a failed turn still reports usage, as Claude does", () => {
+    const [result] = claudeDialect.end({ kind: "failure", message: "boom" }, ctx);
+
+    expect(result).toMatchObject({ is_error: true, usage: { input_tokens: 1000 } });
+  });
+
+  test("assistant events carry the same usage under one message id", () => {
+    const events = [
+      ...claudeDialect.beat({ kind: "text", text: "a" }, 0, ctx),
+      ...claudeDialect.beat({ kind: "shell", command: "ls", output: "x" }, 1, ctx),
+    ].filter((line) => line.type === "assistant");
+
+    const messages = events.map((line) => line.message as Record<string, unknown>);
+    expect(new Set(messages.map((message) => message.id)).size).toBe(1);
+    expect(messages.every((message) => message.usage !== undefined)).toBe(true);
   });
 });
