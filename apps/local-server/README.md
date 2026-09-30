@@ -51,7 +51,6 @@ Registered in `src/app.ts`:
 | `/api/runtime-profiles`, `/api/runtime-configuration` | Runtime catalog and per-runtime configuration |
 | `/api/mcp` | The AOP MCP server (its tools depend on the calling session) |
 | `/api/fs` | Directory browse for settings UI |
-| `/api/updates` | Self-update |
 
 Every route except health, `POST /api/auth/pair`, and `/api/mcp` needs a device token, its session cookie, or a direct request from the host itself. Who may call what is in `src/auth/route-policy.ts`.
 
@@ -82,7 +81,7 @@ src/
   runtime-configuration/, runtime-profile/, providers/
   events/             SSE + log tailing
   auth/               device tokens, pairing, cookie sessions, request guard
-  github-cli/, mcp/, updates/
+  github-cli/, mcp/
   settings/, health/, db/, fs/
 ```
 

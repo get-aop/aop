@@ -1,6 +1,6 @@
 import { Settings2Icon } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { useAopUpdateStatus } from "../hooks/useAopUpdateStatus";
+import { useHostVersion } from "../hooks/useHostVersion";
 import type { HostConnection } from "../projects/selectors";
 import { openSettingsDialog } from "./dialog-store";
 
@@ -16,9 +16,9 @@ const CONNECTION_DOT: Record<HostConnection, string> = {
   offline: "bg-blocked",
 };
 
-/** Sidebar footer: Settings (⌘,), then the state of the connection to the host, its version and an update. */
+/** Sidebar footer: Settings (⌘,), then the state of the connection to the host and its version. */
 export const SidebarFooterStatus = ({ connection }: { connection: HostConnection }) => {
-  const update = useAopUpdateStatus();
+  const version = useHostVersion();
 
   return (
     <div data-testid="sidebar-footer" className="flex flex-col gap-0.5 p-2">
@@ -39,21 +39,7 @@ export const SidebarFooterStatus = ({ connection }: { connection: HostConnection
       >
         <span className={cn("size-1.5 rounded-full", CONNECTION_DOT[connection])} />
         <span>{CONNECTION_LABEL[connection]}</span>
-        {update.status ? <span>· v{update.status.currentVersion}</span> : null}
-        {update.status?.updateAvailable ? (
-          <>
-            <span>·</span>
-            <button
-              type="button"
-              data-testid="sidebar-update"
-              onClick={() => void update.install()}
-              disabled={update.installing}
-              className="text-running hover:underline disabled:opacity-50"
-            >
-              {update.installing ? "Updating…" : "Update"}
-            </button>
-          </>
-        ) : null}
+        {version ? <span>· {version}</span> : null}
       </div>
     </div>
   );

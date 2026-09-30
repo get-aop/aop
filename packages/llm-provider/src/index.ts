@@ -1,5 +1,4 @@
 export type { OutputHandler } from "@aop/infra";
-export { getControlCapabilityUnsupportedReason } from "./control-capabilities";
 export type {
   AssistantSignalText,
   InferredRunOutcome,
@@ -38,13 +37,7 @@ export {
   supportsNativePlanMode,
   UnsupportedPlanModeError,
 } from "./plan-mode";
-export {
-  isPidAlive,
-  listDescendantPids,
-  needsControlProcessCleanup,
-  startProcessTreeTracker,
-  terminateProcessTree,
-} from "./process-tree";
+export { terminateProcessTree } from "./process-tree";
 export { createProvider } from "./provider-factory";
 export { ClaudeCodeProvider } from "./providers/claude-code";
 export { CodexCliProvider } from "./providers/codex-cli";

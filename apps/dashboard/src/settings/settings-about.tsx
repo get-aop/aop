@@ -2,7 +2,7 @@ import { ExternalLinkIcon } from "lucide-react";
 
 import { DashboardVersion } from "../components/DashboardVersion";
 
-/** Settings §About — version/build row (with update panel) + release notes. */
+/** Settings §About: the host's version and a link to the release notes. */
 export const SettingsAbout = () => {
   return (
     <div data-testid="section-about" className="flex flex-col gap-3 p-4">

@@ -1,12 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { buildClaudeCodeSpawnEnv, resolveExecHost } from "@aop/infra";
-import {
-  getControlCapabilityUnsupportedReason,
-  PLAYWRIGHT_MCP_VERSION,
-} from "../control-capabilities";
 import { extractRuntimeSessionIdFromRawJsonl } from "../logs";
 import { assertNativePlanModeSupported } from "../plan-mode";
-import { needsControlProcessCleanup, startProcessTreeTracker } from "../process-tree";
 import { resolveRuntimeAlias } from "../runtime-alias";
 import type { LLMProvider, RunOptions, RunResult } from "../types";
 
@@ -152,7 +147,6 @@ export class ClaudeCodeProvider implements LLMProvider {
 
   buildCommand(options: RunOptions): string[] {
     assertNativePlanModeSupported(this.name, options.mode);
-    assertClaudeControlSupport(options);
     const { isolationArgs, mcpConfig } = buildClaudeIsolation(options);
 
     const cmd = [
@@ -164,7 +158,6 @@ export class ClaudeCodeProvider implements LLMProvider {
     ];
 
     appendClaudePermissionFlags(cmd, options);
-    appendClaudeBrowserFlags(cmd, options);
 
     if (options.resumeSessionId) {
       cmd.push("--resume", options.resumeSessionId);
@@ -237,9 +230,6 @@ export class ClaudeCodeProvider implements LLMProvider {
 
     const pid = proc.pid;
     await options.onSpawn?.(pid);
-    // Playwright MCP / browser helpers can outlive the CLI on control turns.
-    const controlTracker =
-      needsControlProcessCleanup(options) && pid ? startProcessTreeTracker(pid) : null;
 
     let timedOut = false;
     let startupTimedOut = false;
@@ -258,26 +248,22 @@ export class ClaudeCodeProvider implements LLMProvider {
       });
     }
 
-    try {
-      const exitCode = await proc.exited;
-      watchdog?.stop();
+    const exitCode = await proc.exited;
+    watchdog?.stop();
 
-      const logContent = existsSync(logFilePath) ? readFileSync(logFilePath, "utf-8") : "";
-      const sessionId = extractRuntimeSessionIdFromRawJsonl(logContent);
-      if (sessionId) {
-        await options.onSession?.(sessionId);
-      }
-
-      return {
-        exitCode,
-        pid,
-        sessionId: sessionId ?? undefined,
-        timedOut,
-        ...(startupTimedOut ? { startupTimedOut: true } : {}),
-      };
-    } finally {
-      await controlTracker?.terminate();
+    const logContent = existsSync(logFilePath) ? readFileSync(logFilePath, "utf-8") : "";
+    const sessionId = extractRuntimeSessionIdFromRawJsonl(logContent);
+    if (sessionId) {
+      await options.onSession?.(sessionId);
     }
+
+    return {
+      exitCode,
+      pid,
+      sessionId: sessionId ?? undefined,
+      timedOut,
+      ...(startupTimedOut ? { startupTimedOut: true } : {}),
+    };
   }
 
   private async runWithPipeOutput(options: RunOptions): Promise<RunResult> {
@@ -354,12 +340,6 @@ export class ClaudeCodeProvider implements LLMProvider {
   }
 }
 
-const assertClaudeControlSupport = (options: RunOptions): void => {
-  if (!options.computerControl) return;
-  const reason = getControlCapabilityUnsupportedReason("claude-code", "computer");
-  if (reason) throw new Error(reason);
-};
-
 const appendClaudePermissionFlags = (cmd: string[], options: RunOptions): void => {
   if (options.mode === "plan") {
     cmd.push("--permission-mode", "plan");
@@ -407,10 +387,6 @@ const appendClaudeSystemPromptFlags = (cmd: string[], options: RunOptions): void
   cmd.push("--append-system-prompt", text, "--system-prompt-snapshot", "off");
 };
 
-const appendClaudeBrowserFlags = (cmd: string[], options: RunOptions): void => {
-  if (options.browserControl) cmd.push("--chrome");
-};
-
 const normalizeClaudeCodeEffort = (effort: string): string =>
   effort === "extra-high" ? "xhigh" : effort;
 
@@ -432,13 +408,6 @@ const buildClaudeMcpConfig = (options: RunOptions): Record<string, unknown> | nu
   // the only server the run can reach.
   if (normalized) {
     servers.aop = { type: "http", url: normalized };
-  }
-  if (options.browserControl) {
-    servers.playwright = {
-      type: "stdio",
-      command: "bunx",
-      args: ["-y", `@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}`, "--headless", "--isolated"],
-    };
   }
   return Object.keys(servers).length > 0 ? { mcpServers: servers } : null;
 };

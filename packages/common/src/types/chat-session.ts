@@ -81,13 +81,6 @@ export type ChatRuntimeAccessMode =
   | "auto"
   | "full-access";
 
-export type TerminalLineTone = "cmd" | "out" | "meta";
-
-export interface TerminalLine {
-  text: string;
-  tone: TerminalLineTone;
-}
-
 export interface UpdateChatSessionInput {
   title?: string;
   named?: boolean;

@@ -2,10 +2,8 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { buildSpawnEnv, resolveExecHost } from "@aop/infra";
-import { PLAYWRIGHT_MCP_VERSION } from "../control-capabilities";
 import { extractRuntimeSessionIdFromRawJsonl } from "../logs";
 import { assertNativePlanModeSupported } from "../plan-mode";
-import { needsControlProcessCleanup, startProcessTreeTracker } from "../process-tree";
 import { resolveRuntimeAlias } from "../runtime-alias";
 import { sanitizeSessionId } from "../session-id";
 import type { LLMProvider, RunOptions, RunResult } from "../types";
@@ -46,7 +44,6 @@ export class CodexCliProvider implements LLMProvider {
     }
 
     appendAopMcpServer(cmd, options.mcpServerUrl);
-    appendControlCapabilities(cmd, options);
     if (resumeSessionId) {
       cmd.push(resumeSessionId);
     }
@@ -71,33 +68,25 @@ export class CodexCliProvider implements LLMProvider {
 
     const pid = proc.pid;
     await options.onSpawn?.(pid);
-    // computer_use / browser_use helpers can outlive codex exec; track while
-    // the root is alive so cleanup still finds reparented detached children.
-    const controlTracker =
-      needsControlProcessCleanup(options) && pid ? startProcessTreeTracker(pid) : null;
     const timeout = attachCodexTimeoutWatchdog(proc, options);
 
-    try {
-      const exitCode = await proc.exited;
-      timeout.watchdog?.stop();
+    const exitCode = await proc.exited;
+    timeout.watchdog?.stop();
 
-      const sessionId = sanitizeSessionId(
-        options.logFilePath ? readSessionIdFromLog(options.logFilePath) : undefined,
-      );
-      if (sessionId) {
-        await options.onSession?.(sessionId);
-      }
-
-      return {
-        exitCode,
-        pid,
-        sessionId,
-        timedOut: timeout.timedOut,
-        ...(timeout.startupTimedOut ? { startupTimedOut: true } : {}),
-      };
-    } finally {
-      await controlTracker?.terminate();
+    const sessionId = sanitizeSessionId(
+      options.logFilePath ? readSessionIdFromLog(options.logFilePath) : undefined,
+    );
+    if (sessionId) {
+      await options.onSession?.(sessionId);
     }
+
+    return {
+      exitCode,
+      pid,
+      sessionId,
+      timedOut: timeout.timedOut,
+      ...(timeout.startupTimedOut ? { startupTimedOut: true } : {}),
+    };
   }
 }
 
@@ -193,26 +182,6 @@ const appendAopMcpServer = (cmd: string[], mcpServerUrl?: string): void => {
   const url = mcpServerUrl?.trim();
   if (!url) return;
   cmd.push("-c", `mcp_servers.aop.url=${JSON.stringify(url)}`);
-};
-
-const appendControlCapabilities = (cmd: string[], options: RunOptions): void => {
-  if (options.browserControl) {
-    cmd.push(
-      "--enable",
-      "browser_use",
-      "--enable",
-      "browser_use_external",
-      "--enable",
-      "in_app_browser",
-      "-c",
-      'mcp_servers.playwright.command="bunx"',
-      "-c",
-      `mcp_servers.playwright.args=["-y","@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}","--headless","--isolated"]`,
-    );
-  }
-  if (options.computerControl) {
-    cmd.push("--enable", "computer_use");
-  }
 };
 
 const readSessionIdFromLog = (logFilePath: string): string | undefined => {

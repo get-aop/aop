@@ -1,6 +1,5 @@
 import type {
-  AopUpdateInstallResult,
-  AopUpdateStatus,
+  HostHealth,
   MarkdownFileContent,
   RuntimeConfigurationModel,
   RuntimeConfigurationModelInput,
@@ -10,46 +9,6 @@ import type {
   SSEServerStatus,
 } from "@aop/common";
 import { request } from "./request";
-
-export type ProviderCapabilitySupport = "yes" | "no" | "partial";
-
-export interface ProviderCapabilityEntry {
-  id: "claude-code";
-  label: string;
-  roleFit: string;
-  version: string | null;
-  updateState: {
-    status: "idle" | "queued" | "running" | "succeeded" | "failed" | "skipped";
-    startedAt: string | null;
-    finishedAt: string | null;
-    message: string | null;
-  };
-  capabilities: Record<
-    | "structuredJsonl"
-    | "resumeSupport"
-    | "usageReporting"
-    | "nativePlanMode"
-    | "permissionSandboxFlags"
-    | "liveFollowUp",
-    ProviderCapabilitySupport
-  >;
-  readinessProbe: Record<
-    | "cliInstalled"
-    | "authenticated"
-    | "versionDetected"
-    | "canSpawn"
-    | "canResume"
-    | "canWriteLogs"
-    | "canReportUsage"
-    | "supportsConfiguredSafetyFlags",
-    boolean
-  >;
-}
-
-export type ProviderUpdateStates = Record<
-  ProviderCapabilityEntry["id"],
-  ProviderCapabilityEntry["updateState"]
->;
 
 export interface RegisteredRepo {
   id: string;
@@ -68,12 +27,10 @@ export const unregisterRepo = async (
   return request(`/repos/${repoId}?force=true`, { method: "DELETE" });
 };
 
-export const getUpdateStatus = async (): Promise<AopUpdateStatus> => {
-  return request<AopUpdateStatus>("/updates");
-};
-
-export const installUpdate = async (): Promise<AopUpdateInstallResult> => {
-  return request<AopUpdateInstallResult>("/updates/install", { method: "POST" });
+/** The host's release as it reports it on the probe every client may call. */
+export const getHostVersion = async (): Promise<string> => {
+  const health = await request<Pick<HostHealth, "version">>("/health");
+  return health.version;
 };
 
 /**
@@ -83,19 +40,6 @@ export const installUpdate = async (): Promise<AopUpdateInstallResult> => {
  */
 export const openExternalUrl = (url: string): void => {
   window.open(url, "_blank", "noopener,noreferrer");
-};
-
-export const getProviderCapabilities = async (): Promise<ProviderCapabilityEntry[]> => {
-  const data = await request<{ providers: ProviderCapabilityEntry[] }>("/providers/capabilities");
-  return data.providers;
-};
-
-export const updateAllProviderClis = async (): Promise<{ accepted: boolean }> =>
-  request<{ accepted: boolean }>("/providers/update-all", { method: "POST" });
-
-export const getProviderUpdateStates = async (): Promise<ProviderUpdateStates> => {
-  const data = await request<{ states: ProviderUpdateStates }>("/providers/update-status");
-  return data.states;
 };
 
 export interface DirectoryListingResponse {

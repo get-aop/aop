@@ -208,7 +208,6 @@ describe("createApiAuth", () => {
         ["POST", "/api/auth/pairing-codes"],
         ["GET", "/api/auth/devices"],
         ["DELETE", "/api/auth/devices/some-device"],
-        ["POST", "/api/updates/install"],
       ] as const;
 
       for (const [method, path] of hostOnly) {
@@ -236,8 +235,8 @@ describe("createApiAuth", () => {
       const { token } = await pair();
 
       const res = await app.request(
-        `${BASE}/api/updates/install/`,
-        { method: "POST", headers: { authorization: `Bearer ${token}` } },
+        `${BASE}/api/auth/devices/`,
+        { headers: { authorization: `Bearer ${token}` } },
         REMOTE_PEER,
       );
 

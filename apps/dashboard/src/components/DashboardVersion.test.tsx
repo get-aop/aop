@@ -3,92 +3,47 @@ import { setupDashboardDom } from "../test/setup-dom";
 
 setupDashboardDom();
 
-const mockGetUpdateStatus = mock();
-const mockInstallUpdate = mock();
+const mockGetHostVersion = mock();
 const actualClientModule = await import("../api/client.ts");
 
 mock.module("../api/client", () => ({
   ...actualClientModule,
-  getUpdateStatus: mockGetUpdateStatus,
-  installUpdate: mockInstallUpdate,
+  getHostVersion: mockGetHostVersion,
 }));
 
-const { cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
+const { cleanup, render, screen, waitFor } = await import("@testing-library/react");
 const { DashboardVersion } = await import("./DashboardVersion");
 
 beforeEach(() => {
-  mockGetUpdateStatus.mockReset();
-  mockInstallUpdate.mockReset();
+  mockGetHostVersion.mockReset();
 });
 
 afterEach(cleanup);
 
 describe("DashboardVersion", () => {
-  test("shows the current version (no update button) when up to date", async () => {
-    mockGetUpdateStatus.mockResolvedValue({
-      currentVersion: "0.2.1+abc1234",
-      latestVersion: "0.2.1",
-      updateAvailable: false,
-      canAutoUpdate: true,
-    });
+  test("shows the release the host reports without its build metadata", async () => {
+    mockGetHostVersion.mockResolvedValue("0.2.1+abc1234");
 
     render(<DashboardVersion />);
 
     await waitFor(() => expect(screen.getByText("v0.2.1")).toBeDefined());
-    expect(screen.queryByRole("button", { name: /Update available/i })).toBeNull();
-    expect(screen.getByRole("button", { name: /Check for updates/i })).toBeDefined();
+    expect(mockGetHostVersion).toHaveBeenCalledTimes(1);
   });
 
-  test("marks source/dev builds and hides the check button when auto-update is unavailable", async () => {
-    mockGetUpdateStatus.mockResolvedValue({
-      currentVersion: "0.2.1+dev",
-      latestVersion: null,
-      updateAvailable: false,
-      canAutoUpdate: false,
-    });
+  test("says so when the host runs a source build with no release version", async () => {
+    mockGetHostVersion.mockResolvedValue("dev");
 
     render(<DashboardVersion />);
 
-    await waitFor(() => expect(screen.getByText("v0.2.1 (dev)")).toBeDefined());
-    expect(screen.queryByRole("button", { name: /Check for updates/i })).toBeNull();
+    await waitFor(() => expect(screen.getByText("dev build")).toBeDefined());
   });
 
-  test("re-checks for updates on demand", async () => {
-    mockGetUpdateStatus.mockResolvedValue({
-      currentVersion: "0.2.1+abc1234",
-      latestVersion: "0.2.1",
-      updateAvailable: false,
-      canAutoUpdate: true,
-    });
+  test("says the version is unavailable when the host does not answer", async () => {
+    mockGetHostVersion.mockRejectedValue(new Error("offline"));
 
     render(<DashboardVersion />);
 
-    await waitFor(() => expect(mockGetUpdateStatus).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: /Check for updates/i }));
-    await waitFor(() => expect(mockGetUpdateStatus).toHaveBeenCalledTimes(2));
-  });
-
-  test("shows the update button and starts install on click", async () => {
-    mockGetUpdateStatus.mockResolvedValue({
-      currentVersion: "0.1.0+abc1234",
-      latestVersion: "0.2.1",
-      updateAvailable: true,
-      canAutoUpdate: true,
-    });
-    mockInstallUpdate.mockResolvedValue({
-      status: "started",
-      targetVersion: "0.2.1",
-      message: "Upgrading to AOP 0.2.1. The server will restart shortly.",
-    });
-
-    render(<DashboardVersion />);
-
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Update available/i })).toBeDefined(),
-    );
-    fireEvent.click(screen.getByRole("button", { name: /Update available/i }));
-
-    await waitFor(() => expect(mockInstallUpdate).toHaveBeenCalled());
-    expect(screen.getByText(/reload automatically/i)).toBeDefined();
+    await waitFor(() => expect(mockGetHostVersion).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("version unavailable")).toBeDefined();
   });
 });

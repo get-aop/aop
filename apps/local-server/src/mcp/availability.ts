@@ -5,7 +5,7 @@
  */
 
 /** Runtimes whose CLI can host the AOP MCP server. */
-export const MCP_CAPABLE_RUNTIMES = new Set(["claude-code", "codex-cli"]);
+export const MCP_CAPABLE_RUNTIMES = new Set(["claude-code"]);
 
 export const isMcpCapableRuntime = (runtime: string): boolean => MCP_CAPABLE_RUNTIMES.has(runtime);
 

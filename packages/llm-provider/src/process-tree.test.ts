@@ -2,22 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  isPidAlive,
-  listDescendantPids,
-  needsControlProcessCleanup,
-  startProcessTreeTracker,
-  terminateProcessTree,
-} from "./process-tree";
+import { isPidAlive, listDescendantPids, terminateProcessTree } from "./process-tree";
 
 describe("process-tree", () => {
-  test("needsControlProcessCleanup is true for browser or computer flags", () => {
-    expect(needsControlProcessCleanup({})).toBe(false);
-    expect(needsControlProcessCleanup({ browserControl: true })).toBe(true);
-    expect(needsControlProcessCleanup({ computerControl: true })).toBe(true);
-  });
-
-  test("terminates detached descendants after the root exits", async () => {
+  test("terminates the root and a detached descendant", async () => {
     if (process.platform === "win32") return;
 
     const dir = await mkdtemp(join(tmpdir(), "aop-process-tree-"));
@@ -26,9 +14,7 @@ describe("process-tree", () => {
       const script = [
         `const child = Bun.spawn(["sleep", "30"], { detached: true, stdout: "ignore", stderr: "ignore", stdin: "ignore" });`,
         `await Bun.write(${JSON.stringify(pidFile)}, String(child.pid));`,
-        // Stay alive long enough for the tracker to observe the detached child.
-        "await Bun.sleep(200);",
-        "process.exit(0);",
+        "await Bun.sleep(30000);",
       ].join("\n");
       const root = Bun.spawn([process.execPath, "-e", script], {
         detached: true,
@@ -36,16 +22,12 @@ describe("process-tree", () => {
         stderr: "ignore",
         stdin: "ignore",
       });
-      const tracker = startProcessTreeTracker(root.pid);
       while (!(await Bun.file(pidFile).exists())) await Bun.sleep(10);
       const childPid = Number.parseInt(await readFile(pidFile, "utf8"), 10);
       expect(listDescendantPids(root.pid)).toContain(childPid);
-      // Ensure at least one tracker snapshot after the child exists.
-      await Bun.sleep(80);
-      tracker.snapshot();
 
+      await terminateProcessTree(root.pid);
       await root.exited;
-      await tracker.terminate();
       await Bun.sleep(30);
 
       expect(isPidAlive(childPid)).toBe(false);

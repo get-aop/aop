@@ -39,7 +39,6 @@ That bumps the version in the root `package.json` (the single source of truth fo
 - macOS DMG downloads are available at `https://getaop.com/vX.Y.Z/aop-macos-arm64.dmg` and `https://getaop.com/vX.Y.Z/aop-macos-x64.dmg`
 - Windows desktop setup (`aop-windows-x64-setup.exe`) is attached automatically after the primary release finishes; durable URL: `https://getaop.com/latest/aop-windows-x64-setup.exe`
 - Native Windows CLI install: `irm https://getaop.com/install.ps1 | iex`
-- Dashboard **Update available** button appears for binary installs on older versions
 - Existing `~/.aop/` data is preserved; users restart with `aop stop && aop run --background`
 
 ## macOS Desktop DMGs

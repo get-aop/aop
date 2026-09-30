@@ -209,47 +209,6 @@ describe("buildCommand", () => {
     expect(cmd).not.toContain("--settings");
   });
 
-  test("uses native Chrome with an isolated Playwright fallback for browser control", () => {
-    const provider = new ClaudeCodeProvider();
-    const cmd = provider.buildCommand({ prompt: "inspect the page", browserControl: true });
-
-    expect(cmd).toContain("--chrome");
-    expect(cmd).toContain("--mcp-config");
-    expect(cmd.some((arg) => arg.includes("@playwright/mcp@0.0.78"))).toBe(true);
-  });
-
-  test("keeps both AOP and Playwright MCP servers for browser control", () => {
-    const provider = new ClaudeCodeProvider();
-    const cmd = provider.buildCommand({
-      prompt: "inspect the page",
-      isolation: "open",
-      browserControl: true,
-      mcpServerUrl: "http://127.0.0.1:25350/api/mcp",
-    });
-
-    const config = JSON.parse(cmd[cmd.indexOf("--mcp-config") + 1] ?? "{}");
-    expect(Object.keys(config.mcpServers)).toEqual(["aop", "playwright"]);
-  });
-
-  test("does not override configured tools in plan mode", () => {
-    const provider = new ClaudeCodeProvider();
-    const cmd = provider.buildCommand({
-      prompt: "inspect the page",
-      mode: "plan",
-      browserControl: true,
-    });
-
-    expect(cmd).not.toContain("--allowedTools");
-    expect(cmd).toContain("--chrome");
-  });
-
-  test("rejects computer control because detached Claude sessions cannot provide it", () => {
-    const provider = new ClaudeCodeProvider();
-    expect(() => provider.buildCommand({ prompt: "open Finder", computerControl: true })).toThrow(
-      "requires an interactive session",
-    );
-  });
-
   test("adds ultracode to Claude Code settings instead of effort", () => {
     const provider = new ClaudeCodeProvider();
     const cmd = provider.buildCommand({

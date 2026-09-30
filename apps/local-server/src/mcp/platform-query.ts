@@ -1,5 +1,4 @@
 import type { LocalServerContext } from "../context.ts";
-import { getRepoById } from "../repo/handlers.ts";
 
 /**
  * Domain query helpers for AOP MCP tools.
@@ -13,8 +12,4 @@ export const listPlatformRepos = async (ctx: LocalServerContext) => {
     name: repo.name,
     path: repo.path,
   }));
-};
-
-export const getPlatformRepo = async (ctx: LocalServerContext, repoId: string) => {
-  return getRepoById(ctx, repoId);
 };

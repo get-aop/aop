@@ -8,11 +8,6 @@ export interface SSEServerStatus {
   repos: SSERepo[];
 }
 
-export interface SSEInitEvent {
-  type: "init";
-  status: SSEServerStatus;
-}
-
 export interface SSERepoRemovedEvent {
   type: "repo-removed";
   repoId: string;
@@ -30,9 +25,4 @@ export interface SSEChatUnreadEvent {
   title: string;
   snippet: string;
   kind: ChatUnreadKind;
-}
-
-export interface DashboardChatUnreadEvent {
-  type: "chat-unread";
-  data: Omit<SSEChatUnreadEvent, "type">;
 }

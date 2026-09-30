@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { rmSync, writeFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isPidAlive } from "../process-tree";
 import type { LLMProvider } from "../types";
 import { CodexCliProvider } from "./codex-cli";
 
@@ -150,17 +148,6 @@ describe("buildCommand", () => {
     ]);
   });
 
-  test("enables native and Playwright browser control for a control turn", () => {
-    const provider = new CodexCliProvider();
-    const cmd = provider.buildCommand({ prompt: "inspect the page", browserControl: true });
-
-    expect(cmd).toContain("browser_use");
-    expect(cmd).toContain("browser_use_external");
-    expect(cmd).toContain("in_app_browser");
-    expect(cmd.some((arg) => arg.includes("mcp_servers.playwright"))).toBe(true);
-    expect(cmd).toContain("inspect the page");
-  });
-
   test("connects AOP platform tools when an MCP URL is provided", () => {
     const provider = new CodexCliProvider();
     const cmd = provider.buildCommand({
@@ -172,14 +159,6 @@ describe("buildCommand", () => {
     expect(cmd.indexOf('mcp_servers.aop.url="http://127.0.0.1:4310/api/mcp"')).toBeLessThan(
       cmd.indexOf("Create an AOP workflow"),
     );
-  });
-
-  test("enables native computer control for a control turn", () => {
-    const provider = new CodexCliProvider();
-    const cmd = provider.buildCommand({ prompt: "open Finder", computerControl: true });
-
-    expect(cmd).toContain("computer_use");
-    expect(cmd).toContain("open Finder");
   });
 
   test("builds a Codex resume command when a session id is provided", () => {
@@ -244,46 +223,6 @@ describe("run", () => {
     const spawnArgs = spawnSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(spawnArgs.detached).toBe(true);
     expect(spawnArgs.stdin).toBe("ignore");
-  });
-
-  test("reaps detached computer-control helpers after the root codex process exits", async () => {
-    if (process.platform === "win32") return;
-
-    const dir = await mkdtemp(join(tmpdir(), "aop-codex-control-"));
-    const pidFile = join(dir, "child.pid");
-    const logFilePath = join(dir, "run.jsonl");
-    let childPid = 0;
-
-    // Real spawn path: a stub "codex" binary that leaves a detached helper.
-    const codexStub = join(dir, "codex-stub");
-    await writeFile(
-      codexStub,
-      [
-        "#!/usr/bin/env bun",
-        `const child = Bun.spawn(["sleep", "30"], { detached: true, stdout: "ignore", stderr: "ignore", stdin: "ignore" });`,
-        `await Bun.write(${JSON.stringify(pidFile)}, String(child.pid));`,
-        "await Bun.sleep(200);",
-        "process.exit(0);",
-      ].join("\n"),
-      { mode: 0o755 },
-    );
-
-    try {
-      const provider = new CodexCliProvider();
-      const result = await provider.run({
-        prompt: "open Finder",
-        logFilePath,
-        computerControl: true,
-        runtimeAlias: codexStub,
-      });
-      expect(result.exitCode).toBe(0);
-      childPid = Number.parseInt(await readFile(pidFile, "utf8"), 10);
-      await Bun.sleep(40);
-      expect(isPidAlive(childPid)).toBe(false);
-    } finally {
-      if (childPid && isPidAlive(childPid)) process.kill(childPid, "SIGKILL");
-      await rm(dir, { recursive: true, force: true });
-    }
   });
 
   test("keeps Codex stderr out of the JSON stdout log", async () => {

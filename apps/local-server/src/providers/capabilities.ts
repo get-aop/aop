@@ -2,24 +2,19 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import type { CliProvider } from "@aop/common";
 import type { ExecHost } from "@aop/infra";
 import { resolveExecHost } from "@aop/infra";
-import {
-  type ProviderUpdateId,
-  type ProviderUpdateState,
-  providerUpdateService,
-} from "./provider-updates.ts";
 
 export type ProviderCapabilitySupport = "yes" | "no" | "partial";
 
-type ProviderCapabilityId = ProviderUpdateId;
+type ProviderCapabilityId = CliProvider;
 
 export interface ProviderCapabilityEntry {
   id: ProviderCapabilityId;
   label: string;
   roleFit: string;
   version: string | null;
-  updateState: ProviderUpdateState;
   capabilities: {
     structuredJsonl: ProviderCapabilitySupport;
     resumeSupport: ProviderCapabilitySupport;
@@ -55,16 +50,11 @@ const VERSION_TIMEOUT_MS = 1_500;
 
 export const getProviderCapabilities = async (
   doctor: ProviderDoctor = createDefaultProviderDoctor(),
-  updateStates = providerUpdateService.getStates(),
 ): Promise<ProviderCapabilityEntry[]> =>
-  Promise.all(
-    STATIC_PROVIDER_CAPABILITIES.map((entry) =>
-      withReadinessProbe(entry, doctor, updateStates[entry.id]),
-    ),
-  );
+  Promise.all(STATIC_PROVIDER_CAPABILITIES.map((entry) => withReadinessProbe(entry, doctor)));
 
 const STATIC_PROVIDER_CAPABILITIES: Array<
-  Omit<ProviderCapabilityEntry, "readinessProbe" | "version" | "updateState">
+  Omit<ProviderCapabilityEntry, "readinessProbe" | "version">
 > = [
   {
     id: "claude-code",
@@ -82,9 +72,8 @@ const STATIC_PROVIDER_CAPABILITIES: Array<
 ];
 
 const withReadinessProbe = async (
-  entry: Omit<ProviderCapabilityEntry, "readinessProbe" | "version" | "updateState">,
+  entry: Omit<ProviderCapabilityEntry, "readinessProbe" | "version">,
   doctor: ProviderDoctor,
-  updateState: ProviderUpdateState,
 ): Promise<ProviderCapabilityEntry> => {
   const command = CLI_COMMANDS[entry.id];
   const cliInstalled = await doctor.commandExists(command);
@@ -96,7 +85,6 @@ const withReadinessProbe = async (
   return {
     ...entry,
     version,
-    updateState,
     readinessProbe: {
       cliInstalled,
       authenticated,

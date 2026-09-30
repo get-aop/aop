@@ -52,15 +52,11 @@ The dashboard is Sessions-first:
 - **Sessions** `/` — the rail, thread, composer, right panel, and terminal dock.
 - **Settings** `/settings` — General, Repositories, Runtimes, Devices, About.
 
-Task detail lives at `/tasks/:id` (deep links from chat cards). Legacy routes (`/chat`, `/pool`, `/workers`, `/metrics`, `/workflows/:id`) redirect to the home page. The rail footer shows the installed version and the update action when one is available.
+Task detail lives at `/tasks/:id` (deep links from chat cards). Legacy routes (`/chat`, `/pool`, `/workers`, `/metrics`, `/workflows/:id`) redirect to the home page. The rail footer shows the connection to the host and the version the host reports.
 
 ## Desktop and Windows
 
 The desktop app is a thin client of one AOP host. It bundles the dashboard, serves it to its window as `app://aop`, and keeps the host's address and its device token (in the operating system's keychain) in its main process, handing them to the dashboard in memory over a narrow preload bridge. The main process also watches the host's event streams to raise operating system notifications. On a Mac the app can run the host itself, bound to loopback. Windows is a client only and runs no server. [The host guide](../HOST.md) covers pairing, the cross-origin rules, and host mode.
-
-## Updates
-
-The local update service polls release metadata from getaop.com. When a newer version is available, the dashboard top bar exposes **Update**; the server coordinates the platform-specific update path without moving orchestration into a hosted service.
 
 ## Related guides
 

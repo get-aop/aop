@@ -1,8 +1,4 @@
-/**
- * Detached agent trees (Codex computer_use, Playwright MCP, tool subprocesses)
- * can outlive the root CLI. Interrupt paths already reap them; normal control
- * turn completion must too.
- */
+/** Detached agent trees (tool subprocesses) can outlive the root CLI, so a stop reaps the whole tree. */
 
 export const isPidAlive = (pid: number): boolean => {
   try {
@@ -42,46 +38,15 @@ export const listDescendantPids = (rootPid: number): number[] => {
   return descendants;
 };
 
-export interface ProcessTreeTracker {
-  snapshot: () => void;
-  terminate: () => Promise<void>;
-}
+const TERMINATE_GRACE_MS = 400;
 
-/**
- * Snapshot descendants while the root is still alive, then SIGTERM/SIGKILL the
- * process group and every pid observed. Detached helpers reparent to init after
- * the root exits, so mid-run snapshots are required.
- */
-export const startProcessTreeTracker = (rootPid: number): ProcessTreeTracker => {
-  const known = new Set<number>();
-  const snapshot = () => {
-    for (const pid of listDescendantPids(rootPid)) known.add(pid);
-  };
-  // Fast enough to catch short-lived control helpers before the root exits.
-  const timer = setInterval(snapshot, 50);
-  snapshot();
-
-  return {
-    snapshot,
-    terminate: async () => {
-      clearInterval(timer);
-      snapshot();
-      await terminateProcessTree(rootPid, known);
-    },
-  };
-};
-
-export const terminateProcessTree = async (
-  rootPid: number,
-  knownDescendants: Iterable<number> = [],
-  options?: { graceMs?: number },
-): Promise<void> => {
+/** SIGTERM the root's process group and every descendant, then SIGKILL what is still alive after a short grace. */
+export const terminateProcessTree = async (rootPid: number): Promise<void> => {
   if (!Number.isFinite(rootPid) || rootPid <= 0) return;
-  const graceMs = options?.graceMs ?? 400;
-  const pids = new Set<number>([...knownDescendants, ...listDescendantPids(rootPid)]);
+  const pids = new Set<number>(listDescendantPids(rootPid));
 
   signalProcessTree(rootPid, pids, "SIGTERM");
-  if (await waitUntilProcessTreeQuiet(rootPid, pids, graceMs)) return;
+  if (await waitUntilProcessTreeQuiet(rootPid, pids, TERMINATE_GRACE_MS)) return;
   signalProcessTree(rootPid, pids, "SIGKILL");
 };
 
@@ -122,8 +87,3 @@ const processTreeHasAliveMembers = (rootPid: number, pids: Set<number>): boolean
   [...pids].some((pid) => isPidAlive(pid)) ||
   listDescendantPids(rootPid).some((pid) => isPidAlive(pid)) ||
   isPidAlive(rootPid);
-
-export const needsControlProcessCleanup = (options: {
-  browserControl?: boolean;
-  computerControl?: boolean;
-}): boolean => Boolean(options.browserControl || options.computerControl);

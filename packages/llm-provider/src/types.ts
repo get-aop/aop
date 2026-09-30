@@ -69,10 +69,6 @@ export interface RunOptions {
   fastMode?: boolean;
   /** Enable Claude Code Ultracode workflow orchestration for the session */
   ultracode?: boolean;
-  /** Enable provider-native browser tools with an isolated Playwright fallback. */
-  browserControl?: boolean;
-  /** Enable provider-native desktop computer control when the runtime supports it. */
-  computerControl?: boolean;
   /**
    * HTTP URL for AOP MCP tools (chat-first orchestration). Providers that
    * support MCP should pass this through their spawn config when set.
