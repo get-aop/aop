@@ -111,7 +111,9 @@ describe("listDirectories", () => {
       path: "/home/user",
       directories: ["projects", "documents"],
       parent: "/home",
-      isGitRepo: false,
+      gitKind: null,
+      gitFolders: {},
+      worktreeOf: null,
     };
     mockFetch.mockResolvedValueOnce(jsonResponse(response));
 
@@ -126,7 +128,9 @@ describe("listDirectories", () => {
       path: "/home/user/projects",
       directories: ["repo1", "repo2"],
       parent: "/home/user",
-      isGitRepo: false,
+      gitKind: null,
+      gitFolders: {},
+      worktreeOf: null,
     };
     mockFetch.mockResolvedValueOnce(jsonResponse(response));
 
@@ -144,7 +148,9 @@ describe("listDirectories", () => {
       path: "/home/user",
       directories: [".config", ".local", "projects"],
       parent: "/home",
-      isGitRepo: false,
+      gitKind: null,
+      gitFolders: {},
+      worktreeOf: null,
     };
     mockFetch.mockResolvedValueOnce(jsonResponse(response));
 

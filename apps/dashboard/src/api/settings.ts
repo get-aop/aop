@@ -1,4 +1,5 @@
 import type {
+  DirectoryListing,
   HostHealth,
   MarkdownFileContent,
   RuntimeConfigurationModel,
@@ -42,22 +43,12 @@ export const openExternalUrl = (url: string): void => {
   window.open(url, "_blank", "noopener,noreferrer");
 };
 
-export interface DirectoryListingResponse {
-  path: string;
-  directories: string[];
-  parent: string | null;
-  isGitRepo: boolean;
-}
-
-export const listDirectories = async (
-  path?: string,
-  hidden = false,
-): Promise<DirectoryListingResponse> => {
+export const listDirectories = async (path?: string, hidden = false): Promise<DirectoryListing> => {
   const params = new URLSearchParams();
   if (path) params.set("path", path);
   if (hidden) params.set("hidden", "true");
   const query = params.toString();
-  return request<DirectoryListingResponse>(`/fs/directories${query ? `?${query}` : ""}`);
+  return request<DirectoryListing>(`/fs/directories${query ? `?${query}` : ""}`);
 };
 
 export const getMarkdownFile = (filePath: string): Promise<MarkdownFileContent> =>

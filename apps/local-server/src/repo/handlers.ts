@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { getRemoteOrigin, listLocalBranches } from "@aop/git-manager";
+import { getRemoteOrigin, inspectGitFolder, listLocalBranches } from "@aop/git-manager";
 import { aopPaths, generateTypeId, getLogger, resolveExecHost } from "@aop/infra";
 import {
   type ChatHistoryMaintenanceFailureReason,
@@ -170,7 +170,11 @@ const createRepoDirs = (repoId: string): void => {
   mkdirSync(aopPaths.worktreeMetadata(repoId), { recursive: true });
 };
 
+// A repository root, or a linked worktree: the folder the person chose is the one registered, so a
+// subfolder of a repository is refused. git has the last word, since it reads what the files say
+// (a pointer to a repository that moved, a repository it will not open).
 const checkGitRepo = async (path: string): Promise<boolean> => {
+  if ((await inspectGitFolder(path)).kind === null) return false;
   try {
     const proc = resolveExecHost().spawn({
       cmd: ["git", "rev-parse", "--git-dir"],

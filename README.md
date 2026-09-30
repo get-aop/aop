@@ -46,7 +46,7 @@ The desktop app for macOS (Apple silicon or Intel) and Windows connects to a hos
 ## Your first project
 
 1. Open `http://aop.localhost:25150` on the host and choose **New project**.
-2. Give it a name, an optional goal, and optional instructions that go to the coordinator and every thread. Choose **Attach a repository** and pick a git repository from the host's folders. A project can start with no repository, but its threads then have no branch.
+2. Give it a name, an optional goal, and optional instructions that go to the coordinator and every thread. Choose **Attach a repository** and pick a git repository from the host's folders: folders that are repositories carry a badge, you can type a path, and `~` is the host's home folder. A linked git worktree can be attached as it is (AOP keeps the path you chose, and each thread still gets a worktree of its own from the same repository); the dialog also offers to attach the worktree's main repository instead. `aop repo:init <path>` accepts the same folders. A project can start with no repository, but its threads then have no branch.
 3. Open the **Coordinator** tab and say what you want done. Several tasks in one message are fine: the coordinator starts a thread for each and shows a card for every one.
 4. Watch the **Threads** tab. A thread that is **Waiting on you** has a question; open it and answer with an option or your own words. Steer a running thread from its own box, or stop it.
 5. When a thread's work is ready, open its pull request from the thread's pull request bar, or ask the coordinator to. AOP watches the pull request, sends the thread a fix prompt when checks fail or a reviewer asks for changes, and merges it when you ask. See [Threads and git](./docs/THREADS.md).

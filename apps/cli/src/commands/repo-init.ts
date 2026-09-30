@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { getLogger } from "@aop/infra";
 import { fetchServer } from "./client.ts";
 
@@ -10,7 +11,8 @@ interface RepoInitResponse {
 }
 
 export const repoInitCommand = async (repoPath?: string): Promise<void> => {
-  const path = repoPath ?? process.cwd();
+  // The server resolves a relative path against its own folder, not this one.
+  const path = resolve(repoPath ?? process.cwd());
 
   const result = await fetchServer<RepoInitResponse>("/api/repos", {
     method: "POST",
@@ -20,7 +22,10 @@ export const repoInitCommand = async (repoPath?: string): Promise<void> => {
 
   if (!result.ok) {
     if (result.error.error === "Not a git repository") {
-      logger.error("Error: '{path}' is not a git repository", { path });
+      logger.error(
+        "Error: '{path}' is not a git repository root or a linked worktree (run it in the folder that holds .git)",
+        { path },
+      );
     } else {
       logger.error("Error: {error}", { error: result.error.error });
     }

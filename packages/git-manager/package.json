@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aop/common": "workspace:*",
     "@aop/infra": "workspace:*"
   },
   "devDependencies": {

@@ -116,6 +116,7 @@
     "packages/git-manager": {
       "name": "@aop/git-manager",
       "dependencies": {
+        "@aop/common": "workspace:*",
         "@aop/infra": "workspace:*",
       },
       "devDependencies": {

@@ -1,13 +1,10 @@
-import { access, readdir, stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { DirectoryListing, GitFolderKind } from "@aop/common";
+import { inspectGitFolder } from "@aop/git-manager";
 
-export interface DirectoryListingData {
-  path: string;
-  directories: string[];
-  parent: string | null;
-  isGitRepo: boolean;
-}
+export type DirectoryListingData = DirectoryListing;
 
 export type ListDirectoriesResult =
   | { success: true; data: DirectoryListingData }
@@ -22,11 +19,16 @@ export interface ListDirectoriesOptions {
   hidden?: boolean;
 }
 
+/**
+ * One folder for the Attach dialog: its subfolders, which of them are git repositories or linked
+ * worktrees (so a person can see where to go), and what the folder itself is. A leading `~` is the
+ * home folder, and the path in the answer is the one the server resolved, not the one typed.
+ */
 export const listDirectories = async (
   dirPath?: string,
   options: ListDirectoriesOptions = {},
 ): Promise<ListDirectoriesResult> => {
-  const targetPath = dirPath ?? os.homedir();
+  const targetPath = resolveTarget(dirPath);
   const includeHidden = options.hidden ?? false;
 
   try {
@@ -48,20 +50,21 @@ export const listDirectories = async (
       .sort();
 
     const parent = targetPath === "/" ? null : path.dirname(targetPath);
-
-    const gitPath = path.join(targetPath, ".git");
-    let isGitRepo = false;
-    try {
-      await access(gitPath);
-      const gitStats = await stat(gitPath);
-      isGitRepo = gitStats.isDirectory();
-    } catch {
-      isGitRepo = false;
-    }
+    const [self, gitFolders] = await Promise.all([
+      inspectGitFolder(targetPath),
+      findGitFolders(targetPath, directories),
+    ]);
 
     return {
       success: true,
-      data: { path: targetPath, directories, parent, isGitRepo },
+      data: {
+        path: targetPath,
+        directories,
+        parent,
+        gitFolders,
+        gitKind: self.kind,
+        worktreeOf: self.kind === "worktree" ? self.mainRepoPath : null,
+      },
     };
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException;
@@ -82,4 +85,27 @@ export const listDirectories = async (
 
     throw err;
   }
+};
+
+const resolveTarget = (dirPath?: string): string => {
+  if (!dirPath || dirPath === "~") return os.homedir();
+  if (dirPath.startsWith("~/")) return path.join(os.homedir(), dirPath.slice(2));
+  return path.resolve(dirPath);
+};
+
+const findGitFolders = async (
+  parent: string,
+  names: string[],
+): Promise<Record<string, GitFolderKind>> => {
+  const found = await Promise.all(
+    names.map(async (name) => ({
+      name,
+      kind: (await inspectGitFolder(path.join(parent, name))).kind,
+    })),
+  );
+  const gitFolders: Record<string, GitFolderKind> = {};
+  for (const { name, kind } of found) {
+    if (kind) gitFolders[name] = kind;
+  }
+  return gitFolders;
 };

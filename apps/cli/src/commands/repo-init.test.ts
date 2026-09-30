@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { resolve } from "node:path";
 
 const mockFetchServer = mock();
 
@@ -46,6 +47,17 @@ describe("repoInitCommand", () => {
     const call = mockFetchServer.mock.calls.at(0);
     const body = JSON.parse(call?.at(1)?.body);
     expect(body.path).toBe(process.cwd());
+  });
+
+  test("sends an absolute path for a relative one", async () => {
+    mockFetchServer.mockResolvedValue({
+      ok: true,
+      data: { ok: true, repoId: "repo-1", alreadyExists: false },
+    });
+
+    await repoInitCommand("../some-worktree");
+    const body = JSON.parse(mockFetchServer.mock.calls.at(0)?.at(1)?.body);
+    expect(body.path).toBe(resolve(process.cwd(), "../some-worktree"));
   });
 
   test("completes successfully for new repo", async () => {

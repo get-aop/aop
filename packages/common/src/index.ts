@@ -37,6 +37,7 @@ export type {
   ChatWorkLogStatus,
   ChatWorkLogToolKind,
 } from "./types/chat-work-log.ts";
+export type { DirectoryListing, GitFolderKind } from "./types/directory-listing.ts";
 export type { MarkdownFileContent } from "./types/markdown-file.ts";
 export { MARKDOWN_FILE_LIMITS } from "./types/markdown-file.ts";
 export {

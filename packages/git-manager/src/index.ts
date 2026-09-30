@@ -6,6 +6,7 @@ export {
   WorktreeNotFoundError,
 } from "./errors.ts";
 export { GitManager } from "./git-manager.ts";
+export { type GitFolder, inspectGitFolder } from "./inspect-folder.ts";
 export type {
   GitManagerOptions,
   WorktreeInfo,

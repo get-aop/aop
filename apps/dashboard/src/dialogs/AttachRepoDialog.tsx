@@ -1,64 +1,29 @@
-import { ArrowUpIcon, FolderIcon, GitBranchIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import type { GitFolderKind } from "@aop/common";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
-import { Spinner } from "@/ui/spinner";
-import { ApiError, listDirectories, registerRepo } from "../api/client";
+import { ApiError, registerRepo } from "../api/client";
 import { closeAttachRepoDialog, useDialogs } from "../shell/dialog-store";
+import { DirectoryList } from "./attach-repo/DirectoryList";
+import { PathBar } from "./attach-repo/PathBar";
+import { useDirectoryBrowser } from "./attach-repo/use-directory-browser";
 
 /**
- * Attach repository (PLAN §6.5): 560px directory browser. Git repos get a
- * ⎇ git badge; plain folders descend; footer shows the selected path and
- * enables “Attach repository” only on a git repo.
+ * Attach repository: a directory browser with a path field on top. Folders that are git
+ * repositories carry a badge, a linked worktree can be attached as it is, and the button stays off
+ * in any other folder, with the reason beside it.
  */
 export const AttachRepoDialog = ({ onAttached }: { onAttached?: (repoId: string) => void }) => {
   const { attachRepo } = useDialogs();
-  const requestIdRef = useRef(0);
-
-  const [currentPath, setCurrentPath] = useState("");
-  const [directories, setDirectories] = useState<string[]>([]);
-  const [parentPath, setParentPath] = useState<string | null>(null);
-  const [isGitRepo, setIsGitRepo] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const browser = useDirectoryBrowser(attachRepo);
   const [attaching, setAttaching] = useState(false);
+  const { listing } = browser;
 
-  const fetchDirectoriesRef = useRef<(path?: string) => Promise<void>>(async () => {});
-  const fetchDirectories = async (path?: string) => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setError(null);
-    const result = await listDirectories(path).catch((cause: unknown) => cause);
-    if (requestId !== requestIdRef.current) return;
-    if (result instanceof Error) {
-      setError(result.message);
-    } else if (isDirectoryListing(result)) {
-      setCurrentPath(result.path);
-      setDirectories(result.directories);
-      setParentPath(result.parent);
-      setIsGitRepo(result.isGitRepo);
-    }
-    setLoading(false);
-  };
-  fetchDirectoriesRef.current = fetchDirectories;
-
-  useEffect(() => {
-    if (!attachRepo) return;
-    requestIdRef.current += 1;
-    setError(null);
-    setCurrentPath("");
-    setDirectories([]);
-    setParentPath(null);
-    setIsGitRepo(false);
-    void fetchDirectoriesRef.current();
-  }, [attachRepo]);
-
-  const attach = async () => {
+  const attach = async (path: string) => {
     setAttaching(true);
     try {
-      const result = await registerRepo(currentPath);
+      const result = await registerRepo(path);
       toast.success(result.alreadyExists ? "Repository already attached" : "Repository attached");
       onAttached?.(result.repoId);
       closeAttachRepoDialog();
@@ -76,59 +41,51 @@ export const AttachRepoDialog = ({ onAttached }: { onAttached?: (repoId: string)
         if (!open) closeAttachRepoDialog();
       }}
     >
-      <DialogContent className="w-[560px] max-w-[560px]">
+      <DialogContent
+        data-testid="attach-repo-dialog"
+        // The same 560px as New project at any path length: the grid column may shrink below its
+        // content, and a small window leaves a margin on both sides.
+        className="w-[560px] max-w-[min(560px,calc(100%-2rem))] grid-cols-[minmax(0,1fr)]"
+      >
         <DialogHeader>
           <DialogTitle>Attach repository</DialogTitle>
         </DialogHeader>
 
-        <div className="flex items-center gap-1.5 rounded-row border border-border bg-raised px-2.5 py-1.5 font-mono text-[11.5px] text-text-muted">
-          {parentPath ? (
-            <button
-              type="button"
-              data-testid="attach-repo-up"
-              aria-label="Up one level"
-              onClick={() => void fetchDirectories(parentPath)}
-              className="grid size-6 shrink-0 place-items-center rounded text-text-subtle transition-colors duration-[120ms] hover:bg-hover hover:text-text"
-            >
-              <ArrowUpIcon className="size-3.5" />
-            </button>
-          ) : null}
-          <span className="min-w-0 flex-1 truncate" data-testid="attach-repo-path">
-            {currentPath || "/"}
-          </span>
-          {loading ? <Spinner className="size-3 shrink-0" /> : null}
-          {isGitRepo ? (
-            <Badge variant="tag" data-testid="attach-repo-git-badge">
-              <GitBranchIcon className="size-3" />
-              git
-            </Badge>
-          ) : null}
-        </div>
+        <PathBar browser={browser} />
 
-        {error ? (
-          <p className="text-[12px] text-blocked">{error}</p>
-        ) : (
-          <DirectoryList
-            directories={directories}
-            loading={loading}
-            onOpen={(name) =>
-              void fetchDirectories(currentPath === "/" ? `/${name}` : `${currentPath}/${name}`)
-            }
+        {browser.error ? (
+          <p role="alert" data-testid="attach-repo-error" className="text-[12px] text-blocked">
+            {browser.error}
+          </p>
+        ) : null}
+
+        <DirectoryList
+          names={browser.visible}
+          gitFolders={listing?.gitFolders ?? {}}
+          highlighted={browser.highlighted}
+          loading={browser.loading}
+          filter={browser.fragment}
+          onOpen={browser.open}
+        />
+
+        {listing?.worktreeOf && browser.settled ? (
+          <MainRepositoryOffer
+            path={listing.worktreeOf}
+            disabled={attaching}
+            onAttach={() => void attach(listing.worktreeOf ?? "")}
           />
-        )}
+        ) : null}
 
-        <DialogFooter>
-          <span className="mr-auto min-w-0 flex-1 truncate font-mono text-[11px] text-text-subtle">
-            {currentPath || "Select a folder"}
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => void requestIdRef.current++}>
+        <DialogFooter className="flex-col sm:flex-row sm:items-center">
+          <AttachHint kind={listing?.gitKind ?? null} settled={browser.settled} />
+          <Button variant="ghost" size="sm" onClick={closeAttachRepoDialog}>
             Cancel
           </Button>
           <Button
             size="sm"
             data-testid="attach-repo-confirm"
-            disabled={!isGitRepo || attaching || loading}
-            onClick={() => void attach()}
+            disabled={!browser.attachable || attaching}
+            onClick={() => void attach(listing?.path ?? "")}
           >
             {attaching ? "Attaching…" : "Attach repository"}
           </Button>
@@ -138,44 +95,48 @@ export const AttachRepoDialog = ({ onAttached }: { onAttached?: (repoId: string)
   );
 };
 
-const DirectoryList = ({
-  directories,
-  loading,
-  onOpen,
-}: {
-  directories: string[];
-  loading: boolean;
-  onOpen: (path: string) => void;
-}) => (
-  <div
-    data-testid="attach-repo-list"
-    className="flex max-h-72 min-h-40 flex-col gap-0.5 overflow-y-auto"
+const HINTS = {
+  none: "Open a git repository folder to attach it",
+  typing: "Press Enter to open the path you typed",
+  worktree: "A linked worktree. Threads get worktrees of their own from the same repository.",
+  repository: "A git repository. Threads get worktrees of their own from it.",
+} as const;
+
+const AttachHint = ({ kind, settled }: { kind: GitFolderKind | null; settled: boolean }) => (
+  <p
+    data-testid="attach-repo-hint"
+    className="min-w-0 flex-1 text-[11.5px] leading-snug text-text-subtle"
   >
-    {directories.map((directory) => (
-      <button
-        key={directory}
-        type="button"
-        data-testid="attach-repo-dir"
-        onClick={() => onOpen(directory)}
-        className="flex min-w-0 items-center gap-2 rounded-row px-2 py-1.5 text-left text-[12.5px] text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text"
-      >
-        <FolderIcon className="size-3.5 shrink-0 text-text-subtle" strokeWidth={1.7} />
-        <span className="min-w-0 flex-1 truncate">
-          {directory.split("/").filter(Boolean).pop()}
-        </span>
-      </button>
-    ))}
-    {!loading && directories.length === 0 ? (
-      <p className="px-2 py-4 text-center text-[12px] text-text-subtle">No folders here</p>
-    ) : null}
-  </div>
+    {HINTS[hintFor(kind, settled)]}
+  </p>
 );
 
-const isDirectoryListing = (
-  value: unknown,
-): value is import("../api/client").DirectoryListingResponse =>
-  typeof value === "object" &&
-  value !== null &&
-  "path" in value &&
-  "directories" in value &&
-  "isGitRepo" in value;
+const hintFor = (kind: GitFolderKind | null, settled: boolean): keyof typeof HINTS => {
+  if (kind === null) return "none";
+  return settled ? kind : "typing";
+};
+
+const MainRepositoryOffer = ({
+  path,
+  disabled,
+  onAttach,
+}: {
+  path: string;
+  disabled: boolean;
+  onAttach: () => void;
+}) => (
+  <button
+    type="button"
+    data-testid="attach-repo-main-instead"
+    title={path}
+    disabled={disabled}
+    onClick={onAttach}
+    className="flex min-w-0 items-center gap-1 text-left text-[12px] text-text-muted underline-offset-2 hover:text-text hover:underline disabled:opacity-50"
+  >
+    <span className="shrink-0">Attach the main repository instead (</span>
+    <span dir="rtl" className="min-w-0 truncate text-left">
+      <bdi dir="ltr">{path}</bdi>
+    </span>
+    <span className="shrink-0">)</span>
+  </button>
+);

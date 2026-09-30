@@ -127,32 +127,4 @@ describe("listDirectories", () => {
     if (!result.success) return;
     expect(result.data.directories).toEqual(["alpha", "mango", "zebra"]);
   });
-
-  test("returns isGitRepo true when .git directory exists", async () => {
-    mkdirSync(path.join(testDir, ".git"));
-
-    const result = await listDirectories(testDir);
-
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data.isGitRepo).toBe(true);
-  });
-
-  test("returns isGitRepo false when .git directory does not exist", async () => {
-    const result = await listDirectories(testDir);
-
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data.isGitRepo).toBe(false);
-  });
-
-  test("returns isGitRepo false when .git is a file not a directory", async () => {
-    writeFileSync(path.join(testDir, ".git"), "gitdir: /some/path");
-
-    const result = await listDirectories(testDir);
-
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data.isGitRepo).toBe(false);
-  });
 });
