@@ -1,16 +1,11 @@
 import type {
   AopUpdateInstallResult,
   AopUpdateStatus,
-  ExecHostConfig,
-  ExecHostUpsert,
   MarkdownFileContent,
   RuntimeConfigurationModel,
   RuntimeConfigurationModelInput,
   RuntimeConfigurationProvider,
   RuntimeConfigurationProviderInput,
-  RuntimeProfile,
-  RuntimeProfileInput,
-  RuntimeProfilePatch,
   RuntimeThinkingLevel,
   SSEServerStatus,
 } from "@aop/common";
@@ -69,7 +64,7 @@ export const getRepos = async (): Promise<RegisteredRepo[]> => {
 
 export const unregisterRepo = async (
   repoId: string,
-): Promise<{ ok: true; repoId: string; abortedTasks: number; factoryReset: boolean }> => {
+): Promise<{ ok: true; repoId: string; factoryReset: boolean }> => {
   return request(`/repos/${repoId}?force=true`, { method: "DELETE" });
 };
 
@@ -151,69 +146,6 @@ export interface SettingEntry {
 export const getSettings = async (): Promise<SettingEntry[]> => {
   const data = await request<{ settings: SettingEntry[] }>("/settings");
   return data.settings;
-};
-
-export type { ExecHostConfig, ExecHostUpsert };
-
-export interface ExecHostTestResult {
-  reachable: boolean;
-  latencyMs: number | null;
-  rsync: boolean;
-  git: boolean;
-  clis: Array<{
-    id: string;
-    installed: boolean;
-    version: string | null;
-    authenticated: boolean;
-  }>;
-  error?: string;
-}
-
-export const getExecHosts = async (): Promise<ExecHostConfig[]> => {
-  const data = await request<{ hosts: ExecHostConfig[] }>("/exec-hosts");
-  return data.hosts;
-};
-
-export const saveExecHosts = async (hosts: ExecHostUpsert[]): Promise<ExecHostConfig[]> => {
-  const data = await request<{ hosts: ExecHostConfig[] }>("/exec-hosts", {
-    method: "PUT",
-    body: JSON.stringify(hosts),
-  });
-  return data.hosts;
-};
-
-export const testExecHost = async (id: string): Promise<ExecHostTestResult> => {
-  return request<ExecHostTestResult>(`/exec-hosts/${encodeURIComponent(id)}/test`, {
-    method: "POST",
-  });
-};
-
-export const getRuntimeProfiles = async (): Promise<RuntimeProfile[]> => {
-  const data = await request<{ profiles: RuntimeProfile[] }>("/runtime-profiles");
-  return data.profiles;
-};
-
-export const createRuntimeProfile = async (input: RuntimeProfileInput): Promise<RuntimeProfile> => {
-  const data = await request<{ profile: RuntimeProfile }>("/runtime-profiles", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-  return data.profile;
-};
-
-export const updateRuntimeProfile = async (
-  id: string,
-  patch: RuntimeProfilePatch,
-): Promise<RuntimeProfile> => {
-  const data = await request<{ profile: RuntimeProfile }>(
-    `/runtime-profiles/${encodeURIComponent(id)}`,
-    { method: "PATCH", body: JSON.stringify(patch) },
-  );
-  return data.profile;
-};
-
-export const deleteRuntimeProfile = async (id: string): Promise<void> => {
-  await request(`/runtime-profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
 };
 
 export const getRuntimeConfiguration = async (): Promise<RuntimeConfigurationProvider[]> => {

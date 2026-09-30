@@ -1,0 +1,66 @@
+# Project settings, memory, usage and Devices
+
+A project's settings are the screen at `/projects/:id/settings`, in four sections: General, Memory, Environment and Usage. The host owner also has a **Devices** section in the app's Settings dialog, for pairing and revoking devices. This map covers both. The host-level dialog (General, Repositories, Runtimes, About) is in [Settings](./settings.md).
+
+Everything that runs an agent needs a stack seeded with `--fake-runtime` and started with the tripwire stubs first on `PATH` (see [Projects shell](./projects-shell.md)). Usage needs at least one finished turn; the Devices check needs the built dashboard bound to the network (recipe `shell-pairing` there).
+
+## Sub-features
+
+- `psettings-general` edits name and goal, coordinator and thread model and effort (each with Use default), thread access (full access warns and asks before saving), notification level, restarts the coordinator, and pauses, archives or deletes the project.
+- `psettings-memory` edits the instructions with a live counter, and the memory files: the `MEMORY.md` index, topic files (edit, create, delete) and the quick note.
+- `psettings-environment` attaches and detaches repositories; detaching one a thread works in is refused with a message naming the thread.
+- `psettings-usage` shows totals, cache hit, coordinator share and cost by time window, then by model and by thread.
+- `psettings-devices` shows a pairing code with a countdown, lists paired devices, and revokes one. Only the host owner sees it.
+
+## How to get to it (user POV)
+
+- Open a project and choose **Settings** in its header, or `…` then **Settings**. The addresses are `/projects/:id/settings` (General), `/settings/memory`, `/settings/environment` and `/settings/usage`. `/settings/general` is not an address.
+- Devices: choose **Settings** in the sidebar footer (or `⌘,`), then **Devices**. The entry is missing for a paired device.
+
+## Test handles
+
+| `data-testid` | What it is |
+| --- | --- |
+| `project-settings-pane` (`data-section`), `project-settings-nav-{general,memory,environment,usage}` | The pane and its side nav |
+| `settings-name`, `settings-goal`, `settings-name-error` | Name and goal |
+| `settings-{coordinator,thread}-{model,effort}` | The four selects (Radix; `textContent` is the chosen label) |
+| `settings-thread-access` (`data-value`), `settings-thread-access-{auto-accept-edits,full-access}`, `settings-full-access-warning` | Thread access radios and the warning |
+| `settings-notifications`, `settings-notifications-{coordinator,every-turn,off}` | Notification level |
+| `settings-save-bar` (`data-dirty`), `settings-save`, `settings-discard`, `settings-save-state`, `settings-error` | The form's save bar |
+| `settings-restart-coordinator`, `settings-pause`, `settings-archive`, `settings-delete` | Coordinator and danger zone buttons |
+| `confirm-dialog-confirm`, `confirm-dialog-cancel` | The question each of those asks |
+| `settings-instructions`, `settings-instructions-count` (`data-near-limit`), `settings-instructions-save`, `settings-instructions-discard`, `settings-instructions-error` | Instructions |
+| `memory-quick-note-input`, `memory-quick-note-add`, `memory-quick-note-message` | Quick note |
+| `memory-files`, `memory-file` (`data-name`), `memory-file-name`, `memory-file-description`, `memory-file-updated` (`datetime`), `memory-index-label`, `memory-new` | The file list |
+| `memory-editor` (`data-name`, `data-mode` = `edit` or `create`), `memory-new-name`, `memory-description`, `memory-body`, `memory-body-count`, `memory-editor-updated`, `memory-save`, `memory-discard`, `memory-delete`, `memory-error`, `memory-changed-notice`, `memory-load-newer`, `memory-empty`, `memory-load-error` | The editor |
+| `settings-repos-attached`, `settings-repos-available`, `settings-repo` (`data-repo-id`, `data-attached`), `settings-repo-attach`, `settings-repo-detach`, `settings-repo-error`, `settings-register-repo` | Repositories |
+| `settings-usage` (`data-window`), `usage-window-{all,24h,7d,30d}` (`aria-pressed`), `usage-loading`, `usage-error`, `usage-retry`, `usage-empty` | The Usage screen |
+| `usage-stat-{threads,tokens,cache-hit,coordinator,cost,input,output,cache-write,cache-read}` | Totals; the value is the `dd` inside |
+| `usage-model-row` (`data-model`), `usage-thread-row` (`data-thread-id`, `data-kind`) | Per model and per thread; cells carry `data-cell` |
+| `settings-nav-devices`, `section-devices`, `devices-generate`, `devices-code` (`data-expires-at`), `devices-code-countdown`, `devices-code-card` (`data-expired`), `devices-paired-notice`, `devices-error` | Pairing code |
+| `devices-list`, `device-row` (`data-device-id`), `device-name`, `device-last-seen`, `device-created`, `device-revoke`, `devices-empty`, `devices-list-error` | Paired devices |
+
+## Driving it with verify-stack and drive
+
+Preconditions:
+
+- A run started with the tripwire on `PATH`, seeded with `--fake-runtime`, and a project made in the New project dialog with the seeded repo attached. For the Devices check start it as `shell-pairing` describes (`AOP_BIND_HOST=0.0.0.0`, `DASHBOARD_STATIC_PATH` on a fresh `bun run build:dashboard`) and open `http://127.0.0.1:<serverPort>/` for the owner.
+
+- **General (`psettings-general`).** On `/projects/<id>/settings` change `settings-name` and `settings-goal`, choose another thread model, and click `settings-save`. The header title changes at once. Reload: the values are still there, and `curl -s <api>/api/projects/<id>` shows them (`thread.model`, `thread.effort`, `name`, `goal`). Choose `settings-thread-access-full-access`: `settings-full-access-warning` appears before anything is saved. Click `settings-save`: a question titled `Give threads full access?` opens; `confirm-dialog-confirm` saves it and the API reports `threadAccess: "full-access"`. Choosing Edit files again saves without a question.
+- **Danger zone.** `settings-pause` asks, then the header shows a `paused` tag and the button reads Resume; `settings-restart-coordinator` asks, then a toast reads `Coordinator restarted`; `settings-delete` asks, deletes and returns to `/`.
+- **Memory (`psettings-memory`).** Open `/settings/memory`. Type in `settings-instructions`: `settings-instructions-count` reads `<n> / 16000`; `settings-instructions-save` saves it (`instructions` in the API). Type a line in `memory-quick-note-input` and press Enter: `memory-quick-note-message` reads `Added to MEMORY.md.`, and `GET <api>/api/projects/<id>/memory` lists `MEMORY.md` with the line. Click `memory-new`, fill `memory-new-name` (`testing` becomes `testing.md`), `memory-description` and `memory-body`, click `memory-save`: the file is listed with its updated date and the API and `sqlite3 <home>/projects.sqlite "select name, body from memory_files"` show it. Edit the body and save; click `memory-delete` and confirm: the file is gone from the list, the API and the table.
+- **A file the coordinator changes (`psettings-memory`).** Type into `memory-body` without saving, then `curl -s -X PUT <api>/api/projects/<id>/memory/testing.md -H 'content-type: application/json' -d '{"description":"x","body":"from the coordinator"}'`, then send the coordinator any message (`POST <api>/api/projects/<id>/messages`, `{"text":"hi"}`). Within about a second `memory-changed-notice` appears and the typed text is kept; `memory-load-newer` swaps in the host's copy. A hidden tab does not reload on focus (that trigger needs `document.visibilityState` to be `visible`); the message is the reliable trigger.
+- **Environment (`psettings-environment`).** Register a second repository (`cp -R <run>/fixtures/repo <run>/fixtures/repo2`, then `curl -s -X POST <api>/api/repos -H 'content-type: application/json' -d '{"path":"<abs path of repo2>"}'`) and reload `/settings/environment`. `settings-repo-attach` on it moves it to the top list and `GET <api>/api/projects/<id>` lists both ids. Start a thread in the first repository (`POST <api>/api/projects/<id>/threads` with `{"title":"Fix the login redirect","prompt":"go"}`), then click `settings-repo-detach` on that repository: the row shows `“Fix the login redirect” still works in repo. Stop and delete it first, then detach the repository.`, the network log shows `PATCH … 409`, and the repository stays attached. Detaching the other one succeeds.
+- **Usage (`psettings-usage`).** Give the project usage with the fake CLI: `POST <api>/api/projects/<id>/messages` with `{"text":"hi [fake: usage=10,5,200,4000]"}`, and a thread with `{"title":"t","prompt":"go [fake: usage=1000,200,3000,50000]"}`. Open `/settings/usage`: `usage-stat-tokens` reads the sum of the four buckets, `usage-stat-cache-hit` reads cache reads over input, cache writes and cache reads, and the rows match `GET <api>/api/usage/projects/<id>` and `select sum(input_tokens), sum(output_tokens), sum(cache_write_tokens), sum(cache_read_tokens) from run_usage`. Click `usage-window-7d`: the request gains `?since=`. A project with no runs shows `usage-empty`.
+- **Devices (`psettings-devices`).** As the owner open Settings, then `settings-nav-devices`, then click `devices-generate`: `devices-code` shows a code such as `DLVA-275Z` and `devices-code-countdown` reads `Expires in 9:59` and counts down. In a new tab open `http://<lan-ip>:<serverPort>/`, which shows the pairing screen (`shell-pairing`); enter the code and a name and submit. In the owner's tab, within about five seconds, `devices-paired-notice` reads `<name> is paired.` and `device-row` lists it with `Last seen just now`. On the paired tab `fetch('/api/auth/me')` answers `{"kind":"device"}`, Settings has no Devices entry and `fetch('/api/auth/devices')` answers 403. Click `device-revoke`, then `confirm-dialog-confirm`: the row goes, `GET <api>/api/auth/devices` is empty, and the paired tab shows the pairing screen again within a few seconds.
+- **Proof.** Screenshots of General with the full-access warning and its question, the memory editor with the file list and updated dates, the changed-file notice, the 409 message on the repository row, the Usage totals next to the API response and the DB sums, the empty state, the pairing code with its countdown, the device row on the owner tab and the pairing screen on the revoked tab; `read_console_messages` with `onlyErrors: true` after each flow. State that the runtime was the fake CLI.
+
+## Gotchas
+
+- Screenshots from the Claude in Chrome tab show only the top-left 1164×648 device pixels of a 1280×713 window at a device pixel ratio of 1.1, so the right edge and the bottom of the page are cut off (the Settings tab in a project's header is one casualty). Click coordinates are the screenshot's divided by 1.1. To see the whole page, shrink `#root`: `r=document.getElementById('root'); r.style.transformOrigin='0 0'; r.style.transform='scale(0.85)'; r.style.width='1235px'; r.style.height='680px'`. Reload before clicking again.
+- The page scrolls as a whole; the pane has no scroll box of its own, so `settings-save-bar` sticks to the bottom of the viewport.
+- `type` acts on whichever element has focus when it runs. Focus the field in a `javascript_tool` step first, put both steps in one `browser_batch` (calls made in parallel run in any order, and the text is lost), and leave a moment after `scrollIntoView` before typing.
+- A `find` ref click does not always land: it missed radios and small buttons that were below the fold. Use `scroll_to` first, click by coordinates, or `.click()` the element in `javascript_tool`. Arrow keys inside a Radix select send one step per call; open a select by focusing its trigger and pressing Return.
+- `document.dispatchEvent(new Event('visibilitychange'))` does nothing in a tab Chrome reports as hidden (another tab is in front). Use a stream event, as the memory recipe does.
+- The tab group can hold other agents' tabs. Close only the tabs you opened.
+- A timestamp in the list is rendered in the browser's time zone (`Updated Sep 30, 2026, 3:44 AM` for `2026-09-30T07:44:22.993Z` in New York); compare against the `datetime` attribute, which is the API value.

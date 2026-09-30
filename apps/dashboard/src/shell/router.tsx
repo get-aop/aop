@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 
+/** The screens of a project's settings, in the order its side nav lists them. */
+export const PROJECT_SETTINGS_SECTIONS = ["general", "memory", "environment", "usage"] as const;
+export type ProjectSettingsSection = (typeof PROJECT_SETTINGS_SECTIONS)[number];
+
 /**
  * The app's screens. `project` is the project home (its thread grid); the rest are panes of
- * a project that later work fills in: the coordinator chat, a thread, project settings.
+ * a project: the coordinator chat, a thread, and one section of the project's settings.
  */
 export type Route =
   | { name: "projects" }
   | { name: "project"; projectId: string }
   | { name: "coordinator"; projectId: string }
   | { name: "thread"; projectId: string; threadId: string }
-  | { name: "project-settings"; projectId: string };
+  | { name: "project-settings"; projectId: string; section: ProjectSettingsSection };
 
 export const projectsPath = (): string => "/";
 export const projectPath = (projectId: string): string =>
@@ -17,22 +21,37 @@ export const projectPath = (projectId: string): string =>
 export const coordinatorPath = (projectId: string): string => `${projectPath(projectId)}/chat`;
 export const threadPath = (projectId: string, threadId: string): string =>
   `${projectPath(projectId)}/threads/${encodeURIComponent(threadId)}`;
-export const projectSettingsPath = (projectId: string): string =>
-  `${projectPath(projectId)}/settings`;
+export const projectSettingsPath = (
+  projectId: string,
+  section: ProjectSettingsSection = "general",
+): string => `${projectPath(projectId)}/settings${section === "general" ? "" : `/${section}`}`;
 
 /** The route a path names, or null for a path no screen owns (the app then shows the projects). */
 export const parseRoute = (pathname: string): Route | null => {
   const segments = pathname.split("/").filter(Boolean).map(decodeSegment);
   if (segments.length === 0) return { name: "projects" };
-  const [root, projectId, pane, threadId] = segments;
+  const [root, projectId, ...rest] = segments;
   if (root !== "projects" || !projectId) return null;
-  if (segments.length === 2) return { name: "project", projectId };
-  if (segments.length === 3 && pane === "chat") return { name: "coordinator", projectId };
-  if (segments.length === 3 && pane === "settings") return { name: "project-settings", projectId };
-  if (segments.length === 4 && pane === "threads" && threadId) {
-    return { name: "thread", projectId, threadId };
-  }
+  return parseProjectRoute(projectId, rest);
+};
+
+const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
+  const [pane, detail, ...extra] = rest;
+  if (extra.length > 0) return null;
+  if (!pane) return { name: "project", projectId };
+  if (pane === "chat") return detail === undefined ? { name: "coordinator", projectId } : null;
+  if (pane === "settings") return parseSettingsRoute(projectId, detail);
+  if (pane === "threads" && detail) return { name: "thread", projectId, threadId: detail };
   return null;
+};
+
+// General is the bare `/settings` address; `/settings/general` is not a second name for it.
+const parseSettingsRoute = (projectId: string, detail: string | undefined): Route | null => {
+  if (detail === undefined) return { name: "project-settings", projectId, section: "general" };
+  const section = PROJECT_SETTINGS_SECTIONS.find(
+    (candidate) => candidate === detail && candidate !== "general",
+  );
+  return section ? { name: "project-settings", projectId, section } : null;
 };
 
 export const routeProjectId = (route: Route): string | null =>

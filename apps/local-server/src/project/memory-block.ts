@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MEMORY_INDEX_NAME } from "./memory-service.ts";
+import { MEMORY_INDEX_NAME } from "@aop/common";
 import { cutAtLine, oneLine } from "./prompt-text.ts";
 
 /**

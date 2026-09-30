@@ -70,7 +70,8 @@ src/
 
 ## Settings
 
-- Repositories (attach dialog with git badges), Runtimes (add/clone/remove custom), Execution hosts, General, About (version/update)
+- A project's own settings are the screen `/projects/:id/settings` (`src/projects/settings/`): General (name, goal, models and effort, thread access, notifications, restart, pause, archive, delete), Memory (instructions and memory files), Environment (repositories) and Usage.
+- The Settings dialog is for the host: General, Repositories (attach dialog with git badges), Runtimes (add/clone/remove custom), Devices (host owner only: pairing code, paired devices, revoke) and About (version/update).
 - Kit chrome only: one chip, one menu, one badge. No ad-hoc controls outside `src/ui`
 
 ## Scripts

@@ -1,8 +1,7 @@
-import { CreateProjectInputSchema, ProjectPatchSchema } from "@aop/common";
+import { CreateProjectInputSchema, MemoryFileInputSchema, ProjectPatchSchema } from "@aop/common";
 import { Hono } from "hono";
 import { z } from "zod";
 import { errorResponse, readBody } from "./http.ts";
-import { MemoryFileInputSchema } from "./memory-service.ts";
 import type { ProjectAction } from "./service.ts";
 import type { ProjectServices } from "./services.ts";
 

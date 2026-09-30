@@ -30,12 +30,26 @@ describe("parseRoute", () => {
     expect(parseRoute("/projects/p1/settings")).toEqual({
       name: "project-settings",
       projectId: "p1",
+      section: "general",
     });
     expect(parseRoute("/projects/p1/threads/t1")).toEqual({
       name: "thread",
       projectId: "p1",
       threadId: "t1",
     });
+  });
+
+  test("names each section of a project's settings, and General only by the bare address", () => {
+    for (const section of ["memory", "environment", "usage"] as const) {
+      expect(parseRoute(`/projects/p1/settings/${section}`)).toEqual({
+        name: "project-settings",
+        projectId: "p1",
+        section,
+      });
+    }
+    expect(parseRoute("/projects/p1/settings/general")).toBeNull();
+    expect(parseRoute("/projects/p1/settings/billing")).toBeNull();
+    expect(parseRoute("/projects/p1/settings/usage/extra")).toBeNull();
   });
 
   test("returns null for a path no screen owns", () => {
@@ -58,6 +72,12 @@ describe("parseRoute", () => {
     expect(parseRoute(projectSettingsPath(id))).toEqual({
       name: "project-settings",
       projectId: id,
+      section: "general",
+    });
+    expect(parseRoute(projectSettingsPath(id, "usage"))).toEqual({
+      name: "project-settings",
+      projectId: id,
+      section: "usage",
     });
     expect(parseRoute(threadPath(id, "t/1"))).toEqual({
       name: "thread",

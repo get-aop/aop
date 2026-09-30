@@ -23,10 +23,6 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
     label: "Chat",
     keys: ["chat_global_instructions"],
   },
-  {
-    label: "Remote server",
-    keys: ["server_url", "api_key"],
-  },
 ];
 
 export const SETTING_META: Record<string, SettingMeta> = {
@@ -37,8 +33,6 @@ export const SETTING_META: Record<string, SettingMeta> = {
     type: "textarea",
     rows: 4,
   },
-  server_url: { label: "Server URL", description: "Remote server URL", type: "text" },
-  api_key: { label: "API Key", description: "Remote server API key", type: "password" },
 };
 
 export const resolveSettingOptions = (

@@ -1,14 +1,7 @@
+import type { MemoryFile } from "@aop/common";
 import type { Kysely } from "kysely";
 import type { MemoryFileRow } from "../db/projects-schema.ts";
 import type { Database } from "../db/schema.ts";
-
-/** One memory file of a project: the `MEMORY.md` index or a topic file. */
-export interface MemoryFile {
-  name: string;
-  description: string;
-  body: string;
-  updatedAt: string;
-}
 
 export type MemoryFileInput = Pick<MemoryFile, "name" | "description" | "body">;
 

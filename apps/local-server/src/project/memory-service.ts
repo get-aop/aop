@@ -1,21 +1,7 @@
-import { z } from "zod";
-import type { MemoryFile, MemoryRepository } from "./memory-repository.ts";
+import { MEMORY_INDEX_NAME, type MemoryFile, type MemoryFileInputSchema } from "@aop/common";
+import type { z } from "zod";
+import type { MemoryRepository } from "./memory-repository.ts";
 import type { ProjectRepository } from "./repository.ts";
-
-/** The index every session reads first; topic files hold the detail. */
-export const MEMORY_INDEX_NAME = "MEMORY.md";
-
-const MEMORY_DESCRIPTION_MAX = 300;
-const MEMORY_BODY_MAX = 50_000;
-
-export const MemoryFileInputSchema = z.object({
-  name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.md$/, {
-    error: "Memory file names are letters, digits, . _ - and end in .md",
-  }),
-  description: z.string().max(MEMORY_DESCRIPTION_MAX).default(""),
-  body: z.string().max(MEMORY_BODY_MAX),
-});
-export type MemoryFileInput = z.input<typeof MemoryFileInputSchema>;
 
 export type MemoryResult<T> =
   | ({ success: true } & T)

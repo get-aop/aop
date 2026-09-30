@@ -54,9 +54,10 @@ export const PairingScreen = ({ onPaired }: { onPaired: () => void }) => {
 
         <div className="flex flex-col gap-1.5 text-[12.5px] text-text-muted">
           <p>
-            On the machine that runs AOP, ask for a one-time code. It works once and expires after
-            ten minutes.
+            On the machine that runs AOP, open Settings, choose Devices and generate a pairing code.
+            It works once and expires after ten minutes.
           </p>
+          <p className="text-text-subtle">Or ask for one from a terminal on that machine:</p>
           <code
             data-testid="pairing-command"
             className="block rounded-md border border-border bg-input-surface px-2.5 py-2 text-[11.5px] break-all text-text select-all"

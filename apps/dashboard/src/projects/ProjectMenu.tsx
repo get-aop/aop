@@ -13,14 +13,9 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { navigate, projectSettingsPath } from "../shell/router";
+import { NOTIFICATION_LEVELS } from "./notification-levels";
 import { usePinnedProjects } from "./project-preferences";
 import { useProjectActions } from "./use-project-actions";
-
-const NOTIFICATION_LEVELS: { level: NotificationLevel; label: string }[] = [
-  { level: "coordinator", label: "Coordinator posts and blocked threads" },
-  { level: "every-turn", label: "Every finished thread turn" },
-  { level: "off", label: "Off" },
-];
 
 /**
  * The menu on a project row and on a project card: Pin, Notifications, Settings, Archive,

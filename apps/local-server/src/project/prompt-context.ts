@@ -1,7 +1,7 @@
+import { MEMORY_INDEX_NAME } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
 import type { ProjectMemory } from "./memory-block.ts";
-import { MEMORY_INDEX_NAME } from "./memory-service.ts";
 import {
   buildCoordinatorSystemPrompt,
   buildThreadSystemPrompt,

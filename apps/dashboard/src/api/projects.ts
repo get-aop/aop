@@ -40,6 +40,15 @@ export const transitionProject = async (
     })
   ).project;
 
+/** Recycles the coordinator's runtime session; the project's threads are not touched. */
+export const restartCoordinator = async (projectId: string): Promise<Project> =>
+  (
+    await request<{ project: Project }>(
+      `/projects/${encodeURIComponent(projectId)}/coordinator/restart`,
+      { method: "POST" },
+    )
+  ).project;
+
 export const deleteProject = async (projectId: string): Promise<void> => {
   await request<unknown>(`/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
 };

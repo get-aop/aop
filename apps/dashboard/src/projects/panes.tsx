@@ -7,7 +7,7 @@ import { THREAD_STATUS_LABEL } from "./selectors";
  * - `CoordinatorChatPane`: the chat with the project's coordinator. Its messages and live
  *   text come from `useLiveProjects().subscribeEvents(project.id, ...)` and the project's REST routes.
  * - `ThreadPane`: one thread's transcript and its own composer.
- * - `ProjectSettingsPane`: name, models, memory, environment, usage.
+ * The project's settings are built: see `settings/ProjectSettingsPane.tsx`.
  */
 
 export const CoordinatorChatPane = ({
@@ -37,14 +37,6 @@ export const ThreadPane = ({ thread }: { project: Project; thread: Thread | unde
       detail="It may have been deleted, or it belongs to another project."
     />
   );
-
-export const ProjectSettingsPane = ({ project }: { project: Project }) => (
-  <PanePlaceholder
-    testId="project-settings-pane"
-    title="Project settings"
-    detail={`Settings, memory and usage for ${project.name} will open here.`}
-  />
-);
 
 const PanePlaceholder = ({
   testId,

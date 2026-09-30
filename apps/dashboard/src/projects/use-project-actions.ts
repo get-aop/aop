@@ -1,4 +1,4 @@
-import type { CreateProjectInput, NotificationLevel, Project } from "@aop/common";
+import type { CreateProjectInput, NotificationLevel, Project, ProjectPatch } from "@aop/common";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import {
@@ -6,6 +6,7 @@ import {
   deleteProject,
   type ProjectAction,
   patchProject,
+  restartCoordinator,
   transitionProject,
 } from "../api/projects";
 import { requestConfirmation } from "../components/ConfirmationHost";
@@ -16,6 +17,10 @@ export interface ProjectActions {
   create: (input: CreateProjectInput) => Promise<Project>;
   transition: (project: Project, action: ProjectAction) => Promise<void>;
   setNotifications: (project: Project, level: NotificationLevel) => Promise<void>;
+  /** Saves settings. Rejects with the host's message, so a form can say why beside its fields. */
+  update: (project: Project, patch: ProjectPatch) => Promise<Project>;
+  /** A fresh coordinator session: the chat stays, the threads are untouched. */
+  restartCoordinator: (project: Project) => Promise<void>;
   /** Asks first; deletes the project, its threads and its memory for good. */
   remove: (project: Project) => Promise<void>;
 }
@@ -41,6 +46,16 @@ export const useProjectActions = (): ProjectActions => {
         attempt(async () =>
           live.adopt(await patchProject(project.id, { notificationLevel: level })),
         ),
+      update: async (project, patch) => {
+        const updated = await patchProject(project.id, patch);
+        live.adopt(updated);
+        return updated;
+      },
+      restartCoordinator: (project) =>
+        attempt(async () => {
+          live.adopt(await restartCoordinator(project.id));
+          toast.success("Coordinator restarted");
+        }),
       remove: async (project) => {
         const confirmed = await requestConfirmation({
           title: `Delete “${project.name}”?`,

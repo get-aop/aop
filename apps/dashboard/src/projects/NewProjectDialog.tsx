@@ -4,7 +4,7 @@ import {
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
 } from "@aop/common";
 import { FolderIcon, PlusIcon } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Button } from "@/ui/button";
 import { Checkbox } from "@/ui/checkbox";
 import {
@@ -18,15 +18,11 @@ import {
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Textarea } from "@/ui/textarea";
-import { getRepos, type RegisteredRepo } from "../api/client";
-import {
-  closeNewProjectDialog,
-  onRepoAttached,
-  openAttachRepoDialog,
-  useDialogs,
-} from "../shell/dialog-store";
+import type { RegisteredRepo } from "../api/client";
+import { closeNewProjectDialog, openAttachRepoDialog, useDialogs } from "../shell/dialog-store";
 import { navigate, projectPath } from "../shell/router";
 import { useProjectActions } from "./use-project-actions";
+import { useRegisteredRepos } from "./use-registered-repos";
 
 /** Where a new project starts: a name, what it is for, what to tell every agent, and which repositories it works in. */
 export const NewProjectDialog = () => {
@@ -59,7 +55,7 @@ const NewProjectForm = () => {
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const repos = useAttachableRepos((repoId) =>
+  const repos = useRegisteredRepos((repoId) =>
     setSelected((ids) => (ids.includes(repoId) ? ids : [...ids, repoId])),
   );
 
@@ -237,23 +233,3 @@ const RepoPicker = ({
     </div>
   </div>
 );
-
-/** The repositories AOP knows, reloaded when one is attached from the dialog, which then selects it. */
-const useAttachableRepos = (onAttached: (repoId: string) => void): RegisteredRepo[] | null => {
-  const [repos, setRepos] = useState<RegisteredRepo[] | null>(null);
-  const onAttachedRef = useRef(onAttached);
-  onAttachedRef.current = onAttached;
-
-  const load = useCallback(async () => {
-    setRepos(await getRepos().catch(() => []));
-  }, []);
-
-  useEffect(() => {
-    void load();
-    return onRepoAttached((repoId) => {
-      void load().then(() => onAttachedRef.current(repoId));
-    });
-  }, [load]);
-
-  return repos;
-};

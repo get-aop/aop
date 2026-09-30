@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-export type SettingsSection = "general" | "repositories" | "runtimes" | "exec-hosts" | "about";
+export type SettingsSection = "general" | "repositories" | "runtimes" | "devices" | "about";
 
 interface DialogState {
   settings: { open: boolean; section: SettingsSection };

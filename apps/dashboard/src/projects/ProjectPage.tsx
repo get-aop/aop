@@ -1,7 +1,8 @@
 import { Link, projectsPath, type Route } from "../shell/router";
 import { ProjectHeader } from "./ProjectHeader";
 import { useProjectEntry, useProjectsState } from "./ProjectsProvider";
-import { CoordinatorChatPane, ProjectSettingsPane, ThreadPane } from "./panes";
+import { CoordinatorChatPane, ThreadPane } from "./panes";
+import { ProjectSettingsPane } from "./settings/ProjectSettingsPane";
 import { ThreadGrid } from "./ThreadGrid";
 
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
@@ -30,7 +31,9 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
             thread={threads.find((thread) => thread.id === route.threadId)}
           />
         ) : null}
-        {route.name === "project-settings" ? <ProjectSettingsPane project={project} /> : null}
+        {route.name === "project-settings" ? (
+          <ProjectSettingsPane entry={entry} section={route.section} />
+        ) : null}
       </main>
     </div>
   );

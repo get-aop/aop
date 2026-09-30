@@ -178,9 +178,15 @@ describe("project screens", () => {
     expect(screen.getByTestId("thread-not-found")).toBeTruthy();
   });
 
-  test("the settings route shows the settings pane", () => {
-    renderPage(state(), { name: "project-settings", projectId: "p1" });
-    expect(screen.getByTestId("project-settings-pane").textContent).toContain("Checkout");
+  test("the settings route shows the settings pane, on the section the address names", () => {
+    renderPage(state(), { name: "project-settings", projectId: "p1", section: "general" });
+    const pane = screen.getByTestId("project-settings-pane");
+    expect(pane.getAttribute("data-section")).toBe("general");
+    expect((screen.getByTestId("settings-name") as HTMLInputElement).value).toBe("Checkout");
+    expect(screen.getByTestId("project-tab-settings").getAttribute("aria-current")).toBe("page");
+    expect(screen.getByTestId("project-settings-nav-general").getAttribute("aria-current")).toBe(
+      "page",
+    );
   });
 });
 

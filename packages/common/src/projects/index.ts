@@ -18,6 +18,15 @@ export {
 } from "./device-auth.ts";
 export type { EventLogEntry } from "./event-log.ts";
 export { EventLogEntrySchema } from "./event-log.ts";
+export type { MemoryFile, MemoryFileInput } from "./memory.ts";
+export {
+  MEMORY_BODY_MAX_LENGTH,
+  MEMORY_DESCRIPTION_MAX_LENGTH,
+  MEMORY_INDEX_NAME,
+  MEMORY_NAME_PATTERN,
+  MemoryFileInputSchema,
+  MemoryFileSchema,
+} from "./memory.ts";
 export type {
   AssistantMessage,
   Message,

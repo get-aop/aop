@@ -32,7 +32,7 @@ Browser requests must also come from the API's own origin. A page on another ori
 
 Pairing needs the host owner, so run the first command on the host.
 
-1. On the host, ask for a one-time code. It works once and expires after ten minutes. Asking again replaces it.
+1. On the host, ask for a one-time code. It works once and expires after ten minutes. Asking again replaces it. In the dashboard on the host, open Settings, then Devices, and choose Generate pairing code: the code appears with a countdown. Or from a terminal:
 
    ```bash
    curl -s -X POST http://127.0.0.1:25150/api/auth/pairing-codes
@@ -62,7 +62,7 @@ The cookie is `HttpOnly` and `SameSite=Strict`, and it is `Secure` when the requ
 
 ### List and revoke devices
 
-Run these on the host.
+In the dashboard on the host, Settings, then Devices lists each paired device with when it was last seen and when it was paired, and Revoke removes one after a question. The entry is shown only to the host owner: a paired device does not see it, and its requests to these routes answer `403`. Or run these on the host.
 
 ```bash
 curl -s http://127.0.0.1:25150/api/auth/devices
@@ -130,4 +130,3 @@ Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over pla
 - Pairing codes and the wrong-code counter live in memory, so a host restart closes an open pairing.
 - Paired devices are trusted equally. There are no per-device permissions.
 - The `aop` CLI sends no token, so it works only on the host. It cannot reach a host across the network yet.
-- The dashboard can pair a browser but cannot show the code: the host owner still asks for it with the command above. Its device list and revoking are also commands only.

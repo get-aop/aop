@@ -38,3 +38,4 @@ This directory is the maintained source for verifying the user-facing behavior o
 - [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the attach dialog.
 - [Sessions](./sessions.md) covers plain chat sessions through the API (no page in the dashboard): fake chat, usage, a server crash mid-turn.
 - [Settings](./settings.md) covers the Settings dialog and its sections.
+- [Project settings, memory, usage and Devices](./projects-settings.md) covers a project's settings screen (General, Memory, Environment, Usage) and the host owner's Devices section.

@@ -12,13 +12,6 @@ import {
   SettingRow,
 } from "./settings-fields";
 
-const MASKED_SECRET_SETTING_VALUE = "********";
-/** Legacy secret keys may still exist in saved DB rows; never re-save a masked placeholder. */
-const SECRET_SETTING_KEYS = new Set([
-  "jira_api_token",
-  "jira_client_secret",
-  "github_app_private_key",
-]);
 const AUTO_SAVE_DELAY_MS = 600;
 
 interface SettingsGeneralProps {
@@ -133,14 +126,9 @@ export const mergeSavedSettings = (
   settings: SettingEntry[],
 ): Record<string, string> => {
   const next = { ...values };
-  for (const { key, value } of settings) {
-    next[key] = normalizeSavedSettingValue(key, value);
-  }
+  for (const { key, value } of settings) next[key] = value;
   return next;
 };
-
-export const normalizeSavedSettingValue = (key: string, value: string): string =>
-  SECRET_SETTING_KEYS.has(key) && value.trim().length > 0 ? MASKED_SECRET_SETTING_VALUE : value;
 
 const buildSavableDirtyEntries = (
   editedValues: Record<string, string>,
@@ -148,7 +136,4 @@ const buildSavableDirtyEntries = (
 ): SettingEntry[] =>
   Object.entries(editedValues)
     .filter(([key, value]) => value !== savedValues[key])
-    .filter(
-      ([key, value]) => !(SECRET_SETTING_KEYS.has(key) && value === MASKED_SECRET_SETTING_VALUE),
-    )
     .map(([key, value]) => ({ key, value }));

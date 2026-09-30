@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { isSettingVisible, resolveSettingOptions, SETTINGS_GROUPS } from "./settings-fields.tsx";
+import { setupDashboardDom } from "../test/setup-dom";
+
+// The field renderers load Radix, which decides once, at import, whether a document exists:
+// importing them without one would leave every later test file in the process without layout effects.
+setupDashboardDom();
+
+const { isSettingVisible, resolveSettingOptions, SETTINGS_GROUPS } = await import(
+  "./settings-fields.tsx"
+);
 
 describe("settings fields", () => {
   test("does not expose Quick-fix or control runtime settings", () => {

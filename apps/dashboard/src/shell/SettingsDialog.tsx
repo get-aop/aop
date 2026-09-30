@@ -5,14 +5,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { getSettings } from "../api/client";
 import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
 import { SettingsAbout } from "../settings/settings-about";
-import { SettingsExecHosts } from "../settings/settings-exec-hosts";
-import {
-  mergeSavedSettings,
-  normalizeSavedSettingValue,
-  SettingsGeneral,
-} from "../settings/settings-general";
+import { SettingsDevices } from "../settings/settings-devices";
+import { mergeSavedSettings, SettingsGeneral } from "../settings/settings-general";
 import { SettingsRepositories } from "../settings/settings-repositories";
 import { SettingsRuntimes } from "../settings/settings-runtimes";
+import { useIsHostOwner } from "../settings/use-host-owner";
 import {
   closeSettingsDialog,
   openSettingsDialog,
@@ -24,13 +21,21 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   general: "General",
   repositories: "Repositories",
   runtimes: "Runtimes",
-  "exec-hosts": "Execution hosts",
+  devices: "Devices",
   about: "About",
 };
 
 /** Host settings, 780×580 with a side nav. A project's own settings live on the project. */
 export const SettingsDialog = () => {
   const dialogs = useDialogs();
+  // Pairing and revoking devices is the host owner's alone, so no one else is shown the section.
+  const owner = useIsHostOwner(dialogs.settings.open);
+  const sections = (Object.keys(SECTION_LABELS) as SettingsSection[]).filter(
+    (section) => section !== "devices" || owner,
+  );
+  const current = sections.includes(dialogs.settings.section)
+    ? dialogs.settings.section
+    : "general";
 
   return (
     <Dialog
@@ -42,7 +47,7 @@ export const SettingsDialog = () => {
         className="flex h-[580px] max-h-[85vh] w-[780px] gap-0 overflow-hidden p-0"
       >
         <nav className="flex w-44 shrink-0 flex-col gap-0.5 border-r border-border p-2 pt-4">
-          {(Object.keys(SECTION_LABELS) as SettingsSection[]).map((section) => (
+          {sections.map((section) => (
             <button
               key={section}
               type="button"
@@ -50,7 +55,7 @@ export const SettingsDialog = () => {
               onClick={() => openSettingsDialog(section)}
               className={cn(
                 "flex h-8 items-center rounded-row px-2 text-left text-[13px] font-medium transition-colors duration-[120ms]",
-                dialogs.settings.section === section
+                current === section
                   ? "bg-active text-text"
                   : "text-text-muted hover:bg-hover hover:text-text",
               )}
@@ -61,12 +66,10 @@ export const SettingsDialog = () => {
         </nav>
         <div className="flex min-w-0 flex-1 flex-col">
           <DialogHeader className="border-b border-border px-4 py-3">
-            <DialogTitle className="text-[14px]">
-              {SECTION_LABELS[dialogs.settings.section]}
-            </DialogTitle>
+            <DialogTitle className="text-[14px]">{SECTION_LABELS[current]}</DialogTitle>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-            <SettingsSectionHost section={dialogs.settings.section} />
+            <SettingsSectionHost section={current} />
           </div>
         </div>
       </DialogContent>
@@ -86,9 +89,7 @@ const SettingsSectionHost = ({ section }: { section: SettingsSection }) => {
     void getSettings()
       .then((settings) => {
         const values: Record<string, string> = {};
-        for (const setting of settings) {
-          values[setting.key] = normalizeSavedSettingValue(setting.key, setting.value);
-        }
+        for (const setting of settings) values[setting.key] = setting.value;
         setSavedValues(values);
         setEditedValues(values);
       })
@@ -98,7 +99,7 @@ const SettingsSectionHost = ({ section }: { section: SettingsSection }) => {
 
   if (section === "repositories") return <SettingsRepositories />;
   if (section === "runtimes") return <SettingsRuntimes />;
-  if (section === "exec-hosts") return <SettingsExecHosts />;
+  if (section === "devices") return <SettingsDevices />;
   if (section === "about") return <SettingsAbout />;
   return (
     <SettingsGeneral

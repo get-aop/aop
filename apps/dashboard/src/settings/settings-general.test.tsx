@@ -14,7 +14,7 @@ const { cleanup, fireEvent, render, screen, waitFor } = await import("@testing-l
 const { SettingsGeneral } = await import("./settings-general");
 
 const saved = {
-  server_url: "http://localhost:8787",
+  chat_global_instructions: "Be concise.",
 };
 
 afterEach(() => {
@@ -38,7 +38,7 @@ describe("SettingsGeneral", () => {
 
   test("auto-saves an edited value after the debounce, not on the keystroke", async () => {
     const onSaved = mock(() => undefined);
-    const edited = { ...saved, server_url: "http://localhost:9999" };
+    const edited = { ...saved, chat_global_instructions: "Be concise. No jargon." };
 
     render(
       <SettingsGeneral
@@ -53,9 +53,11 @@ describe("SettingsGeneral", () => {
 
     await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
     expect(mockUpdateSettings).toHaveBeenCalledWith([
-      { key: "server_url", value: "http://localhost:9999" },
+      { key: "chat_global_instructions", value: "Be concise. No jargon." },
     ]);
-    expect(onSaved).toHaveBeenCalledWith([{ key: "server_url", value: "http://localhost:9999" }]);
+    expect(onSaved).toHaveBeenCalledWith([
+      { key: "chat_global_instructions", value: "Be concise. No jargon." },
+    ]);
   });
 
   test("does not write when nothing differs from the saved values", async () => {
@@ -83,10 +85,10 @@ describe("SettingsGeneral", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Server URL"), {
-      target: { value: "http://localhost:9000" },
+    fireEvent.change(screen.getByLabelText("Global instructions"), {
+      target: { value: "Be brief." },
     });
 
-    expect(onChange).toHaveBeenCalledWith("server_url", "http://localhost:9000");
+    expect(onChange).toHaveBeenCalledWith("chat_global_instructions", "Be brief.");
   });
 });

@@ -1,6 +1,6 @@
+import { MEMORY_INDEX_NAME, MemoryFileInputSchema } from "@aop/common";
 import { z } from "zod";
 import { describeServiceError } from "../project/errors.ts";
-import { MEMORY_INDEX_NAME, MemoryFileInputSchema } from "../project/memory-service.ts";
 import { defineTool, type McpToolCall, McpToolError, textResult } from "./registry.ts";
 
 /** Project memory, shared by the coordinator and every thread: MEMORY.md is the index, topic files hold detail. */
