@@ -1,11 +1,12 @@
 import { CheckIcon, ChevronsUpDownIcon, CopyIcon } from "lucide-react";
 import type { AnchorHTMLAttributes, HTMLAttributes, MouseEvent, ReactNode } from "react";
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
-import { Streamdown } from "streamdown";
+import { defaultRemarkPlugins, Streamdown } from "streamdown";
 import { openExternalUrl } from "../../api/client";
 import { lazyCodeHighlighter } from "../../components/lazy-code-highlighter";
 import { isDesktopApp } from "../../utils/desktop-runtime";
 import { chipIndexOf } from "./inline-run";
+import { remarkLiteralHtml } from "./literal-html";
 
 interface ChatMarkdownProps {
   content: string;
@@ -38,7 +39,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
         className="chat-markdown text-sm leading-relaxed text-foreground"
         data-testid="chat-markdown"
       >
-        <Streamdown plugins={plugins} components={components}>
+        <Streamdown plugins={plugins} components={components} remarkPlugins={remarkPlugins}>
           {content}
         </Streamdown>
       </div>
@@ -47,6 +48,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
 });
 
 const plugins = { code: lazyCodeHighlighter };
+const remarkPlugins = [...Object.values(defaultRemarkPlugins), remarkLiteralHtml];
 type ChildrenProps = { children?: ReactNode };
 
 const components = {
