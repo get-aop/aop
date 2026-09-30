@@ -85,7 +85,7 @@ src/
   repo/, session-git/ repo registration, git state
   process/            process supervision
   runtime-configuration/  runtime catalog
-  event-log/, events/ the project event stream, the older SSE streams
+  event-log/  the project event stream
   auth/               device tokens, pairing, cookie sessions, request guard
   github-cli/, mcp/
   usage/, settings/, health/, db/, fs/

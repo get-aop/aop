@@ -1,6 +1,6 @@
 import { type MessageDelta, PROJECT_STREAM_EVENTS } from "@aop/common";
-import type { SSEStreamHelper } from "../events/sse-stream.ts";
 import { mergeDelta } from "./live-turns.ts";
+import type { SSEStreamHelper } from "./sse-stream.ts";
 import type { FeedItem } from "./stream-feed.ts";
 
 export interface Outbox {

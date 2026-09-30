@@ -72,7 +72,6 @@ export const finalizeChatRunAndPublish = async (
   publishChatSessionEvent({
     type: "assistant-final",
     sessionId: run.session_id,
-    sessionTitle: session.title,
     message: toMessageDto(
       finalized,
       await ctx.db.selectFrom("chat_runs").selectAll().where("id", "=", run.id).executeTakeFirst(),

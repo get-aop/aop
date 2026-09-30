@@ -28,7 +28,6 @@ import {
 } from "./chat-session/work-log-repository.ts";
 import type { Database } from "./db/schema.ts";
 import { createEventPublisher, type EventPublisher } from "./event-log/publisher.ts";
-import { getTaskEventEmitter, type TaskEventEmitter } from "./events/index.ts";
 import { createMemoryRepository, type MemoryRepository } from "./project/memory-repository.ts";
 import { createProjectRepository, type ProjectRepository } from "./project/repository.ts";
 import { createProjectSessionHooks } from "./project/session-hooks.ts";
@@ -55,17 +54,9 @@ export interface LocalServerContext {
   /** How domains tell clients a project changed; open project streams deliver it. */
   eventPublisher: EventPublisher;
   settingsRepository: SettingsRepository;
-  taskEventEmitter: TaskEventEmitter;
 }
 
-export interface CreateCommandContextOptions {
-  taskEventEmitter?: TaskEventEmitter;
-}
-
-export const createCommandContext = (
-  db: Kysely<Database>,
-  options: CreateCommandContextOptions = {},
-): LocalServerContext => {
+export const createCommandContext = (db: Kysely<Database>): LocalServerContext => {
   const eventPublisher = createEventPublisher(db);
   return {
     db,
@@ -83,6 +74,5 @@ export const createCommandContext = (
     sessionMutationLock: createSessionMutationLock(),
     eventPublisher,
     settingsRepository: createSettingsRepository(db),
-    taskEventEmitter: options.taskEventEmitter ?? getTaskEventEmitter(),
   };
 };

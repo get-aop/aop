@@ -1,5 +1,4 @@
 import { EventEmitter } from "node:events";
-import { getTaskEventEmitter } from "../events/task-events.ts";
 import type { ChatMessageDto, ChatSessionDto } from "./service.ts";
 
 export interface ChatStreamCommandRow {
@@ -33,8 +32,6 @@ export type ChatSessionEvent =
       type: "assistant-final";
       sessionId: string;
       message: ChatMessageDto;
-      sessionTitle?: string;
-      notifyUnread?: boolean;
     }
   | { type: "session-updated"; sessionId: string; session: ChatSessionDto };
 
@@ -107,20 +104,6 @@ export const suffixDelta = (previous: string, next: string): string =>
 export const publishChatSessionEvent = (event: ChatSessionEvent): void => {
   updateLatestProgress(event);
   emitter.emit(event.sessionId, event);
-  if (event.type === "assistant-final" && event.notifyUnread !== false) {
-    getTaskEventEmitter().emit({
-      type: "chat-unread",
-      sessionId: event.sessionId,
-      title: event.sessionTitle ?? "Chat session",
-      snippet: event.message.content.slice(0, 160),
-      kind:
-        event.message.action?.label === "Task done"
-          ? "task-done"
-          : event.message.action?.label === "Task blocked"
-            ? "task-blocked"
-            : "assistant-final",
-    });
-  }
 };
 
 /** Replay frame: the full cumulative text, flagged so clients replace state. */
@@ -130,64 +113,6 @@ export const getLatestChatSessionProgress = (sessionId: string): AssistantProgre
 export const subscribeChatSession = (sessionId: string, listener: Listener): (() => void) => {
   emitter.on(sessionId, listener);
   return () => emitter.off(sessionId, listener);
-};
-
-/**
- * Same-stream consecutive progress frames coalesce losslessly: deltas
- * concatenate exactly, and a `replace` frame supersedes whatever was queued.
- */
-const coalesceConsecutiveProgress = (
-  last: ChatSessionEvent | undefined,
-  event: ChatSessionEvent,
-): ChatSessionEvent | null => {
-  if (last?.type !== "assistant-progress" || event.type !== "assistant-progress") return null;
-  if (event.replace) return event;
-  return {
-    ...last,
-    thinking: last.thinking + event.thinking,
-    content: last.content + event.content,
-    commandGroups: event.commandGroups,
-  };
-};
-
-/** Serializes SSE writes while retaining only the newest unsent cumulative progress event. */
-export const createChatSessionEventQueue = (
-  send: (event: ChatSessionEvent) => Promise<unknown>,
-): { push: Listener; clear: () => void } => {
-  const queued: ChatSessionEvent[] = [];
-  let draining = false;
-  let cleared = false;
-
-  const drain = async () => {
-    if (draining || cleared) return;
-    draining = true;
-    try {
-      while (!cleared) {
-        const event = queued.shift();
-        if (!event) return;
-        await send(event);
-      }
-    } finally {
-      draining = false;
-    }
-  };
-
-  return {
-    push: (event) => {
-      if (cleared) return;
-      const merged = coalesceConsecutiveProgress(queued[queued.length - 1], event);
-      if (merged) {
-        queued[queued.length - 1] = merged;
-      } else {
-        queued.push(event);
-      }
-      void drain();
-    },
-    clear: () => {
-      cleared = true;
-      queued.length = 0;
-    },
-  };
 };
 
 const updateLatestProgress = (event: ChatSessionEvent): void => {

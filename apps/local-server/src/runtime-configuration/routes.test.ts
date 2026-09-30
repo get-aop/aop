@@ -122,49 +122,6 @@ describe("runtime configuration routes", () => {
     );
   });
 
-  test("keeps a deleted legacy-backed provider out of refreshed runtime configuration", async () => {
-    await db
-      .insertInto("runtime_profiles")
-      .values({
-        id: "rprof_work_claude",
-        name: "Work Claude",
-        base_provider: "claude-code",
-        command: "claude --work",
-        model: "claude-fable-5",
-        reasoning: "high",
-        fast_mode: false,
-      })
-      .execute();
-
-    expect(await listProviders()).toContainEqual(
-      expect.objectContaining({
-        id: "legacy_rprof_work_claude",
-        name: "Work Claude",
-        command: "claude",
-        driver: "claude-code",
-        builtIn: false,
-        models: [
-          expect.objectContaining({
-            providerId: "legacy_rprof_work_claude",
-            model: "claude-fable-5",
-          }),
-        ],
-      }),
-    );
-
-    expect((await send("DELETE", "/providers/legacy_rprof_work_claude")).status).toBe(204);
-
-    const refreshed = await listProviders();
-    expect(refreshed.some((provider) => provider.id === "legacy_rprof_work_claude")).toBe(false);
-    expect(
-      await db
-        .selectFrom("runtime_profiles")
-        .select("id")
-        .where("id", "=", "rprof_work_claude")
-        .executeTakeFirst(),
-    ).toBeUndefined();
-  });
-
   test("clones Claude Code as an editable custom provider", async () => {
     const cloneResponse = await send("POST", "/providers/claude-code/clone", {
       name: "Work Claude",

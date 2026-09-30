@@ -90,10 +90,5 @@ export type {
   SessionPullRequestStatus,
   SwitchSessionGitBranchResult,
 } from "./types/session-git.ts";
-export type {
-  SSEChatUnreadEvent,
-  SSEDataResetEvent,
-  SSERepoRemovedEvent,
-  SSEServerStatus,
-} from "./types/sse-events.ts";
+export type { SSEServerStatus } from "./types/sse-events.ts";
 export { normalizeReleaseVersion } from "./version.ts";

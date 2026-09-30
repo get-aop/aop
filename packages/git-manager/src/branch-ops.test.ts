@@ -60,46 +60,6 @@ describe("BranchOps", () => {
     });
   });
 
-  describe("create", () => {
-    test("creates new branch from start point", async () => {
-      const mainSha = await branchOps.getCommit("main");
-      await branchOps.create("feature", mainSha);
-
-      expect(await branchOps.exists("feature")).toBe(true);
-    });
-  });
-
-  describe("delete", () => {
-    test("deletes existing branch", async () => {
-      await Bun.$`git branch feature`.cwd(repoPath).quiet();
-      expect(await branchOps.exists("feature")).toBe(true);
-
-      await branchOps.delete("feature");
-      expect(await branchOps.exists("feature")).toBe(false);
-    });
-  });
-
-  describe("checkout", () => {
-    test("checks out existing branch", async () => {
-      await Bun.$`git branch feature`.cwd(repoPath).quiet();
-      await branchOps.checkout("feature");
-
-      const current = await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(repoPath).text();
-      expect(current.trim()).toBe("feature");
-    });
-  });
-
-  describe("checkoutPrevious", () => {
-    test("returns to previous branch", async () => {
-      await Bun.$`git branch feature`.cwd(repoPath).quiet();
-      await branchOps.checkout("feature");
-      await branchOps.checkoutPrevious();
-
-      const current = await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(repoPath).text();
-      expect(current.trim()).toBe("main");
-    });
-  });
-
   describe("listLocal", () => {
     test("lists all local branches and current branch", async () => {
       await Bun.$`git branch feature-a`.cwd(repoPath).quiet();
@@ -115,7 +75,7 @@ describe("BranchOps", () => {
 
     test("reflects current branch after checkout", async () => {
       await Bun.$`git branch feature`.cwd(repoPath).quiet();
-      await branchOps.checkout("feature");
+      await Bun.$`git checkout feature`.cwd(repoPath).quiet();
 
       const result = await branchOps.listLocal();
 

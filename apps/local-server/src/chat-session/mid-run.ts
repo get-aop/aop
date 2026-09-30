@@ -149,7 +149,6 @@ const tryImmediateMidRunSlash = async (
   publishChatSessionEvent({
     type: "assistant-final",
     sessionId,
-    sessionTitle: nextSession.title,
     message: toMessageDto(assistantMessage),
   });
   publishChatSessionEvent({ type: "session-updated", sessionId, session: sessionDto });

@@ -152,7 +152,6 @@ export const removeRepo = async (
   const factoryReset =
     (await repoRepository.getAll()).length === 0 &&
     (await ctx.projectRepository.list()).length === 0;
-  ctx.taskEventEmitter.emit({ type: "repo-removed", repoId: repo.id });
   if (factoryReset) {
     const reset = await resetAllRuntimeData(ctx);
     if (!reset.success) {
@@ -161,7 +160,6 @@ export const removeRepo = async (
       });
       return { success: false, error: { code: "CHAT_HISTORY_UNSAFE", ...reset.error } };
     }
-    ctx.taskEventEmitter.emit({ type: "data-reset" });
   }
 
   logger.info("Repo removed {repoId} at {path}", { repoId: repo.id, path: repoPath });

@@ -61,7 +61,3 @@ A slow client costs one waiting frame per running turn, not one per chunk: delta
 The log keeps its newest 10,000 entries, over all projects. It is trimmed after any append whose id is a multiple of 1,000, so it never exceeds 11,000. Trimming only removes the oldest prefix, so one number, `trimFloor`, says which cursors are still complete: a cursor below it may have missed entries, one at or above it has missed none. The stream checks it on every read.
 
 A client more than 1,000 entries behind is not replayed to; it resyncs. Every read is one page of 200 entries, so a slow or distant client never holds more than that in memory.
-
-## Other streams
-
-`GET /api/events` and `GET /api/chat-sessions/:id/stream` are the streams of the earlier Sessions dashboard. They have no resume and restart their ids at 0 on every connection. The Projects dashboard, the `aop` CLI and the desktop app read neither, and they are to be deleted.

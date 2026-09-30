@@ -20,7 +20,6 @@ const BASELINE_TABLES = [
   "repos",
   "runtime_configuration_models",
   "runtime_configuration_providers",
-  "runtime_profiles",
   "schema_migrations",
   "settings",
 ];

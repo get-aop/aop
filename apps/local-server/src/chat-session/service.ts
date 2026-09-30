@@ -3,7 +3,7 @@ import type { LocalServerContext } from "../context.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { resumeRateLimited } from "./rate-limit-resume.ts";
 import { applyFollowUp, dispatchQueuedRuns, drainAfterResume } from "./reply-lifecycle.ts";
-import { ensureAllChatRunRecoveries, ensureSessionChatRunRecovery } from "./run-recovery.ts";
+import { ensureAllChatRunRecoveries } from "./run-recovery.ts";
 import { retryFreshChatRun, sendChatMessage } from "./send-message.ts";
 import { abortChatSession, resetRuntimeSession } from "./session-control.ts";
 import { createChatSession } from "./session-create.ts";
@@ -48,7 +48,7 @@ export const createChatSessionService = (
 
     setWorkspace: (sessionId: string, path: unknown) => updateChatWorkspace(ctx, sessionId, path),
 
-    /** Existence check for SSE stream subscription — no business orchestration. */
+    /** Whether the session exists, for routes that must answer 404 before doing anything else. */
     exists: async (sessionId: string): Promise<boolean> => {
       const session = await ctx.chatSessionRepository.getById(sessionId);
       return session !== null;
@@ -59,8 +59,6 @@ export const createChatSessionService = (
       const session = await ctx.chatSessionRepository.getById(sessionId);
       return session?.project_id != null;
     },
-
-    ensureRecovery: (sessionId: string) => ensureSessionChatRunRecovery(ctx, sessionId, deps),
 
     /** Starts the queued thread turns the host has room for; the run cap changing is one reason to. */
     dispatchQueuedRuns: () => dispatchQueuedRuns(ctx, deps),

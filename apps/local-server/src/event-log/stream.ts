@@ -3,10 +3,10 @@ import { getLogger } from "@aop/infra";
 import type { SSEStreamingApi } from "hono/streaming";
 import type { Kysely } from "kysely";
 import type { Database } from "../db/schema.ts";
-import { createSSEStreamHelper, type SSEStreamHelper } from "../events/sse-stream.ts";
 import { createProjectRepository } from "../project/repository.ts";
 import type { EventPublisher } from "./publisher.ts";
 import { createEventLogRepository, type EventLogRepository } from "./repository.ts";
+import { createSSEStreamHelper, type SSEStreamHelper } from "./sse-stream.ts";
 import { createLogFeed } from "./stream-feed.ts";
 import { createOutbox } from "./stream-outbox.ts";
 

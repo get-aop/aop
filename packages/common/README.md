@@ -12,7 +12,7 @@ Shared types, Zod schemas, and constants for AOP apps and packages. Consumers im
 | **Runtime configuration** | `RuntimeConfigurationProvider`, built-in configurations, thinking-level defaults | `src/types/runtime-configuration.ts` |
 | **Chat sessions** | `ChatSessionSummary`, `UpdateChatSessionInput`, `ChatDocumentAttachment`, `ChatImageAttachment` with `CHAT_DOCUMENT_LIMITS` and `CHAT_IMAGE_LIMITS` | `src/types/chat-*.ts` |
 | **Session git** | Branch, diff, and pull request wire types | `src/types/session-git.ts` |
-| **SSE** | `SSEServerStatus`, `SSERepoRemovedEvent`, `SSEDataResetEvent`, `SSEChatUnreadEvent` | `src/types/sse-events.ts` |
+| **SSE** | `SSEServerStatus` | `src/types/sse-events.ts` |
 
 ## Scripts
 

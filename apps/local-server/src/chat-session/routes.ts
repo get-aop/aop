@@ -4,9 +4,7 @@ import type { UpdateChatSessionInput } from "@aop/common";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
-import { streamSSE } from "hono/streaming";
 import type { LocalServerContext } from "../context.ts";
-import { createSSEStreamHelper } from "../events/sse-stream.ts";
 import { chatSessionAttachmentsDir, isSafeAttachmentFileName } from "./message-images.ts";
 import {
   type AbortChatSessionResult,
@@ -20,14 +18,6 @@ import {
   type UpdateChatSessionResult,
   type UpdateChatWorkspaceResult,
 } from "./service.ts";
-import {
-  createChatSessionEventQueue,
-  getLatestChatSessionProgress,
-  subscribeChatSession,
-} from "./session-events.ts";
-
-// Stay below the dashboard proxy's idle upstream timeout, matching the global event stream.
-const CHAT_SSE_HEARTBEAT_INTERVAL_MS = 3_000;
 
 export const createChatSessionRoutes = (
   ctx: LocalServerContext,
@@ -58,41 +48,6 @@ export const createChatSessionRoutes = (
 
   routes.get("/", async (c) => {
     return c.json(await service.list());
-  });
-
-  routes.get("/:sessionId/stream", async (c) => {
-    const sessionId = c.req.param("sessionId");
-    const exists = await service.exists(sessionId);
-    if (!exists) {
-      return c.json({ error: "Session not found" }, 404);
-    }
-
-    return streamSSE(c, async (stream) => {
-      const helper = createSSEStreamHelper(stream);
-      const eventQueue = createChatSessionEventQueue((event) =>
-        helper.sendEvent(event.type, event),
-      );
-      const unsubscribe = subscribeChatSession(sessionId, eventQueue.push);
-      helper.registerCleanup(() => {
-        eventQueue.clear();
-        unsubscribe();
-      });
-      const connected = await helper.sendEvent("connected", { sessionId });
-      if (!connected) return;
-      const latestProgress = getLatestChatSessionProgress(sessionId);
-      if (latestProgress) await helper.sendEvent(latestProgress.type, latestProgress);
-      await service.ensureRecovery(sessionId);
-
-      const pingInterval = setInterval(async () => {
-        const sent = await helper.sendEvent("ping", { t: Date.now() });
-        if (!sent) clearInterval(pingInterval);
-      }, CHAT_SSE_HEARTBEAT_INTERVAL_MS);
-      helper.registerCleanup(() => clearInterval(pingInterval));
-
-      // Hono's stream.sleep can resolve after the response callback returns under Bun.
-      // Keep the callback alive until the client aborts, matching the global event stream.
-      await new Promise(() => {});
-    });
   });
 
   routes.get("/:sessionId/location", async (c) => {

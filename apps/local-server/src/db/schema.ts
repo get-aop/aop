@@ -9,23 +9,6 @@ export interface SettingsTable {
   value: string;
 }
 
-/**
- * Nothing inserts or updates rows here any more; the runtime-configuration seed still imports any
- * rows an older build saved as custom providers, and deleting such a provider deletes its row.
- * Dropping the table takes a new migration version.
- */
-export interface RuntimeProfilesTable {
-  id: string;
-  name: string;
-  base_provider: string;
-  command: string;
-  model: string;
-  reasoning: string;
-  fast_mode: Generated<boolean>;
-  created_at: Generated<string>;
-  updated_at: Generated<string>;
-}
-
 export interface RuntimeConfigurationProvidersTable {
   id: string;
   name: string;
@@ -183,7 +166,6 @@ export interface SchemaMigrationsTable {
 export interface Database extends ChatHistoryDatabase, ProjectsDatabase, UsageDatabase {
   schema_migrations: SchemaMigrationsTable;
   settings: SettingsTable;
-  runtime_profiles: RuntimeProfilesTable;
   runtime_configuration_providers: RuntimeConfigurationProvidersTable;
   runtime_configuration_models: RuntimeConfigurationModelsTable;
   repos: ReposTable;

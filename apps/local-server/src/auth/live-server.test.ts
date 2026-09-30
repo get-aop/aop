@@ -63,10 +63,9 @@ describe("auth behind a real listener", () => {
     const byToken = await call("/api/status", {
       headers: { ...asProxy, authorization: `Bearer ${token}` },
     });
-    const byCookie = await call("/api/events", { headers: { ...asProxy, cookie } });
+    const byCookie = await call("/api/status", { headers: { ...asProxy, cookie } });
     expect(byToken.status).toBe(200);
     expect(byCookie.status).toBe(200);
-    expect(byCookie.headers.get("content-type")).toContain("text/event-stream");
 
     const revoked = await call(`/api/auth/devices/${device.id}`, { method: "DELETE" });
     expect(revoked.status).toBe(204);
@@ -74,12 +73,8 @@ describe("auth behind a real listener", () => {
     const afterToken = await call("/api/status", {
       headers: { ...asProxy, authorization: `Bearer ${token}` },
     });
+    const afterCookie = await call("/api/status", { headers: { ...asProxy, cookie } });
     expect(afterToken.status).toBe(401);
-    // The stream the device held open is closed by the host, not left to time out.
-    const drained = await Promise.race([
-      byCookie.text(),
-      Bun.sleep(3_000).then(() => "still open"),
-    ]);
-    expect(drained).not.toBe("still open");
+    expect(afterCookie.status).toBe(401);
   });
 });

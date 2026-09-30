@@ -57,12 +57,14 @@ describe("migration v8 on a database that ran versions 1 to 7", () => {
     await before.destroy();
 
     const db = createDatabase(path);
-    await runMigrations(db);
+    await applyMigrations(db, migrationsThrough(8));
 
     expect(await listColumns(db, "runtime_profiles")).not.toContain("exec_host_id");
-    expect(await db.selectFrom("runtime_profiles").selectAll().execute()).toMatchObject([
-      { id: "rprof_1", name: "Work", command: "claude", model: "claude-opus-5" },
-    ]);
+    expect(
+      await sql`SELECT id, name, command, model FROM runtime_profiles`
+        .execute(db)
+        .then(({ rows }) => rows),
+    ).toEqual([{ id: "rprof_1", name: "Work", command: "claude", model: "claude-opus-5" }]);
     expect(await listSettingKeys(db)).not.toContain("remote_exec_hosts_json");
     expect(
       await db
@@ -75,16 +77,15 @@ describe("migration v8 on a database that ran versions 1 to 7", () => {
     expect(violations.rows).toEqual([]);
 
     const ledger = await db.selectFrom("schema_migrations").selectAll().execute();
-    await runMigrations(db);
+    await applyMigrations(db, migrationsThrough(8));
     expect(await db.selectFrom("schema_migrations").selectAll().execute()).toEqual(ledger);
     await db.destroy();
   });
 
-  test("a fresh database never has the column or the setting", async () => {
+  test("a fresh database never has the setting", async () => {
     const db = createDatabase(path);
     await runMigrations(db);
 
-    expect(await listColumns(db, "runtime_profiles")).not.toContain("exec_host_id");
     expect(await listSettingKeys(db)).not.toContain("remote_exec_hosts_json");
     await db.destroy();
   });

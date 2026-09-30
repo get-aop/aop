@@ -19,22 +19,6 @@ export class BranchOps {
     return this.executor.exec(["rev-parse", ref]);
   }
 
-  async create(branch: string, startPoint: string): Promise<void> {
-    await this.executor.exec(["checkout", "-b", branch, startPoint]);
-  }
-
-  async delete(branch: string): Promise<void> {
-    await this.executor.exec(["branch", "-D", branch]);
-  }
-
-  async checkout(ref: string): Promise<void> {
-    await this.executor.exec(["checkout", ref]);
-  }
-
-  async checkoutPrevious(): Promise<void> {
-    await this.executor.exec(["checkout", "-"]);
-  }
-
   async listLocal(): Promise<{ branches: string[]; current: string }> {
     const output = await this.executor.exec(["branch", "--format=%(refname:short)"]);
     const branches = output

@@ -9,7 +9,6 @@ import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
 import type { LocalServerContext } from "./context.ts";
 import { createEventStreamRoutes } from "./event-log/routes.ts";
-import { createEventsSSEHandler } from "./events/index.ts";
 import { createFsRoutes } from "./fs/routes.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
@@ -68,10 +67,10 @@ export const createApp = (deps: AppDependencies) => {
     c.res = await maybeCompressJsonResponse(c.req.raw, c.res);
   });
 
-  // Request logging middleware — skip noisy endpoints (SSE, health)
+  // Request logging middleware — skip the noisy health endpoint
   app.use("/api/*", async (c, next) => {
     const path = new URL(c.req.url).pathname;
-    if (path.startsWith("/api/health") || path === "/api/events") {
+    if (path.startsWith("/api/health")) {
       return next();
     }
 
@@ -104,10 +103,6 @@ export const createApp = (deps: AppDependencies) => {
 
   app.get("/api/status", async (c) => c.json(await listRepoSummaries(ctx)));
 
-  app.get(
-    "/api/events",
-    createEventsSSEHandler(ctx, () => listRepoSummaries(ctx), deps.eventsSSEOptions),
-  );
   app.route("/api/auth", createAuthRoutes(ctx));
   app.route("/api/projects", createEventStreamRoutes(ctx, deps.eventsSSEOptions));
   app.route("/api/chat-sessions", createChatSessionRoutes(ctx));

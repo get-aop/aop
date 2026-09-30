@@ -209,11 +209,10 @@ describe("auth routes", () => {
       expect(exchange.status).toBe(200);
       expect(cookie).toContain(`aop_device=${token}`);
 
-      const stream = await remote("/api/events", { headers: { cookie: `aop_device=${token}` } });
+      const me = await remote("/api/auth/me", { headers: { cookie: `aop_device=${token}` } });
 
-      expect(stream.status).toBe(200);
-      expect(stream.headers.get("content-type")).toContain("text/event-stream");
-      await stream.body?.cancel();
+      expect(me.status).toBe(200);
+      expect(((await me.json()) as AnyJson).kind).toBe("device");
     });
 
     test("refuses to set a cookie for a token the host does not know", async () => {

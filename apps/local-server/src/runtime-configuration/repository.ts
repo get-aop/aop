@@ -181,21 +181,14 @@ export const createRuntimeConfigurationRepository = (
       return toProvider(provider, models);
     });
   },
-  deleteProvider: async (id) =>
-    db.transaction().execute(async (trx) => {
-      const result = await trx
-        .deleteFrom("runtime_configuration_providers")
-        .where("id", "=", id)
-        .where("built_in", "=", false)
-        .executeTakeFirst();
-      if (result.numDeletedRows === 0n) return false;
-
-      const legacyProfileId = getLegacyRuntimeProfileId(id);
-      if (legacyProfileId) {
-        await trx.deleteFrom("runtime_profiles").where("id", "=", legacyProfileId).execute();
-      }
-      return true;
-    }),
+  deleteProvider: async (id) => {
+    const result = await db
+      .deleteFrom("runtime_configuration_providers")
+      .where("id", "=", id)
+      .where("built_in", "=", false)
+      .executeTakeFirst();
+    return result.numDeletedRows > 0n;
+  },
   getModel: async (id) => {
     const record = await db
       .selectFrom("runtime_configuration_models")
@@ -459,47 +452,6 @@ const seedBuiltIns = async (db: Kysely<Database>) => {
       )
       .execute();
   }
-  const profiles = await db.selectFrom("runtime_profiles").selectAll().execute();
-  const providerCount = await db
-    .selectFrom("runtime_configuration_providers")
-    .select(({ fn }) => fn.count<number>("id").as("count"))
-    .executeTakeFirstOrThrow();
-  let nextPosition = Number(providerCount.count);
-  for (const profile of profiles) {
-    const providerId = `legacy_${profile.id}`;
-    const inserted = await db
-      .insertInto("runtime_configuration_providers")
-      .values({
-        id: providerId,
-        name: profile.name,
-        command: normalizeExecutable(profile.command),
-        driver: profile.base_provider,
-        built_in: false,
-        position: nextPosition,
-        supports_fast_mode:
-          Boolean(profile.fast_mode) ||
-          runtimeSupportsFastMode(profile.base_provider as RuntimeConfigurationProvider["driver"]),
-      })
-      .onConflict((oc) => oc.column("id").doNothing())
-      .executeTakeFirst();
-    if (Number(inserted.numInsertedOrUpdatedRows ?? 0) > 0) nextPosition += 1;
-    await db
-      .insertInto("runtime_configuration_models")
-      .values({
-        id: `${providerId}_model`,
-        provider_id: providerId,
-        description: profile.model,
-        model: profile.model,
-        thinking_levels: JSON.stringify([profile.reasoning]),
-        fast_mode: false,
-        built_in: false,
-        position: 0,
-        is_default: true,
-        default_thinking_level: profile.reasoning,
-      })
-      .onConflict((oc) => oc.column("id").doNothing())
-      .execute();
-  }
 };
 
 const insertBuiltInModel = async (
@@ -544,13 +496,6 @@ const insertBuiltInModel = async (
       }),
     )
     .execute();
-};
-
-const normalizeExecutable = (command: string): string => command.trim().split(/\s+/)[0] ?? command;
-
-const getLegacyRuntimeProfileId = (providerId: string): string | null => {
-  const prefix = "legacy_";
-  return providerId.startsWith(prefix) ? providerId.slice(prefix.length) : null;
 };
 
 const toProviderRecord = (input: RuntimeConfigurationProviderInput) => ({

@@ -38,11 +38,10 @@ const setup = async () => {
   return { s, project: created.project, coordinator };
 };
 
-// The status of each call a client makes on a session id: read, stream, stop, send, delete.
+// The status of each call a client makes on a session id: read, stop, send, delete.
 const statusesOf = async (chat: Hono, sessionId: string): Promise<number[]> => {
   const calls = [
     ["GET", `/api/chat-sessions/${sessionId}`],
-    ["GET", `/api/chat-sessions/${sessionId}/stream`],
     ["POST", `/api/chat-sessions/${sessionId}/abort`],
     ["POST", `/api/chat-sessions/${sessionId}/messages`],
     ["DELETE", `/api/chat-sessions/${sessionId}`],
@@ -333,7 +332,7 @@ describe("chat sessions that belong to no project", () => {
 
     expect(ids).toEqual([plain.id]);
     for (const hidden of [coordinator.id, spawned.thread.id]) {
-      expect(await statusesOf(chat, hidden)).toEqual([404, 404, 404, 404, 404]);
+      expect(await statusesOf(chat, hidden)).toEqual([404, 404, 404, 404]);
     }
     expect(await s.ctx.chatSessionRepository.getById(spawned.thread.id)).not.toBeNull();
   });

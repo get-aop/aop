@@ -3,34 +3,23 @@ import { generateTypeId } from "./typeid";
 
 describe("generateTypeId", () => {
   test("generates a valid typeid with the given prefix", () => {
-    const id = generateTypeId("task");
-    expect(id).toMatch(/^task_[0-9a-z]{26}$/);
+    const id = generateTypeId("repo");
+    expect(id).toMatch(/^repo_[0-9a-z]{26}$/);
   });
 
   test("generates unique IDs", () => {
-    const id1 = generateTypeId("exec");
-    const id2 = generateTypeId("exec");
+    const id1 = generateTypeId("isess");
+    const id2 = generateTypeId("isess");
     expect(id1).not.toBe(id2);
   });
 
   test("supports different prefixes", () => {
-    const taskId = generateTypeId("task");
-    const execId = generateTypeId("exec");
-    const repoId = generateTypeId("repo");
-    const agentId = generateTypeId("agent");
-    const channelId = generateTypeId("chan");
     const chatRunId = generateTypeId("crun");
+    const messageId = generateTypeId("smsg");
+    const projectId = generateTypeId("proj");
 
-    expect(taskId.startsWith("task_")).toBe(true);
-    expect(execId.startsWith("exec_")).toBe(true);
-    expect(repoId.startsWith("repo_")).toBe(true);
-    expect(agentId.startsWith("agent_")).toBe(true);
-    expect(channelId.startsWith("chan_")).toBe(true);
-    expect(chatRunId.startsWith("crun_")).toBe(true);
-  });
-
-  test("supports project IDs", () => {
-    const id = generateTypeId("proj");
-    expect(id).toMatch(/^proj_[0-9a-z]{26}$/);
+    expect(chatRunId).toMatch(/^crun_[0-9a-z]{26}$/);
+    expect(messageId).toMatch(/^smsg_[0-9a-z]{26}$/);
+    expect(projectId).toMatch(/^proj_[0-9a-z]{26}$/);
   });
 });
