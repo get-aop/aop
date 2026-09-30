@@ -18,7 +18,8 @@ import {
 } from "electron";
 import packageInfo from "../../../package.json";
 import { windowTitle } from "../src/backend/connection-label";
-import type { DesktopState } from "../src/backend/types";
+import type { AppUpdateState, DesktopState } from "../src/backend/types";
+import { hostDriftTag, updateLabel } from "../src/backend/update-label";
 import { APP_SCHEME, createAppProtocolHandler, DASHBOARD_HOST, SHELL_HOST } from "./app-protocol";
 import { IPC_CHANNELS } from "./channels";
 import { buildMenuTemplate } from "./chrome";
@@ -47,7 +48,10 @@ import { createLogger, type Logger } from "./log";
 import { createNotifier } from "./notifications/notifier";
 import { createProjectWatcher } from "./notifications/project-watcher";
 import { resolveDesktopPaths } from "./runtime-paths";
-import { isAllowedNavigation, isSafeExternalUrl } from "./security";
+import { isAllowedNavigation, isSafeExternalUrl, isSafeUpdateUrl } from "./security";
+import { type AppUpdater, createAppUpdater } from "./updates/app-updater";
+import { createElectronUpdaterPort } from "./updates/electron-updater-port";
+import { chooseUpdateMode } from "./updates/update-policy";
 import { buildWindowOptions } from "./window-options";
 
 // Development means the connect screen comes from the Vite dev server named in AOP_DESKTOP_DEV_URL.
@@ -63,6 +67,9 @@ protocol.registerSchemesAsPrivileged([
     privileges: { standard: true, secure: true, supportFetchAPI: true },
   },
 ]);
+
+// `AOP_GITHUB_API_URL` points the app at a fake release feed; it is how the updater is tested.
+const feedOverride = process.env.AOP_GITHUB_API_URL?.trim() || undefined;
 
 let mainWindow: BrowserWindow | null = null;
 let finishingQuit = false;
@@ -160,6 +167,22 @@ async function start(): Promise<void> {
     log,
   });
 
+  appUpdater = createAppUpdater({
+    mode: chooseUpdateMode({
+      platform: process.platform,
+      packaged: app.isPackaged,
+      disabled: process.env.AOP_DESKTOP_DISABLE_UPDATES === "1",
+    }),
+    appVersion: packageInfo.version,
+    arch: process.arch,
+    apiBase: feedOverride,
+    fetch: fetchImpl,
+    createAutoUpdater: createElectronUpdaterPort,
+    schedule: timer,
+    onChange: applyUpdate,
+    log,
+  });
+
   await registerAppProtocol(paths, controller.activeHostUrl);
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
     callback(false),
@@ -186,6 +209,9 @@ async function start(): Promise<void> {
       getHostConfig: controller.hostConfigForDashboard,
       hostRejected: controller.hostRejected,
       setZoom: async (factor) => void mainWindow?.webContents.setZoomFactor(factor),
+      getUpdateState: () => updateState,
+      openUpdateDownload: openDownload,
+      restartToUpdate: async () => appUpdater?.restartToUpdate(),
     },
     development,
   );
@@ -194,11 +220,14 @@ async function start(): Promise<void> {
   installLifecycle(controller);
   log("started", { version: packageInfo.version, development, hostMode: supervisor !== null });
   await controller.boot();
+  appUpdater.start();
 }
 
 // The menu's actions need the controller, which exists only once the app has started.
 let menuActions: Parameters<typeof buildMenuTemplate>[1] | null = null;
 let lastState: DesktopState | null = null;
+let appUpdater: AppUpdater | null = null;
+let updateState: AppUpdateState = { status: "idle" };
 let logChrome: Logger = () => {};
 
 function installMenuActions(controller: ReturnType<typeof createDesktopController>): void {
@@ -209,6 +238,8 @@ function installMenuActions(controller: ReturnType<typeof createDesktopControlle
     manageHost: () => void controller.showHostMode(),
     startHost: () => void controller.startHostMode(),
     stopHost: () => void controller.stopHostMode(),
+    openUpdateDownload: () => void openDownload(),
+    restartToUpdate: () => appUpdater?.restartToUpdate(),
   };
   if (lastState) applyChrome(lastState);
 }
@@ -229,13 +260,14 @@ function installLifecycle(controller: ReturnType<typeof createDesktopController>
     if (finishingQuit) return;
     event.preventDefault();
     finishingQuit = true;
+    appUpdater?.stop();
     void controller.shutdown().finally(() => app.quit());
   });
 }
 
 function applyChrome(state: DesktopState): void {
   lastState = state;
-  const title = windowTitle(state.connection);
+  const title = titleFor(state);
   logChrome("window title", { title });
   mainWindow?.setTitle(title);
   mainWindow?.webContents.send(IPC_CHANNELS.stateChanged, state);
@@ -248,11 +280,35 @@ function applyChrome(state: DesktopState): void {
           connection: state.connection,
           hostProcess: state.hostProcess,
           hostModeAvailable: state.hostModeAvailable,
+          update: updateState,
+          appVersion: state.appVersion,
         },
         menuActions,
       ),
     ),
   );
+}
+
+// The update and a host on another release are asides in the title: quiet, and always in view.
+function titleFor(state: DesktopState): string {
+  const { connection } = state;
+  return windowTitle(connection, [
+    updateLabel(updateState),
+    connection.status === "connected"
+      ? hostDriftTag(connection.hostVersion, state.appVersion)
+      : null,
+  ]);
+}
+
+async function openDownload(): Promise<void> {
+  const url = appUpdater?.downloadUrl();
+  if (url && isSafeUpdateUrl(url, feedOverride !== undefined)) await shell.openExternal(url);
+}
+
+function applyUpdate(next: AppUpdateState): void {
+  updateState = next;
+  mainWindow?.webContents.send(IPC_CHANNELS.updateStateChanged, next);
+  if (lastState) applyChrome(lastState);
 }
 
 function windowPort(): WindowPort {
@@ -318,7 +374,7 @@ function createMainWindow(preloadPath: string, log?: Logger): BrowserWindow {
   window.on("closed", () => {
     if (mainWindow === window) mainWindow = null;
   });
-  if (lastState) window.setTitle(windowTitle(lastState.connection));
+  if (lastState) window.setTitle(titleFor(lastState));
   window.webContents.on("did-finish-load", () =>
     log?.("page loaded", { url: window.webContents.getURL(), title: window.getTitle() }),
   );

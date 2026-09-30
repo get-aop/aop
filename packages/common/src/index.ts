@@ -91,4 +91,18 @@ export type {
   SwitchSessionGitBranchResult,
 } from "./types/session-git.ts";
 export type { SSEServerStatus } from "./types/sse-events.ts";
-export { normalizeReleaseVersion } from "./version.ts";
+export type { ReleaseInfo, UpdateStatus } from "./updates.ts";
+export {
+  GITHUB_API_URL,
+  GithubReleaseSchema,
+  latestReleaseApiUrl,
+  parseGithubRelease,
+  RELEASE_REPO,
+  UpdateStatusSchema,
+} from "./updates.ts";
+export {
+  compareReleaseVersions,
+  isNewerRelease,
+  isReleaseVersion,
+  normalizeReleaseVersion,
+} from "./version.ts";

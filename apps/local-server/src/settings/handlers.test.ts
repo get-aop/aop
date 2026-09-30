@@ -26,6 +26,7 @@ describe("settings/handlers", () => {
       expect(result.settings).toEqual([
         { key: "chat_global_instructions", value: "" },
         { key: "max_concurrent_runs", value: "4" },
+        { key: "update_check", value: "true" },
       ]);
       expect(result.settings.map(({ key }) => key).sort()).toEqual(
         Object.keys(DEFAULT_SETTINGS).sort(),
@@ -134,6 +135,22 @@ describe("settings/handlers", () => {
         });
       }
       expect(await ctx.settingsRepository.get(SettingKey.MAX_CONCURRENT_RUNS)).toBe("32");
+    });
+
+    test("update_check is on until the person turns it off, and takes only true or false", async () => {
+      expect(await ctx.settingsRepository.get(SettingKey.UPDATE_CHECK)).toBe("true");
+
+      expect(await setSetting(ctx, "update_check", "false")).toMatchObject({ success: true });
+      expect(await ctx.settingsRepository.get(SettingKey.UPDATE_CHECK)).toBe("false");
+      expect(await setSetting(ctx, "update_check", "off")).toEqual({
+        success: false,
+        error: {
+          code: "INVALID_VALUE",
+          key: "update_check",
+          message: 'update_check must be "true" or "false"',
+        },
+      });
+      expect(await ctx.settingsRepository.get(SettingKey.UPDATE_CHECK)).toBe("false");
     });
 
     test("a batch with one bad value saves none of it", async () => {

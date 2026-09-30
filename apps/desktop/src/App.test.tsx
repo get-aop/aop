@@ -212,6 +212,44 @@ describe("a remote host", () => {
     expect(backend.forgetHost).toHaveBeenCalledTimes(1);
   });
 
+  test("says when the host is on another release than the app, and stays quiet when it is not", async () => {
+    const newer = await show(
+      remote({ status: "connected", host: HOST, hostVersion: "0.10.0+abc1234" }),
+    );
+    expect(newer.view.getByTestId("status-version-drift").textContent).toBe(
+      "The host (0.10.0) is newer than this app (0.9.51). Update the app.",
+    );
+    cleanup();
+
+    const older = await show(remote({ status: "connected", host: HOST, hostVersion: "0.9.0" }));
+    expect(older.view.getByTestId("status-version-drift").textContent).toContain("is older");
+    cleanup();
+
+    const same = await show(remote({ status: "connected", host: HOST, hostVersion: "0.9.51" }));
+    expect(same.view.queryByTestId("status-version-drift")).toBeNull();
+  });
+
+  test("shows the app's own update with a download link, and then the restart once it is downloaded", async () => {
+    const { view, backend, pushUpdate } = await show(
+      remote({ status: "connected", host: HOST, hostVersion: "0.9.51" }),
+    );
+    expect(view.queryByTestId("status-update")).toBeNull();
+
+    act(() =>
+      pushUpdate({ status: "available", version: "0.10.0", releaseUrl: "https://example/r" }),
+    );
+    await waitFor(() =>
+      expect(view.getByTestId("status-update").textContent).toContain("Update available (0.10.0)"),
+    );
+    fireEvent.click(view.getByTestId("status-update-download"));
+    expect(backend.openUpdateDownload).toHaveBeenCalledTimes(1);
+
+    act(() => pushUpdate({ status: "ready", version: "0.10.0" }));
+    await waitFor(() => expect(view.getByTestId("status-update-restart")).toBeDefined());
+    fireEvent.click(view.getByTestId("status-update-restart"));
+    expect(backend.restartToUpdate).toHaveBeenCalledTimes(1);
+  });
+
   test("follows what the app pushes: connecting, then connected", async () => {
     const { view, push } = await show(remote({ status: "connecting", host: HOST }));
     expect(view.getByTestId("status-label").getAttribute("data-tone")).toBe("busy");

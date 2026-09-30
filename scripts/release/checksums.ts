@@ -20,6 +20,14 @@ export const RELEASE_CHECKSUM_ARTIFACTS = [
   "aop-windows-x64-setup.exe",
 ];
 
+/**
+ * Published with the release but not in checksums.sha256: electron-updater reads them from the
+ * release to update the installed Windows app. `latest.yml` carries the installer's own sha512,
+ * which the updater checks, and install.sh never looks at either file. The R2 deploy skips them
+ * too, because the update feed is the release on GitHub.
+ */
+export const RELEASE_UPDATER_FILES = ["latest.yml", "aop-windows-x64-setup.exe.blockmap"];
+
 export const generateChecksumFile = async (
   files: string[],
   checksumPath: string,
@@ -39,6 +47,16 @@ const buildChecksumLines = async (files: string[]): Promise<string[]> => {
   }
 
   return lines;
+};
+
+/** Absolute paths of the updater files that are actually present on disk. */
+export const resolvePresentUpdaterFiles = async (releaseDir: string): Promise<string[]> => {
+  const present: string[] = [];
+  for (const name of RELEASE_UPDATER_FILES) {
+    const path = join(releaseDir, name);
+    if (await Bun.file(path).exists()) present.push(path);
+  }
+  return present;
 };
 
 /** Absolute paths of the release artifacts that are actually present on disk. */

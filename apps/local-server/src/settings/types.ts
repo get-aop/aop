@@ -19,6 +19,11 @@ export const SettingKey = {
    * `MAX_CONCURRENT_RUNS_LIMIT`. Turns beyond it wait in order (see scheduling/).
    */
   MAX_CONCURRENT_RUNS: "max_concurrent_runs",
+  /**
+   * Whether the host looks for a newer release once a day and shows a notice. "true" or
+   * "false"; on by default. It never installs anything by itself.
+   */
+  UPDATE_CHECK: "update_check",
 } as const;
 
 export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
@@ -26,6 +31,7 @@ export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
 export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
   [SettingKey.MAX_CONCURRENT_RUNS]: String(DEFAULT_MAX_CONCURRENT_RUNS),
+  [SettingKey.UPDATE_CHECK]: "true",
 };
 
 export const VALID_KEYS: SettingKey[] = Object.values(SettingKey);
@@ -38,6 +44,9 @@ export const isValidSettingKey = (key: string): key is SettingKey => {
 export const validateSettingValue = (key: SettingKey, value: string): string | null => {
   if (key === SettingKey.MAX_CONCURRENT_RUNS && parseMaxConcurrentRuns(value) === null) {
     return `${key} must be a whole number from 1 to ${MAX_CONCURRENT_RUNS_LIMIT}`;
+  }
+  if (key === SettingKey.UPDATE_CHECK && value !== "true" && value !== "false") {
+    return `${key} must be "true" or "false"`;
   }
   return null;
 };

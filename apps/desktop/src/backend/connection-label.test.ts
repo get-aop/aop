@@ -42,6 +42,19 @@ describe("windowTitle", () => {
       "AOP · Connected to mac.tail1234.ts.net",
     );
   });
+
+  test("appends the asides that apply and skips the ones that do not", () => {
+    const connected = { status: "connected", host: HOST, hostVersion: "1" } as const;
+
+    expect(
+      windowTitle(connected, ["Update available (0.10.0)", null, "host 0.10.0 is newer"]),
+    ).toBe(
+      "AOP · Connected to mac.tail1234.ts.net · Update available (0.10.0) · host 0.10.0 is newer",
+    );
+    expect(windowTitle({ status: "unconfigured" }, ["Update available (0.10.0)"])).toBe(
+      "AOP · Update available (0.10.0)",
+    );
+  });
 });
 
 describe("hostName", () => {

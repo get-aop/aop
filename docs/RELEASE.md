@@ -8,7 +8,8 @@
 | `runtime-assets.tar.gz` | The dashboard the host serves, unpacked next to the binary | Linux runner |
 | `aop-macos-arm64.dmg`, `aop-macos-x64.dmg` | The macOS desktop app | macOS runner |
 | `aop-windows-x64-setup.exe` | The Windows desktop app | Windows runner |
-| `checksums.sha256` | SHA-256 of every file above, checked by `install.sh` | Linux runner |
+| `latest.yml`, `aop-windows-x64-setup.exe.blockmap` | What the installed Windows app updates itself from (electron-updater) | Windows runner |
+| `checksums.sha256` | SHA-256 of the host binaries, the assets archive and the installers, checked by `install.sh`. The two updater files are not in it: `latest.yml` carries the installer's own sha512 | Linux runner |
 
 The host runs on macOS and Linux only. Windows gets the desktop app and nothing else: there is no Windows host, CLI, server binary or PowerShell installer. The Windows app is a client of a host: it bundles the dashboard, pairs over `https://` and starts no server. The macOS app is the same client and can also run the host on that Mac from its bundled `aop` binary.
 
@@ -33,8 +34,8 @@ The workflow (`.github/workflows/release.yml`) runs these jobs:
 
 1. `build` compiles the four host binaries and `runtime-assets.tar.gz` (`bun run build:release`).
 2. `package-macos` builds both DMGs on `macos-latest`.
-3. `package-windows` builds the NSIS installer on `windows-latest`. It needs no host binary.
-4. `assemble` downloads everything, fails if any file is missing or if an `aop-windows-x64.exe` appears, and writes `checksums.sha256`.
+3. `package-windows` builds the NSIS installer on `windows-latest`, with `latest.yml` and the blockmap electron-builder writes beside it. It needs no host binary.
+4. `assemble` downloads everything, fails if any file is missing or if an `aop-windows-x64.exe` appears, prints `latest.yml` and fails unless it names this run's version and installer file and carries the installer's sha512 (this is where the Windows updater config is checked in CI), and writes `checksums.sha256`.
 5. `release` (tag pushes, and manual runs with `publish` on) creates the GitHub Release and runs `scripts/release/deploy-r2.sh`.
 
 On a pull request that touches the release files, jobs 1 to 4 run and stop. Nothing is published, and the assembled files are kept for a day as the `release-all` workflow artifact, so a change to the packaging is checked before it merges.
@@ -76,6 +77,48 @@ bun run build:release -- --target darwin-arm64     # dist/release/aop-darwin-arm
 bun run package:macos-dmg -- --arch arm64          # dist/release/aop-macos-arm64.dmg (needs the line above)
 bun run package:windows                            # on Windows: dist/release/aop-windows-x64-setup.exe
 ```
+
+## Host updates
+
+An installed host updates itself from the same GitHub Release that `install.sh` falls back to: the newest one that is neither a draft nor a pre-release (`GET /repos/get-aop/aop-mono/releases/latest`). Nothing on getaop.com is involved, so a release is updatable as soon as its GitHub Release exists, and the release must carry the assets `aop update` downloads: `aop-<os>-<arch>` for the host's platform, `runtime-assets.tar.gz` and `checksums.sha256` with a line for each. A release that lacks one is refused with a message naming it, and nothing on the host changes. How the host behaves, and how to turn the check off, is in [Updating the host](./HOST.md#updating-the-host).
+
+The version `aop update` compares is the release tag (`v0.10.0` is `0.10.0`), against the `version` in the host's build (`0.10.0+<commit>`; the `+commit` part is ignored). Pre-releases are never offered. The first release with the updater is `v0.10.0`; hosts older than it have no `aop update`, so they update once by running `install.sh` again.
+
+Test the whole path against a fake feed instead of a real release:
+
+```bash
+bun scripts/release/fake-feed.ts --dir <folder with aop-darwin-arm64, runtime-assets.tar.gz, checksums.sha256> --version 0.10.0 --port 25511
+AOP_GITHUB_API_URL=http://127.0.0.1:25511 aop update --check
+```
+
+`AOP_GITHUB_API_URL` and `AOP_GITHUB_REPO` override where the host looks; the unit tests of `apps/local-server/src/update/` run against an in-process feed the same way and never reach GitHub.
+
+## Desktop app updates
+
+The apps read the same GitHub Releases directly. `deploy-r2.sh` therefore does not upload the updater files.
+
+| App | What happens |
+| --- | --- |
+| Windows | Real auto update with electron-updater. The app looks at startup and every six hours, downloads the new installer in the background (only the changed blocks, through the blockmap), and installs it when the app restarts. The window menu gains "Restart to update (x.y.z)" once the download is ready. |
+| macOS | A notice only, until the app is Developer ID signed: Squirrel.Mac installs an update only over a signed app. The app looks at the latest release at startup and every six hours and, when it is newer, adds "Update available (x.y.z)" to the window title and a menu with a link to the DMG for this Mac's architecture. The person downloads and replaces the app by hand. |
+
+Both apps also say when the host runs another release than the app: a line on the status screen, the Host menu and a few words in the window title ("host 0.10.0 is newer" means update the app, "host 0.9.0 is older" means run `aop update` on the host). It is only a notice; the API version handshake decides whether they can talk.
+
+How the pieces fit:
+
+- `scripts/desktop/electron-builder-config.ts` has a `publish` entry for the GitHub repo. With `--publish never` (what the workflow passes) electron-builder uploads nothing but still writes `latest.yml` and the blockmap for the Windows installer, and `app-update.yml` into the app's resources, which tells the installed app where to look. The same entry makes a DMG build write a `latest-mac.yml`; the packaging script copies only the DMG into `dist/release`, so it never ships.
+- `scripts/release/windows-installer.ts` copies the installer, `latest.yml` and `aop-windows-x64-setup.exe.blockmap` into `dist/release`. The workflow uploads them from `package-windows`, requires them in `assemble`, and attaches them to the GitHub Release. `scripts/release/updater-wiring.test.ts` keeps those lists the same.
+- The installer is per-user, so an update needs no elevation. An unsigned installer updates too: electron-updater checks the sha512 in `latest.yml`; it checks a publisher name only if one is configured, and none is.
+
+### Turn on macOS auto update
+
+When the macOS app is signed and notarized ([Signing is off](#signing-is-off) says how), flip one constant: `MAC_AUTO_UPDATE_ENABLED` in `apps/desktop/electron/updates/update-policy.ts`. The Mac app then takes the Windows code path. The release must also carry what Squirrel.Mac reads, which it does not today: a zip of the signed app next to each DMG and `latest-mac.yml` (add `zip` to the `mac.target` list in the builder config, copy those files into `dist/release` in `scripts/release/macos-dmg.ts`, and list them in `release.yml` and `RELEASE_UPDATER_FILES`). Until then leave the constant off.
+
+### Settings and testing
+
+- `AOP_DESKTOP_DISABLE_UPDATES=1` in the app's environment turns the check off. A development run (not packaged) never auto updates, and on macOS shows the notice.
+- `AOP_GITHUB_API_URL` points the apps (and the host) at another feed, such as `http://127.0.0.1:<port>`. Run `bun scripts/release/fake-feed.ts --dir <folder of assets> --version 99.0.0 --port <port>` to serve one. The app opens a download link from such a feed only when it is https, or plain http on this computer while `AOP_GITHUB_API_URL` is set.
+- Windows cannot be run from a Mac. Its updater configuration is checked in the `assemble` job's "Check the Windows updater config" step, whose log prints `latest.yml`.
 
 ## Signing is off
 

@@ -16,6 +16,10 @@ export const IPC_CHANNELS = {
   hostRejected: "desktop:host-rejected",
   // Either page.
   setZoom: "desktop:set-zoom",
+  getUpdateState: "desktop:get-update-state",
+  openUpdateDownload: "desktop:open-update-download",
+  restartToUpdate: "desktop:restart-to-update",
   // The app to the connect screen: something it shows changed.
   stateChanged: "desktop:state-changed",
+  updateStateChanged: "desktop:update-state-changed",
 } as const;

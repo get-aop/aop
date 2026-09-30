@@ -26,6 +26,8 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
   ["POST", /^\/api\/auth\/pairing-codes\/?$/],
   ["GET", /^\/api\/auth\/devices\/?$/],
   ["DELETE", /^\/api\/auth\/devices\/[^/]+\/?$/],
+  // Replaces the host's own binary and restarts its service.
+  ["POST", /^\/api\/updates\/apply\/?$/],
 ];
 
 export const routeAccess = (method: string, pathname: string): RouteAccess => {

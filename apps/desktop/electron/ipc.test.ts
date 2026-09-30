@@ -26,6 +26,9 @@ const setup = (development = false) => {
     getHostConfig: mock(async () => ({ baseUrl: "https://mac.tail1234.ts.net", token: "aop_t" })),
     hostRejected: mock(async () => {}),
     setZoom: mock(async () => {}),
+    getUpdateState: mock(() => ({ status: "idle" as const })),
+    openUpdateDownload: mock(async () => {}),
+    restartToUpdate: mock(async () => {}),
   };
   registerDesktopIpc(
     {
@@ -200,5 +203,34 @@ describe("zoom", () => {
     await expect(call(IPC_CHANNELS.setZoom, HOST_PAGE, 1)).rejects.toThrow(
       "Blocked desktop IPC sender.",
     );
+  });
+});
+
+describe("the app's update", () => {
+  test("either of the app's own pages may read it and act on it", async () => {
+    const { call, host } = setup();
+
+    for (const page of [SHELL, DASHBOARD]) {
+      expect(await call(IPC_CHANNELS.getUpdateState, page)).toEqual({ status: "idle" });
+      await call(IPC_CHANNELS.openUpdateDownload, page);
+      await call(IPC_CHANNELS.restartToUpdate, page);
+    }
+
+    expect(host.openUpdateDownload).toHaveBeenCalledTimes(2);
+    expect(host.restartToUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  test("a page a host served may not", async () => {
+    const { call, host } = setup();
+
+    for (const channel of [
+      IPC_CHANNELS.getUpdateState,
+      IPC_CHANNELS.openUpdateDownload,
+      IPC_CHANNELS.restartToUpdate,
+    ]) {
+      await expect(call(channel, HOST_PAGE)).rejects.toThrow("Blocked desktop IPC sender.");
+    }
+
+    expect(host.restartToUpdate).not.toHaveBeenCalled();
   });
 });

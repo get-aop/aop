@@ -31,6 +31,9 @@ describe("createDesktopBridge", () => {
     await bridge.getHostConfig();
     await bridge.hostRejected();
     await bridge.setZoom(1.1);
+    await bridge.getUpdateState();
+    await bridge.openUpdateDownload();
+    await bridge.restartToUpdate();
 
     expect(invoke.mock.calls).toEqual([
       [IPC_CHANNELS.getState],
@@ -47,6 +50,9 @@ describe("createDesktopBridge", () => {
       [IPC_CHANNELS.getHostConfig],
       [IPC_CHANNELS.hostRejected],
       [IPC_CHANNELS.setZoom, 1.1],
+      [IPC_CHANNELS.getUpdateState],
+      [IPC_CHANNELS.openUpdateDownload],
+      [IPC_CHANNELS.restartToUpdate],
     ]);
   });
 

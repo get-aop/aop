@@ -9,7 +9,15 @@ import {
 
 describe("windows-installer release planning", () => {
   test("names the NSIS installer distinctly from the bare CLI binary", () => {
-    expect(resolveWindowsInstallerArtifacts()).toEqual(["aop-windows-x64-setup.exe"]);
+    expect(resolveWindowsInstallerArtifacts()[0]).toBe("aop-windows-x64-setup.exe");
+  });
+
+  test("ships the files electron-updater reads beside the installer", () => {
+    expect(resolveWindowsInstallerArtifacts()).toEqual([
+      "aop-windows-x64-setup.exe",
+      "latest.yml",
+      "aop-windows-x64-setup.exe.blockmap",
+    ]);
   });
 
   test("builds bundle paths from the release directory and version", () => {
@@ -23,6 +31,23 @@ describe("windows-installer release planning", () => {
       appName: "AOP",
       builderInstallerPath: join("/repo", "dist/electron-builder/aop-windows-x64-setup.exe"),
       builderOutputDir: join("/repo", "dist/electron-builder"),
+      artifacts: [
+        {
+          name: "aop-windows-x64-setup.exe",
+          builderPath: join("/repo", "dist/electron-builder/aop-windows-x64-setup.exe"),
+          releasePath: join("/repo", "dist/release/aop-windows-x64-setup.exe"),
+        },
+        {
+          name: "latest.yml",
+          builderPath: join("/repo", "dist/electron-builder/latest.yml"),
+          releasePath: join("/repo", "dist/release/latest.yml"),
+        },
+        {
+          name: "aop-windows-x64-setup.exe.blockmap",
+          builderPath: join("/repo", "dist/electron-builder/aop-windows-x64-setup.exe.blockmap"),
+          releasePath: join("/repo", "dist/release/aop-windows-x64-setup.exe.blockmap"),
+        },
+      ],
       installerPath: join("/repo", "dist/release/aop-windows-x64-setup.exe"),
       releaseDir: join("/repo", "dist/release"),
       version: "0.2.11",

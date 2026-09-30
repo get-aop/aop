@@ -78,6 +78,17 @@ export type PairingCodeResult =
   | { ok: true; code: string; expiresAt: string }
   | { ok: false; message: string };
 
+/**
+ * The app's own update, as the screens and the menu show it. `available` is a notice with a
+ * download link (the macOS app until it is signed); `downloading` and `ready` belong to the
+ * automatic path (the Windows app), where `ready` waits for a restart.
+ */
+export type AppUpdateState =
+  | { status: "idle" }
+  | { status: "available"; version: string; releaseUrl: string | null }
+  | { status: "downloading"; version: string; percent: number }
+  | { status: "ready"; version: string };
+
 /** What the connect, host and status screens call. Every method is one IPC round trip. */
 export interface DesktopBackend {
   getState: () => Promise<DesktopState>;
@@ -94,4 +105,10 @@ export interface DesktopBackend {
   reconnect: () => Promise<void>;
   openLogsFolder: () => Promise<void>;
   quitApp: () => Promise<void>;
+  getUpdateState: () => Promise<AppUpdateState>;
+  onUpdateStateChanged: (listener: (state: AppUpdateState) => void) => () => void;
+  /** Opens the new version's download in the person's browser. */
+  openUpdateDownload: () => Promise<void>;
+  /** Installs a downloaded update and restarts the app. */
+  restartToUpdate: () => Promise<void>;
 }

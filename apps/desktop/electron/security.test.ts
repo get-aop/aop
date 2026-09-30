@@ -3,6 +3,7 @@ import {
   isAllowedNavigation,
   isDashboardSender,
   isSafeExternalUrl,
+  isSafeUpdateUrl,
   isShellSender,
 } from "./security";
 
@@ -58,5 +59,22 @@ describe("isSafeExternalUrl", () => {
     expect(isSafeExternalUrl("file:///etc/passwd")).toBe(false);
     expect(isSafeExternalUrl("javascript:alert(1)")).toBe(false);
     expect(isSafeExternalUrl("app://aop/")).toBe(false);
+  });
+});
+
+describe("isSafeUpdateUrl", () => {
+  test("opens an https download and nothing else for the real feed", () => {
+    expect(
+      isSafeUpdateUrl("https://github.com/get-aop/aop-mono/releases/download/v1/a.dmg", false),
+    ).toBe(true);
+    expect(isSafeUpdateUrl("http://127.0.0.1:9/download/a.dmg", false)).toBe(false);
+    expect(isSafeUpdateUrl("http://evil.example/a.dmg", false)).toBe(false);
+    expect(isSafeUpdateUrl("file:///etc/passwd", false)).toBe(false);
+  });
+
+  test("a test feed may serve plain http from this computer, and only from it", () => {
+    expect(isSafeUpdateUrl("http://127.0.0.1:9/download/a.dmg", true)).toBe(true);
+    expect(isSafeUpdateUrl("http://localhost:9/download/a.dmg", true)).toBe(true);
+    expect(isSafeUpdateUrl("http://evil.example/a.dmg", true)).toBe(false);
   });
 });

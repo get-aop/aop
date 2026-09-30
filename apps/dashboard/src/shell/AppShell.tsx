@@ -5,6 +5,7 @@ import { ConfirmationHost } from "../components/ConfirmationHost";
 import { AttachRepoDialog } from "../dialogs/AttachRepoDialog";
 import { NewProjectDialog } from "../projects/NewProjectDialog";
 import { useLiveProjects } from "../projects/ProjectsProvider";
+import { UpdateNotice } from "../updates/UpdateNotice";
 import { announceRepoAttached, openNewProjectDialog, openSettingsDialog } from "./dialog-store";
 import { ProjectPalette } from "./ProjectPalette";
 import { ProjectsSidebar } from "./ProjectsSidebar";
@@ -45,7 +46,10 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         onOpenCommand={() => setPaletteOpen(true)}
         onNewProject={openNewProjectDialog}
       />
-      <SidebarInset className="min-h-0 min-w-0">{children}</SidebarInset>
+      <SidebarInset className="min-h-0 min-w-0">
+        <UpdateNotice />
+        {children}
+      </SidebarInset>
       <ProjectPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <SettingsDialog />
       <NewProjectDialog />

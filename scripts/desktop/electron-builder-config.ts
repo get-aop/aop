@@ -1,3 +1,4 @@
+import { RELEASE_REPO } from "@aop/common";
 import packageInfo from "../../package.json";
 
 interface ElectronBuilderConfigOptions {
@@ -6,6 +7,8 @@ interface ElectronBuilderConfigOptions {
   /** True when a Developer ID identity is configured; false builds get an ad-hoc signature. */
   signed?: boolean;
 }
+
+const [RELEASE_OWNER = "", RELEASE_NAME = ""] = RELEASE_REPO.split("/");
 
 export const createElectronBuilderConfig = ({
   version,
@@ -28,6 +31,11 @@ export const createElectronBuilderConfig = ({
     version,
     description: "AOP desktop app for running local coding-agent workflows.",
   },
+  // The feed the installed app updates from: the published GitHub Releases. This makes the
+  // Windows build write `latest.yml` and the installer's blockmap beside the installer, and
+  // `app-update.yml` into the app's resources (what electron-updater reads). The workflow still
+  // passes `--publish never`: nothing is uploaded from the build, the release job does that.
+  publish: [{ provider: "github" as const, owner: RELEASE_OWNER, repo: RELEASE_NAME }],
   files: ["dist/**/*", "dist-electron/**/*", "package.json"],
   extraResources: [
     {

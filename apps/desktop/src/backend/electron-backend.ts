@@ -7,7 +7,11 @@ export interface DashboardBridge {
   setZoom: (zoomFactor: number) => Promise<void>;
 }
 
-/** Everything the preload script exposes as `window.aopDesktop`. Each page may use its own half. */
+/**
+ * Everything the preload script exposes as `window.aopDesktop`. Each page may use its own half;
+ * the app's update (`getUpdateState`, `onUpdateStateChanged`, `openUpdateDownload`,
+ * `restartToUpdate`) is open to both, so the bundled dashboard can show it too.
+ */
 export interface ElectronDesktopBridge extends DesktopBackend, DashboardBridge {}
 
 declare global {

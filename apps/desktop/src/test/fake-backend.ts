@@ -1,5 +1,6 @@
 import { mock } from "bun:test";
 import type {
+  AppUpdateState,
   ConnectResult,
   DesktopBackend,
   DesktopState,
@@ -28,6 +29,8 @@ export const makeState = (overrides: Partial<DesktopState> = {}): DesktopState =
 export const createFakeBackend = (initial: DesktopState = makeState()) => {
   let state = initial;
   const listeners = new Set<(state: DesktopState) => void>();
+  let update: AppUpdateState = { status: "idle" };
+  const updateListeners = new Set<(state: AppUpdateState) => void>();
   const backend = {
     getState: mock(async () => state),
     onStateChanged: mock((listener: (state: DesktopState) => void) => {
@@ -50,6 +53,13 @@ export const createFakeBackend = (initial: DesktopState = makeState()) => {
     reconnect: mock(async () => {}),
     openLogsFolder: mock(async () => {}),
     quitApp: mock(async () => {}),
+    getUpdateState: mock(async () => update),
+    onUpdateStateChanged: mock((listener: (state: AppUpdateState) => void) => {
+      updateListeners.add(listener);
+      return () => void updateListeners.delete(listener);
+    }),
+    openUpdateDownload: mock(async () => {}),
+    restartToUpdate: mock(async () => {}),
   } satisfies DesktopBackend;
   return {
     backend,
@@ -57,6 +67,11 @@ export const createFakeBackend = (initial: DesktopState = makeState()) => {
     push: (next: DesktopState) => {
       state = next;
       for (const listener of listeners) listener(next);
+    },
+    /** The app pushes a change to its own update. */
+    pushUpdate: (next: AppUpdateState) => {
+      update = next;
+      for (const listener of updateListeners) listener(next);
     },
     listenerCount: () => listeners.size,
   };

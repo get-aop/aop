@@ -12,12 +12,16 @@ describe("buildMenuTemplate", () => {
     manageHost: mock(() => {}),
     startHost: mock(() => {}),
     stopHost: mock(() => {}),
+    openUpdateDownload: mock(() => {}),
+    restartToUpdate: mock(() => {}),
   });
   const model = (overrides: Partial<MenuModel> = {}): MenuModel => ({
     platform: "darwin",
-    connection: { status: "connected", host: HOST, hostVersion: "1" },
+    connection: { status: "connected", host: HOST, hostVersion: "0.9.51" },
     hostProcess: { status: "stopped" },
     hostModeAvailable: false,
+    update: { status: "idle" },
+    appVersion: "0.9.51",
     ...overrides,
   });
   const hostMenu = (template: MenuItemConstructorOptions[]) =>
@@ -114,5 +118,54 @@ describe("buildMenuTemplate", () => {
     expect(wired.changeHost).toHaveBeenCalledTimes(1);
     expect(wired.manageHost).toHaveBeenCalledTimes(1);
     expect(wired.startHost).toHaveBeenCalledTimes(1);
+  });
+
+  const topLevel = (template: MenuItemConstructorOptions[]) => template.map((item) => item.label);
+
+  test("has no update menu until there is an update to offer", () => {
+    expect(topLevel(buildMenuTemplate(model(), actions()))).not.toContain(
+      "Update available (0.10.0)",
+    );
+  });
+
+  test("offers the download of an available update, and the restart of a downloaded one", () => {
+    const wired = actions();
+    const available = buildMenuTemplate(
+      model({ update: { status: "available", version: "0.10.0", releaseUrl: null } }),
+      wired,
+    ).find((item) => item.label === "Update available (0.10.0)");
+    const ready = buildMenuTemplate(
+      model({ update: { status: "ready", version: "0.10.0" } }),
+      wired,
+    ).find((item) => item.label === "Restart to update (0.10.0)");
+
+    const [download] = (available?.submenu ?? []) as MenuItemConstructorOptions[];
+    const [restart] = (ready?.submenu ?? []) as MenuItemConstructorOptions[];
+    download?.click?.({} as never, undefined, {} as never);
+    restart?.click?.({} as never, undefined, {} as never);
+
+    expect(download?.label).toBe("Download 0.10.0…");
+    expect(wired.openUpdateDownload).toHaveBeenCalledTimes(1);
+    expect(wired.restartToUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  test("tells the person when the host is on another release than the app", () => {
+    const newer = hostMenu(
+      buildMenuTemplate(
+        model({ connection: { status: "connected", host: HOST, hostVersion: "0.10.0+abc1234" } }),
+        actions(),
+      ),
+    );
+    const same = hostMenu(
+      buildMenuTemplate(
+        model({ connection: { status: "connected", host: HOST, hostVersion: "0.9.51" } }),
+        actions(),
+      ),
+    );
+
+    expect(labels(newer)).toContain(
+      "The host (0.10.0) is newer than this app (0.9.51). Update the app.",
+    );
+    expect(labels(same).some((label) => label?.startsWith("The host ("))).toBe(false);
   });
 });

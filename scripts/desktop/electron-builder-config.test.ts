@@ -56,4 +56,11 @@ describe("Electron Builder configuration", () => {
     expect(config.win).toMatchObject({ target: [{ target: "nsis", arch: ["x64"] }] });
     expect(config.nsis).toMatchObject({ oneClick: true, perMachine: false });
   });
+
+  test("publishes to the GitHub Releases the host updates from, so the Windows build writes latest.yml", () => {
+    const config = createElectronBuilderConfig({ version: "0.9.49", notarize: false });
+
+    expect(config.publish).toEqual([{ provider: "github", owner: "get-aop", repo: "aop-mono" }]);
+    expect(config.win.artifactName).toMatch(/^aop-windows-.+-setup\./);
+  });
 });

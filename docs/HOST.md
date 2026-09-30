@@ -12,7 +12,7 @@ Every `/api/*` route needs credentials except the few a client must reach before
 | Paired device | `Authorization: Bearer <token>`, or the `aop_device` cookie the host set for it. | Everything except administering the host. |
 | Anyone else | Nothing. | `GET /api/health`, `POST /api/auth/pair`, and `/api/mcp`, which checks its own per-session token. |
 
-Administering the host means pairing devices and listing and revoking them. Only the host owner can do these, so a stolen laptop cannot mint itself a new token or remove the owner's other devices. The list lives in `apps/local-server/src/auth/route-policy.ts`. A route that is not listed there is open to paired devices and closed to everyone else.
+Administering the host means pairing devices, listing and revoking them, and starting an update of the host itself. Only the host owner can do these, so a stolen laptop cannot mint itself a new token or remove the owner's other devices. The list lives in `apps/local-server/src/auth/route-policy.ts`. A route that is not listed there is open to paired devices and closed to everyone else.
 
 ### The host owner
 
@@ -76,6 +76,8 @@ The desktop app is a client of one host. It bundles the dashboard and serves it 
 - **Where the token lives.** In the operating system's keychain, through Electron's `safeStorage`: Keychain on macOS, DPAPI on Windows. The app writes the encrypted value to `device-tokens.json` in its data folder, mode `0600`, and refuses to pair on a machine where the keychain is unavailable. The dashboard receives the token in memory when it starts and never writes it to local storage.
 - **Connection state.** The window title, the Host menu and the app's own status screen say whether the host is connected, unreachable, refusing this device (`unauthorized`, for example after it was revoked on the host) or on another API version. The app checks every fifteen seconds, faster while the host is away. It brings its status screen forward when the host turns the device away, and returns to the dashboard on its own when the host comes back. **Change Host** in the menu, or on that screen, pairs with another host; **Disconnect** removes the device from the host and forgets the token.
 - **Notifications.** The app's main process, not the dashboard, follows every active project's event stream with the token and raises an operating system notification when a coordinator posts, a thread needs the person, a thread fails, or a pull request merges or closes without merging. It runs in the main process because a notification is about any project, not the one on screen, must reach the person with the window closed, and needs the token that only the main process holds. Each project's notification level decides: `coordinator` (the default) is those events, `every-turn` adds each finished thread turn, and `off` is silence. It stays quiet while the app is in front, and it does not announce what happened more than two minutes earlier, so a laptop that wakes up does not bury the person in old news.
+- **Updates.** The apps update from the published GitHub Releases of get-aop/aop-mono. The Windows app downloads new versions in the background and installs them when you restart it. The macOS app shows "Update available (x.y.z)" in its window title and a menu with a link to the new DMG until it is signed ([Releasing](./RELEASE.md#desktop-app-updates)). Set `AOP_DESKTOP_DISABLE_UPDATES=1` in the app's environment to turn the check off.
+- **Host and app on different releases.** The status screen, the Host menu and the window title say when the host is newer than the app (update the app) or older (run `aop update` on the host). It is a notice only; the API version handshake still decides whether they can talk.
 - **Windows.** Windows is a client only. It bundles no server and has no host mode, and there is no Windows host, CLI or server build at all.
 - **First launch, unsigned builds.** The builds are not signed yet, so the operating system warns once. On macOS, Gatekeeper says the app cannot be verified: right-click `AOP.app`, choose **Open**, or allow it under System Settings, Privacy & Security, **Open Anyway** (`xattr -dr com.apple.quarantine /Applications/AOP.app` clears the download flag). On Windows, SmartScreen says "Windows protected your PC": choose **More info**, then **Run anyway**. [Releasing](./RELEASE.md#signing-is-off) says how signing gets turned on.
 
@@ -95,6 +97,40 @@ curl -s -X DELETE http://127.0.0.1:25150/api/auth/devices/<id>
 ```
 
 Revoking takes effect on the device's next request, and the host closes any event stream the device already holds open. A device can also sign itself out with `DELETE /api/auth/session`, which revokes it.
+
+## Updating the host
+
+An installed host (the `aop` binary from `install.sh`) updates itself from the newest published GitHub Release of get-aop/aop-mono. The first release that can do this is 0.10.0; an older host has no `aop update` and updates once by running the installer again.
+
+```bash
+aop update --check    # only report whether a newer release is published
+aop update            # download, verify, install and restart
+```
+
+`aop update` downloads the binary for this machine and `runtime-assets.tar.gz`, and checks both against the release's `checksums.sha256`, the way `install.sh` does. It then runs the new binary once (`--version`) to see that it starts and is the release it claims to be. Only then does it replace the binary and the `dashboard` folder next to it, keeping the old ones aside, and restart the host the way it runs:
+
+| How the host runs | Restart |
+| --- | --- |
+| launchd service from `install.sh` (macOS) | `launchctl unload`, then `launchctl load -w` of the same plist |
+| systemd user service from `install.sh` (Linux) | `systemctl --user restart aop-local-server.service` |
+| `aop run --background` | stop the recorded process, then `aop run --background` again on the same port |
+| `aop run` in a terminal, or installed with `--no-service` and not running | nothing can restart it: the files are replaced and `aop update` says to restart it yourself |
+
+If the new host does not report the new version within a minute, or cannot be started, the old binary and dashboard are put back and started again, and the update reports why. The data folder (`~/.aop`) is never touched; database migrations run when the new host starts, as on any start. Only an `aop` that is the installed binary can update: one running from a source checkout says so and does nothing.
+
+### The notice in the dashboard
+
+The host looks for a newer release once a day, about half a minute after it starts and then whenever the last look is a day old, and keeps the result in `~/.aop/update-check.json`, so restarts do not ask again. The dashboard shows a quiet "Update available (x.y.z)" bar with a link to the release notes to every signed-in client. On the host itself, the owner also gets **Update now**: it starts `aop update` in a separate process, the page shows that it is updating, and it reloads on its own once the host answers on the new version. A paired device sees the notice but no button, and `POST /api/updates/apply` answers `403` to it. If an update fails, the bar says why and offers Retry; the log of the run is `~/.aop/logs/update.log`.
+
+To turn the check off, switch off **Check for updates** in Settings (the `update_check` setting, `"true"` by default). The host then never contacts GitHub by itself; `aop update` still works when you run it.
+
+The API:
+
+| Call | Who | Does |
+| --- | --- | --- |
+| `GET /api/updates` | host owner, paired device | The running release, the newest one seen, whether it is newer, and the state of a running update. |
+| `POST /api/updates/check` | host owner, paired device | Looks at the feed now (at most every 30 seconds) and returns the same. |
+| `POST /api/updates/apply` | host owner only | Starts the update. `202` when it started, `409` with a reason when it cannot (already up to date, running from source, one already running). |
 
 ## Reach the host with Tailscale
 
@@ -147,6 +183,8 @@ A proxy that rewrites `Host` to `127.0.0.1` and adds no forwarding header passes
 | `AOP_LOCAL_SERVER_PORT` | none, required | Port the server listens on. |
 | `AOP_BIND_HOST` | `127.0.0.1` | Address the server listens on. Set `0.0.0.0` to serve the network directly over plain HTTP. |
 | `AOP_ALLOWED_ORIGINS` | none | Comma-separated browser origins, besides the API's own and the desktop app's `app://aop`, that may call the API. |
+| `AOP_GITHUB_API_URL` | `https://api.github.com` | Where the update check and `aop update` look for the newest release. Tests and trials point it at a fake feed. |
+| `AOP_GITHUB_REPO` | `get-aop/aop-mono` | The repository whose releases are the feed. |
 | `AOP_PR_POLL_INTERVAL_MS` | none (adaptive) | Milliseconds between looks at an open pull request, for a fixed pace instead of the adaptive one. See [Threads and git](./THREADS.md#watching-the-pull-request). |
 
 Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over plain HTTP, so use it only on a network you trust, and the browser will not treat the page as a secure context. If you bind one specific non-loopback address, the host's own agents can no longer reach the MCP endpoint at `127.0.0.1`; set `AOP_MCP_URL` to an address they can reach.

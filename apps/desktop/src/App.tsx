@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useState } from "react";
-import type { DesktopBackend, DesktopState } from "./backend/types";
+import type { AppUpdateState, DesktopBackend, DesktopState } from "./backend/types";
 import { chooseScreen, parseScreenHash, type Screen } from "./screen-choice";
 import { ConnectScreen } from "./screens/ConnectScreen";
 import { HostModeScreen } from "./screens/HostModeScreen";
@@ -17,6 +17,7 @@ interface AppProps {
  */
 export const App = ({ backend }: AppProps): ReactElement | null => {
   const state = useDesktopState(backend);
+  const update = useUpdateState(backend);
   const [requested, setRequested] = useState<Screen | null>(() =>
     parseScreenHash(window.location.hash),
   );
@@ -50,7 +51,14 @@ export const App = ({ backend }: AppProps): ReactElement | null => {
         <HostModeScreen state={state} backend={backend} onChangeHost={() => show("connect")} />
       );
     case "status":
-      return <StatusScreen state={state} backend={backend} onChangeHost={() => show("connect")} />;
+      return (
+        <StatusScreen
+          state={state}
+          backend={backend}
+          update={update}
+          onChangeHost={() => show("connect")}
+        />
+      );
   }
 };
 
@@ -73,4 +81,25 @@ const useDesktopState = (backend: DesktopBackend): DesktopState | null => {
   }, [backend]);
 
   return state;
+};
+
+/** The app's own update: read once, then kept current by what the app pushes. */
+const useUpdateState = (backend: DesktopBackend): AppUpdateState => {
+  const [update, setUpdate] = useState<AppUpdateState>({ status: "idle" });
+
+  useEffect(() => {
+    let cancelled = false;
+    const stop = backend.onUpdateStateChanged((next) => {
+      if (!cancelled) setUpdate(next);
+    });
+    void backend.getUpdateState().then((initial) => {
+      if (!cancelled) setUpdate((current) => (current.status === "idle" ? initial : current));
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [backend]);
+
+  return update;
 };

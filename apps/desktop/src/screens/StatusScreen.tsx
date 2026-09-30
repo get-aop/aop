@@ -1,16 +1,24 @@
 import type { ReactNode } from "react";
 import { connectionLabel, hostName } from "../backend/connection-label";
-import type { ConnectionState, DesktopBackend, DesktopState } from "../backend/types";
+import { hostVersionNotice } from "../backend/host-version";
+import type {
+  AppUpdateState,
+  ConnectionState,
+  DesktopBackend,
+  DesktopState,
+} from "../backend/types";
+import { updateLabel } from "../backend/update-label";
 import { Brand, Notice, StatusLine, type Tone } from "../ui";
 
 interface StatusScreenProps {
   state: DesktopState;
   backend: DesktopBackend;
+  update: AppUpdateState;
   onChangeHost: () => void;
 }
 
 /** How the app stands with its remote host, and what to do when it does not stand well. */
-export const StatusScreen = ({ state, backend, onChangeHost }: StatusScreenProps) => {
+export const StatusScreen = ({ state, backend, update, onChangeHost }: StatusScreenProps) => {
   const { connection } = state;
   return (
     <main className="screen" data-testid="status-screen">
@@ -26,6 +34,7 @@ export const StatusScreen = ({ state, backend, onChangeHost }: StatusScreenProps
           testId="status-label"
         />
         <Explanation connection={connection} />
+        <VersionNotices state={state} backend={backend} update={update} />
 
         <dl className="meta">
           {connection.status === "connected" ? (
@@ -87,6 +96,64 @@ export const StatusScreen = ({ state, backend, onChangeHost }: StatusScreenProps
         </div>
       </div>
     </main>
+  );
+};
+
+/** Quiet notes beside the connection: the host is on another release, or this app can update. */
+const VersionNotices = ({
+  state,
+  backend,
+  update,
+}: {
+  state: DesktopState;
+  backend: DesktopBackend;
+  update: AppUpdateState;
+}): ReactNode => {
+  const { connection } = state;
+  const drift =
+    connection.status === "connected"
+      ? hostVersionNotice(connection.hostVersion, state.appVersion)
+      : null;
+  const updateText = updateLabel(update);
+  return (
+    <>
+      {drift ? (
+        <Notice tone="info" testId="status-version-drift">
+          {drift}
+        </Notice>
+      ) : null}
+      {updateText ? (
+        <Notice tone="info" testId="status-update">
+          {updateText}
+          {update.status === "available" ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                className="button"
+                data-testid="status-update-download"
+                onClick={() => void backend.openUpdateDownload()}
+              >
+                Download
+              </button>
+            </>
+          ) : null}
+          {update.status === "ready" ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                className="button"
+                data-testid="status-update-restart"
+                onClick={() => void backend.restartToUpdate()}
+              >
+                Restart to update
+              </button>
+            </>
+          ) : null}
+        </Notice>
+      ) : null}
+    </>
   );
 };
 

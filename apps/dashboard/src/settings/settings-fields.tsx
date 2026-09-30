@@ -27,6 +27,10 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
     label: "Runs",
     keys: ["max_concurrent_runs"],
   },
+  {
+    label: "Updates",
+    keys: ["update_check"],
+  },
 ];
 
 export const SETTING_META: Record<string, SettingMeta> = {
@@ -35,6 +39,12 @@ export const SETTING_META: Record<string, SettingMeta> = {
     description:
       "How many thread turns this host runs at once. The rest wait their turn, in order. Raising it starts waiting turns at once; lowering it never stops a turn that is running.",
     type: "number",
+  },
+  update_check: {
+    label: "Check for updates",
+    description:
+      "Once a day the host looks for a newer AOP release on GitHub and shows a notice here. It never installs anything without you.",
+    type: "toggle",
   },
   chat_global_instructions: {
     label: "Global instructions",

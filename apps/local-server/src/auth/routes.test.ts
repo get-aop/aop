@@ -345,6 +345,7 @@ describe("auth routes", () => {
         "POST /api/auth/pairing-codes",
         "GET /api/auth/devices",
         "DELETE /api/auth/devices/:id",
+        "POST /api/updates/apply",
       ];
 
       for (const route of hostOnly) {

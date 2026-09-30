@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { buildGhReleaseArgs, buildGhUploadArgs } from "./gh-release.ts";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { buildGhReleaseArgs, buildGhUploadArgs, resolveReleaseAssets } from "./gh-release.ts";
 
 describe("buildGhReleaseArgs", () => {
   test("builds gh release create args with the resolved artifacts", () => {
@@ -53,5 +56,44 @@ describe("buildGhUploadArgs", () => {
       "--clobber",
       "/dist/release/aop-windows-x64-setup.exe",
     ]);
+  });
+});
+
+describe("resolveReleaseAssets", () => {
+  const namesIn = async (dir: string) =>
+    (await resolveReleaseAssets(dir)).map((path) => path.slice(dir.length + 1));
+
+  test("attaches the Windows updater files and the checksums when they exist", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-gh-release-"));
+    try {
+      for (const name of [
+        "aop-windows-x64-setup.exe",
+        "latest.yml",
+        "aop-windows-x64-setup.exe.blockmap",
+        "checksums.sha256",
+      ]) {
+        await writeFile(join(dir, name), name);
+      }
+
+      expect(await namesIn(dir)).toEqual([
+        "aop-windows-x64-setup.exe",
+        "latest.yml",
+        "aop-windows-x64-setup.exe.blockmap",
+        "checksums.sha256",
+      ]);
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+
+  test("leaves them out of a release built without the Windows app", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-gh-release-"));
+    try {
+      await writeFile(join(dir, "aop-darwin-arm64"), "binary");
+
+      expect(await namesIn(dir)).toEqual(["aop-darwin-arm64"]);
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
   });
 });

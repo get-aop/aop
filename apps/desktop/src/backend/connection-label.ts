@@ -18,8 +18,12 @@ export const connectionLabel = (connection: ConnectionState): string => {
   }
 };
 
-export const windowTitle = (connection: ConnectionState): string =>
-  connection.status === "unconfigured" ? "AOP" : `AOP · ${connectionLabel(connection)}`;
+/** `notes` are short asides after the connection, such as an available update. */
+export const windowTitle = (connection: ConnectionState, notes: (string | null)[] = []): string =>
+  [
+    connection.status === "unconfigured" ? "AOP" : `AOP · ${connectionLabel(connection)}`,
+    ...notes.filter((note) => note !== null),
+  ].join(" · ");
 
 /** The host's name and port, without the scheme: what a person recognises their host by. */
 export const hostName = (hostUrl: string): string => {

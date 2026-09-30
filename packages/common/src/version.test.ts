@@ -1,5 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { normalizeReleaseVersion } from "./version.ts";
+import { compareReleaseVersions, isNewerRelease, normalizeReleaseVersion } from "./version.ts";
+
+describe("release comparison", () => {
+  test("orders by major, minor and patch, ignoring prefix and build metadata", () => {
+    expect(compareReleaseVersions("0.10.0", "0.9.51")).toBeGreaterThan(0);
+    expect(compareReleaseVersions("v0.9.51+abc1234", "0.9.51")).toBe(0);
+    expect(compareReleaseVersions("1.0.0", "0.99.99")).toBeGreaterThan(0);
+  });
+
+  test("a build that is not a release is never reported as older than a release", () => {
+    expect(isNewerRelease("0.10.0", "dev")).toBe(false);
+    expect(isNewerRelease("0.10.0", "0.9.51+abc1234")).toBe(true);
+    expect(isNewerRelease("0.9.51", "0.9.51")).toBe(false);
+  });
+});
 
 describe("version", () => {
   test("normalizes build metadata and v-prefix", () => {

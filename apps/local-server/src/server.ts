@@ -18,6 +18,7 @@ import { createProjectServices } from "./project/services.ts";
 import { startPullRequestWatcher } from "./pull-request-watch/watcher.ts";
 import { cleanupOrphanRepoDirs } from "./repo/orphan-dirs.ts";
 import { startThreadMaintenance } from "./thread/lifecycle.ts";
+import { createHostUpdateService } from "./update/host-update-service.ts";
 
 const logger = getLogger("local-server");
 
@@ -57,9 +58,11 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     {},
     { timing: pollIntervalMs ? { activeMs: pollIntervalMs, quietMs: pollIntervalMs } : {} },
   );
+  const updates = createHostUpdateService(ctx);
   const app = createApp({
     ctx,
     projectServices,
+    updates,
     startTimeMs,
     dashboardStaticPath: options?.dashboardStaticPath ?? getDashboardStaticPath(),
     dashboardDevOrigin: getDashboardDevOrigin(),
@@ -90,11 +93,14 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   const stopMaintenance = startThreadMaintenance(projectServices.git);
   // Open pull requests are watched for their checks and reviews, and answered with fix prompts.
   const stopWatcher = startPullRequestWatcher(projectServices.pullRequestWatcher, pollIntervalMs);
+  // Once a day the host looks for a newer release, unless the person turned that off.
+  updates.start();
 
   return {
     shutdown: async () => {
       logger.info("Shutting down...");
       stopMaintenance();
+      updates.stop();
       await stopWatcher();
       server.stop();
       await shutdownChatSessions(ctx);

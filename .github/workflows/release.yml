@@ -4,7 +4,9 @@ name: Release
 #   - the host for macOS and Linux: aop-{linux,darwin}-{x64,arm64} plus runtime-assets.tar.gz,
 #     installed by scripts/installer/install.sh (one terminal command, no installer app);
 #   - the desktop app, a client of a host that launches no server on Windows: aop-macos-*.dmg and
-#     aop-windows-x64-setup.exe.
+#     aop-windows-x64-setup.exe, with the two files the installed Windows app updates itself from:
+#     latest.yml and aop-windows-x64-setup.exe.blockmap (electron-updater reads them from this
+#     GitHub Release; the macOS app only shows a notice until it is signed).
 # Windows has no host, CLI or server build.
 #
 # On a pull request, and on a manual dispatch with "publish" off (the default), the workflow builds
@@ -183,7 +185,10 @@ jobs:
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: release-windows
-          path: dist/release/aop-windows-x64-setup.exe
+          path: |
+            dist/release/aop-windows-x64-setup.exe
+            dist/release/latest.yml
+            dist/release/aop-windows-x64-setup.exe.blockmap
           retention-days: 1
 
   # Puts the pieces together and checks that exactly the expected set exists. This is the last step
@@ -220,7 +225,8 @@ jobs:
       - name: Check the artifact set
         run: |
           for name in aop-linux-x64 aop-linux-arm64 aop-darwin-x64 aop-darwin-arm64 \
-            aop-macos-x64.dmg aop-macos-arm64.dmg aop-windows-x64-setup.exe runtime-assets.tar.gz; do
+            aop-macos-x64.dmg aop-macos-arm64.dmg aop-windows-x64-setup.exe runtime-assets.tar.gz \
+            latest.yml aop-windows-x64-setup.exe.blockmap; do
             if [ ! -s "dist/release/$name" ]; then
               echo "Missing or empty release artifact: $name" >&2
               exit 1
@@ -231,6 +237,27 @@ jobs:
             echo "Unexpected Windows host binary: aop-windows-x64.exe" >&2
             exit 1
           fi
+
+      # The installed Windows app updates itself from latest.yml on the GitHub Release, so a
+      # latest.yml that names another file, another version or another hash than the installer in
+      # this run would strand every installed app. The file is printed so the log shows the config.
+      - name: Check the Windows updater config
+        env:
+          EXPECTED_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          cat dist/release/latest.yml
+          fail() { echo "latest.yml check failed: $1" >&2; exit 1; }
+          grep -Eq "^version: ['\"]?${EXPECTED_VERSION}['\"]?$" dist/release/latest.yml \
+            || fail "version is not ${EXPECTED_VERSION}"
+          grep -Eq "^path: aop-windows-x64-setup.exe$" dist/release/latest.yml \
+            || fail "path is not aop-windows-x64-setup.exe"
+          grep -Eq "^ +- url: aop-windows-x64-setup.exe$" dist/release/latest.yml \
+            || fail "files does not list aop-windows-x64-setup.exe"
+          expected="$(awk '/^sha512: /{print $2; exit}' dist/release/latest.yml)"
+          [ -n "$expected" ] || fail "no sha512"
+          actual="$(openssl dgst -sha512 -binary dist/release/aop-windows-x64-setup.exe | base64 | tr -d '\n')"
+          [ "$expected" = "$actual" ] || fail "sha512 does not match the installer in this run"
+          echo "latest.yml matches aop-windows-x64-setup.exe ${EXPECTED_VERSION}"
 
       - name: Generate release checksums
         run: bun run ./scripts/release/checksums.ts dist/release
@@ -251,6 +278,8 @@ jobs:
             dist/release/aop-macos-x64.dmg
             dist/release/aop-macos-arm64.dmg
             dist/release/aop-windows-x64-setup.exe
+            dist/release/latest.yml
+            dist/release/aop-windows-x64-setup.exe.blockmap
             dist/release/runtime-assets.tar.gz
             dist/release/checksums.sha256
           retention-days: 1
@@ -286,6 +315,8 @@ jobs:
             dist/release/aop-macos-x64.dmg
             dist/release/aop-macos-arm64.dmg
             dist/release/aop-windows-x64-setup.exe
+            dist/release/latest.yml
+            dist/release/aop-windows-x64-setup.exe.blockmap
             dist/release/runtime-assets.tar.gz
             dist/release/checksums.sha256
 

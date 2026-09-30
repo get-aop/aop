@@ -1,4 +1,5 @@
 import type {
+  AppUpdateState,
   ConnectInput,
   ConnectResult,
   DesktopState,
@@ -35,6 +36,9 @@ export interface DesktopIpcHost {
   getHostConfig: () => Promise<{ baseUrl: string; token: string | null }>;
   hostRejected: () => Promise<void>;
   setZoom: (factor: number) => Promise<void>;
+  getUpdateState: () => AppUpdateState;
+  openUpdateDownload: () => Promise<void>;
+  restartToUpdate: () => Promise<void>;
 }
 
 /**
@@ -89,6 +93,17 @@ export const registerDesktopIpc = (
     IPC_CHANNELS.hostRejected,
     fromDashboard(() => host.hostRejected()),
   );
+
+  // The app's own update is no secret and changes no host, so either of the app's two pages may use it.
+  const fromEitherPage = (operation: () => unknown): IpcHandler => {
+    return async (event) => {
+      assertSender(isAllowedNavigation(senderUrl(event), development));
+      return operation();
+    };
+  };
+  register(ipcMain, IPC_CHANNELS.getUpdateState, fromEitherPage(host.getUpdateState));
+  register(ipcMain, IPC_CHANNELS.openUpdateDownload, fromEitherPage(host.openUpdateDownload));
+  register(ipcMain, IPC_CHANNELS.restartToUpdate, fromEitherPage(host.restartToUpdate));
 
   register(ipcMain, IPC_CHANNELS.setZoom, async (event, factor) => {
     assertSender(isAllowedNavigation(senderUrl(event), development));

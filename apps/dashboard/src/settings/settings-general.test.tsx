@@ -22,7 +22,7 @@ const saved = {
 
 /** The dialog's own wiring: edits live in state, and a save folds back into what is saved. */
 const Harness = () => {
-  const initial = { ...saved, max_concurrent_runs: "4" };
+  const initial = { ...saved, max_concurrent_runs: "4", update_check: "true" };
   const [savedValues, setSavedValues] = useState<Record<string, string>>(initial);
   const [editedValues, setEditedValues] = useState<Record<string, string>>(initial);
   return (
@@ -125,6 +125,18 @@ describe("SettingsGeneral", () => {
     expect(capInput().value).toBe("4");
     expect(capInput().getAttribute("aria-invalid")).toBeNull();
     expect(screen.queryByTestId("setting-error-max_concurrent_runs")).toBeNull();
+  });
+
+  test("turns the daily update check off from a switch and saves it as 'false'", async () => {
+    render(<Harness />);
+
+    const toggle = screen.getByLabelText("Check for updates");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect(mockUpdateSettings).toHaveBeenCalledWith([{ key: "update_check", value: "false" }]);
+    expect(screen.getByLabelText("Check for updates").getAttribute("aria-checked")).toBe("false");
   });
 
   test("saves a valid run cap after the debounce, and only the key that changed", async () => {

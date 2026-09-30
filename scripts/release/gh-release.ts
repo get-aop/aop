@@ -2,7 +2,7 @@
 // biome-ignore-all lint/suspicious/noConsole: local release CLI reports progress to the operator
 
 import { join } from "node:path";
-import { resolvePresentReleaseArtifacts } from "./checksums.ts";
+import { resolvePresentReleaseArtifacts, resolvePresentUpdaterFiles } from "./checksums.ts";
 
 const RELEASE_DIR = process.env.RELEASE_DIR ?? "dist/release";
 const CHECKSUMS_FILE = "checksums.sha256";
@@ -11,9 +11,13 @@ const CHECKSUMS_FILE = "checksums.sha256";
  * Release artifacts present on disk plus the checksums manifest. resolvePresentReleaseArtifacts
  * intentionally omits checksums.sha256 (it lists the files that get hashed, not the hash file),
  * so attach it separately or the published release ships without the manifest install.sh verifies.
+ * The Windows updater files (latest.yml, the blockmap) ride along when the build produced them.
  */
-const resolveReleaseAssets = async (releaseDir: string): Promise<string[]> => {
-  const assets = await resolvePresentReleaseArtifacts(releaseDir);
+export const resolveReleaseAssets = async (releaseDir: string): Promise<string[]> => {
+  const assets = [
+    ...(await resolvePresentReleaseArtifacts(releaseDir)),
+    ...(await resolvePresentUpdaterFiles(releaseDir)),
+  ];
   const checksums = join(releaseDir, CHECKSUMS_FILE);
   if (await Bun.file(checksums).exists()) {
     assets.push(checksums);

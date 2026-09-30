@@ -8,11 +8,17 @@ import cac from "cac";
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
 const DEFAULT_RELEASE_DIR = "dist/release";
 const INSTALLER_NAME = "aop-windows-x64-setup.exe";
+// What electron-updater reads from the GitHub Release to update an installed Windows app:
+// `latest.yml` names the installer and its sha512, the blockmap lets it download only the changes.
+const UPDATE_INFO_NAME = "latest.yml";
+const BLOCKMAP_NAME = `${INSTALLER_NAME}.blockmap`;
 
 export interface WindowsInstallerPlan {
   appName: string;
   builderInstallerPath: string;
   builderOutputDir: string;
+  /** The installer, then the updater files that travel with it, as electron-builder wrote them and as released. */
+  artifacts: { name: string; builderPath: string; releasePath: string }[];
   installerPath: string;
   releaseDir: string;
   version: string;
@@ -41,7 +47,11 @@ interface CliOptions {
   version?: string;
 }
 
-export const resolveWindowsInstallerArtifacts = (): string[] => [INSTALLER_NAME];
+export const resolveWindowsInstallerArtifacts = (): string[] => [
+  INSTALLER_NAME,
+  UPDATE_INFO_NAME,
+  BLOCKMAP_NAME,
+];
 
 export const buildWindowsInstallerPlan = ({
   releaseDir = DEFAULT_RELEASE_DIR,
@@ -55,6 +65,11 @@ export const buildWindowsInstallerPlan = ({
     appName: "AOP",
     builderInstallerPath: join(builderOutputDir, INSTALLER_NAME),
     builderOutputDir,
+    artifacts: resolveWindowsInstallerArtifacts().map((name) => ({
+      name,
+      builderPath: join(builderOutputDir, name),
+      releasePath: join(resolvedReleaseDir, name),
+    })),
     installerPath: join(resolvedReleaseDir, INSTALLER_NAME),
     releaseDir: resolvedReleaseDir,
     version,
@@ -110,13 +125,15 @@ export const buildWindowsInstallerArtifacts = async ({
     plan.workspaceRoot,
     electronBuilderWindowsSigningEnv(signingConfig),
   );
-  await assertFile(
-    plan.builderInstallerPath,
-    "Electron Builder did not produce the expected Windows installer.",
-  );
-  await cp(plan.builderInstallerPath, plan.installerPath);
-  console.log(`Built ${plan.installerPath}`);
-  return [plan.installerPath];
+  for (const artifact of plan.artifacts) {
+    await assertFile(
+      artifact.builderPath,
+      `Electron Builder did not produce ${artifact.name}; the installed app cannot update without it.`,
+    );
+    await cp(artifact.builderPath, artifact.releasePath);
+    console.log(`Built ${artifact.releasePath}`);
+  }
+  return plan.artifacts.map((artifact) => artifact.releasePath);
 };
 
 const readPackageVersion = async (workspaceRoot: string): Promise<string> => {

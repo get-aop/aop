@@ -10,7 +10,8 @@
     "./db/migrations": "./src/db/migrations.ts",
     "./db/schema": "./src/db/schema.ts",
     "./github-cli": "./src/github-cli/index.ts",
-    "./settings/types": "./src/settings/types.ts"
+    "./settings/types": "./src/settings/types.ts",
+    "./update": "./src/update/run-update.ts"
   },
   "scripts": {
     "build": "bun build ./src/run.ts --outdir ./dist --target bun",

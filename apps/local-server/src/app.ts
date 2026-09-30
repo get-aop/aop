@@ -23,6 +23,9 @@ import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
 import { createSuggestionRoutes } from "./suggestion/routes.ts";
 import { createThreadRoutes } from "./thread/routes.ts";
+import { createHostUpdateService } from "./update/host-update-service.ts";
+import { createUpdateRoutes } from "./update/routes.ts";
+import type { UpdateService } from "./update/update-service.ts";
 import { createUsageRoutes } from "./usage/routes.ts";
 
 const logger = getLogger("api");
@@ -41,6 +44,8 @@ export interface AppDependencies {
   eventsSSEOptions?: EventsSSEOptions;
   /** The project services the routes call; the server passes its own so its housekeeping shares them. */
   projectServices?: ProjectServices;
+  /** The host's own release and its updates; the server passes its own so it can run the daily check. */
+  updates?: UpdateService;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -118,6 +123,7 @@ export const createApp = (deps: AppDependencies) => {
     "/api/settings",
     createSettingsRoutes(ctx, { runCapChanged: () => projects.chat.dispatchQueuedRuns() }),
   );
+  app.route("/api/updates", createUpdateRoutes(deps.updates ?? createHostUpdateService(ctx)));
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));

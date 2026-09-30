@@ -1,12 +1,16 @@
 import type { MenuItemConstructorOptions } from "electron";
 import { connectionLabel } from "../src/backend/connection-label";
-import type { ConnectionState, HostProcessState } from "../src/backend/types";
+import { hostVersionNotice } from "../src/backend/host-version";
+import type { AppUpdateState, ConnectionState, HostProcessState } from "../src/backend/types";
+import { updateLabel } from "../src/backend/update-label";
 
 export interface MenuModel {
   platform: NodeJS.Platform;
   connection: ConnectionState;
   hostProcess: HostProcessState;
   hostModeAvailable: boolean;
+  update: AppUpdateState;
+  appVersion: string;
 }
 
 export interface MenuActions {
@@ -16,6 +20,8 @@ export interface MenuActions {
   manageHost: () => void;
   startHost: () => void;
   stopHost: () => void;
+  openUpdateDownload: () => void;
+  restartToUpdate: () => void;
 }
 
 /** The application menu. Built from plain data so what it offers in each state can be tested. */
@@ -27,6 +33,7 @@ export const buildMenuTemplate = (
     ? [{ role: "appMenu" as const }]
     : [{ label: "File", submenu: [{ role: "quit" as const }] }]),
   { label: "Host", submenu: hostMenu(model, actions) },
+  ...updateMenu(model.update, actions),
   { role: "editMenu" },
   { role: "viewMenu" },
   { role: "windowMenu" },
@@ -36,6 +43,7 @@ const hostMenu = (model: MenuModel, actions: MenuActions): MenuItemConstructorOp
   const { connection } = model;
   const items: MenuItemConstructorOptions[] = [
     { label: connectionLabel(connection), enabled: false },
+    ...hostVersionItems(model),
     { type: "separator" },
     {
       label: "Show Dashboard",
@@ -62,4 +70,33 @@ const hostModeItems = (model: MenuModel, actions: MenuActions): MenuItemConstruc
           click: actions.startHost,
         },
   ];
+};
+
+// A host on another release than the app is a notice, not a fault: the API handshake decides
+// whether they can talk.
+const hostVersionItems = (model: MenuModel): MenuItemConstructorOptions[] => {
+  if (model.connection.status !== "connected") return [];
+  const notice = hostVersionNotice(model.connection.hostVersion, model.appVersion);
+  return notice ? [{ label: notice, enabled: false }] : [];
+};
+
+/** A menu that exists only while the app has an update to offer, so it stays out of the way otherwise. */
+const updateMenu = (update: AppUpdateState, actions: MenuActions): MenuItemConstructorOptions[] => {
+  const label = updateLabel(update);
+  if (!label) return [];
+  switch (update.status) {
+    case "available":
+      return [
+        {
+          label,
+          submenu: [{ label: `Download ${update.version}…`, click: actions.openUpdateDownload }],
+        },
+      ];
+    case "downloading":
+      return [{ label, submenu: [{ label: `Downloading… ${update.percent}%`, enabled: false }] }];
+    case "ready":
+      return [{ label, submenu: [{ label: "Restart to Update", click: actions.restartToUpdate }] }];
+    case "idle":
+      return [];
+  }
 };

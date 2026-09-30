@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { registerCommands, setupLogging } from "@aop/cli/commands";
 import { configureLogging, getLogger } from "@aop/infra";
 import { startServer } from "@aop/local-server/server";
+import { runUpdate } from "@aop/local-server/update";
 import cac from "cac";
 import { isSystemdUserServiceActive, stopSystemdUserService } from "./systemd.ts";
 
@@ -122,6 +123,19 @@ cli
       port,
       dashboardStaticPath: dashboardPath,
     });
+  });
+
+cli
+  .command("update", "Update this host to the newest published release")
+  .option("--check", "Only report whether a newer release is published")
+  .action(async (options: { check?: boolean }) => {
+    const exitCode = await runUpdate({
+      buildVersion: typeof BUILD_VERSION !== "undefined" ? BUILD_VERSION : undefined,
+      execPath: process.execPath,
+      checkOnly: Boolean(options.check),
+      print: (line) => process.stdout.write(`${line}\n`),
+    });
+    process.exit(exitCode);
   });
 
 cli.command("stop", "Stop the local server").action(async () => {

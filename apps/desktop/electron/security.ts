@@ -29,6 +29,21 @@ export const isSafeExternalUrl = (rawUrl: string): boolean => {
   return url?.protocol === "https:" || url?.protocol === "http:";
 };
 
+/**
+ * The link an update offers comes from the release feed, so it is opened only if it is https.
+ * A test feed (`AOP_GITHUB_API_URL` set) runs on this computer over plain http, which is allowed
+ * for loopback and only then.
+ */
+export const isSafeUpdateUrl = (rawUrl: string, testFeedConfigured: boolean): boolean => {
+  const url = parseUrl(rawUrl);
+  if (url?.protocol === "https:") return true;
+  return (
+    testFeedConfigured &&
+    url?.protocol === "http:" &&
+    (url.hostname === "127.0.0.1" || url.hostname === "localhost")
+  );
+};
+
 const parseUrl = (rawUrl: string): URL | null => {
   try {
     return new URL(rawUrl);

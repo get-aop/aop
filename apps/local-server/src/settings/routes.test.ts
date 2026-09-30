@@ -39,6 +39,7 @@ describe("settings/routes", () => {
       expect(body.settings).toEqual([
         { key: "chat_global_instructions", value: "" },
         { key: "max_concurrent_runs", value: "4" },
+        { key: "update_check", value: "true" },
       ]);
       expect(body.settings).toHaveLength(VALID_KEYS.length);
     });

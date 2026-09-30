@@ -1,5 +1,6 @@
 import type { ElectronDesktopBridge } from "../src/backend/electron-backend";
 import type {
+  AppUpdateState,
   ConnectInput,
   ConnectResult,
   DesktopState,
@@ -34,4 +35,9 @@ export const createDesktopBridge = (
     invoke(IPC_CHANNELS.getHostConfig) as ReturnType<ElectronDesktopBridge["getHostConfig"]>,
   hostRejected: () => invoke(IPC_CHANNELS.hostRejected) as Promise<void>,
   setZoom: (zoomFactor) => invoke(IPC_CHANNELS.setZoom, zoomFactor) as Promise<void>,
+  getUpdateState: () => invoke(IPC_CHANNELS.getUpdateState) as Promise<AppUpdateState>,
+  onUpdateStateChanged: (listener) =>
+    subscribe(IPC_CHANNELS.updateStateChanged, (payload) => listener(payload as AppUpdateState)),
+  openUpdateDownload: () => invoke(IPC_CHANNELS.openUpdateDownload) as Promise<void>,
+  restartToUpdate: () => invoke(IPC_CHANNELS.restartToUpdate) as Promise<void>,
 });
