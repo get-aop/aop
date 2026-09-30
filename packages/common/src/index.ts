@@ -71,12 +71,6 @@ export {
 } from "./types/runtime-configuration.ts";
 export type { RuntimeEventKind } from "./types/runtime-events.ts";
 export type {
-  RuntimeProfile,
-  RuntimeProfileInput,
-  RuntimeProfilePatch,
-} from "./types/runtime-profile.ts";
-export { RuntimeProfileInputSchema, RuntimeProfilePatchSchema } from "./types/runtime-profile.ts";
-export type {
   CreateSessionPrMode,
   CreateSessionPrResult,
   MergeSessionPrMethod,

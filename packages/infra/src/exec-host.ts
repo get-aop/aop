@@ -3,8 +3,8 @@
 // Providers describe *what* to run via an ExecHostSpawnSpec; the host decides *how* to spawn
 // it on the current platform, so call sites do not branch on OS.
 //
-// The native hosts are faithful pass-throughs to Bun.spawn; only the shell and
-// command-existence probes differ by platform (zsh/`command -v` vs cmd/`where`).
+// The native hosts are faithful pass-throughs to Bun.spawn; only the shell differs by
+// platform (zsh -lc vs cmd /c).
 // Unix prefers the user's zsh so login PATH and interactive-shell expectations match the
 // terminal; falls back to sh when zsh is missing.
 
@@ -38,8 +38,6 @@ export interface ExecHost {
   spawn(spec: ExecHostSpawnSpec): Bun.Subprocess;
   /** Run a shell script string (the host picks the platform shell). */
   shell(script: string, options?: ExecHostShellOptions): Bun.Subprocess;
-  /** Resolve whether a command is available on PATH. */
-  commandExists(name: string): Promise<boolean>;
 }
 
 type BunStdio = "ignore" | "inherit" | "pipe" | ReturnType<typeof Bun.file> | undefined;
@@ -101,31 +99,6 @@ export const shellInvocation = (
   unixShell: string = resolveUnixShell(),
 ): string[] => (kind === "native-windows" ? ["cmd", "/c", script] : [unixShell, "-lc", script]);
 
-/**
- * Build the argv for a "does this command exist on PATH" probe. The unix form passes the
- * name as `$0` to avoid shell injection; the Windows form uses `where`.
- */
-export const commandExistsInvocation = (
-  kind: ExecHostKind,
-  name: string,
-  unixShell: string = resolveUnixShell(),
-): string[] =>
-  kind === "native-windows" ? ["where", name] : [unixShell, "-lc", 'command -v "$0"', name];
-
-const probeCommandExists = async (kind: ExecHostKind, name: string): Promise<boolean> => {
-  try {
-    const proc = spawnWithBun({
-      cmd: commandExistsInvocation(kind, name),
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    return (await proc.exited) === 0;
-  } catch {
-    return false;
-  }
-};
-
 /** Shared native-host behavior; only `kind` (which selects the shell) differs. */
 abstract class BaseNativeHost implements ExecHost {
   abstract readonly kind: ExecHostKind;
@@ -137,10 +110,6 @@ abstract class BaseNativeHost implements ExecHost {
   shell(script: string, options: ExecHostShellOptions = {}): Bun.Subprocess {
     return spawnWithBun({ cmd: shellInvocation(this.kind, script), ...options });
   }
-
-  commandExists(name: string): Promise<boolean> {
-    return probeCommandExists(this.kind, name);
-  }
 }
 
 /** Native macOS/Linux execution host (`zsh -lc` when available, else `sh -lc`). */
@@ -148,7 +117,7 @@ export class NativeUnixHost extends BaseNativeHost {
   readonly kind = "native-unix" as const;
 }
 
-/** Native Windows execution host (`cmd /c`, `where`). Bun.spawn resolves .exe via PATHEXT. */
+/** Native Windows execution host (`cmd /c`). Bun.spawn resolves .exe via PATHEXT. */
 export class NativeWindowsHost extends BaseNativeHost {
   readonly kind = "native-windows" as const;
 }

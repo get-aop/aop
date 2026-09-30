@@ -41,8 +41,9 @@ Keys:
 | Key | Purpose |
 | --- | --- |
 | `chat_global_instructions` | Free-text preferences added to every chat turn, outside the visible transcript |
+| `max_concurrent_runs` | How many thread turns the host runs at once, from 1 to 32 (default 4); see [Run scheduling](../../docs/SCHEDULING.md) |
 
-Runtime providers and models are easier to manage through **Settings → Runtime configuration**.
+Runtime providers and models are easier to manage through **Settings → Runtimes**.
 
 ## Service management
 

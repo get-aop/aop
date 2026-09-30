@@ -52,10 +52,6 @@ describe("aopPaths", () => {
     expect(aopPaths.repoDir("repo_abc123")).toBe(join(DEFAULT_AOP_HOME, "repos", "repo_abc123"));
   });
 
-  test("relativeTaskDocs returns docs/tasks", () => {
-    expect(aopPaths.relativeTaskDocs()).toBe(join("docs", "tasks"));
-  });
-
   test("worktrees returns <home>/worktrees/<repoId>", () => {
     expect(aopPaths.worktrees("repo_abc123")).toBe(
       join(DEFAULT_AOP_HOME, "worktrees", "repo_abc123"),

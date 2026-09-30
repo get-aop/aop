@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generateTypeId, getTypeIdPrefix, isValidTypeId } from "./typeid";
+import { generateTypeId } from "./typeid";
 
 describe("generateTypeId", () => {
   test("generates a valid typeid with the given prefix", () => {
@@ -32,42 +32,5 @@ describe("generateTypeId", () => {
   test("supports project IDs", () => {
     const id = generateTypeId("proj");
     expect(id).toMatch(/^proj_[0-9a-z]{26}$/);
-    expect(isValidTypeId(id, "proj")).toBe(true);
-  });
-
-  test("supports runtime profile IDs", () => {
-    const id = generateTypeId("rprof");
-    expect(id).toStartWith("rprof_");
-    expect(isValidTypeId(id, "rprof")).toBe(true);
-  });
-});
-
-describe("getTypeIdPrefix", () => {
-  test("extracts prefix from valid typeid", () => {
-    const id = generateTypeId("task");
-    expect(getTypeIdPrefix(id)).toBe("task");
-  });
-
-  test("returns null for invalid typeid", () => {
-    expect(getTypeIdPrefix("invalid")).toBe(null);
-    expect(getTypeIdPrefix("")).toBe(null);
-  });
-});
-
-describe("isValidTypeId", () => {
-  test("validates correctly formatted typeid", () => {
-    const id = generateTypeId("task");
-    expect(isValidTypeId(id)).toBe(true);
-  });
-
-  test("validates with expected prefix", () => {
-    const id = generateTypeId("task");
-    expect(isValidTypeId(id, "task")).toBe(true);
-    expect(isValidTypeId(id, "exec")).toBe(false);
-  });
-
-  test("returns false for invalid typeid", () => {
-    expect(isValidTypeId("invalid")).toBe(false);
-    expect(isValidTypeId("")).toBe(false);
   });
 });

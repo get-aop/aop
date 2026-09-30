@@ -9,6 +9,11 @@ export interface SettingsTable {
   value: string;
 }
 
+/**
+ * Nothing inserts or updates rows here any more; the runtime-configuration seed still imports any
+ * rows an older build saved as custom providers, and deleting such a provider deletes its row.
+ * Dropping the table takes a new migration version.
+ */
 export interface RuntimeProfilesTable {
   id: string;
   name: string;
@@ -190,9 +195,6 @@ export interface Database extends ChatHistoryDatabase, ProjectsDatabase, UsageDa
 export type Setting = Selectable<SettingsTable>;
 export type NewSetting = Insertable<SettingsTable>;
 
-export type RuntimeProfileRecord = Selectable<RuntimeProfilesTable>;
-export type NewRuntimeProfileRecord = Insertable<RuntimeProfilesTable>;
-export type RuntimeProfileRecordUpdate = Updateable<RuntimeProfilesTable>;
 export type RuntimeConfigurationProviderRecord = Selectable<RuntimeConfigurationProvidersTable>;
 export type RuntimeConfigurationModelRecord = Selectable<RuntimeConfigurationModelsTable>;
 

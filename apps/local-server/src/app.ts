@@ -16,12 +16,10 @@ import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
 import { createProjectRoutes } from "./project/routes.ts";
 import { createProjectServices, type ProjectServices } from "./project/services.ts";
-import { createProviderRoutes } from "./providers/routes.ts";
 import { createPullRequestWatchRoutes } from "./pull-request-watch/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
-import { createRuntimeProfileRoutes } from "./runtime-profile/routes.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
 import { createSuggestionRoutes } from "./suggestion/routes.ts";
@@ -112,7 +110,6 @@ export const createApp = (deps: AppDependencies) => {
   );
   app.route("/api/auth", createAuthRoutes(ctx));
   app.route("/api/projects", createEventStreamRoutes(ctx, deps.eventsSSEOptions));
-  app.route("/api", createProviderRoutes());
   app.route("/api/chat-sessions", createChatSessionRoutes(ctx));
   app.route("/api/chat-sessions", createSessionGitRoutes(ctx));
   const projects = deps.projectServices ?? createProjectServices(ctx);
@@ -126,7 +123,6 @@ export const createApp = (deps: AppDependencies) => {
     "/api/settings",
     createSettingsRoutes(ctx, { runCapChanged: () => projects.chat.dispatchQueuedRuns() }),
   );
-  app.route("/api/runtime-profiles", createRuntimeProfileRoutes(ctx));
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));

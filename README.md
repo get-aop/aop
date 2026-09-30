@@ -55,7 +55,7 @@ If a message to the coordinator comes back with `Runtime exited with code ...`, 
 | [Runtimes](./docs/RUNTIMES.md) | The supported agent CLI and where its state lives |
 | [MCP](./docs/MCP.md) | The tools the coordinator and threads call, and how the endpoint is authenticated |
 | [CLI](./apps/cli/README.md) | Commands of the `aop` HTTP client |
-| [Architecture](./docs/architecture/README.md) | The previous architecture, kept until it is rewritten |
+| [Architecture](./docs/architecture/README.md) | How projects, threads, the chat engine and the clients fit together, and the deeper guides on each part |
 | [Releasing](./docs/RELEASE.md) | Cutting a release and publishing installers |
 
 ## Contributing

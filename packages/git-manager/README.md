@@ -1,8 +1,8 @@
 # @aop/git-manager
 
-Git worktree lifecycle management for task isolation. Enables parallel agent work through isolated filesystems and clean PR workflows via squash merging.
+Git worktree lifecycle management for thread isolation. Enables parallel agent work through isolated filesystems.
 
-This package is what makes concurrent worker lanes practical. Each task can receive its own worktree, run through its workflow, and hand off a branch without corrupting another task that is still implementing or testing.
+This package is what lets several threads of one project work in the same repository at once. Each thread receives its own worktree on its own branch, so one thread's edits never reach another thread or the person's own checkout.
 
 ## Installation
 
@@ -15,21 +15,16 @@ bun add @aop/git-manager
 ```typescript
 import { GitManager } from "@aop/git-manager";
 
-const manager = new GitManager({ repoPath: "/path/to/repo" });
+const manager = new GitManager({ repoPath: "/path/to/repo", repoId: "repo_abc" });
 await manager.init();
 
-// Create isolated worktree for a task
-const worktree = await manager.createWorktree("feat-auth", "main");
-// In AOP installs, executor worktrees typically live under ~/.aop/worktrees/<repo-id>/<task-id>/
-// worktree.branch = "feat-auth"
+// Create an isolated worktree for a thread
+const worktree = await manager.createWorktree("isess_123", "main", "aop/add-auth-abc123");
+// The worktree lives under ~/.aop/worktrees/<repo-id>/<thread-id>/
+// worktree.branch = "aop/add-auth-abc123"
 // worktree.baseBranch = "main"
 // worktree.baseCommit = "abc123..."
 
-// After work is done, squash merge to a PR branch
-const result = await manager.squashMerge("feat-auth", "pr/feat-auth", "feat: add authentication");
-// result.targetBranch = "pr/feat-auth"
-// result.commitSha = "def456..."
-
 // Clean up when done
-await manager.removeWorktree("feat-auth");
+await manager.removeWorktree("isess_123");
 ```

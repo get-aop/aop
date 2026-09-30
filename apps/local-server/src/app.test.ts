@@ -88,18 +88,10 @@ describe("app", () => {
     });
   });
 
-  describe("loop engineering API routes", () => {
-    test("mounts provider capabilities with readiness probes", async () => {
-      const res = await app.request("/api/providers/capabilities");
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(body.providers.map((provider: { id: string }) => provider.id)).toEqual([
-        "claude-code",
-      ]);
-      expect(body.providers[0].readinessProbe).toHaveProperty("cliInstalled");
-      expect(body.providers[0].readinessProbe).toHaveProperty("versionDetected");
-      expect(body.providers[0].readinessProbe).toHaveProperty("canWriteLogs");
+  describe("removed runtime-catalog routes", () => {
+    test("serves neither the provider capability probe nor runtime profiles", async () => {
+      expect((await app.request("/api/providers/capabilities")).status).toBe(404);
+      expect((await app.request("/api/runtime-profiles")).status).toBe(404);
     });
   });
 });

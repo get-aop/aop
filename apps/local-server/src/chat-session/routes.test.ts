@@ -2267,47 +2267,6 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
-  test("applies a saved runtime profile as a full session preset", async () => {
-    const { db, app } = await setup();
-    const session = await createSession(app, "repo_chat_1");
-    await db
-      .updateTable("chat_sessions")
-      .set({ runtime_session_id: "old-runtime-session" })
-      .where("id", "=", session.id)
-      .execute();
-    await db
-      .insertInto("runtime_profiles")
-      .values({
-        id: "rprof_chat_claude",
-        name: "Work Claude",
-        base_provider: "claude-code",
-        command: "cpe",
-        model: "vendor/custom-model:v2",
-        reasoning: "extra-high",
-        fast_mode: true,
-      })
-      .execute();
-
-    const response = await app.request(`/api/chat-sessions/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtimeProfileId: "rprof_chat_claude" }),
-    });
-
-    expect(response.status).toBe(200);
-    expect((await response.json()) as unknown).toMatchObject({
-      session: {
-        runtime: "claude-code",
-        runtimeAlias: "cpe",
-        model: "vendor/custom-model:v2",
-        reasoningEffort: "extra-high",
-        fastMode: true,
-        runtimeSessionId: null,
-      },
-    });
-    await teardown(db);
-  });
-
   test("locks the model after the session has its first message", async () => {
     const { db, app } = await setup();
     const session = await createSession(app, "repo_chat_1");

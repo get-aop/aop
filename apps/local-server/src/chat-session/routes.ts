@@ -356,8 +356,6 @@ const mapUpdateError = (
       return c.json({ error: "settledOverride must be settled or active" }, 400);
     case "INVALID_TITLE":
       return c.json({ error: "Title is required" }, 400);
-    case "RUNTIME_PROFILE_NOT_FOUND":
-      return c.json({ error: "Runtime profile not found" }, 404);
     case "RUNTIME_CONFIGURATION_NOT_FOUND":
       return c.json({ error: "Runtime configuration not found" }, 404);
     case "RUN_IN_PROGRESS":

@@ -6,20 +6,17 @@ import {
 } from "@aop/common";
 import type { ChatSession } from "../db/schema.ts";
 import type { RuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
-import type { RuntimeProfileRepository } from "../runtime-profile/repository.ts";
 import { buildUpdatePatch } from "./update-patch.ts";
 
 export const DEFAULT_EFFORT: ReasoningEffort = "medium";
 
 export const resolveSessionUpdatePatch = async (
-  runtimeProfiles: RuntimeProfileRepository,
   runtimeConfigurations: RuntimeConfigurationRepository,
   existing: ChatSession,
   input: UpdateChatSessionInput,
 ) => {
   // Explicit provider switch clears any configuration binding via buildUpdatePatch.
   if (input.runtime !== undefined) return buildUpdatePatch(existing, input);
-  if (input.runtimeProfileId) return resolveRuntimeProfilePatch(runtimeProfiles, existing, input);
 
   const runtimeConfigurationId = resolveUpdateRuntimeConfigurationId(existing, input);
   if (!runtimeConfigurationId) return buildUpdatePatch(existing, input);
@@ -101,34 +98,6 @@ const nonRuntimeUpdateInput = (input: UpdateChatSessionInput): UpdateChatSession
   settledOverride: input.settledOverride,
   runtimeAccessMode: input.runtimeAccessMode,
 });
-
-const resolveRuntimeProfilePatch = async (
-  runtimeProfiles: RuntimeProfileRepository,
-  existing: ChatSession,
-  input: UpdateChatSessionInput,
-) => {
-  const profile = await runtimeProfiles.get(input.runtimeProfileId ?? "");
-  if (!profile) {
-    return { success: false as const, error: { code: "RUNTIME_PROFILE_NOT_FOUND" as const } };
-  }
-
-  const nonRuntime = buildUpdatePatch(existing, nonRuntimeUpdateInput(input));
-  if (!nonRuntime.success) return nonRuntime;
-
-  return {
-    success: true as const,
-    patch: {
-      ...nonRuntime.patch,
-      runtime: profile.baseProvider,
-      runtime_configuration_id: null,
-      model: profile.model,
-      reasoning_effort: profile.reasoning,
-      runtime_alias: profile.command,
-      runtime_session_id: null,
-      fast_mode: profile.fastMode,
-    },
-  };
-};
 
 export const resolveRuntimeConfigurationPatch = async (
   runtimeConfigurations: RuntimeConfigurationRepository,

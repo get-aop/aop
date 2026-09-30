@@ -117,7 +117,6 @@ export type UpdateChatSessionResult =
         | { code: "INVALID_ACCESS_MODE" }
         | { code: "INVALID_SETTLED_OVERRIDE" }
         | { code: "INVALID_TITLE" }
-        | { code: "RUNTIME_PROFILE_NOT_FOUND" }
         | { code: "RUNTIME_CONFIGURATION_NOT_FOUND" }
         | { code: "RUN_IN_PROGRESS" }
         | { code: "MODEL_LOCKED" }

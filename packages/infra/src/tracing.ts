@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { context, propagation, type Span, SpanStatusCode, trace } from "@opentelemetry/api";
+import { context, propagation, trace } from "@opentelemetry/api";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import {
@@ -47,8 +47,6 @@ export const initTracing = (serviceName: string): BasicTracerProvider => {
 
 export const getTracerProvider = (): BasicTracerProvider | undefined => tracerProvider;
 
-export const getTracer = () => trace.getTracer("@aop/infra");
-
 export const getActiveTraceId = (): string | undefined => {
   const span = trace.getSpan(context.active());
   if (!span) return undefined;
@@ -61,32 +59,6 @@ export const getActiveSpanId = (): string | undefined => {
   if (!span) return undefined;
   const spanId = span.spanContext().spanId;
   return spanId === INVALID_SPAN_ID ? undefined : spanId;
-};
-
-export const injectTraceHeaders = (headers: Headers | Record<string, string>): Headers => {
-  const result = headers instanceof Headers ? new Headers(headers) : new Headers(headers);
-  const setter = {
-    set: (carrier: Headers, key: string, value: string) => carrier.set(key, value),
-  };
-  propagator.inject(context.active(), result, setter);
-  return result;
-};
-
-export const runWithSpan = async <T>(name: string, fn: () => T | Promise<T>): Promise<T> => {
-  const tracer = getTracer();
-  return tracer.startActiveSpan(name, async (span: Span) => {
-    try {
-      const result = await fn();
-      span.setStatus({ code: SpanStatusCode.OK });
-      return result;
-    } catch (error) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message: String(error) });
-      span.recordException(error instanceof Error ? error : new Error(String(error)));
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
 };
 
 export const resetTracing = (): void => {

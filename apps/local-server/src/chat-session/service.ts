@@ -1,7 +1,6 @@
 import type { UpdateChatSessionInput } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
-import { createRuntimeProfileRepository } from "../runtime-profile/repository.ts";
 import { resumeRateLimited } from "./rate-limit-resume.ts";
 import { applyFollowUp, dispatchQueuedRuns, drainAfterResume } from "./reply-lifecycle.ts";
 import { ensureAllChatRunRecoveries, ensureSessionChatRunRecovery } from "./run-recovery.ts";
@@ -36,7 +35,6 @@ export const createChatSessionService = (
   deps: ChatSessionServiceDeps = {},
 ) => {
   void ensureAllChatRunRecoveries(ctx, deps);
-  const runtimeProfiles = createRuntimeProfileRepository(ctx.db);
   const runtimeConfigurations = createRuntimeConfigurationRepository(ctx.db);
 
   return {
@@ -91,7 +89,7 @@ export const createChatSessionService = (
     delete: (sessionId: string) => deleteChatSession(ctx, sessionId),
 
     update: (sessionId: string, input: UpdateChatSessionInput): Promise<UpdateChatSessionResult> =>
-      updateChatSession(ctx, runtimeProfiles, runtimeConfigurations, sessionId, input),
+      updateChatSession(ctx, runtimeConfigurations, sessionId, input),
 
     markRead: async (sessionId: string): Promise<MarkChatSessionReadResult> => {
       const updated = await ctx.chatSessionRepository.update(sessionId, {

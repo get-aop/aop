@@ -2,7 +2,6 @@ import type { ChatSessionSettledOverride, UpdateChatSessionInput } from "@aop/co
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
 import type { RuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
-import type { RuntimeProfileRepository } from "../runtime-profile/repository.ts";
 import { resolveSessionUpdatePatch } from "./runtime-configuration-patch.ts";
 import { isSessionRunActive } from "./runtime-engine.ts";
 import { sessionDtoFor } from "./session-dto.ts";
@@ -11,7 +10,6 @@ import type { UpdateChatSessionResult } from "./session-types.ts";
 
 export const updateChatSession = async (
   ctx: LocalServerContext,
-  runtimeProfiles: RuntimeProfileRepository,
   runtimeConfigurations: RuntimeConfigurationRepository,
   sessionId: string,
   input: UpdateChatSessionInput,
@@ -19,12 +17,7 @@ export const updateChatSession = async (
   const existing = await ctx.chatSessionRepository.getById(sessionId);
   if (!existing) return { success: false, error: { code: "SESSION_NOT_FOUND" } };
 
-  const patch = await resolveSessionUpdatePatch(
-    runtimeProfiles,
-    runtimeConfigurations,
-    existing,
-    input,
-  );
+  const patch = await resolveSessionUpdatePatch(runtimeConfigurations, existing, input);
   if (!patch.success) return patch;
 
   const hasActiveRun = isSessionRunActive(sessionId) || (await hasRunningChatRun(ctx, sessionId));

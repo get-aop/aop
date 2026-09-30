@@ -20,7 +20,7 @@ Thank you for helping improve AOP. The project is **MIT-licensed** and stays ope
 ## Licensing (contributors)
 
 - Application code in this repo is MIT — see [`LICENSE`](./LICENSE).
-- Bundled methodology prompts are documented in [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
+- Third-party code the repo copies or adapts is documented in [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
 
 ## Getting help
 

@@ -93,5 +93,4 @@ export interface UpdateChatSessionInput {
   runtimeAlias?: string | null;
   fastMode?: boolean;
   runtimeAccessMode?: ChatRuntimeAccessMode;
-  runtimeProfileId?: string;
 }

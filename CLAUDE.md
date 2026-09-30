@@ -40,11 +40,11 @@ Within apps, organize by domain:
 
 ```
 apps/local-server/src/
-  repo/       # Domain: repo registration and status
-  task/       # Domain: task discovery and updates
-  executor/   # Domain: agent execution lifecycle
-  workflow/   # Domain: local workflow orchestration
-  settings/   # Domain: local configuration
+  repo/          # Domain: repo registration and status
+  project/       # Domain: projects and their coordinator
+  thread/        # Domain: a project's threads, worktrees and pull requests
+  chat-session/  # Domain: the chat engine that runs agent turns
+  settings/      # Domain: local configuration
 ```
 
 ### DRY

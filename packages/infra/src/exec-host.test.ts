@@ -1,13 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  commandExistsInvocation,
-  NativeUnixHost,
-  resolveExecHost,
-  resolveUnixShell,
-  shellInvocation,
-} from "./exec-host.ts";
+import { NativeUnixHost, resolveExecHost, resolveUnixShell, shellInvocation } from "./exec-host.ts";
 
 const readStream = async (stream: unknown): Promise<string> => {
   if (!(stream instanceof ReadableStream)) {
@@ -68,16 +62,6 @@ describe("platform invocations", () => {
     expect(shellInvocation("native-unix", "bun test", "sh")).toEqual(["sh", "-lc", "bun test"]);
     expect(shellInvocation("native-windows", "bun test")).toEqual(["cmd", "/c", "bun test"]);
   });
-
-  test("commandExistsInvocation is injection-safe on unix and uses where on windows", () => {
-    expect(commandExistsInvocation("native-unix", "git; rm -rf /", "/bin/zsh")).toEqual([
-      "/bin/zsh",
-      "-lc",
-      'command -v "$0"',
-      "git; rm -rf /",
-    ]);
-    expect(commandExistsInvocation("native-windows", "git")).toEqual(["where", "git"]);
-  });
 });
 
 describe("NativeUnixHost", () => {
@@ -125,10 +109,5 @@ describe("NativeUnixHost", () => {
   test("shell runs a script string", async () => {
     const proc = host.shell("echo shell-ran", { stdout: "pipe", stderr: "ignore" });
     expect(await readStream(proc.stdout)).toBe("shell-ran\n");
-  });
-
-  test("commandExists resolves real and missing commands", async () => {
-    expect(await host.commandExists("sh")).toBe(true);
-    expect(await host.commandExists("definitely-not-a-real-command-xyz")).toBe(false);
   });
 });

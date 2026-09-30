@@ -12,7 +12,6 @@ export const aopPaths = {
   /** A project's own directory: its coordinator's workspace and the scratch space of repo-less threads. */
   projectDir: (projectId: string) => join(getAopHome(), "projects", projectId),
   repoDir: (repoId: string) => join(getAopHome(), "repos", repoId),
-  relativeTaskDocs: () => join("docs", "tasks"),
   worktrees: (repoId: string) => join(getAopHome(), "worktrees", repoId),
   worktree: (repoId: string, taskId: string) => join(getAopHome(), "worktrees", repoId, taskId),
   worktreeMetadata: (repoId: string) => join(getAopHome(), "worktrees", repoId, ".metadata"),

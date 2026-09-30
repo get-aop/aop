@@ -64,4 +64,4 @@ A client more than 1,000 entries behind is not replayed to; it resyncs. Every re
 
 ## Other streams
 
-`GET /api/events` and `GET /api/chat-sessions/:id/stream` still serve the Sessions dashboard. They have no resume and restart their ids at 0 on every connection. They stay until the Projects dashboard replaces the views that use them, and are deleted then.
+`GET /api/events` and `GET /api/chat-sessions/:id/stream` are the streams of the earlier Sessions dashboard. They have no resume and restart their ids at 0 on every connection. The Projects dashboard, the `aop` CLI and the desktop app read neither, and they are to be deleted.

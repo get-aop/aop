@@ -284,57 +284,18 @@ interface BufferedFileSink {
 }
 
 const activeBufferedSinks: BufferedFileSink[] = [];
-const activeRotatingSinks: Disposable[] = [];
-
-/**
- * Flush all buffered logs to disk immediately.
- * Call this on graceful shutdown to ensure no logs are lost.
- */
-export const flushLogs = (): void => {
-  for (const sink of activeBufferedSinks) {
-    flushBuffer(sink);
-  }
-};
-
-/**
- * Cleanup all file writers and stop flush intervals.
- * Call this when shutting down the application.
- */
-export const cleanupLoggers = (): void => {
-  // Clean up buffered sinks
-  for (const sink of activeBufferedSinks) {
-    clearInterval(sink.flushInterval);
-    flushBuffer(sink);
-  }
-  activeBufferedSinks.length = 0;
-
-  // Dispose rotating sinks (stops their internal flush timers)
-  // Only dispose if not followed by logtapeReset() which also disposes
-  for (const sink of activeRotatingSinks) {
-    sink[Symbol.dispose]();
-  }
-  activeRotatingSinks.length = 0;
-};
-
-/**
- * Cleanup loggers without disposing rotating sinks (logtapeReset handles those).
- */
-const cleanupLoggersForReset = (): void => {
-  for (const sink of activeBufferedSinks) {
-    clearInterval(sink.flushInterval);
-    flushBuffer(sink);
-  }
-  activeBufferedSinks.length = 0;
-  activeRotatingSinks.length = 0;
-};
 
 /**
  * Reset logging configuration and flush all buffered logs.
- * Wraps logtape's reset to also clean up file sinks.
+ * Wraps logtape's reset, which also disposes the rotating file sinks.
  */
 export const resetLogging = async (): Promise<void> => {
   currentServiceName = undefined;
-  cleanupLoggersForReset();
+  for (const sink of activeBufferedSinks) {
+    clearInterval(sink.flushInterval);
+    flushBuffer(sink);
+  }
+  activeBufferedSinks.length = 0;
   await logtapeReset();
 };
 
@@ -351,14 +312,12 @@ const createFileSink = (opts: FileSinkOptions): Sink => {
   if (opts.maxSize && opts.maxSize > 0) {
     // bufferSize: 0 for immediate writes - logtape's flushInterval only checks on writes,
     // not via a timer, so it doesn't help for low-volume logging
-    const rotatingSink = getRotatingFileSink(opts.path, {
+    return getRotatingFileSink(opts.path, {
       maxSize: opts.maxSize,
       maxFiles: opts.maxFiles ?? 5,
       formatter,
       bufferSize: 0,
     });
-    activeRotatingSinks.push(rotatingSink);
-    return rotatingSink;
   }
 
   return createBufferedFileSink(opts.path, formatter);
