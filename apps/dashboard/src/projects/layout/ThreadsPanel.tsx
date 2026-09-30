@@ -113,7 +113,7 @@ const PanelTabStrip = ({
       data-testid="panel-tabs"
       role="tablist"
       aria-label="Panel sections"
-      className="flex h-12 shrink-0 items-center gap-1 px-3"
+      className="flex h-pane-header shrink-0 items-center gap-1 px-3"
     >
       {PANEL_TABS.map(({ id, label, icon: Icon }) => (
         <Link
@@ -122,14 +122,14 @@ const PanelTabStrip = ({
           role="tab"
           aria-selected
           data-testid={`panel-tab-${id}`}
-          className="flex h-8 items-center gap-2 rounded-row bg-active px-3 text-[13.5px] font-medium text-text"
+          className="flex h-9 items-center gap-2 rounded-row bg-active px-3.5 text-body font-medium text-text"
         >
           <Icon aria-hidden="true" className="size-4 text-text-muted" />
           {label}
           {waiting > 0 && id === "threads" ? (
             <span
               data-testid="project-tab-waiting"
-              className="rounded-full bg-running px-1.5 text-[11px] font-semibold tabular-nums text-primary-foreground"
+              className="rounded-full bg-running px-1.5 text-xs font-semibold tabular-nums text-primary-foreground"
             >
               {waiting}
             </span>

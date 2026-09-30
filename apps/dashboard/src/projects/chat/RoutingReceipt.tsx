@@ -16,7 +16,7 @@ export const RoutingReceipt = ({
   <div
     data-testid="routing-receipt"
     data-thread-count={threadIds.length}
-    className="mb-1.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-[12px] text-text-subtle"
+    className="mb-1.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-meta text-text-subtle"
   >
     <SendIcon aria-hidden="true" className="mr-1 size-3" />
     <span>{receiptLabel(threadIds.length)}</span>

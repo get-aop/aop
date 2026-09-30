@@ -64,7 +64,7 @@ export const SuggestedThreads = ({
     >
       <header className="flex items-center gap-2 border-b border-border px-3 py-2">
         <LightbulbIcon aria-hidden="true" className="size-3.5 text-text-subtle" />
-        <h4 className="flex-1 text-[12.5px] font-medium text-text-muted">Suggested threads</h4>
+        <h4 className="flex-1 text-meta font-medium text-text-muted">Suggested threads</h4>
         {waiting.length > 1 ? (
           <Button
             type="button"
@@ -138,15 +138,10 @@ const SuggestionRow = ({
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p
-            data-testid="suggestion-title"
-            className="text-[13.5px] font-medium leading-snug text-text"
-          >
+          <p data-testid="suggestion-title" className="text-title font-medium text-text">
             {suggestion.title}
           </p>
-          <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-text-muted">
-            {suggestion.prompt}
-          </p>
+          <p className="mt-0.5 line-clamp-2 text-meta text-text-muted">{suggestion.prompt}</p>
         </div>
         <RowActions
           state={state}
@@ -157,17 +152,14 @@ const SuggestionRow = ({
         />
       </div>
       {answer?.state === "started" ? (
-        <p
-          className="flex items-center gap-1.5 text-[12px] text-ok"
-          data-testid="suggestion-started"
-        >
+        <p className="flex items-center gap-1.5 text-meta text-ok" data-testid="suggestion-started">
           <CheckIcon aria-hidden="true" className="size-3.5" />
           Started
           <ThreadChip threadId={answer.threadId} />
         </p>
       ) : null}
       {failure ? (
-        <p role="alert" data-testid="suggestion-error" className="text-[12px] text-blocked">
+        <p role="alert" data-testid="suggestion-error" className="text-meta text-blocked">
           {failure}
         </p>
       ) : null}
@@ -192,7 +184,7 @@ const RowActions = ({
   if (state === "skipped") {
     return (
       <div className="flex shrink-0 items-center gap-2">
-        <span className="text-[12px] text-text-subtle">Skipped</span>
+        <span className="text-meta text-text-subtle">Skipped</span>
         <Button
           type="button"
           size="xs"

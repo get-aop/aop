@@ -26,7 +26,7 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
       data-unread={thread.unread}
       data-checks-failing={failing ? "true" : undefined}
       className={cn(
-        "group/card relative flex items-start gap-3 rounded-row border-l-2 px-3 py-2.5 transition-colors duration-[120ms] hover:bg-hover",
+        "group/card relative flex items-start gap-3 rounded-row border-l-2 px-3.5 py-2.5 transition-colors duration-[120ms] hover:bg-hover",
         blocked ? "border-waiting/60" : failing ? "border-blocked/60" : "border-transparent",
         thread.status === "resolved" && "opacity-70",
       )}
@@ -37,7 +37,7 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
         <span
           data-testid="thread-status-label"
           className={cn(
-            "text-[12px]",
+            "text-meta",
             failing ? "text-blocked" : "sr-only",
             blocked && "text-waiting",
           )}
@@ -54,7 +54,7 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
 
 /** The title, which is the link that opens the thread, led by its status dot and an unread dot. */
 const CardTitle = ({ thread, failing }: { thread: Thread; failing: boolean }) => (
-  <h3 className="flex min-w-0 items-center gap-2 text-[14px] leading-snug text-text">
+  <h3 className="flex min-w-0 items-center gap-2.5 text-title text-text">
     <ThreadStatusDot status={thread.status} className={cn(failing && "bg-blocked")} />
     <Link
       to={threadPath(thread.projectId, thread.id)}
@@ -83,7 +83,7 @@ const CardAside = ({ thread, now }: { thread: Thread; now: number }) => {
   const blocked = thread.status === "waiting-on-you";
   const pullRequest = pullRequestOf(thread);
   return (
-    <div className="flex shrink-0 items-center gap-2 pt-0.5 text-[12px] text-text-muted">
+    <div className="flex shrink-0 items-center gap-2.5 pt-0.5 text-meta text-text-muted">
       {progress && !blocked ? <StepsRing done={progress.done} total={progress.total} /> : null}
       {pullRequest ? (
         <PullRequestChip
@@ -95,7 +95,7 @@ const CardAside = ({ thread, now }: { thread: Thread; now: number }) => {
       <time
         dateTime={thread.lastActivityAt}
         title={new Date(thread.lastActivityAt).toLocaleString()}
-        className="min-w-7 text-right tabular-nums text-text-subtle"
+        className="min-w-8 text-right tabular-nums text-text-subtle"
       >
         {formatAge(thread.lastActivityAt, now)}
       </time>
@@ -108,7 +108,7 @@ const CardFooter = ({ thread }: { thread: Thread }) => {
   const docCount = thread.artifacts.filter((artifact) => artifact.type === "doc").length;
   if (thread.status !== "rate-limited" && docCount === 0) return null;
   return (
-    <footer className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-[11.5px] text-text-subtle">
+    <footer className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-meta text-text-subtle">
       <ResumeThreadButton thread={thread} />
       {docCount > 0 ? (
         <span className="inline-flex items-center gap-1" data-testid="thread-docs">
@@ -124,7 +124,7 @@ const CardFooter = ({ thread }: { thread: Thread }) => {
 const StatusLine = ({ thread }: { thread: Thread }) => {
   if (thread.status === "waiting-on-you") {
     return (
-      <p data-testid="thread-status-line" className="line-clamp-2 text-[12.5px] text-text-muted">
+      <p data-testid="thread-status-line" className="line-clamp-2 text-meta text-text-muted">
         <span className="font-medium text-waiting">Blocked · </span>
         {thread.blockedQuestion.question}
       </p>
@@ -132,7 +132,7 @@ const StatusLine = ({ thread }: { thread: Thread }) => {
   }
   if (!thread.liveStatusLine) return null;
   return (
-    <p data-testid="thread-status-line" className="line-clamp-2 text-[12.5px] text-text-muted">
+    <p data-testid="thread-status-line" className="line-clamp-2 text-meta text-text-muted">
       {thread.liveStatusLine}
     </p>
   );

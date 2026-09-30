@@ -7,7 +7,7 @@ export const ChatLoading = () => (
   <div
     data-testid="chat-loading"
     role="status"
-    className="flex flex-1 items-center justify-center gap-2 text-[13px] text-text-subtle"
+    className="flex flex-1 items-center justify-center gap-2 text-body text-text-subtle"
   >
     <Spinner className="size-3.5" />
     Loading the conversation…
@@ -21,9 +21,9 @@ export const ChatError = ({ message, onRetry }: { message: string; onRetry: () =
     role="alert"
     className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
   >
-    <h2 className="text-[14px] font-medium text-text">Could not load the conversation</h2>
-    <p className="max-w-sm text-[13px] text-text-subtle">{message}</p>
-    <p className="text-[12px] text-text-subtle">It is trying again on its own.</p>
+    <h2 className="text-title font-medium text-text">Could not load the conversation</h2>
+    <p className="max-w-sm text-body text-text-subtle">{message}</p>
+    <p className="text-meta text-text-subtle">It is trying again on its own.</p>
     <Button type="button" size="sm" variant="outline" data-testid="chat-retry" onClick={onRetry}>
       Try again now
     </Button>
@@ -35,7 +35,7 @@ export const ChatRefreshNotice = ({ message }: { message: string }) => (
   <p
     data-testid="chat-refresh-error"
     role="status"
-    className="mb-2 rounded-row border border-border bg-raised px-3 py-1.5 text-[12px] text-text-muted"
+    className="mb-2 rounded-row border border-border bg-raised px-3 py-1.5 text-meta text-text-muted"
   >
     Could not refresh the conversation ({message}). It is trying again.
   </p>
@@ -65,8 +65,8 @@ export const ChatEmpty = ({
     className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center"
   >
     <div className="flex max-w-md flex-col gap-1.5">
-      <h2 className="text-[16px] font-medium text-text">Talk to the coordinator</h2>
-      <p className="text-[13px] leading-relaxed text-text-muted">
+      <h2 className="text-title font-medium text-text">Talk to the coordinator</h2>
+      <p className="text-body text-text-muted">
         Say what you want done. The coordinator answers what it can, starts a thread for each piece
         of work, and tells you when one needs your call.
       </p>
@@ -79,7 +79,7 @@ export const ChatEmpty = ({
               type="button"
               data-testid="chat-starter"
               onClick={() => onStart(text)}
-              className="line-clamp-2 w-full rounded-row border border-border bg-raised px-3 py-2 text-left text-[13px] text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text"
+              className="line-clamp-2 w-full rounded-row border border-border bg-raised px-3 py-2 text-left text-body text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text"
             >
               {text}
             </button>
@@ -98,7 +98,7 @@ export const ProjectClosedNotice = ({ project }: { project: Project }) => {
     <div
       data-testid="chat-closed-notice"
       data-status={project.status}
-      className="mb-2 flex items-center gap-3 rounded-row border border-border bg-raised px-3 py-2 text-[12.5px] text-text-muted"
+      className="mb-2 flex items-center gap-3 rounded-row border border-border bg-raised px-3 py-2 text-meta text-text-muted"
     >
       <p className="flex-1">
         {paused

@@ -6,7 +6,7 @@ function Bubble({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="bubble"
       className={cn(
-        "ml-auto w-fit max-w-[76%] rounded-2xl rounded-br-md bg-raised px-3.5 py-2.5 text-[14px] leading-relaxed text-text",
+        "ml-auto w-fit max-w-[76%] rounded-2xl rounded-br-md bg-raised px-4 py-3 text-body text-text",
         className,
       )}
       {...props}

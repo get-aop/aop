@@ -10,9 +10,9 @@ export const StepsRing = ({ done, total }: { done: number; total: number }) => {
       data-done={done}
       data-total={total}
       title={`${done} of ${total} steps done`}
-      className="inline-flex items-center gap-1.5 text-[11.5px] tabular-nums text-text-muted"
+      className="inline-flex items-center gap-1.5 text-meta tabular-nums text-text-muted"
     >
-      <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" className="-rotate-90">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" className="-rotate-90">
         <circle
           cx="10"
           cy="10"

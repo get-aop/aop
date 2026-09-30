@@ -92,7 +92,7 @@ export const MessageList = ({
               type="button"
               data-testid="chat-show-earlier"
               onClick={() => setWindow((current) => current + WINDOW_STEP)}
-              className="mx-auto mb-3 rounded-md border border-border px-3 py-1 text-xs text-text-muted hover:bg-hover hover:text-text"
+              className="mx-auto mb-3 rounded-md border border-border px-3 py-1 text-meta text-text-muted hover:bg-hover hover:text-text"
             >
               Show {Math.min(WINDOW_STEP, hidden)} earlier messages
             </button>
@@ -117,7 +117,7 @@ export const MessageList = ({
           type="button"
           data-testid="chat-scroll-to-end"
           onClick={scrollToEnd}
-          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border-strong bg-overlay px-3 py-1.5 text-xs text-text-muted shadow-2 hover:text-text"
+          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border-strong bg-overlay px-3 py-1.5 text-meta text-text-muted shadow-2 hover:text-text"
         >
           <ChevronDownIcon className="size-3.5" />
           Scroll to latest
@@ -134,12 +134,12 @@ const LoadEarlier = ({ earlier, onLoad }: { earlier: EarlierMessages; onLoad: ()
       data-testid="chat-load-earlier"
       disabled={earlier.loading}
       onClick={onLoad}
-      className="rounded-md border border-border px-3 py-1 text-xs text-text-muted hover:bg-hover hover:text-text disabled:opacity-60"
+      className="rounded-md border border-border px-3 py-1 text-meta text-text-muted hover:bg-hover hover:text-text disabled:opacity-60"
     >
       {earlier.loading ? "Loading earlier messages…" : "Load earlier messages"}
     </button>
     {earlier.error ? (
-      <p data-testid="chat-load-earlier-error" role="alert" className="text-[12px] text-blocked">
+      <p data-testid="chat-load-earlier-error" role="alert" className="text-meta text-blocked">
         Could not load earlier messages ({earlier.error}).
       </p>
     ) : null}
@@ -214,7 +214,7 @@ const ActivityRow = ({
   const now = useNow(1_000);
   const shown = useStreamingReveal(liveText, true);
   return (
-    <div data-testid={`${worker.testIdPrefix}-activity`} className="pb-4">
+    <div data-testid={`${worker.testIdPrefix}-activity`} className="pb-5">
       {workLog}
       {shown ? (
         <div data-testid={`${worker.testIdPrefix}-live-text`} className="min-w-0 px-1 py-0.5">
@@ -224,7 +224,7 @@ const ActivityRow = ({
       <div
         data-testid={`${worker.testIdPrefix}-working`}
         role="status"
-        className="flex items-center gap-2 px-1 pt-1.5 text-[12px] text-text-subtle"
+        className="flex items-center gap-2 px-1 pt-1.5 text-meta text-text-subtle"
       >
         <Spinner className="size-3" />
         <span>

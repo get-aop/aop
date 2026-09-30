@@ -1,6 +1,7 @@
 import { CheckIcon, ChevronsUpDownIcon, CopyIcon } from "lucide-react";
 import type { AnchorHTMLAttributes, HTMLAttributes, MouseEvent, ReactNode } from "react";
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
+import remarkBreaks from "remark-breaks";
 import { defaultRemarkPlugins, Streamdown } from "streamdown";
 import { openExternalUrl } from "../../api/client";
 import { lazyCodeHighlighter } from "../../components/lazy-code-highlighter";
@@ -35,10 +36,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   if (!content.trim()) return null;
   return (
     <ChatLinkContext.Provider value={{ desktop, openLink, chips }}>
-      <div
-        className="chat-markdown text-sm leading-relaxed text-foreground"
-        data-testid="chat-markdown"
-      >
+      <div className="chat-markdown text-body text-foreground" data-testid="chat-markdown">
         <Streamdown plugins={plugins} components={components} remarkPlugins={remarkPlugins}>
           {content}
         </Streamdown>
@@ -48,7 +46,10 @@ export const ChatMarkdown = memo(function ChatMarkdown({
 });
 
 const plugins = { code: lazyCodeHighlighter };
-const remarkPlugins = [...Object.values(defaultRemarkPlugins), remarkLiteralHtml];
+// A single newline in a chat message is a line break, as in every chat app (plain markdown folds it
+// into a space). remark-breaks only touches newlines inside paragraph text, so lists, tables and
+// code stay as they are.
+const remarkPlugins = [...Object.values(defaultRemarkPlugins), remarkLiteralHtml, remarkBreaks];
 type ChildrenProps = { children?: ReactNode };
 
 const components = {

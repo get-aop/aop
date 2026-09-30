@@ -92,6 +92,19 @@
   --radius-modal: 14px;
   --radius-menu: 10px;
   --radius-composer: 22px;
+
+  /* Type scale of the project screen (chat, threads panel, top bar), sized for a 1440px window. */
+  --text-body: 0.9375rem; /* chat messages, transcript, composer, group bars, tabs */
+  --text-body--line-height: 1.6;
+  --text-title: 1.0625rem; /* thread row, thread card and project titles */
+  --text-title--line-height: 1.4;
+  --text-meta: 0.8125rem; /* status lines, times, counts, chips, hints */
+  --text-meta--line-height: 1.45;
+  --text-greeting: 2rem; /* "Welcome back." */
+  --text-greeting--line-height: 1.15;
+
+  /* The row every pane header shares, so the top bar, the tab strip and a thread's breadcrumb line up. */
+  --spacing-pane-header: 3.5rem;
 }
 
 /* Scalar + elevation tokens (plain vars so runtime var() consumers resolve). */

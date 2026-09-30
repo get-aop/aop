@@ -2,7 +2,7 @@ import type { Thread } from "@aop/common";
 import { effortLabel, modelLabel } from "../chat/runtime-options";
 
 const CHIP_CLASS =
-  "flex h-7 min-w-0 items-center whitespace-nowrap rounded-lg px-2 text-[12.5px] font-medium text-text-muted";
+  "flex h-8 min-w-0 items-center whitespace-nowrap rounded-lg px-2 text-meta font-medium text-text-muted";
 
 /**
  * The model and effort the thread runs on, in the composer's footer. A thread keeps the ones

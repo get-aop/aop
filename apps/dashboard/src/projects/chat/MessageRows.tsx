@@ -21,7 +21,7 @@ const COLLAPSED_MAX_LINES = 8;
 export const UserRow = memo(function UserRow({ message }: { message: UserMessage }) {
   return (
     <div
-      className="group flex flex-col items-end gap-1 pb-4"
+      className="group flex flex-col items-end gap-1 pb-5"
       data-testid="user-message"
       data-message-id={message.id}
       data-message-role="user"
@@ -50,7 +50,7 @@ export const AssistantRow = memo(function AssistantRow({
 }) {
   return (
     <div
-      className="group pb-4"
+      className="group pb-5"
       data-testid="assistant-message"
       data-message-id={message.id}
       data-message-role="assistant"
@@ -66,7 +66,7 @@ export const AssistantRow = memo(function AssistantRow({
         {message.failed ? (
           <p
             data-testid="assistant-message-failed"
-            className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-blocked"
+            className="mb-1 flex items-center gap-1.5 text-meta font-medium text-blocked"
           >
             <CircleAlertIcon aria-hidden="true" className="size-3.5" />
             This turn failed
@@ -117,7 +117,7 @@ export const ThreadReportRow = memo(function ThreadReportRow({
       data-message-id={message.id}
       data-message-role="thread-report"
       data-outcome={message.outcome}
-      className="pb-3 text-[12px] text-text-subtle"
+      className="pb-4 text-meta text-text-subtle"
     >
       <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
         <Icon aria-hidden="true" className={cn("mr-1 size-3.5", REPORT_TONE[message.outcome])} />
@@ -175,7 +175,7 @@ const FoldedText = ({ text }: { text: string }) => {
           aria-expanded={expanded}
           data-testid="user-message-fold"
           onClick={() => setExpanded((value) => !value)}
-          className="-ml-1 mt-1.5 h-6 rounded-md px-1.5 text-xs text-text-subtle hover:bg-hover hover:text-text-muted"
+          className="-ml-1 mt-1.5 h-7 rounded-md px-1.5 text-meta text-text-subtle hover:bg-hover hover:text-text-muted"
         >
           {expanded ? "Show less" : "Show full message"}
         </button>

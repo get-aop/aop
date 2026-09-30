@@ -142,7 +142,7 @@ const Body = ({
     return (
       <p
         data-testid="thread-empty"
-        className="flex-1 px-6 py-16 text-center text-[13px] text-text-subtle"
+        className="flex-1 px-6 py-16 text-center text-body text-text-subtle"
       >
         Nothing has been said in this thread yet.
       </p>

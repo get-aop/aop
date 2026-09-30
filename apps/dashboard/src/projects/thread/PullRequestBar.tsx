@@ -57,7 +57,7 @@ export const PullRequestBar = ({
   );
 };
 
-const SUMMARY_CLASS = "flex items-center gap-1.5 whitespace-nowrap text-[12.5px] text-text-muted";
+const SUMMARY_CLASS = "flex items-center gap-1.5 whitespace-nowrap text-meta text-text-muted";
 
 const StateSummary = ({ thread }: { thread: Thread }) => {
   const pullRequest = pullRequestOf(thread);
@@ -260,14 +260,14 @@ const Problem = ({
     data-code={problem.code}
     className="mx-6 mt-3 flex items-start gap-3 rounded-card border border-blocked/30 bg-blocked/5 px-3.5 py-2.5"
   >
-    <div className="min-w-0 flex-1 text-[12.5px] leading-snug">
+    <div className="min-w-0 flex-1 text-meta">
       <p className="text-text">
         <span className="font-medium">{HEADLINE[problem.op]}</span>{" "}
         <span data-testid="pr-error-message" className="text-text-muted">
           {problem.message}
         </span>
       </p>
-      <p data-testid="pr-error-code" className="mt-0.5 text-[11.5px] text-text-subtle">
+      <p data-testid="pr-error-code" className="mt-0.5 text-xs text-text-subtle">
         {problem.code}
       </p>
       <ProblemAction problem={problem} controls={controls} />

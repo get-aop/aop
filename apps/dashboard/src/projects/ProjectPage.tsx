@@ -41,7 +41,7 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
 };
 
 const ProjectLoading = () => (
-  <p data-testid="project-loading" className="p-6 text-[13px] text-text-subtle">
+  <p data-testid="project-loading" className="p-6 text-body text-text-subtle">
     Loading project…
   </p>
 );
@@ -51,11 +51,11 @@ const ProjectNotFound = () => (
     data-testid="project-not-found"
     className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center"
   >
-    <h1 className="text-[15px] font-medium text-text">This project does not exist</h1>
-    <p className="max-w-sm text-[13px] text-text-subtle">
+    <h1 className="text-title font-medium text-text">This project does not exist</h1>
+    <p className="max-w-sm text-body text-text-subtle">
       It may have been deleted, or the link is wrong.
     </p>
-    <Link to={projectsPath()} className="mt-2 text-[13px] text-running hover:underline">
+    <Link to={projectsPath()} className="mt-2 text-body text-running hover:underline">
       Back to all projects
     </Link>
   </div>

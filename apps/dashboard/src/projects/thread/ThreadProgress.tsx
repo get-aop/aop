@@ -21,13 +21,13 @@ export const ThreadProgress = ({ thread }: { thread: Thread }) => {
     <Collapsible
       defaultOpen
       data-testid="thread-progress"
-      className="group/progress mx-6 mt-3 rounded-card border border-border bg-raised"
+      className="group/progress mx-6 mt-1 rounded-card border border-border bg-raised"
     >
       <CollapsibleTrigger
         data-testid="thread-progress-toggle"
-        className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left outline-none"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left outline-none"
       >
-        <span className="min-w-0 flex-1 text-[12.5px] text-text-muted">
+        <span className="min-w-0 flex-1 text-meta text-text-muted">
           {line ? (
             <span data-testid="thread-progress-line" className="text-text">
               {line}
@@ -46,7 +46,7 @@ export const ThreadProgress = ({ thread }: { thread: Thread }) => {
         <CollapsibleContent>
           <ol
             data-testid="thread-steps-list"
-            className="flex max-h-40 flex-col gap-1.5 overflow-y-auto border-t border-border px-3.5 py-2.5"
+            className="flex max-h-48 flex-col gap-2.5 overflow-y-auto border-t border-border px-4 py-3"
           >
             {keyedSteps(thread.steps).map(({ key, step }) => (
               <StepItem key={key} step={step} working={thread.status === "working"} />
@@ -73,7 +73,7 @@ const StepItem = ({ step, working }: { step: ThreadStep; working: boolean }) => 
     data-testid="thread-step"
     data-state={step.state}
     className={cn(
-      "flex items-start gap-2.5 text-[13px] leading-snug",
+      "flex items-start gap-3 text-body",
       step.state === "pending" ? "text-text-subtle" : "text-text",
       step.state === "done" && "text-text-muted",
     )}
@@ -88,9 +88,9 @@ const StepMarker = ({ state, working }: { state: ThreadStep["state"]; working: b
     return (
       <span
         aria-hidden="true"
-        className="mt-px grid size-4 shrink-0 place-items-center rounded-full bg-ok/15 text-ok"
+        className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-ok/15 text-ok"
       >
-        <CheckIcon className="size-2.5" strokeWidth={3} />
+        <CheckIcon className="size-3" strokeWidth={3} />
       </span>
     );
   }
@@ -98,7 +98,7 @@ const StepMarker = ({ state, working }: { state: ThreadStep["state"]; working: b
     <span
       aria-hidden="true"
       className={cn(
-        "mt-px size-4 shrink-0 rounded-full border-[1.5px]",
+        "mt-0.5 size-5 shrink-0 rounded-full border-[1.5px]",
         state === "active"
           ? cn(
               "border-running",

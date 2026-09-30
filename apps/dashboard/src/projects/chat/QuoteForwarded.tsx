@@ -8,7 +8,7 @@ export const QuoteForwarded = ({ text }: { text: string }) => (
     data-testid="quote-forwarded"
     className="group/quote my-1.5 max-w-xl rounded-card border border-border bg-raised/60"
   >
-    <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-text-subtle outline-none hover:text-text-muted">
+    <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left text-meta text-text-subtle outline-none hover:text-text-muted">
       <CornerUpRightIcon aria-hidden="true" className="size-3.5" />
       <span className="flex-1">Message forwarded from project chat</span>
       <ChevronDownIcon
@@ -19,7 +19,7 @@ export const QuoteForwarded = ({ text }: { text: string }) => (
     <CollapsibleContent>
       <blockquote
         data-testid="quote-forwarded-text"
-        className="whitespace-pre-wrap border-t border-border px-3 py-2 text-[13px] leading-relaxed text-text-muted"
+        className="whitespace-pre-wrap border-t border-border px-3 py-2 text-body text-text-muted"
       >
         {text}
       </blockquote>

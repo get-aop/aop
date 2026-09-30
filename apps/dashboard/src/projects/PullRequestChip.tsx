@@ -46,7 +46,7 @@ export const PullRequestChip = ({
       data-checks={checks?.state}
       title={checks ? checksLabel(checks) : undefined}
       className={cn(
-        "inline-flex h-5 items-center gap-1 rounded-md border px-1.5 align-middle text-[11.5px] font-medium",
+        "inline-flex h-6 items-center gap-1 rounded-md border px-2 align-middle text-meta font-medium",
         TONE[pullRequest.state],
         className,
       )}

@@ -119,3 +119,56 @@ describe("real markdown still renders", () => {
     expect(root.querySelectorAll("table tbody td")).toHaveLength(2);
   });
 });
+
+describe("single line breaks", () => {
+  test("a newline inside a paragraph becomes a line break", () => {
+    const root = renderMarkdown("First line\nSecond line\nThird line");
+
+    expect(root.querySelectorAll("p")).toHaveLength(1);
+    expect(root.querySelectorAll("p br")).toHaveLength(2);
+    expect(root.querySelector("p")?.innerHTML).toMatch(
+      /First line<br>\s*Second line<br>\s*Third line/,
+    );
+  });
+
+  test("a blank line still starts a new paragraph, with no extra break", () => {
+    const root = renderMarkdown("One\n\nTwo");
+
+    expect(root.querySelectorAll("p")).toHaveLength(2);
+    expect(root.querySelector("br")).toBeNull();
+  });
+
+  test("list items, nested lists and tables get no stray breaks", () => {
+    const root = renderMarkdown(
+      ["- one", "- two", "  - nested", "", "| a | b |", "| - | - |", "| 1 | 2 |"].join("\n"),
+    );
+
+    expect(root.querySelectorAll("li")).toHaveLength(3);
+    expect(root.querySelectorAll("table tbody td")).toHaveLength(2);
+    expect(root.querySelector("br")).toBeNull();
+  });
+
+  test("a wrapped list item keeps its breaks inside the item", () => {
+    const root = renderMarkdown("1. first\n   continued\n2. second");
+
+    expect(root.querySelectorAll("ol > li")).toHaveLength(2);
+    expect(root.querySelector("ol > li")?.innerHTML).toMatch(/first<br>\s*continued/);
+  });
+
+  test("code blocks keep their newlines and gain no <br>", async () => {
+    const root = renderMarkdown("Before\nafter\n\n```ts\nconst a = 1;\nconst b = 2;\n```");
+
+    await waitFor(() => expect(root.querySelector("pre code")).toBeTruthy());
+    expect(root.querySelector("pre br")).toBeNull();
+    expect(root.querySelector("pre code")?.textContent).toContain("const a = 1;\nconst b = 2;");
+    expect(root.querySelector("p")?.innerHTML).toMatch(/Before<br>\s*after/);
+  });
+
+  test("angle-bracket text survives across a line break", () => {
+    const root = renderMarkdown("Use <your-token>\nthen Array<string>");
+
+    expect(root.textContent).toContain("<your-token>");
+    expect(root.textContent).toContain("Array<string>");
+    expect(root.querySelector("p br")).toBeTruthy();
+  });
+});

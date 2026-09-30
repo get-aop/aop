@@ -17,7 +17,7 @@ export const ThreadChip = ({ threadId }: { threadId: string }) => {
     return (
       <span
         data-testid="thread-chip-missing"
-        className="mx-0.5 inline-flex items-center rounded-md border border-dashed border-border-strong px-1.5 text-[12.5px] text-text-subtle"
+        className="mx-0.5 inline-flex items-center rounded-md border border-dashed border-border-strong px-1.5 text-text-subtle"
       >
         {loaded ? "Deleted thread" : "Thread"}
       </span>
@@ -33,7 +33,7 @@ export const ThreadChip = ({ threadId }: { threadId: string }) => {
           data-thread-id={thread.id}
           data-status={thread.status}
           data-chat-chip=""
-          className="mx-0.5 inline-flex max-w-[18rem] items-center gap-1.5 rounded-md border border-border bg-raised px-1.5 align-baseline text-[12.5px] font-medium text-text transition-colors duration-[120ms] hover:bg-hover"
+          className="mx-0.5 inline-flex max-w-[18rem] items-center gap-1.5 rounded-md border border-border bg-raised px-1.5 align-baseline font-medium text-text transition-colors duration-[120ms] hover:bg-hover"
         >
           <ThreadStatusDot status={thread.status} className="size-1.5" />
           <span className="truncate">{thread.title}</span>
@@ -51,7 +51,7 @@ export const ThreadChipDetails = ({ thread, now }: { thread: Thread; now: number
   const blocked = thread.status === "waiting-on-you";
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="flex items-center gap-2 text-[12px]">
+      <p className="flex items-center gap-2 text-meta">
         <ThreadStatusDot status={thread.status} />
         <span
           data-testid="thread-chip-status"
@@ -60,10 +60,10 @@ export const ThreadChipDetails = ({ thread, now }: { thread: Thread; now: number
           {THREAD_STATUS_LABEL[thread.status]}
         </span>
       </p>
-      <p data-testid="thread-chip-title" className="text-[13px] font-medium leading-snug text-text">
+      <p data-testid="thread-chip-title" className="text-body font-medium text-text">
         {thread.title}
       </p>
-      <p data-testid="thread-chip-activity" className="text-[12px] text-text-subtle">
+      <p data-testid="thread-chip-activity" className="text-meta text-text-subtle">
         {repliesLabel(thread.repliesCount)} · {formatAge(thread.lastActivityAt, now)}
       </p>
     </div>

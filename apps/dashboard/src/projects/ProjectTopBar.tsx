@@ -36,7 +36,7 @@ export const ProjectTopBar = ({
   return (
     <header
       data-testid="project-topbar"
-      className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2"
+      className="flex h-pane-header shrink-0 items-center gap-2 border-b border-border px-2"
     >
       <ShellNav />
       <Link
@@ -45,7 +45,7 @@ export const ProjectTopBar = ({
         className="flex min-w-0 items-center gap-2 rounded-row px-1.5 py-1 hover:bg-hover"
       >
         <ProjectTile project={project} />
-        <h1 data-testid="project-title" className="truncate text-[14px] font-semibold text-text">
+        <h1 data-testid="project-title" className="truncate text-title font-semibold text-text">
           {project.name}
         </h1>
       </Link>
@@ -65,7 +65,7 @@ export const ProjectTopBar = ({
       {project.status !== "active" ? (
         <span
           data-testid="project-status-tag"
-          className="shrink-0 rounded-md border border-border-strong px-1.5 text-[11px] font-medium capitalize text-text-muted"
+          className="shrink-0 rounded-md border border-border-strong px-1.5 text-xs font-medium capitalize text-text-muted"
         >
           {project.status}
         </span>
@@ -74,7 +74,7 @@ export const ProjectTopBar = ({
         <span
           data-testid="project-stream-state"
           data-state={connection}
-          className="hidden shrink-0 items-center gap-1.5 text-[11.5px] text-text-subtle lg:flex"
+          className="hidden shrink-0 items-center gap-1.5 text-meta text-text-subtle lg:flex"
         >
           <span
             className={cn("size-1.5 rounded-full", connection === "live" ? "bg-ok" : "bg-waiting")}

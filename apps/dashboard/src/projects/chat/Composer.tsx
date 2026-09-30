@@ -95,46 +95,52 @@ export const Composer = ({
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={onKeyDown}
         className={cn(
-          "block max-h-[220px] resize-none bg-transparent px-4 text-[14px] leading-[20px] text-text outline-none [field-sizing:content] placeholder:text-text-subtle disabled:cursor-not-allowed",
-          compact ? "min-h-[40px] min-w-0 flex-1 pb-2 pt-2.5" : "min-h-[52px] w-full pb-1 pt-3.5",
+          "block max-h-[220px] resize-none bg-transparent px-5 text-body text-text outline-none [field-sizing:content] placeholder:text-text-subtle disabled:cursor-not-allowed",
+          compact ? "min-h-[44px] min-w-0 flex-1 pb-2 pt-2.5" : "min-h-[60px] w-full pb-1 pt-4",
         )}
       />
       {error ? (
         <p
           role="alert"
           data-testid="composer-error"
-          className={cn("px-4 pb-1 text-[12px] text-blocked", compact && "order-last basis-full")}
+          className={cn("px-5 pb-1 text-meta text-blocked", compact && "order-last basis-full")}
         >
           {error}
         </p>
       ) : null}
-      <div className={cn("flex items-center gap-1 px-2.5", compact ? "pb-1.5" : "pb-2.5")}>
-        <div className="flex min-w-0 flex-1 items-center gap-1">{chips}</div>
-        {onStop ? (
-          <Button
+      <div
+        className={cn("flex flex-wrap items-center gap-1 px-2.5", compact ? "pb-1.5" : "pb-2.5")}
+      >
+        <div className={cn("flex min-w-0 flex-1 items-center gap-1", !compact && "basis-48")}>
+          {chips}
+        </div>
+        <div className="ml-auto flex items-center">
+          {onStop ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="composer-stop"
+              aria-keyshortcuts="Escape"
+              onClick={onStop}
+              className="mr-1"
+            >
+              <SquareIcon aria-hidden="true" className="fill-current" />
+              Stop
+              <Kbd>Esc</Kbd>
+            </Button>
+          ) : null}
+          <button
             type="button"
-            size="sm"
-            variant="outline"
-            data-testid="composer-stop"
-            aria-keyshortcuts="Escape"
-            onClick={onStop}
-            className="mr-1"
+            data-testid="composer-send"
+            aria-label="Send message"
+            disabled={!canSend}
+            onClick={() => void submit()}
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-[transform,opacity] duration-150 enabled:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"
           >
-            <SquareIcon aria-hidden="true" className="fill-current" />
-            Stop
-            <Kbd>Esc</Kbd>
-          </Button>
-        ) : null}
-        <button
-          type="button"
-          data-testid="composer-send"
-          aria-label="Send message"
-          disabled={!canSend}
-          onClick={() => void submit()}
-          className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-[transform,opacity] duration-150 enabled:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30"
-        >
-          <ArrowUpIcon aria-hidden="true" className="size-4" strokeWidth={2.25} />
-        </button>
+            <ArrowUpIcon aria-hidden="true" className="size-4" strokeWidth={2.25} />
+          </button>
+        </div>
       </div>
     </div>
   );

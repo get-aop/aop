@@ -57,12 +57,12 @@ export const ThreadHeader = ({
   const blocked = thread.status === "waiting-on-you";
 
   return (
-    <header data-testid="thread-header" className="shrink-0 px-6 pt-3">
-      <div className="flex items-center gap-2">
+    <header data-testid="thread-header" className="shrink-0 px-6">
+      <div className="flex min-h-pane-header items-center gap-2 py-1">
         <Link
           to={projectPath(project.id)}
           data-testid="thread-back"
-          className="-ml-1 inline-flex shrink-0 items-center rounded-row px-1 text-[13px] text-text-subtle transition-colors duration-[120ms] hover:text-text"
+          className="-ml-1 inline-flex shrink-0 items-center rounded-row px-1 text-body text-text-subtle transition-colors duration-[120ms] hover:text-text"
         >
           Threads
         </Link>
@@ -70,7 +70,7 @@ export const ThreadHeader = ({
         <h2
           data-testid="thread-title"
           title={thread.title}
-          className="min-w-0 flex-1 truncate text-[15px] font-semibold text-text"
+          className="min-w-0 flex-1 line-clamp-2 text-body font-medium text-text"
         >
           {thread.title}
         </h2>
@@ -87,7 +87,7 @@ export const ThreadHeader = ({
       </div>
       <div
         data-testid="thread-meta"
-        className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-text-muted"
+        className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pb-1 text-meta text-text-muted"
       >
         <MetaItem testId="thread-status" className={cn(blocked && "text-waiting")}>
           <ThreadStatusDot status={thread.status} />

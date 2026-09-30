@@ -23,7 +23,7 @@ export const WorkLog = ({ turn }: { turn: ThreadTurnActivity }) => {
     >
       <CollapsibleTrigger
         data-testid="work-log-toggle"
-        className="flex max-w-full items-center gap-1.5 rounded-row px-1 py-0.5 text-[12px] text-text-subtle outline-none transition-colors duration-[120ms] hover:text-text-muted"
+        className="flex max-w-full items-center gap-1.5 rounded-row px-1 py-0.5 text-meta text-text-subtle outline-none transition-colors duration-[120ms] hover:text-text-muted"
       >
         <ChevronRightIcon
           aria-hidden="true"
@@ -63,15 +63,12 @@ const Row = ({ row }: { row: ActivityRow }) => (
   <li
     data-testid="work-log-row"
     data-status={row.status}
-    className="flex min-w-0 items-baseline gap-2 text-[12px] leading-snug"
+    className="flex min-w-0 items-baseline gap-2 text-meta"
   >
     <RowStatus status={row.status} />
     <span className="shrink-0 font-medium text-text-muted">{row.label}</span>
     {row.detail ? (
-      <span
-        className="min-w-0 truncate font-mono text-[11.5px] text-text-subtle"
-        title={row.detail}
-      >
+      <span className="min-w-0 truncate font-mono text-xs text-text-subtle" title={row.detail}>
         {row.detail}
       </span>
     ) : null}

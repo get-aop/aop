@@ -55,7 +55,7 @@ export const ChatThreadCard = ({
       data-status={thread.status}
       data-checks-failing={failing ? "true" : undefined}
       className={cn(
-        "relative my-2 flex max-w-xl flex-col gap-1.5 rounded-card border bg-raised p-3 transition-colors duration-[120ms] hover:bg-hover",
+        "relative my-2 flex max-w-xl flex-col gap-2 rounded-card border bg-raised px-4 py-3 transition-colors duration-[120ms] hover:bg-hover",
         shown === "needs-call"
           ? "border-waiting/40"
           : failing
@@ -63,13 +63,13 @@ export const ChatThreadCard = ({
             : "border-border",
       )}
     >
-      <header className="flex items-center gap-2">
+      <header className="flex items-center gap-2.5">
         <VariantIcon variant={shown} thread={thread} failing={failing} />
-        <h4 className="min-w-0 flex-1 text-[13.5px] font-medium leading-snug text-text">
+        <h4 className="min-w-0 flex-1 text-title font-medium text-text">
           <Link
             to={threadPath(projectId, thread.id)}
             data-testid="chat-thread-card-link"
-            className="line-clamp-1 outline-none after:absolute after:inset-0 after:rounded-card after:content-['']"
+            className="line-clamp-2 outline-none after:absolute after:inset-0 after:rounded-card after:content-['']"
           >
             {thread.title}
           </Link>
@@ -138,14 +138,11 @@ const CardBody = ({ thread, variant }: { thread: Thread; variant: ThreadCardVari
     const { question, options } = thread.blockedQuestion;
     return (
       <>
-        <p data-testid="chat-thread-card-question" className="text-[13px] leading-snug text-text">
+        <p data-testid="chat-thread-card-question" className="text-body text-text">
           {question}
         </p>
         {options.length > 0 ? (
-          <p
-            data-testid="chat-thread-card-options"
-            className="text-[12.5px] leading-snug text-text-muted"
-          >
+          <p data-testid="chat-thread-card-options" className="text-meta text-text-muted">
             Reply with:{" "}
             {options
               .map(({ label, recommended }) => (recommended ? `${label} (recommended)` : label))
@@ -169,10 +166,7 @@ const CardBody = ({ thread, variant }: { thread: Thread; variant: ThreadCardVari
   return (
     <>
       {line ? (
-        <p
-          data-testid="chat-thread-card-status"
-          className="line-clamp-2 text-[12.5px] text-text-muted"
-        >
+        <p data-testid="chat-thread-card-status" className="line-clamp-2 text-meta text-text-muted">
           {line}
         </p>
       ) : null}
@@ -198,7 +192,7 @@ const UnavailableCard = ({
     data-testid="chat-thread-card-unavailable"
     data-thread-id={threadId}
     data-variant={variant}
-    className="my-2 max-w-xl rounded-card border border-dashed border-border-strong p-3 text-[12.5px] text-text-subtle"
+    className="my-2 max-w-xl rounded-card border border-dashed border-border-strong px-4 py-3 text-meta text-text-subtle"
   >
     {unavailableReason(loaded, error, projectId)}
   </article>

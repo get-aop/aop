@@ -56,7 +56,7 @@ export const ThreadPane = ({
         projectId={project.id}
         subject="this thread"
         error={threadsError}
-        className="p-6 text-[13px]"
+        className="p-6 text-body"
       />
     );
   }
@@ -117,7 +117,7 @@ const ThreadView = ({
                 {changed > 0 ? (
                   <span
                     data-testid="thread-tab-changes-count"
-                    className="ml-1.5 rounded-md bg-hover px-1.5 text-[11px] font-semibold tabular-nums text-text-muted"
+                    className="ml-1.5 rounded-md bg-hover px-1.5 text-xs font-semibold tabular-nums text-text-muted"
                   >
                     {changed}
                   </span>
@@ -167,7 +167,7 @@ const TabButton = ({
     aria-current={active ? "page" : undefined}
     onClick={onSelect}
     className={cn(
-      "-mb-px flex h-9 items-center border-b-2 text-[13px] font-medium transition-colors duration-[120ms]",
+      "-mb-px flex h-10 items-center border-b-2 text-body font-medium transition-colors duration-[120ms]",
       active ? "border-text text-text" : "border-transparent text-text-muted hover:text-text",
     )}
   >
@@ -190,7 +190,7 @@ const useMarkRead = (thread: Thread): void => {
 };
 
 const ThreadLoading = () => (
-  <p data-testid="thread-loading" className="p-6 text-[13px] text-text-subtle">
+  <p data-testid="thread-loading" className="p-6 text-body text-text-subtle">
     Loading thread…
   </p>
 );
@@ -200,11 +200,11 @@ const ThreadMissing = ({ project }: { project: Project }) => (
     data-testid="thread-not-found"
     className="flex flex-1 flex-col items-center justify-center gap-1.5 px-6 py-16 text-center"
   >
-    <h2 className="text-[14px] font-medium text-text">Thread not found</h2>
-    <p className="max-w-sm text-[13px] text-text-subtle">
+    <h2 className="text-title font-medium text-text">Thread not found</h2>
+    <p className="max-w-sm text-body text-text-subtle">
       It may have been deleted, or it belongs to another project.
     </p>
-    <Link to={projectPath(project.id)} className="mt-2 text-[13px] text-running hover:underline">
+    <Link to={projectPath(project.id)} className="mt-2 text-body text-running hover:underline">
       Back to the project
     </Link>
   </div>

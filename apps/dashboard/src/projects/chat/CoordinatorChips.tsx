@@ -19,7 +19,7 @@ import { effortLabel, effortOptions, modelLabel, modelOptions } from "./runtime-
 const DEFAULT_VALUE = "default";
 
 const CHIP_CLASS =
-  "flex h-7 min-w-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 text-[12.5px] font-medium text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text disabled:opacity-50";
+  "flex h-8 min-w-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 text-meta font-medium text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text disabled:opacity-50";
 
 /**
  * The model and effort the project's coordinator runs on, in the composer's footer as in the

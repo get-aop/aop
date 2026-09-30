@@ -280,9 +280,9 @@ describe("the compact box", () => {
     renderComposer();
 
     expect(compact.box).toContain("flex-wrap");
-    expect(compact.field).toContain("min-h-[40px]");
+    expect(compact.field).toContain("min-h-[44px]");
     expect(screen.getByTestId("composer").className).not.toContain("flex-wrap");
-    expect(input().className).toContain("min-h-[52px]");
+    expect(input().className).toContain("min-h-[60px]");
   });
 
   test("still sends, and its refusal shows on a row of its own", async () => {

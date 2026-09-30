@@ -24,18 +24,14 @@ export const ThreadUsageChip = ({ thread }: { thread: Thread }) => {
           type="button"
           data-testid="thread-usage"
           data-tokens={totalTokens(totals)}
-          className="flex items-center gap-1.5 rounded-row text-[12px] text-text-muted transition-colors duration-[120ms] hover:text-text"
+          className="flex items-center gap-1.5 rounded-row text-meta text-text-muted transition-colors duration-[120ms] hover:text-text"
         >
           <CoinsIcon aria-hidden="true" className="size-3.5 text-text-subtle" />
           {formatTokens(totalTokens(totals))} tokens
           {totals.costUsd === null ? "" : ` · ${formatCost(totals.costUsd)}`}
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        data-testid="thread-usage-details"
-        className="w-72 text-[12.5px]"
-      >
+      <PopoverContent align="start" data-testid="thread-usage-details" className="w-72 text-meta">
         <UsageDetails usage={usage} />
       </PopoverContent>
     </Popover>

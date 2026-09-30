@@ -42,8 +42,8 @@ export const AnswerCard = ({
       <header className="flex items-start gap-2.5">
         <HandIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-waiting" />
         <div className="min-w-0">
-          <p className="text-[12px] font-medium text-waiting">Waiting on you</p>
-          <p data-testid="answer-question" className="mt-0.5 text-[14px] leading-snug text-text">
+          <p className="text-meta font-medium text-waiting">Waiting on you</p>
+          <p data-testid="answer-question" className="mt-0.5 text-body text-text">
             {question}
           </p>
         </div>
@@ -64,7 +64,7 @@ export const AnswerCard = ({
               >
                 {label}
                 {recommended ? (
-                  <span className="text-[11px] font-normal opacity-70">Recommended</span>
+                  <span className="text-xs font-normal opacity-70">Recommended</span>
                 ) : null}
               </Button>
             </li>
@@ -72,7 +72,7 @@ export const AnswerCard = ({
         </ul>
       ) : null}
       {error ? (
-        <p role="alert" data-testid="answer-error" className="text-[12px] text-blocked">
+        <p role="alert" data-testid="answer-error" className="text-meta text-blocked">
           {error}
         </p>
       ) : null}

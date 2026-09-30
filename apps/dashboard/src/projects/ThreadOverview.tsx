@@ -44,14 +44,14 @@ export const ThreadOverview = ({
         projectId={project.id}
         subject="this project's threads"
         error={threadsError}
-        className="p-6 text-[13px]"
+        className="p-6 text-body"
       />
     );
   }
 
   if (!threadsLoaded) {
     return (
-      <p data-testid="threads-loading" className="p-6 text-[13px] text-text-subtle">
+      <p data-testid="threads-loading" className="p-6 text-body text-text-subtle">
         Loading threads…
       </p>
     );
@@ -67,15 +67,11 @@ const NoThreads = ({ onNewThread }: { onNewThread: () => void }) => (
     className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center"
   >
     <div className="flex flex-col gap-1.5">
-      <h2 className="text-[14px] font-medium text-text">No threads yet</h2>
-      <p
-        data-testid="project-attention"
-        data-waiting={0}
-        className="text-[12.5px] text-text-subtle"
-      >
+      <h2 className="text-title font-medium text-text">No threads yet</h2>
+      <p data-testid="project-attention" data-waiting={0} className="text-meta text-text-subtle">
         {attentionSentence(0)}
       </p>
-      <p className="max-w-sm text-[13px] text-text-subtle">
+      <p className="max-w-sm text-body text-text-subtle">
         Tell the coordinator what you want done. It starts a thread for each piece of work and
         reports back here.
       </p>
@@ -102,12 +98,12 @@ const OverviewBody = ({
   );
 
   return (
-    <div data-testid="thread-overview" className="flex flex-col gap-4 px-4 pb-6 pt-3">
+    <div data-testid="thread-overview" className="flex flex-col gap-5 px-5 pb-6 pt-4">
       <Greeting waiting={attentionOf(threads).waiting} />
       {filters.searchOpen ? <SearchBox query={query} onChange={filters.setQuery} /> : null}
       <ResultCount shown={visible.length} total={threads.length} filters={filters} />
       {visible.length === 0 ? (
-        <p data-testid="threads-no-match" className="py-8 text-center text-[13px] text-text-subtle">
+        <p data-testid="threads-no-match" className="py-8 text-center text-body text-text-subtle">
           {query.trim() ? `No threads match “${query.trim()}”.` : "No threads match the filter."}
         </p>
       ) : (
@@ -128,7 +124,7 @@ const ResultCount = ({
   filters: OverviewFilters;
 }) =>
   filters.active ? (
-    <div className="flex items-center justify-between text-[12px] text-text-subtle">
+    <div className="flex items-center justify-between text-meta text-text-subtle">
       <span data-testid="thread-count" className="tabular-nums">
         {shown} of {total}
       </span>
@@ -162,7 +158,7 @@ const Groups = ({ threads, open }: { threads: readonly Thread[]; open: "all" | "
     });
 
   return (
-    <div data-testid="thread-groups" className="flex flex-col gap-2">
+    <div data-testid="thread-groups" className="flex flex-col gap-2.5">
       {groups.map(({ status, threads: inGroup }) => (
         <GroupSection
           key={status}
@@ -195,7 +191,7 @@ const SearchBox = ({ query, onChange }: { query: string; onChange: (query: strin
         placeholder="Search threads"
         value={query}
         onChange={(event) => onChange(event.target.value)}
-        className="h-8 pl-8 text-[13px]"
+        className="h-9 pl-8 text-meta md:text-meta"
       />
     </div>
   );
@@ -203,17 +199,17 @@ const SearchBox = ({ query, onChange }: { query: string; onChange: (query: strin
 
 /** "Welcome back." and, under it, how many threads wait on the person; the groups below carry the rest of the counts. */
 const Greeting = ({ waiting }: { waiting: number }) => (
-  <div className="flex flex-col gap-1 px-1">
+  <div className="flex flex-col gap-1.5 px-1">
     <h2
       data-testid="overview-greeting"
-      className="font-display text-[32px] font-normal leading-tight tracking-[-0.01em] text-text"
+      className="font-display text-greeting font-normal tracking-[-0.01em] text-text"
     >
       Welcome back.
     </h2>
     <p
       data-testid="project-attention"
       data-waiting={waiting}
-      className={cn("text-[14px]", waiting > 0 ? "text-waiting" : "text-text-subtle")}
+      className={cn("text-body", waiting > 0 ? "text-waiting" : "text-text-subtle")}
     >
       {attentionSentence(waiting)}
     </p>
@@ -240,11 +236,11 @@ const GroupSection = ({
         data-testid="thread-group-toggle"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex h-9 w-full items-center gap-2 rounded-row bg-hover px-3 text-[13.5px] font-medium text-text transition-colors duration-[120ms] hover:bg-active"
+        className="flex h-10 w-full items-center gap-2.5 rounded-row bg-hover px-3.5 text-body font-medium text-text transition-colors duration-[120ms] hover:bg-active"
       >
         <ChevronDownIcon
           aria-hidden="true"
-          className={cn("size-3.5 text-text-subtle transition-transform", !open && "-rotate-90")}
+          className={cn("size-4 text-text-subtle transition-transform", !open && "-rotate-90")}
         />
         <ThreadStatusDot status={status} />
         <span className={cn(status === "waiting-on-you" && "text-waiting")}>
@@ -255,6 +251,6 @@ const GroupSection = ({
         </span>
       </button>
     </h2>
-    {open ? <div className="flex flex-col gap-0.5 pt-1">{children}</div> : null}
+    {open ? <div className="flex flex-col gap-1 pt-1.5">{children}</div> : null}
   </section>
 );
