@@ -2,10 +2,16 @@ import { getLogger } from "@aop/infra";
 import type { Kysely } from "kysely";
 import type { LocalServerContext } from "../context.ts";
 import type { NewChatCheckpointCleanupJob } from "../db/chat-history-schema.ts";
-import type { Database } from "../db/schema.ts";
+import type { ChatSession, Database } from "../db/schema.ts";
+import type { PublisherTransaction } from "../event-log/publisher.ts";
 import type { CheckpointGitOptions } from "../session-git/checkpoint-types.ts";
 import { processCheckpointCleanupJobs } from "./checkpoint-cleanup-service.ts";
-import { type ChatSessionCleanupPlan, planChatSessionCleanup } from "./session-graph-deletion.ts";
+import { createChatSessionRepository } from "./repository.ts";
+import {
+  type ChatSessionCleanupPlan,
+  type DeleteChatSessionGraphResult,
+  planChatSessionCleanup,
+} from "./session-graph-deletion.ts";
 import type { MaintenanceScope } from "./session-mutation-lock.ts";
 
 const logger = getLogger("chat-history-maintenance");
@@ -24,9 +30,22 @@ export type ChatHistoryMaintenanceResult =
   | { success: true; deletedSessionIds: string[]; cleanupJobIds: string[] }
   | { success: false; error: ChatHistoryMaintenanceFailure };
 
+/**
+ * Wraps the deletion of one session in the transaction that makes it: `remove` deletes the
+ * session graph, so the caller can read what the rows will take with them before it and log
+ * entries after it, and both commit or neither does.
+ */
+export type SessionDeletion = (
+  tx: PublisherTransaction,
+  session: ChatSession,
+  remove: () => Promise<DeleteChatSessionGraphResult>,
+) => Promise<DeleteChatSessionGraphResult>;
+
 export interface ChatHistoryMaintenanceOptions {
   /** Kills provider processes and finalizes durable runs before anything is planned. */
   abortSessions?: (sessionIds: string[]) => Promise<void>;
+  /** Tells clients about the sessions that go, in the transaction that deletes each one. */
+  deletion?: SessionDeletion;
   processJobs?: typeof processCheckpointCleanupJobs;
   git?: CheckpointGitOptions;
   now?: () => Date;
@@ -156,7 +175,7 @@ const runMaintenance = async (
       };
     }
 
-    return deletePreflightedSessions(ctx, preflighted.plans, clock);
+    return deletePreflightedSessions(ctx, preflighted.plans, clock, options.deletion);
   });
 };
 
@@ -197,15 +216,22 @@ const deletePreflightedSessions = async (
   ctx: LocalServerContext,
   plans: ChatSessionCleanupPlan[],
   clock: () => Date,
+  around: SessionDeletion = (_tx, _session, remove) => remove(),
 ): Promise<ChatHistoryMaintenanceResult> => {
   const deletedSessionIds: string[] = [];
   const cleanupJobIds = plans.flatMap((plan) => plan.jobs.map((job) => job.id));
   for (const plan of plans) {
     try {
-      const deletion = await ctx.chatSessionRepository.deleteGraph(plan.sessionId, {
-        now: clock().toISOString(),
-        expectedUpdatedAt: plan.sessionUpdatedAt,
-        expectedCleanupJobIds: plan.jobs.map((job) => job.id),
+      const deletion = await ctx.eventPublisher.transaction(async (tx) => {
+        const sessions = createChatSessionRepository(tx.db);
+        const session = await sessions.getById(plan.sessionId);
+        const remove = () =>
+          sessions.deleteGraph(plan.sessionId, {
+            now: clock().toISOString(),
+            expectedUpdatedAt: plan.sessionUpdatedAt,
+            expectedCleanupJobIds: plan.jobs.map((job) => job.id),
+          });
+        return session ? around(tx, session, remove) : remove();
       });
       if (deletion.deleted) deletedSessionIds.push(plan.sessionId);
     } catch (error) {

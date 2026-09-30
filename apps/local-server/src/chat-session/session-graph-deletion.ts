@@ -1,4 +1,4 @@
-import type { Kysely } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import type { NewChatCheckpointCleanupJob } from "../db/chat-history-schema.ts";
 import type { Database } from "../db/schema.ts";
 import {
@@ -79,7 +79,8 @@ export const planChatSessionCleanup = async (
 
 /**
  * Deletes the whole session graph in one transaction after saving its cleanup
- * jobs. Planning or insertion failures abort before any row is removed.
+ * jobs. Planning or insertion failures abort before any row is removed. Given a
+ * transaction, the deletion joins it, so the caller can commit other writes with it.
  */
 export const deleteChatSessionGraph = async (
   db: Kysely<Database>,
@@ -91,7 +92,10 @@ export const deleteChatSessionGraph = async (
   if (!plan) return { deleted: false, cleanupJobIds: [] };
   requireFreshPlan(plan, options);
 
-  return db.transaction().execute(async (trx) => {
+  const inTransaction = <T>(work: (trx: Transaction<Database>) => Promise<T>): Promise<T> =>
+    db.isTransaction ? work(db as Transaction<Database>) : db.transaction().execute(work);
+
+  return inTransaction(async (trx) => {
     await insertChatCheckpointCleanupJobs(trx, plan.jobs);
 
     const runIds = await listRunIdsBySession(trx, sessionId);

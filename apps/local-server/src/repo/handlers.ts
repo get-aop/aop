@@ -13,6 +13,7 @@ import {
 import { forceAbortChatSessionsForPurge } from "../chat-session/service.ts";
 import type { LocalServerContext } from "../context.ts";
 import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
+import { announceThreadRemoval } from "../thread/purge-events.ts";
 import { extractRepoName } from "./repository.ts";
 
 const logger = getLogger("repos-handlers");
@@ -116,6 +117,7 @@ export const removeRepo = async (
   // again. A failure here preserves the registration, sessions, and paths.
   const chatPurge = await purgeRepoChatHistory(ctx, repo.id, {
     abortSessions: (sessionIds) => forceAbortChatSessionsForPurge(ctx, sessionIds),
+    deletion: announceThreadRemoval,
   });
   if (!chatPurge.success) {
     logger.error("Remove repo blocked: chat history cleanup failed for {repoId}: {message}", {
@@ -246,6 +248,7 @@ export const resetAllRuntimeData = async (
 ): Promise<ResetRuntimeDataResult> => {
   const chatPurge = await purgeAllChatHistory(ctx, {
     abortSessions: (sessionIds) => forceAbortChatSessionsForPurge(ctx, sessionIds),
+    deletion: announceThreadRemoval,
   });
   if (!chatPurge.success) {
     logger.error("Reset blocked: chat history cleanup failed: {message}", {
