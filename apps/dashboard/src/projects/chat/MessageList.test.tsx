@@ -269,3 +269,21 @@ describe("older messages the host still holds", () => {
     expect((screen.getByTestId("chat-load-earlier") as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+describe("scroll to latest", () => {
+  test("is a row under the transcript, not a float over it, and only while away from the end", () => {
+    renderList({ messages: [userMessage("u1", 1), reply("a1", 2)] });
+    expect(screen.queryByTestId("chat-scroll-to-end")).toBeNull();
+
+    const scroller = screen.getByTestId("chat-scroll");
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 2000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+    scroller.scrollTop = 0;
+    fireEvent.scroll(scroller);
+
+    const pill = screen.getByTestId("chat-scroll-to-end");
+    expect(pill.className).not.toContain("absolute");
+    expect(pill.parentElement?.contains(scroller)).toBe(false);
+    expect(pill.parentElement?.parentElement?.contains(scroller)).toBe(true);
+  });
+});

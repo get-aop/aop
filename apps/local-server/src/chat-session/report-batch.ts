@@ -5,6 +5,7 @@ import type { ChatMessage, ChatRun, ChatSession, Database } from "../db/schema.t
 import { decodeStoredAttachmentMetadata } from "./message-images.ts";
 import { parseMessageOrigin } from "./message-origin.ts";
 import { coordinatorWakeTasks } from "./reply-state.ts";
+import { insertAnsweredRuns } from "./repository.ts";
 
 const logger = getLogger("chat-session", "report-batch");
 
@@ -83,25 +84,7 @@ export const loadReportBatch = async (
   oldest: ChatMessage,
 ): Promise<ChatMessage[]> => {
   if (!isThreadReport(oldest)) return [oldest];
-  const waiting = await ctx.db
-    .selectFrom("chat_messages")
-    .selectAll()
-    .where("session_id", "=", oldest.session_id)
-    .where("role", "=", "user")
-    .where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom("chat_runs")
-            .select("id")
-            .whereRef("chat_runs.user_message_id", "=", "chat_messages.id"),
-        ),
-      ),
-    )
-    .orderBy("turn_index", "asc")
-    .orderBy("created_at", "asc")
-    .orderBy("id", "asc")
-    .execute();
+  const waiting = await ctx.chatSessionRepository.listWaitingUserMessages(oldest.session_id);
   const batch: ChatMessage[] = [];
   for (const message of waiting) {
     if (!isThreadReport(message)) break;
@@ -161,41 +144,30 @@ export const consumeAnsweredMessages = async (
   const answered = input.alsoAnswered ?? [];
   if (answered.length === 0) return;
   const { session } = input;
-  await trx
-    .insertInto("chat_runs")
-    .values(
-      answered.map((message) => ({
-        id: generateTypeId("crun"),
-        session_id: input.sessionId,
-        user_message_id: message.id,
-        assistant_message_id: generateTypeId("smsg"),
-        runtime: session.runtime,
-        log_file_path: input.logFilePath,
-        status: "completed" as const,
-        runtime_session_id: session.runtime_session_id,
-        resume_session_id: session.runtime_session_id,
-        failure_kind: null,
-        interruption_kind: null,
-        context_strategy: input.contextStrategy,
-        workspace_path: input.workspacePath,
-        timeout_policy: input.timeoutPolicy,
-        retry_of_run_id: null,
-        runtime_session_state: null,
-        error_message: null,
-        created_at: at,
-        updated_at: at,
-      })),
-    )
-    .execute();
-  await trx
-    .updateTable("chat_messages")
-    .set({ disposition: "immediate" })
-    .where(
-      "id",
-      "in",
-      answered.map(({ id }) => id),
-    )
-    .execute();
+  await insertAnsweredRuns(
+    trx,
+    answered.map((message) => ({
+      id: generateTypeId("crun"),
+      session_id: input.sessionId,
+      user_message_id: message.id,
+      assistant_message_id: generateTypeId("smsg"),
+      runtime: session.runtime,
+      log_file_path: input.logFilePath,
+      status: "completed" as const,
+      runtime_session_id: session.runtime_session_id,
+      resume_session_id: session.runtime_session_id,
+      failure_kind: null,
+      interruption_kind: null,
+      context_strategy: input.contextStrategy,
+      workspace_path: input.workspacePath,
+      timeout_policy: input.timeoutPolicy,
+      retry_of_run_id: null,
+      runtime_session_state: null,
+      error_message: null,
+      created_at: at,
+      updated_at: at,
+    })),
+  );
 };
 
 export const isThreadReport = (message: ChatMessage): boolean =>

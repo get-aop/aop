@@ -52,7 +52,7 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
   );
 };
 
-/** The title, which is the link that opens the thread, led by its status dot and an unread dot. */
+/** The title, which is the link that opens the thread, led by its status dot alone; unread is a bolder title, so a row never shows two dots. */
 const CardTitle = ({ thread, failing }: { thread: Thread; failing: boolean }) => (
   <h3 className="flex min-w-0 items-center gap-2.5 text-title text-text">
     <ThreadStatusDot status={thread.status} className={cn(failing && "bg-blocked")} />
@@ -61,17 +61,10 @@ const CardTitle = ({ thread, failing }: { thread: Thread; failing: boolean }) =>
       data-testid="thread-card-link"
       className={cn(
         "line-clamp-2 min-w-0 outline-none after:absolute after:inset-0 after:rounded-row after:content-['']",
-        thread.unread ? "font-semibold" : "font-medium",
+        thread.unread ? "font-semibold" : "font-normal",
       )}
     >
-      {thread.unread ? (
-        <span
-          data-testid="thread-unread-dot"
-          role="img"
-          aria-label="Unread"
-          className="mr-1.5 inline-block size-1.5 -translate-y-px rounded-full bg-unread align-middle"
-        />
-      ) : null}
+      {thread.unread ? <span className="sr-only">Unread: </span> : null}
       {thread.title}
     </Link>
   </h3>

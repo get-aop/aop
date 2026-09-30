@@ -3,7 +3,7 @@ import type { Kysely, KyselyPlugin } from "kysely";
 import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import { CleanupManifestError } from "./checkpoint-cleanup-manifest.ts";
-import { createChatSessionRepository } from "./repository.ts";
+import { createChatSessionRepository, insertAnsweredRuns } from "./repository.ts";
 import { StaleChatSessionError } from "./session-graph-deletion.ts";
 import {
   countChatRows,
@@ -280,5 +280,70 @@ describe("chat session repository deletion", () => {
     expect(await repository.countMessages(TARGET)).toBe(4);
     expect(await repository.countMessages(KEEP)).toBe(2);
     expect(await repository.countMessages("csess_empty")).toBe(0);
+  });
+
+  test("lists the user messages no run has answered, oldest turn first, and only for that session", async () => {
+    const repository = createChatSessionRepository(db);
+    await seedChatSessionGraph(db, { sessionId: TARGET, turns: 1 });
+    await seedChatSessionGraph(db, { sessionId: KEEP, turns: 1 });
+    const waiting = (id: string, sessionId: string, turnIndex: number) =>
+      repository.createMessage({
+        id,
+        session_id: sessionId,
+        role: "user",
+        content: id,
+        action: null,
+        activity: null,
+        turn_index: turnIndex,
+        disposition: "queued",
+        created_at: "2026-07-24T10:00:00.000Z",
+      });
+    await waiting("umsg_late", TARGET, 3);
+    await waiting("umsg_early", TARGET, 2);
+    await waiting("umsg_other", KEEP, 2);
+
+    const listed = await repository.listWaitingUserMessages(TARGET);
+
+    expect(listed.map((message) => message.id)).toEqual(["umsg_early", "umsg_late"]);
+  });
+
+  test("answering messages stores a run for each and releases their queue label", async () => {
+    const repository = createChatSessionRepository(db);
+    const { runIds } = await seedChatSessionGraph(db, { sessionId: TARGET, turns: 1 });
+    await repository.createMessage({
+      id: "umsg_waiting",
+      session_id: TARGET,
+      role: "user",
+      content: "umsg_waiting",
+      action: null,
+      activity: null,
+      turn_index: 1,
+      disposition: "queued",
+      created_at: "2026-07-24T10:00:00.000Z",
+    });
+    const template = await db
+      .selectFrom("chat_runs")
+      .selectAll()
+      .where("id", "=", runIds[0] ?? "")
+      .executeTakeFirstOrThrow();
+
+    await db.transaction().execute((trx) =>
+      insertAnsweredRuns(trx, [
+        {
+          ...template,
+          id: "crun_answered",
+          user_message_id: "umsg_waiting",
+          assistant_message_id: "amsg_unused",
+        },
+      ]),
+    );
+
+    expect(await repository.listWaitingUserMessages(TARGET)).toEqual([]);
+    const message = await db
+      .selectFrom("chat_messages")
+      .select("disposition")
+      .where("id", "=", "umsg_waiting")
+      .executeTakeFirstOrThrow();
+    expect(message.disposition).toBe("immediate");
   });
 });

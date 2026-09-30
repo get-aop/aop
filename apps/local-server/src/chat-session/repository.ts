@@ -5,6 +5,7 @@ import type {
   ChatSessionUpdate,
   Database,
   NewChatMessage,
+  NewChatRun,
   NewChatSession,
 } from "../db/schema.ts";
 import {
@@ -42,6 +43,8 @@ export interface ChatSessionRepository {
   countMessages: (sessionId: string) => Promise<number>;
   countUnreadAssistantMessages: (sessionId: string, lastReadAt: string | null) => Promise<number>;
   createMessage: (message: NewChatMessage) => Promise<ChatMessage>;
+  /** The session's messages from the person that no run has answered yet, in the order they are answered. */
+  listWaitingUserMessages: (sessionId: string) => Promise<ChatMessage[]>;
 }
 
 export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRepository => {
@@ -214,7 +217,52 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
         .where("id", "=", message.id)
         .executeTakeFirstOrThrow();
     },
+
+    listWaitingUserMessages: (sessionId) =>
+      db
+        .selectFrom("chat_messages")
+        .selectAll()
+        .where("session_id", "=", sessionId)
+        .where("role", "=", "user")
+        .where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom("chat_runs")
+                .select("id")
+                .whereRef("chat_runs.user_message_id", "=", "chat_messages.id"),
+            ),
+          ),
+        )
+        .orderBy("turn_index", "asc")
+        .orderBy("created_at", "asc")
+        .orderBy("id", "asc")
+        .execute(),
   };
+};
+
+/**
+ * Inside the transaction that claims a run: stores a finished run for each message that run
+ * also answers, and drops their mid-run label. A message stops waiting when it has a run.
+ */
+export const insertAnsweredRuns = async (
+  trx: Kysely<Database>,
+  runs: readonly NewChatRun[],
+): Promise<void> => {
+  if (runs.length === 0) return;
+  await trx
+    .insertInto("chat_runs")
+    .values([...runs])
+    .execute();
+  await trx
+    .updateTable("chat_messages")
+    .set({ disposition: "immediate" })
+    .where(
+      "id",
+      "in",
+      runs.map((run) => run.user_message_id),
+    )
+    .execute();
 };
 
 const countUnreadAssistantMessages = async (

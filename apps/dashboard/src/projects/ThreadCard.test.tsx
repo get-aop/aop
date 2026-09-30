@@ -129,11 +129,16 @@ describe("ThreadCard", () => {
   test("an unread thread marks its title", () => {
     render(<ThreadCard now={NOW} thread={makeThread({ unread: true })} />);
     expect(card().getAttribute("data-unread")).toBe("true");
-    expect(screen.getByTestId("thread-unread-dot")).toBeTruthy();
+    expect(screen.getByTestId("thread-card-link").className).toContain("font-semibold");
+    expect(screen.getByTestId("thread-card-link").textContent).toContain("Unread");
+    // One leading dot: the status dot. Unread is not a second one.
+    expect(card().querySelectorAll("[data-testid='thread-status-dot']").length).toBe(1);
+    expect(card().querySelector("[data-testid='thread-unread-dot']")).toBeNull();
 
     cleanup();
     render(<ThreadCard now={NOW} thread={makeThread({ unread: false })} />);
-    expect(screen.queryByTestId("thread-unread-dot")).toBeNull();
+    expect(screen.getByTestId("thread-card-link").className).not.toContain("font-semibold");
+    expect(screen.getByTestId("thread-card-link").textContent).not.toContain("Unread");
   });
 
   test("its pull request is a chip that opens the pull request, and documents are counted", () => {

@@ -77,7 +77,7 @@ export const MessageList = ({
   };
 
   return (
-    <div className="relative flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 flex-col">
       <MessageScroller
         scrollerRef={scroller}
         data-testid="chat-scroll"
@@ -112,16 +112,19 @@ export const MessageList = ({
           ))}
         </div>
       </MessageScroller>
+      {/* Its own row under the transcript rather than a float over it: nothing it could cover. */}
       {atEnd ? null : (
-        <button
-          type="button"
-          data-testid="chat-scroll-to-end"
-          onClick={scrollToEnd}
-          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border-strong bg-overlay px-3 py-1.5 text-meta text-text-muted shadow-2 hover:text-text"
-        >
-          <ChevronDownIcon className="size-3.5" />
-          Scroll to latest
-        </button>
+        <div className="flex shrink-0 justify-center px-6 pb-1 pt-2">
+          <button
+            type="button"
+            data-testid="chat-scroll-to-end"
+            onClick={scrollToEnd}
+            className="flex items-center gap-1 rounded-md border border-border-strong bg-overlay px-3 py-1.5 text-meta text-text-muted shadow-2 hover:text-text"
+          >
+            <ChevronDownIcon className="size-3.5" />
+            Scroll to latest
+          </button>
+        </div>
       )}
     </div>
   );
