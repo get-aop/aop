@@ -98,6 +98,7 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
           "chat_sessions.pr_number",
           "chat_sessions.pr_url",
           "chat_sessions.pr_state",
+          "chat_sessions.pr_checks_json",
           "chat_sessions.target_json",
           "chat_sessions.last_activity_at",
           "chat_sessions.unread",

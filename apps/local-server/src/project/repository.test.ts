@@ -57,6 +57,21 @@ describe("project repository", () => {
     expect((await projects.getById("p1"))?.threadAccess).toBe("auto-accept-edits");
   });
 
+  test("stores whether the watcher fixes pull requests by itself, and a patch changes it", async () => {
+    const created = await projects.create({
+      id: "p1",
+      ...projectSettings({ autoFixPullRequests: false }),
+    });
+    expect(created.autoFixPullRequests).toBe(false);
+
+    const updated = await projects.update("p1", { autoFixPullRequests: true });
+
+    expect(updated?.autoFixPullRequests).toBe(true);
+    expect((await projects.getById("p1"))?.autoFixPullRequests).toBe(true);
+    // A patch that leaves it out leaves it as it is.
+    expect((await projects.update("p1", { goal: "Ship" }))?.autoFixPullRequests).toBe(true);
+  });
+
   test("keeps the order of the repos and returns null for an unknown project", async () => {
     await projects.create({ id: "p1", ...projectSettings({ repoIds: ["r3", "r1", "r2"] }) });
 

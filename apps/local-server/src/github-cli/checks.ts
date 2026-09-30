@@ -1,3 +1,4 @@
+import { attemptGh, type GhRead, ghFailure } from "./read.ts";
 import type { RunGh } from "./run-gh.ts";
 
 export interface GhPullRequestCheck {
@@ -33,23 +34,41 @@ export const listPullRequestChecksDetailed = async (
   repoPath: string,
   branchName: string,
 ): Promise<PullRequestChecksDetailed> => {
-  const result = await runGh(
+  const read = await readPullRequestChecks(runGh, repoPath, branchName);
+  // Unstructured failure (auth, network): preserve the legacy empty/pending view.
+  return read.ok ? read.value : { reported: true, checks: [] };
+};
+
+/**
+ * The checks of a pull request, named by its number or its branch. Unlike the view above, a read
+ * that gave no answer (auth, network, rate limit) says so, so a caller does not take it for a
+ * pull request whose checks are gone.
+ */
+export const readPullRequestChecks = async (
+  runGh: RunGh,
+  repoPath: string,
+  pullRequest: string,
+): Promise<GhRead<PullRequestChecksDetailed>> => {
+  const run = await attemptGh(
+    runGh,
     [
       "pr",
       "checks",
-      branchName,
+      pullRequest,
       "--json",
       "name,state,workflow,link,startedAt,completedAt,bucket,description",
     ],
     repoPath,
   );
+  if (!run.ran) return ghFailure(run.message);
+  const { result } = run;
   // gh exits non-zero with "no checks reported" when the branch has no CI at all.
-  if (NO_CHECKS_PATTERN.test(result.stderr)) return { reported: false, checks: [] };
+  if (NO_CHECKS_PATTERN.test(result.stderr))
+    return { ok: true, value: { reported: false, checks: [] } };
   // gh prints the JSON payload even on non-zero exits (pending = 8, failing = 1).
   const parsed = parseChecksJson(result.stdout);
-  if (parsed) return { reported: true, checks: parsed };
-  // Unstructured failure (auth, network): preserve the legacy empty/pending view.
-  return { reported: true, checks: [] };
+  if (parsed) return { ok: true, value: { reported: true, checks: parsed } };
+  return ghFailure(result.stderr.trim() || result.stdout.trim() || "GitHub CLI gave no checks");
 };
 
 const parseChecksJson = (stdout: string): GhPullRequestCheck[] | null => {

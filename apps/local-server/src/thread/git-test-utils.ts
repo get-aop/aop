@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CommandResult, RunGh } from "../github-cli/index.ts";
+import { createFakeCi, createReadLoad } from "./github-ci-test-utils.ts";
 
 /** Runs git in `cwd` and returns its trimmed output; a failing command throws. */
 export const git = (cwd: string, ...args: string[]): string =>
@@ -62,14 +63,21 @@ export interface FakePullRequest {
 }
 
 /**
- * An in-memory GitHub behind the `gh` seam: it lists, creates, views and merges pull requests
- * and answers everything else as a repository without CI would. Nothing leaves the process.
+ * An in-memory GitHub behind the `gh` seam: it lists, creates, views and merges pull requests,
+ * and runs checks, reviews and conflicts as a test scripts them (see github-ci-test-utils.ts). A
+ * repository nobody scripted checks for answers as one without CI would. Nothing leaves the process.
  */
 export const createFakeGithub = (options: { repo?: string } = {}) => {
   const repo = options.repo ?? "acme/widget";
   const prs: FakePullRequest[] = [];
   const calls: string[][] = [];
-  const failures = { merge: null as string | null, unavailable: false };
+  const ci = createFakeCi(repo);
+  const readLoad = createReadLoad();
+  const failures = {
+    merge: null as string | null,
+    unavailable: false,
+    reads: null as string | null,
+  };
   let createDelayMs = 0;
 
   const ok = (stdout: string): CommandResult => ({ exitCode: 0, stdout, stderr: "" });
@@ -129,8 +137,20 @@ export const createFakeGithub = (options: { repo?: string } = {}) => {
         mergedAt: pr.state === "MERGED" ? "2026-09-30T12:00:00Z" : null,
         baseRefName: pr.base,
         headRefName: pr.head,
+        ...ci.viewFields(pr.number),
       }),
     );
+  };
+
+  const checks = (args: string[]): CommandResult => {
+    const pr = byNumber(args) ?? prs.find((candidate) => candidate.head === args[2]);
+    return pr ? ci.checks(pr.number, pr.head) : fail("no pull requests found for branch");
+  };
+
+  // `gh api repos/{owner}/{repo}/pulls/<n>/<endpoint>?per_page=100 --paginate`
+  const api = (args: string[]): CommandResult => {
+    const [, number, endpoint] = /pulls\/(\d+)\/(\w+)/.exec(args[1] ?? "") ?? [];
+    return number && endpoint ? ci.api(Number(number), endpoint) : fail(`unexpected gh api call`);
   };
 
   const merge = (args: string[]): CommandResult => {
@@ -147,14 +167,30 @@ export const createFakeGithub = (options: { repo?: string } = {}) => {
     "pr create": create,
     "pr view": view,
     "pr merge": merge,
-    "pr checks": () => fail("no checks reported"),
+    "pr checks": checks,
+    "run view": (args) => ci.runLog(args[2] ?? ""),
+    api,
   };
 
-  const run: RunGh = async (args) => {
+  const READS = new Set(["pr view", "pr checks", "api"]);
+  // `gh api` takes an endpoint where other commands take a subcommand.
+  const commandOf = (args: string[]): string =>
+    args[0] === "api" ? "api" : `${args[0]} ${args[1]}`;
+
+  // The pull request a read is about: its number, or the number in a `gh api` path.
+  const pullRequestOf = (args: string[]): string =>
+    args[0] === "api" ? (/pulls\/(\d+)/.exec(args[1] ?? "")?.[1] ?? "") : (args[2] ?? "");
+
+  const run: RunGh = async (args, cwd) => {
     calls.push(args);
     if (failures.unavailable) return fail("gh: not logged in");
-    const handler = commands[`${args[0]} ${args[1]}`];
-    return handler ? handler(args) : fail(`unexpected gh call: ${args.join(" ")}`);
+    const command = commandOf(args);
+    const handler = commands[command];
+    if (!handler) return fail(`unexpected gh call: ${args.join(" ")}`);
+    if (!READS.has(command)) return handler(args);
+    return readLoad.around(cwd, pullRequestOf(args), () =>
+      failures.reads ? fail(failures.reads) : handler(args),
+    );
   };
 
   return {
@@ -172,6 +208,21 @@ export const createFakeGithub = (options: { repo?: string } = {}) => {
     },
     setUnavailable: (unavailable: boolean) => {
       failures.unavailable = unavailable;
+    },
+    /** Makes what the watcher reads (a pull request, its checks, its reviews) fail with this message. */
+    failReads: (message: string | null) => {
+      failures.reads = message;
+    },
+    /** Checks, reviews and conflicts as a person or a CI system would leave them on a pull request. */
+    ci,
+    /** Makes every read take this long, and counts how many pull requests are being read at once. */
+    readLoad,
+    /** `gh` calls of one kind so far, such as `pr checks`. */
+    callsTo: (command: string) => calls.filter((call) => commandOf(call) === command),
+    /** Closes without merging on the GitHub side. */
+    closeOnGithub: (number: number) => {
+      const pr = prs.find((candidate) => candidate.number === number);
+      if (pr) pr.state = "CLOSED";
     },
     /** Merges on the GitHub side, as a person clicking the button would. */
     mergeOnGithub: (number: number) => {

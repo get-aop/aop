@@ -83,6 +83,6 @@ Kills only the two PIDs recorded for this run (process groups), deletes `home/` 
 | --- | --- |
 | `scripts/verify-stack.ts` | `bun $S/verify-stack.ts <start\|doctor\|env\|aop\|restart-server\|stop> [--name run] [--crash] [-- aop args]`; `restart-server --crash` SIGKILLs only the server and restarts it on the same port and DB |
 | `scripts/seed.ts` | `bun $S/seed.ts [--name run] [--fake-runtime]` after `start`; idempotent |
-| `scripts/fake-gh.ts` | A fake GitHub CLI: put it first on the server's `PATH` as `gh` (a two-line wrapper), never the real one; see `features/projects.md` for thread pull requests |
+| `scripts/fake-gh.ts` | A fake GitHub CLI: put it first on the server's `PATH` as `gh` (a two-line wrapper), never the real one; `gh fake ...` scripts checks, reviews, conflicts, merges and closes; see `features/projects.md` for thread pull requests and the pull request watcher |
 | `scripts/desktop-cdp.ts` | `bun $S/desktop-cdp.ts <targets\|js\|jsfile\|shot\|errors> [argument]` against an app started with `--remote-debugging-port=9333`; see `features/desktop.md` |
 | `scripts/seed-events.ts` | `bun $S/seed-events.ts [--name run] <project\|thread\|status\|message\|remove> ...` appends project events for the project stream; see `features/project-stream.md` |

@@ -25,6 +25,7 @@ export const makeProject = (overrides: Overrides = {}): Project =>
     thread: { provider: "claude-code", model: null, effort: "high" },
     notificationLevel: "coordinator",
     threadAccess: "auto-accept-edits",
+    autoFixPullRequests: true,
     repoIds: [],
     status: "active",
     createdAt: LONG_AGO,

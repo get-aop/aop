@@ -18,7 +18,7 @@ import {
 } from "@/ui/dropdown-menu";
 import { Spinner } from "@/ui/spinner";
 import type { MergeMethod } from "../../api/threads";
-import { PullRequestChip } from "../PullRequestChip";
+import { checksLabel, PullRequestChip } from "../PullRequestChip";
 import { pullRequestOf } from "../selectors";
 import type { PullRequestControls, PullRequestProblem } from "./use-pull-request";
 
@@ -88,6 +88,11 @@ const StateSummary = ({ thread }: { thread: Thread }) => {
       <span data-testid="pr-bar-state" className={STATE_TONE[pullRequest.state]}>
         {STATE_LABEL[pullRequest.state]}
       </span>
+      {pullRequest.state === "open" && pullRequest.checks ? (
+        <span data-testid="pr-bar-checks" className="text-text-subtle">
+          · {checksLabel(pullRequest.checks)}
+        </span>
+      ) : null}
     </p>
   );
 };

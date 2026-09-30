@@ -39,3 +39,13 @@ const toOrigin = (entry: string): string => {
     throw new Error(`AOP_ALLOWED_ORIGINS entry is not a URL: ${entry}`);
   }
 };
+
+/**
+ * How often, in milliseconds, the watcher looks at an open pull request, for a host that wants a
+ * fixed pace instead of the adaptive one (30 seconds while something changes, slower while
+ * nothing does). Unset, or not a positive whole number: the adaptive pace.
+ */
+export const getPullRequestPollIntervalMs = (): number | undefined => {
+  const value = Number(process.env.AOP_PR_POLL_INTERVAL_MS);
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+};

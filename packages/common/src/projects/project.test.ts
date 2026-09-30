@@ -109,6 +109,7 @@ describe("CreateProjectInputSchema", () => {
       thread: { provider: "claude-code", model: null, effort: "high" },
       notificationLevel: "coordinator",
       threadAccess: "auto-accept-edits",
+      autoFixPullRequests: true,
       repoIds: [],
     });
   });
@@ -140,6 +141,23 @@ describe("ThreadAccessSchema", () => {
   test("a project without threadAccess is not a project", () => {
     const { threadAccess: _threadAccess, ...missing } = makeProject();
     expect(rejectedPaths(ProjectSchema, missing)).toEqual(["threadAccess"]);
+  });
+});
+
+describe("autoFixPullRequests", () => {
+  test("is a boolean every project states, and a new project starts with it on", () => {
+    const { autoFixPullRequests: _autoFix, ...missing } = makeProject();
+    expect(rejectedPaths(ProjectSchema, missing)).toEqual(["autoFixPullRequests"]);
+    expect(rejectedPaths(ProjectSchema, makeProject({ autoFixPullRequests: "yes" }))).toEqual([
+      "autoFixPullRequests",
+    ]);
+    expect(CreateProjectInputSchema.parse({ name: "x" }).autoFixPullRequests).toBe(true);
+  });
+
+  test("can be turned off on its own, through the same patch every other setting uses", () => {
+    expect(ProjectPatchSchema.parse({ autoFixPullRequests: false })).toEqual({
+      autoFixPullRequests: false,
+    });
   });
 });
 

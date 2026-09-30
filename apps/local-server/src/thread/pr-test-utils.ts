@@ -1,6 +1,7 @@
-import type { Project, Thread } from "@aop/common";
+import type { Project, ProjectSettings, Thread } from "@aop/common";
 import { aopPaths } from "@aop/infra";
 import { createProjectStack, type ProjectStack, projectSettings } from "../project/test-utils.ts";
+import type { PullRequestWatcherDeps } from "../pull-request-watch/watcher.ts";
 import type { GenerateSessionPrDraft } from "../session-git/pull-request.ts";
 import type { ThreadGitDeps } from "./git.ts";
 import { createFakeGithub } from "./git-test-utils.ts";
@@ -24,16 +25,25 @@ const stubDraft: GenerateSessionPrDraft = async () => ({
  */
 export const setupPrWorld = async (
   aopHome: string,
-  options: { git?: ThreadGitDeps; mcp?: boolean } = {},
+  options: {
+    git?: ThreadGitDeps;
+    mcp?: boolean;
+    watch?: PullRequestWatcherDeps;
+    /** How many repos the project has; `repo` is the first. */
+    repos?: number;
+    settings?: Partial<ProjectSettings>;
+  } = {},
 ): Promise<PrWorld> => {
   const github = createFakeGithub();
   const s = await createProjectStack(aopHome, {
     origin: true,
     mcp: options.mcp,
+    repos: options.repos,
+    watch: options.watch,
     git: { runGh: github.run, generateDraft: stubDraft, ...options.git },
   });
   const created = await s.services.projects.create(
-    projectSettings({ repoIds: s.repos.map((repo) => repo.id) }),
+    projectSettings({ repoIds: s.repos.map((repo) => repo.id), ...options.settings }),
   );
   if (!created.success) throw new Error("project not created");
   const [repo] = s.repos as { id: string; path: string; origin: string }[];

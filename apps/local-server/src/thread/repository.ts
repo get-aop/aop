@@ -1,5 +1,6 @@
 import {
   type BlockedQuestion,
+  type PullRequestChecks,
   type PullRequestRef,
   type Thread,
   type ThreadAccess,
@@ -28,8 +29,10 @@ export interface ThreadPatch {
   steps?: ThreadStep[];
   liveStatusLine?: string | null;
   branch?: string | null;
-  /** `null` clears the pull request. */
+  /** `null` clears the pull request. Its checks are left as they are; `checks` sets those. */
   pullRequest?: PullRequestRef | null;
+  /** What the checks of the recorded pull request add up to; `null` clears it. */
+  checks?: PullRequestChecks | null;
   target?: ThreadTarget;
   unread?: boolean;
   lastActivityAt?: string;
@@ -111,6 +114,9 @@ const selectThreads = (db: Kysely<Database>) =>
 const toColumns = (patch: ThreadPatch): ChatSessionUpdate => ({
   ...(patch.status && statusColumns(patch.status)),
   ...(patch.pullRequest !== undefined && pullRequestColumns(patch.pullRequest)),
+  ...(patch.checks !== undefined && {
+    pr_checks_json: patch.checks === null ? null : JSON.stringify(patch.checks),
+  }),
   ...plainColumns(patch),
 });
 
@@ -122,10 +128,14 @@ const statusColumns = (change: ThreadStatusChange): ChatSessionUpdate => ({
   resumes_at: change.status === "rate-limited" ? change.resumesAt : null,
 });
 
+// The checks belong to the pull request the watcher read them from, so they go with it and are
+// otherwise not touched: a merge that read its pull request a moment ago must not put back a
+// summary the watcher has replaced since.
 const pullRequestColumns = (pullRequest: PullRequestRef | null): ChatSessionUpdate => ({
   pr_number: pullRequest?.number ?? null,
   pr_url: pullRequest?.url ?? null,
   pr_state: pullRequest?.state ?? null,
+  ...(pullRequest === null && { pr_checks_json: null }),
 });
 
 const plainColumns = (patch: ThreadPatch): ChatSessionUpdate => {
@@ -154,7 +164,15 @@ const toThread = (row: ThreadRow): Thread =>
     artifacts:
       row.pr_number === null
         ? []
-        : [{ type: "pr", number: row.pr_number, url: row.pr_url, state: row.pr_state }],
+        : [
+            {
+              type: "pr",
+              number: row.pr_number,
+              url: row.pr_url,
+              state: row.pr_state,
+              ...(row.pr_checks_json !== null && { checks: JSON.parse(row.pr_checks_json) }),
+            },
+          ],
     repliesCount: Number(row.replies_count),
     unread: row.unread === 1,
     lastActivityAt: row.last_activity_at,

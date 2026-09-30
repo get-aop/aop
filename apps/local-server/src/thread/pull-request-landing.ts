@@ -15,6 +15,7 @@ import {
   stateOf,
   type Target,
 } from "./pull-request-support.ts";
+import type { ThreadPatch } from "./repository.ts";
 import { pullRequestOf } from "./state.ts";
 import type { ThreadResult } from "./types.ts";
 
@@ -109,9 +110,24 @@ export const syncThreadPullRequest = async (
   const stalled = thread.status === "landing";
   if (state === recorded.state && !stalled) return { success: true, thread };
   // Only a thread still landing is put back; a status something else has set since is left alone.
-  const changed = await changeThreadFrom(env.ctx, thread.id, ["landing"], {
-    pullRequest: { ...recorded, state },
-    ...(stalled && { status: restingStatus(thread) }),
-  });
+  const changed = await changeThreadFrom(
+    env.ctx,
+    thread.id,
+    ["landing"],
+    syncPatch(thread, recorded, state, stalled),
+  );
   return { success: true, thread: changed.thread ?? thread };
 };
+
+// A pull request that changed state is news, which clients such as the desktop app read from how
+// recently the thread moved.
+const syncPatch = (
+  thread: Thread,
+  recorded: PullRequestRef,
+  state: PullRequestRef["state"],
+  stalled: boolean,
+): ThreadPatch => ({
+  pullRequest: { ...recorded, state },
+  ...(state !== recorded.state && { lastActivityAt: new Date().toISOString() }),
+  ...(stalled && { status: restingStatus(thread) }),
+});

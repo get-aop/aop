@@ -78,6 +78,20 @@ const reportToCoordinator = async (
 ): Promise<string[]> => {
   const outcome = reportOutcome(thread, turn.end);
   if (!outcome) return [];
+  return postThreadReport(tx, thread, outcome, reportText(thread, outcome, turn.text));
+};
+
+/**
+ * Puts a report about a thread in its project's coordinator inbox, in the transaction the caller
+ * is in, and returns the coordinator's session id for the caller to wake once it commits. Nothing
+ * is posted, and nobody is woken, when the project has no coordinator or is not active.
+ */
+export const postThreadReport = async (
+  tx: PublisherTransaction,
+  thread: Pick<Thread, "id" | "projectId">,
+  outcome: ThreadReportOutcome,
+  text: string,
+): Promise<string[]> => {
   const coordinator = await tx.db
     .selectFrom("chat_sessions")
     .innerJoin("projects", "projects.id", "chat_sessions.project_id")
@@ -89,7 +103,6 @@ const reportToCoordinator = async (
   if (!coordinator) return [];
 
   const now = new Date().toISOString();
-  const text = reportText(thread, outcome, turn.text);
   const row = await tx.db
     .insertInto("chat_messages")
     .values({

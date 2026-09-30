@@ -9,11 +9,13 @@ import {
   getDashboardDevOrigin,
   getDashboardStaticPath,
   getPort,
+  getPullRequestPollIntervalMs,
 } from "./config.ts";
 import { createCommandContext } from "./context.ts";
 import { createDatabase, getDefaultDbPath } from "./db/connection.ts";
 import { runMigrations } from "./db/migrations.ts";
 import { createProjectServices } from "./project/services.ts";
+import { startPullRequestWatcher } from "./pull-request-watch/watcher.ts";
 import { cleanupOrphanRepoDirs } from "./repo/orphan-dirs.ts";
 import { startThreadMaintenance } from "./thread/lifecycle.ts";
 
@@ -48,7 +50,13 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     logger.warn("Failed to clean orphan repo directories: {error}", { error: String(error) });
   });
 
-  const projectServices = createProjectServices(ctx);
+  const pollIntervalMs = getPullRequestPollIntervalMs();
+  const projectServices = createProjectServices(
+    ctx,
+    {},
+    {},
+    { timing: pollIntervalMs ? { activeMs: pollIntervalMs, quietMs: pollIntervalMs } : {} },
+  );
   const app = createApp({
     ctx,
     projectServices,
@@ -80,11 +88,14 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   logger.info("Local server listening on http://{bindHost}:{port}", { bindHost, port });
   // Threads left landing by a restart are settled, and threads idle for a week are resolved.
   const stopMaintenance = startThreadMaintenance(projectServices.git);
+  // Open pull requests are watched for their checks and reviews, and answered with fix prompts.
+  const stopWatcher = startPullRequestWatcher(projectServices.pullRequestWatcher, pollIntervalMs);
 
   return {
     shutdown: async () => {
       logger.info("Shutting down...");
       stopMaintenance();
+      await stopWatcher();
       server.stop();
       await shutdownChatSessions(ctx);
       await db.destroy();

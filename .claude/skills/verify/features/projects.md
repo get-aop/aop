@@ -11,8 +11,9 @@ Everything here needs a stack seeded with `--fake-runtime`: projects resolve the
 - `projects-thread` follows a thread: waiting on you, replying, status reports, Stop.
 - `projects-memory` writes and reads the project's memory files.
 - `projects-scheduling` caps the thread turns that run at once, watches the rest queue and start in order, and follows a thread through a usage limit.
-- `projects-thread-git` gives a thread a worktree and branch, opens and merges its pull request against a fake `gh`, and cleans up; see the last section.
+- `projects-thread-git` gives a thread a worktree and branch, opens and merges its pull request against a fake `gh`, and cleans up; see the section after this list of recipes.
 - `projects-thread-changes` reads what a thread changed in its worktree and the tool calls of its turns.
+- `projects-pr-watch` watches a thread's open pull request: checks shown on the project home, one fix prompt for each failing run, requested changes, the attempt cap and the report to the coordinator, a merge landed by the watcher, and a crash in the middle; see the section after `projects-thread-git`.
 
 ## How to get to it
 
@@ -48,6 +49,23 @@ Preconditions:
 - **Crash in the merge window.** `touch <home>/fake-gh/hang-after-merge`, call merge in the background, kill the server the same way after 4 seconds (the row is `landing`, the pull request merged). After the restart the row is `resolved` with the pull request `merged` and the worktree and branch are gone, without another request; merging again answers 200 and adds no `gh pr merge`.
 - **Resolve, reopen, delete.** `POST <api>/api/threads/<id>/resolve` removes the worktree and keeps the branch with the thread's files committed; a message to the thread brings the worktree back; `DELETE <api>/api/threads/<id>` removes the worktree and the branch, and a second delete answers 404.
 - **Proof.** The requests and responses, `git worktree list`, `git branch` and the origin's log before and after each step, `calls.log`, the stream frames, the tripwire log (it must not exist), and in Chrome the Sessions page and a fake chat with no console errors. Say that the runtime was the fake CLI and that GitHub was the fake `gh`.
+
+## Pull request watcher (`projects-pr-watch`)
+
+The server watches every open thread pull request: it reads checks and reviews through `gh`, puts the checks summary on the thread's `pr` artifact, sends the thread a fix prompt (`Automatic fix, attempt n of 3`) for failing checks, a review that requests changes and conflicts, and reports to the coordinator when the pull request merges or closes or when it gives up after 3 attempts. The fake `gh` scripts all of it. Everything in the last section applies (stubs and fake `gh` on `PATH`, a bare origin, `--fake-runtime`), plus a fast pace: start and restart with `AOP_PR_POLL_INTERVAL_MS=1500` in the environment, or a look takes 30 seconds.
+
+Preconditions: a project on the fixture repo, a thread with work whose pull request is open (`POST <api>/api/threads/<id>/pull-request`), `<fakegh>` = `FAKE_GH_DIR=<home>/fake-gh bun .claude/skills/verify/scripts/fake-gh.ts` (run it from any directory), and the project stream recorded (`curl -N <api>/api/projects/<id>/stream > evidence/stream.log`, see [Project event stream](./project-stream.md)).
+
+- **Checks on the card.** `<fakegh> fake checks 1 pending test,lint`: within one look `GET <api>/api/threads/<id>` has `artifacts[0].checks` `{state: pending, pending: 2}`, the stream has one `thread.upserted` with it, and on the project home the card's PR chip shows an amber dot (its title reads `2 checks running`). Reading the same checks again adds no entry. `pass` turns the dot green; a repository that never had a `fake checks` call has no dot.
+- **Fix prompt, once.** `<fakegh> fake checks 1 fail test,lint "FAIL notes.test.ts: expected a heading"`: exactly one user message beginning `Automatic fix, attempt 1 of 3` reaches the thread (`GET <api>/api/threads/<id>/messages`, and one `message.created` on the stream), naming both checks with their run links and quoting the log; the thread runs a turn for it (`working`, then `ready-for-review`) and the dot is red. Wait a dozen looks: still one message. `GET <api>/api/threads/<id>/pull-request/watch` lists it under `actions`.
+- **The thread fixes it.** Steer the thread with `write="FIX.md=fixed"` and call `POST <api>/api/threads/<id>/pull-request` again: that pushes, the fake starts a new round of checks (new run id, pending), and `fake checks 1 pass` turns the dot green. Failing again after a push is a new run and gets prompt 2.
+- **Requested changes.** `<fakegh> fake review 1 changes-requested "Please add a heading" "NOTES.md:1:Start with a title"`: the next prompt quotes the review and the line comment. A `commented` or `approved` review sends nothing.
+- **Conflicts.** `<fakegh> fake conflict 1 on` sends a prompt to resolve them, once for each head commit.
+- **The cap.** After 3 prompts, a 4th failing round sends nothing: the thread's line reads `Auto-fix stopped after 3 attempts: failing checks: test, lint`, it is unread, `watch` says `gaveUp: true` with a `cap` action, and the coordinator's inbox has one thread report (`needs-you`, "stopped fixing pull request #1"); the project chat shows it as a "needs your call" row.
+- **A restart in the middle.** With the checks failing and the prompt already sent, `PATH=<bin>:$PATH AOP_PR_POLL_INTERVAL_MS=1500 bun $S/verify-stack.ts restart-server --name <run> --crash`, then watch a dozen looks: the count of `Automatic fix` messages does not change.
+- **Merged on GitHub.** `<fakegh> fake merge 1`: within a look the thread is `resolved` with the pull request `merged` (landed by the same logic as the merge route: the worktree and both branches are gone, and the origin's `main` has the squash commit), the coordinator has one report (`its pull request #1 was merged on GitHub`), and the card shows a purple chip. `fake close 1` records `closed`, keeps the worktree and reports it. Neither is reported twice.
+- **The setting.** Project settings, General, Pull requests: the checkbox is on for a new project. Turning it off and saving sends `PATCH /api/projects/<id>` `{"autoFixPullRequests": false}`; later failures still show on the card and send nothing.
+- **Proof.** The `fake` calls and `calls.log`, `GET .../watch`, the messages of the thread, the stream frames (ids and types), `sqlite3 "$AOP_DB_PATH" "select * from pull_request_watch"`, `git worktree list` and `git branch` before and after the merge, the tripwire log (it must not exist), and screenshots of the project home at each step with `read_console_messages` showing no errors. Say that the runtime was the fake CLI and GitHub was the fake `gh`.
 
 ## Gotchas
 

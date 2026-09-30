@@ -108,6 +108,69 @@ describe("ThreadCard", () => {
     expect(within(card()).getByText("aop/cold-start")).toBeTruthy();
   });
 
+  test("the chip of an open pull request shows what its checks add up to, and a merged one does not", () => {
+    const pr = { type: "pr" as const, number: 7, url: "https://github.com/acme/app/pull/7" };
+    const renderWith = (overrides: Parameters<typeof makeThread>[0]) =>
+      render(<ThreadCard now={NOW} thread={makeThread(overrides)} />);
+    renderWith({
+      artifacts: [
+        {
+          ...pr,
+          state: "open",
+          checks: { state: "failure", successful: 2, failing: 2, pending: 0 },
+        },
+      ],
+    });
+    const chip = screen.getByTestId("thread-pr-chip");
+    expect(chip.getAttribute("data-checks")).toBe("failure");
+    expect(chip.getAttribute("title")).toBe("2 checks failing");
+    expect(screen.getByTestId("thread-pr-chip-checks").getAttribute("aria-label")).toBe(
+      "2 checks failing",
+    );
+
+    cleanup();
+    renderWith({
+      artifacts: [
+        {
+          ...pr,
+          state: "open",
+          checks: { state: "pending", successful: 0, failing: 0, pending: 1 },
+        },
+      ],
+    });
+    expect(screen.getByTestId("thread-pr-chip").getAttribute("title")).toBe("1 check running");
+
+    cleanup();
+    renderWith({
+      artifacts: [
+        {
+          ...pr,
+          state: "open",
+          checks: { state: "success", successful: 3, failing: 0, pending: 0 },
+        },
+      ],
+    });
+    expect(screen.getByTestId("thread-pr-chip").getAttribute("title")).toBe("All checks passed");
+
+    // Once merged, the last reading is history and the chip is only its state.
+    cleanup();
+    renderWith({
+      artifacts: [
+        {
+          ...pr,
+          state: "merged",
+          checks: { state: "pending", successful: 0, failing: 0, pending: 1 },
+        },
+      ],
+    });
+    expect(screen.getByTestId("thread-pr-chip").getAttribute("data-checks")).toBeNull();
+    expect(screen.queryByTestId("thread-pr-chip-checks")).toBeNull();
+
+    cleanup();
+    renderWith({ artifacts: [{ ...pr, state: "open" }] });
+    expect(screen.queryByTestId("thread-pr-chip-checks")).toBeNull();
+  });
+
   test("the card opens the thread inside the app", () => {
     render(<ThreadCard now={NOW} thread={makeThread({ id: "t 1", projectId: "p1" })} />);
 

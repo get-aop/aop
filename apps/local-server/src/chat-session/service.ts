@@ -3,7 +3,7 @@ import type { LocalServerContext } from "../context.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { createRuntimeProfileRepository } from "../runtime-profile/repository.ts";
 import { resumeRateLimited } from "./rate-limit-resume.ts";
-import { dispatchQueuedRuns, drainAfterResume } from "./reply-lifecycle.ts";
+import { applyFollowUp, dispatchQueuedRuns, drainAfterResume } from "./reply-lifecycle.ts";
 import { ensureAllChatRunRecoveries, ensureSessionChatRunRecovery } from "./run-recovery.ts";
 import { retryFreshChatRun, sendChatMessage } from "./send-message.ts";
 import { abortChatSession, resetRuntimeSession } from "./session-control.ts";
@@ -66,6 +66,13 @@ export const createChatSessionService = (
 
     /** Starts the queued thread turns the host has room for; the run cap changing is one reason to. */
     dispatchQueuedRuns: () => dispatchQueuedRuns(ctx, deps),
+
+    /**
+     * Starts the queued message of each session, for whoever stored one for it in a transaction
+     * of its own and has committed: a thread report put in a coordinator's inbox.
+     */
+    wake: (sessionIds: string[]) =>
+      applyFollowUp(ctx, { wakeSessionIds: sessionIds, resume: null }, deps),
 
     /** Ends a session's wait on a rate limit now, instead of at its reset. False when it was not waiting. */
     resumeRateLimited: (sessionId: string) =>

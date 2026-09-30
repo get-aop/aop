@@ -23,6 +23,7 @@ export const NO_PROJECT_COLUMNS = {
   pr_number: null,
   pr_url: null,
   pr_state: null,
+  pr_checks_json: null,
   target_json: '{"kind":"host"}',
   last_activity_at: null,
   unread: 0,

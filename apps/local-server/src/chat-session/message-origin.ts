@@ -15,6 +15,11 @@ export const MessageOriginSchema = z.discriminatedUnion("type", [
     threadId: z.string().min(1),
     outcome: ThreadReportOutcomeSchema,
   }),
+  /**
+   * The pull request watcher sending a thread a fix prompt. It reads as the person's message; the
+   * claim id ties it to the watcher's entry for it, so a crash between the two can be settled.
+   */
+  z.object({ type: z.literal("pull-request-watch"), claimId: z.string().min(1) }),
   /** The server telling a session its wait on a rate limit is over; it is never shown as a message. */
   z.object({ type: z.literal("rate-limit-resume") }),
 ]);

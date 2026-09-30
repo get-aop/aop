@@ -31,6 +31,24 @@ describe("ArtifactSchema", () => {
     expect(rejectedPaths(ArtifactSchema, makePrArtifact({ state: "draft" }))).toEqual(["state"]);
   });
 
+  test("carries the checks summary the watcher read, and needs none", () => {
+    const checks = { state: "failure", successful: 2, failing: 1, pending: 0 };
+    expect(parsed(ArtifactSchema, makePrArtifact({ checks }))).toEqual(makePrArtifact({ checks }));
+    expect(parsed(ArtifactSchema, makePrArtifact())).not.toHaveProperty("checks");
+  });
+
+  test("rejects checks whose state is unknown or whose count is negative or fractional", () => {
+    const checks = { state: "failure", successful: 2, failing: 1, pending: 0 };
+    expect(
+      rejectedPaths(ArtifactSchema, makePrArtifact({ checks: { ...checks, state: "red" } })),
+    ).toEqual(["checks.state"]);
+    for (const failing of [-1, 1.5]) {
+      expect(
+        rejectedPaths(ArtifactSchema, makePrArtifact({ checks: { ...checks, failing } })),
+      ).toEqual(["checks.failing"]);
+    }
+  });
+
   test("rejects an unknown type and a nameless document", () => {
     expect(rejectedPaths(ArtifactSchema, { type: "screenshot", name: "x" })).toEqual(["type"]);
     expect(rejectedPaths(ArtifactSchema, { type: "doc", name: "  " })).toEqual(["name"]);

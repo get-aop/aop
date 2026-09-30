@@ -270,7 +270,7 @@ export const proposeThreadsTool = defineTool({
 export const projectSettingsGetTool = defineTool({
   name: "project_settings_get",
   description:
-    "Read the project's settings: goal, instructions, the models and effort for you and for threads, notification level, thread access, and its repositories.",
+    "Read the project's settings: goal, instructions, the models and effort for you and for threads, notification level, thread access, whether pull requests are fixed automatically, and its repositories.",
   input: z.object({}),
   handler: async (_args, call) => {
     const { project } = unwrap(await call.services.projects.get(projectIdOf(call)));
@@ -286,6 +286,7 @@ export const projectSettingsGetTool = defineTool({
       thread: project.thread,
       notificationLevel: project.notificationLevel,
       threadAccess: project.threadAccess,
+      autoFixPullRequests: project.autoFixPullRequests,
       repos: repos.flatMap((repo) =>
         repo ? [{ id: repo.id, name: repo.name, path: repo.path }] : [],
       ),
@@ -301,12 +302,12 @@ export const projectSettingsGetTool = defineTool({
 // schema is strict, so a call naming any of these fails with a message instead of being trimmed
 // to the settings that remain and reported as done.
 const SETTINGS_OF_THE_PERSON =
-  "Only the person changes the goal, the instructions, thread access and the repositories; here you can set threadModel, threadEffort and notificationLevel. Save what you learn with memory_write.";
+  "Only the person changes the goal, the instructions, thread access, the repositories and whether pull requests are fixed automatically; here you can set threadModel, threadEffort and notificationLevel. Save what you learn with memory_write.";
 
 export const projectSettingsSetTool = defineTool({
   name: "project_settings_set",
   description:
-    "Change how threads run, when the person asks: the model and effort they use, or the notification level. Omit what should stay. The goal, the instructions, thread access and the repositories can only be changed by the person.",
+    "Change how threads run, when the person asks: the model and effort they use, or the notification level. Omit what should stay. The goal, the instructions, thread access, the repositories and whether pull requests are fixed automatically can only be changed by the person.",
   input: z
     .strictObject(
       {

@@ -235,6 +235,32 @@ describe("thread access", () => {
   });
 });
 
+describe("pull requests", () => {
+  test("shows whether the host fixes them by itself, and saves turning it off", async () => {
+    renderGeneral();
+    const box = screen.getByTestId("settings-auto-fix") as HTMLInputElement;
+    expect(box.checked).toBe(true);
+
+    fireEvent.click(box);
+    expect(box.checked).toBe(false);
+    save();
+
+    await waitFor(() => expect(api.writes()).toHaveLength(1));
+    expect(api.writes()[0]?.body).toEqual({ autoFixPullRequests: false });
+  });
+
+  test("a project that has it off shows it off, and turning it back on leaves nothing to save", () => {
+    renderGeneral(makeProject({ id: "p1", name: "Checkout", autoFixPullRequests: false }));
+    const box = screen.getByTestId("settings-auto-fix") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+
+    fireEvent.click(box);
+    fireEvent.click(box);
+
+    expect(screen.getByTestId("settings-save-bar").getAttribute("data-dirty")).toBe("false");
+  });
+});
+
 describe("notifications", () => {
   test("saves the level the person picks", async () => {
     renderGeneral();

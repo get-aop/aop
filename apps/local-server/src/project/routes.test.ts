@@ -39,6 +39,7 @@ describe("POST /api/projects", () => {
       thread: { provider: "claude-code", model: null, effort: "high" },
       notificationLevel: "coordinator",
       threadAccess: "auto-accept-edits",
+      autoFixPullRequests: true,
       repoIds: [],
     });
     expect(response.body.project.id).toStartWith("proj_");
@@ -100,15 +101,21 @@ describe("reading and changing a project", () => {
     const changed = await s.api<{ project: Project }>("PATCH", `/api/projects/${project.id}`, {
       goal: "Ship v2",
       threadAccess: "full-access",
+      autoFixPullRequests: false,
     });
     const empty = await s.api("PATCH", `/api/projects/${project.id}`, {});
     const bad = await s.api("PATCH", `/api/projects/${project.id}`, { threadAccess: "root" });
+    const notABoolean = await s.api("PATCH", `/api/projects/${project.id}`, {
+      autoFixPullRequests: "yes",
+    });
 
     expect(changed.body.project).toMatchObject({
       goal: "Ship v2",
       threadAccess: "full-access",
+      autoFixPullRequests: false,
       name: "Checkout",
     });
+    expect(notABoolean.status).toBe(400);
     expect(empty.status).toBe(400);
     expect(bad.status).toBe(400);
   });

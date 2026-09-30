@@ -110,6 +110,8 @@ export interface ChatSessionsTable {
   pr_number: number | null;
   pr_url: string | null;
   pr_state: PullRequestState | null;
+  /** JSON `PullRequestChecks` the pull request watcher last read, added by migration v7. */
+  pr_checks_json: string | null;
   /** JSON `ThreadTarget`: where the thread runs. */
   target_json: Generated<string>;
   last_activity_at: string | null;

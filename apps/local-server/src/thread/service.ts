@@ -44,11 +44,17 @@ export interface ThreadService {
   list: (projectId: string) => Promise<ThreadResult<{ threads: Thread[] }>>;
   get: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
   listMessages: (threadId: string) => Promise<ThreadResult<{ messages: Message[] }>>;
-  /** Steers a thread: queued while it works, a new turn while it is idle, a reopen once resolved. */
+  /**
+   * Steers a thread: queued while it works, a new turn while it is idle, a reopen once resolved.
+   * With `onlyIn`, the message is sent only if the thread is in one of those statuses when it is
+   * stored, which nothing that releases its worktree can change meanwhile; otherwise it is
+   * refused as busy and nothing is stored or made.
+   */
   send: (
     threadId: string,
     text: string,
     origin?: MessageOrigin,
+    options?: { onlyIn?: readonly ThreadStatus[] },
   ) => Promise<ThreadResult<{ thread: Thread }>>;
   /** Answers the question a thread is waiting on; the answer resumes its runtime session. */
   reply: (threadId: string, text: string) => Promise<ThreadResult<{ thread: Thread }>>;
@@ -105,10 +111,17 @@ export const createThreadService = (
     return { project };
   };
 
+  // Asked as a message is stored, inside the thread's turn in the checkout's queue.
+  const allowedIn = (threadId: string, statuses?: readonly ThreadStatus[]) =>
+    statuses
+      ? async () => inStatus(await ctx.threadRepository.getById(threadId), statuses)
+      : undefined;
+
   const sendToThread = async (
     thread: Thread,
     text: string,
     origin: MessageOrigin | null,
+    onlyIn?: readonly ThreadStatus[],
   ): Promise<ThreadResult<{ thread: Thread }>> => {
     const active = await activeProject(thread.projectId);
     if ("error" in active) return { success: false, error: active.error };
@@ -118,8 +131,10 @@ export const createThreadService = (
     if (thread.status === "landing") return { success: false, error: { code: "THREAD_BUSY" } };
     // A resolved thread's worktree is gone; a turn needs it back, and nothing may take it away
     // again between the two, so the message is stored (and the turn started) while it is held.
-    const started = await git.holding(thread, () =>
-      chat.sendMessage(thread.id, { content: text, origin }),
+    const started = await git.holding(
+      thread,
+      () => chat.sendMessage(thread.id, { content: text, origin }),
+      allowedIn(thread.id, onlyIn),
     );
     if (!started.success) return started;
     return started.value.success
@@ -259,10 +274,10 @@ export const createThreadService = (
         : { success: false, error: { code: "THREAD_NOT_FOUND" } };
     },
 
-    send: async (threadId, text, origin) => {
+    send: async (threadId, text, origin, options) => {
       const thread = await ctx.threadRepository.getById(threadId);
       return thread
-        ? sendToThread(thread, text, origin ?? null)
+        ? sendToThread(thread, text, origin ?? null, options?.onlyIn)
         : { success: false, error: { code: "THREAD_NOT_FOUND" } };
     },
 
@@ -338,6 +353,9 @@ export const createThreadService = (
     },
   };
 };
+
+const inStatus = (thread: Thread | null, statuses: readonly ThreadStatus[]): boolean =>
+  thread !== null && statuses.includes(thread.status);
 
 const STOP_ENDS: ReadonlySet<ThreadStatus> = new Set([
   "waiting-on-you",

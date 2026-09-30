@@ -14,6 +14,8 @@ import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import type { RunGh } from "../github-cli/index.ts";
 import { createAuthenticatedMcpUrl } from "../mcp/auth.ts";
 import { createMcpRoutes } from "../mcp/routes.ts";
+import { createPullRequestWatchRoutes } from "../pull-request-watch/routes.ts";
+import type { PullRequestWatcherDeps } from "../pull-request-watch/watcher.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import type { ThreadGitDeps } from "../thread/git.ts";
 import { attachBareOrigin } from "../thread/git-test-utils.ts";
@@ -29,6 +31,7 @@ export const projectSettings = (overrides: Partial<ProjectSettings> = {}): Proje
   thread: { provider: "claude-code", model: "claude-opus-4-8", effort: "high" },
   notificationLevel: "coordinator",
   threadAccess: "auto-accept-edits",
+  autoFixPullRequests: true,
   repoIds: [],
   ...overrides,
 });
@@ -186,6 +189,8 @@ export const createProjectStack = async (
     origin?: boolean;
     /** The seams of the git side of threads; `runGh` defaults to one that refuses, never the real `gh`. */
     git?: ThreadGitDeps;
+    /** The seams of the pull request watcher: its clock, its randomness, its pace and its cap. */
+    watch?: PullRequestWatcherDeps;
   } = {},
 ): Promise<ProjectStack> => {
   const db = await createTestDb();
@@ -212,11 +217,13 @@ export const createProjectStack = async (
     ctx,
     { createProviderFn: () => recordingProvider, recoveryPollIntervalMs: 20 },
     { runGh: refusingGh, ...options.git },
+    options.watch,
   );
   const app = new Hono();
   app.route("/api/mcp", createMcpRoutes(ctx, services));
   app.route("/api/projects", createProjectRoutes(services));
   app.route("/api", createThreadRoutes(services));
+  app.route("/api", createPullRequestWatchRoutes(services));
 
   const previousMcpUrl = process.env.AOP_MCP_URL;
   const server = options.mcp

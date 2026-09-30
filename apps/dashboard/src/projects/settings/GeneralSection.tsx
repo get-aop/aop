@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/ui/textarea";
 import { requestConfirmation } from "../../components/ConfirmationHost";
 import { NOTIFICATION_LEVELS } from "../notification-levels";
+import { AutoFixSetting } from "./AutoFixSetting";
 import { SaveBar, SettingsBlock } from "./blocks";
 import { ModelSettings } from "./ModelSettings";
 import { CoordinatorRestart, DangerZone } from "./ProjectLifecycle";
@@ -91,6 +92,13 @@ export const GeneralSection = ({ project }: { project: Project }) => {
           description="How much a thread may do on this host without asking you first."
         >
           <ThreadAccessSetting draft={draft} />
+        </SettingsBlock>
+
+        <SettingsBlock
+          title="Pull requests"
+          description="What the host does when a thread's pull request needs work."
+        >
+          <AutoFixSetting draft={draft} />
         </SettingsBlock>
 
         <SettingsBlock

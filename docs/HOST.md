@@ -146,6 +146,7 @@ A proxy that rewrites `Host` to `127.0.0.1` and adds no forwarding header passes
 | `AOP_LOCAL_SERVER_PORT` | none, required | Port the server listens on. |
 | `AOP_BIND_HOST` | `127.0.0.1` | Address the server listens on. Set `0.0.0.0` to serve the network directly over plain HTTP. |
 | `AOP_ALLOWED_ORIGINS` | none | Comma-separated browser origins, besides the API's own and the desktop app's `app://aop`, that may call the API. |
+| `AOP_PR_POLL_INTERVAL_MS` | none (adaptive) | Milliseconds between looks at an open pull request, for a fixed pace instead of the adaptive one. See [Threads and git](./THREADS.md#watching-the-pull-request). |
 
 Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over plain HTTP, so use it only on a network you trust, and the browser will not treat the page as a secure context. If you bind one specific non-loopback address, the host's own agents can no longer reach the MCP endpoint at `127.0.0.1`; set `AOP_MCP_URL` to an address they can reach.
 

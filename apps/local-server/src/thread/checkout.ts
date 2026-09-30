@@ -45,10 +45,16 @@ export interface ThreadCheckout {
   chooseBranch: (repoPath: string, threadId: string, title: string) => Promise<string>;
   /** Makes sure the worktree exists, so a turn can run in it. */
   provision: (thread: CheckoutThread) => Promise<CheckoutResult>;
-  /** Makes sure the worktree exists, then runs `start` (which starts the turn) before any release can run. */
+  /**
+   * Makes sure the worktree exists, then runs `start` (which starts the turn) before any release can
+   * run. `allowed`, when given, is asked first, in the thread's turn in the queue and so with no
+   * release able to change the thread meanwhile: a thread it refuses is answered as busy and its
+   * worktree is not made.
+   */
   holding: <T>(
     thread: CheckoutThread,
     start: () => Promise<T>,
+    allowed?: () => Promise<boolean>,
   ) => Promise<{ success: true; value: T } | Extract<CheckoutResult, { success: false }>>;
   /** Removes the worktree and keeps the branch, after committing what the worktree held. */
   park: (thread: CheckoutThread, options?: ReleaseOptions) => Promise<CheckoutResult>;
@@ -120,8 +126,9 @@ export const createThreadCheckout = (
 
     provision: (thread) => queue(thread.id, () => provision(thread)),
 
-    holding: (thread, start) =>
+    holding: (thread, start, allowed) =>
       queue(thread.id, async () => {
+        if (allowed && !(await allowed())) return busy;
         const ready = await provision(thread);
         return ready.success ? { success: true as const, value: await start() } : ready;
       }),
@@ -132,7 +139,7 @@ export const createThreadCheckout = (
   };
 };
 
-const busy: CheckoutResult = { success: false, error: { code: "THREAD_BUSY" } };
+const busy = { success: false as const, error: { code: "THREAD_BUSY" as const } };
 
 const failed = (message: string): CheckoutResult => ({
   success: false,

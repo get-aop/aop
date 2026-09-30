@@ -17,6 +17,7 @@ import { createMcpRoutes } from "./mcp/routes.ts";
 import { createProjectRoutes } from "./project/routes.ts";
 import { createProjectServices, type ProjectServices } from "./project/services.ts";
 import { createProviderRoutes } from "./providers/routes.ts";
+import { createPullRequestWatchRoutes } from "./pull-request-watch/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
@@ -118,6 +119,7 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/mcp", createMcpRoutes(ctx, projects));
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api", createThreadRoutes(projects));
+  app.route("/api", createPullRequestWatchRoutes(projects));
   app.route("/api/repos", createRepoRoutes(ctx));
   app.route(
     "/api/settings",

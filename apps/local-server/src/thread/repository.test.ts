@@ -186,6 +186,29 @@ describe("thread repository", () => {
     expect((await threads.update("t1", { pullRequest: null }))?.artifacts).toEqual([]);
   });
 
+  test("keeps the checks summary on the pull request artifact, and it follows the pull request", async () => {
+    await addThread("t1");
+    const checks = { state: "failure", successful: 2, failing: 1, pending: 0 } as const;
+
+    const opened = await threads.update("t1", { pullRequest });
+    expect(opened?.artifacts).toEqual([{ type: "pr", ...pullRequest }]);
+
+    const read = await threads.update("t1", { checks });
+    expect(read?.artifacts).toEqual([{ type: "pr", ...pullRequest, checks }]);
+    // The state of the pull request changes without a stale summary put back or dropped.
+    const merged = await threads.update("t1", { pullRequest: { ...pullRequest, state: "merged" } });
+    expect(merged?.artifacts).toEqual([{ type: "pr", ...pullRequest, state: "merged", checks }]);
+    expect((await threads.update("t1", { checks: null }))?.artifacts).toEqual([
+      { type: "pr", ...pullRequest, state: "merged" },
+    ]);
+    await threads.update("t1", { checks });
+    expect((await threads.update("t1", { pullRequest: null }))?.artifacts).toEqual([]);
+    expect(
+      (await db.selectFrom("chat_sessions").select("pr_checks_json").executeTakeFirst())
+        ?.pr_checks_json,
+    ).toBeNull();
+  });
+
   test("updates progress, branch, target, read state and activity, and only those it is given", async () => {
     await addThread("t1");
     const steps = [

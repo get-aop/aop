@@ -33,6 +33,11 @@ export const ProjectSettingsSchema = z.object({
   thread: RuntimePreferenceSchema,
   notificationLevel: NotificationLevelSchema,
   threadAccess: ThreadAccessSchema,
+  /**
+   * Whether the server sends a thread a fix prompt by itself when its pull request has failing
+   * checks, a review that requests changes, or merge conflicts. Off leaves those to the person.
+   */
+  autoFixPullRequests: z.boolean(),
   repoIds: z.array(IdSchema).refine((ids) => new Set(ids).size === ids.length, {
     error: "A repo can be attached to a project once",
   }),
@@ -62,6 +67,7 @@ export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
   thread: shape.thread.default({ provider: "claude-code", model: null, effort: "high" }),
   notificationLevel: shape.notificationLevel.default("coordinator"),
   threadAccess: shape.threadAccess.default("auto-accept-edits"),
+  autoFixPullRequests: shape.autoFixPullRequests.default(true),
   repoIds: shape.repoIds.default([]),
 });
 export type CreateProjectInput = z.input<typeof CreateProjectInputSchema>;

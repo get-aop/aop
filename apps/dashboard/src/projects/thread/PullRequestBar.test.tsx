@@ -105,6 +105,39 @@ describe("a thread with an open pull request", () => {
     expect(screen.queryByTestId("pr-open")).toBeNull();
   });
 
+  test("says in words what its checks add up to, when the host has read them", () => {
+    const withChecks = (checks: {
+      state: "pending" | "success" | "failure";
+      successful: number;
+      failing: number;
+      pending: number;
+    }) =>
+      makeThread({
+        id: "thr_1",
+        status: "ready-for-review",
+        artifacts: [{ ...OPEN_PR, checks }],
+      });
+
+    const { rerender } = render(<Harness thread={withPullRequest("open", "ready-for-review")} />);
+    expect(screen.queryByTestId("pr-bar-checks")).toBeNull();
+
+    rerender(
+      <Harness thread={withChecks({ state: "failure", successful: 1, failing: 2, pending: 0 })} />,
+    );
+    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("· 2 checks failing");
+    expect(screen.getByTestId("pr-bar-chip").getAttribute("data-checks")).toBe("failure");
+
+    rerender(
+      <Harness thread={withChecks({ state: "pending", successful: 0, failing: 0, pending: 1 })} />,
+    );
+    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("· 1 check running");
+
+    rerender(
+      <Harness thread={withChecks({ state: "success", successful: 3, failing: 0, pending: 0 })} />,
+    );
+    expect(screen.getByTestId("pr-bar-checks").textContent).toBe("· All checks passed");
+  });
+
   test("Sync asks the host to bring the thread in line with GitHub", async () => {
     host.respondWith(() => json({ thread: idle() }));
     render(<Harness thread={withPullRequest("open", "ready-for-review")} />);

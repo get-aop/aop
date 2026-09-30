@@ -21,6 +21,8 @@ export interface ProjectsTable {
   notification_level: Generated<NotificationLevel>;
   /** Added by migration v4. */
   thread_access: Generated<ThreadAccess>;
+  /** Added by migration v7. SQLite has no boolean: 0 or 1. */
+  auto_fix_pull_requests: Generated<0 | 1>;
   status: Generated<ProjectStatus>;
   created_at: Generated<string>;
   updated_at: Generated<string>;
@@ -60,12 +62,20 @@ export interface EventLogTable {
   created_at: Generated<string>;
 }
 
+export interface PullRequestWatchTable {
+  thread_id: string;
+  /** JSON array of what the watcher has already sent for this thread's pull request. */
+  entries_json: Generated<string>;
+  updated_at: Generated<string>;
+}
+
 export interface ProjectsDatabase {
   projects: ProjectsTable;
   project_repos: ProjectReposTable;
   memory_files: MemoryFilesTable;
   devices: DevicesTable;
   event_log: EventLogTable;
+  pull_request_watch: PullRequestWatchTable;
 }
 
 export type ProjectRow = Selectable<ProjectsTable>;

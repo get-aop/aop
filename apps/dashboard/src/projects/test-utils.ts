@@ -13,6 +13,7 @@ export const makeProject = (overrides: Partial<Project> = {}): Project => ({
   thread: { provider: "claude-code", model: null, effort: "high" },
   notificationLevel: "coordinator",
   threadAccess: "auto-accept-edits",
+  autoFixPullRequests: true,
   repoIds: ["repo_1"],
   status: "active",
   createdAt: AT,

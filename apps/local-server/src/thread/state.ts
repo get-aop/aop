@@ -49,7 +49,9 @@ const statusAfterEndedTurn = (
 /** The thread's pull request, if it has one: a thread has at most one. */
 export const pullRequestOf = (thread: Pick<Thread, "artifacts">): PullRequestRef | null => {
   const artifact = thread.artifacts.find((candidate) => candidate.type === "pr");
-  return artifact ? { number: artifact.number, url: artifact.url, state: artifact.state } : null;
+  if (!artifact) return null;
+  const { number, url, state, checks } = artifact;
+  return { number, url, state, ...(checks && { checks }) };
 };
 
 /** The change that would leave a thread in the status it is in now. */
