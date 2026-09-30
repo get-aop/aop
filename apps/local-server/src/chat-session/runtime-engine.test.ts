@@ -15,6 +15,7 @@ import {
   runSessionPrompt,
   sessionRunPhase,
 } from "./runtime-engine.ts";
+import { NO_PROJECT_COLUMNS } from "./test-utils.ts";
 
 const session = (overrides: Partial<ChatSession> = {}): ChatSession => ({
   id: "isess_run",
@@ -36,6 +37,7 @@ const session = (overrides: Partial<ChatSession> = {}): ChatSession => ({
   last_read_at: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  ...NO_PROJECT_COLUMNS,
   ...overrides,
 });
 

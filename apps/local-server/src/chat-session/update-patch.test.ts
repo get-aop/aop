@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ChatSession } from "../db/schema.ts";
+import { NO_PROJECT_COLUMNS } from "./test-utils.ts";
 import { buildUpdatePatch } from "./update-patch.ts";
 
 const base: ChatSession = {
@@ -22,6 +23,7 @@ const base: ChatSession = {
   last_read_at: null,
   created_at: "now",
   updated_at: "now",
+  ...NO_PROJECT_COLUMNS,
 };
 
 describe("buildUpdatePatch", () => {

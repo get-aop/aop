@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { useTestAopHome } from "@aop/infra";
 import type { LLMProvider, RunOptions, RunResult } from "@aop/llm-provider";
+import { NO_PROJECT_COLUMNS } from "../chat-session/test-utils.ts";
 import type { ChatMessage, ChatSession } from "../db/schema.ts";
 import { generatePullRequestDraft, parsePullRequestDraft } from "./pr-draft.ts";
 
@@ -31,6 +32,7 @@ const session = (overrides: Partial<ChatSession> = {}): ChatSession => ({
   last_read_at: null,
   created_at: now,
   updated_at: now,
+  ...NO_PROJECT_COLUMNS,
   ...overrides,
 });
 

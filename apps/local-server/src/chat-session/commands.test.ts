@@ -6,6 +6,7 @@ import { createCommandContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { executeChatCommand, slashCommandMayReachRuntime } from "./commands.ts";
+import { NO_PROJECT_COLUMNS } from "./test-utils.ts";
 
 const baseSession = (repoId: string): ChatSession => ({
   id: "isess_test",
@@ -27,6 +28,7 @@ const baseSession = (repoId: string): ChatSession => ({
   last_read_at: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
+  ...NO_PROJECT_COLUMNS,
 });
 
 describe("executeChatCommand", () => {

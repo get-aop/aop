@@ -11,6 +11,24 @@ import {
 export const runCheckpointRef = buildRunCheckpointRef;
 export const revertBackupRef = buildRevertBackupCheckpointRef;
 
+/** The project columns of a session that belongs to no project, for `ChatSession` fixtures. */
+export const NO_PROJECT_COLUMNS = {
+  project_id: null,
+  kind: null,
+  state: null,
+  blocked_question_json: null,
+  steps_json: "[]",
+  status_line: null,
+  branch: null,
+  pr_number: null,
+  pr_url: null,
+  pr_state: null,
+  target_json: '{"kind":"host"}',
+  last_activity_at: null,
+  unread: 0,
+  resolved_at: null,
+} as const;
+
 export interface SeedChatSessionOptions {
   sessionId: string;
   repoId?: string | null;
