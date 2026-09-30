@@ -2,7 +2,7 @@ import type { ChatActionPayload } from "@aop/common";
 import { generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatMessage, ChatRun, ChatSession } from "../db/schema.ts";
-import { loadProjectPromptContext } from "../project/prompt-context.ts";
+import { loadTurnContext } from "../project/prompt-context.ts";
 import { prepareConversationPrompt } from "./conversation-history.ts";
 import {
   buildRuntimePrompt,
@@ -207,7 +207,7 @@ export const claimNextQueuedSteer = async (
   const decoded = decodeStoredImages(queued.content);
   const workspacePath = await resolveSessionWorkspaceBinding(ctx, session);
   const globalInstructions = await loadChatGlobalInstructions(ctx.settingsRepository);
-  const projectContext = await loadProjectPromptContext(ctx, session);
+  const turnContext = await loadTurnContext(ctx, session);
   const basePrompt = buildRuntimePrompt(
     decoded.text,
     sessionId,
@@ -215,7 +215,7 @@ export const claimNextQueuedSteer = async (
     decoded.documents,
     decoded.pastes,
     globalInstructions,
-    projectContext?.instructions,
+    turnContext,
   );
   const context = await prepareConversationPrompt({
     ctx,

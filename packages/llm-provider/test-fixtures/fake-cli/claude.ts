@@ -53,6 +53,8 @@ function parseInvocation(args: string[]): Invocation {
       "--settings",
       "--model",
       "--effort",
+      "--append-system-prompt",
+      "--system-prompt-snapshot",
     ],
     // The real parser treats these as `<values...>`, so each one swallows a prompt placed after it.
     variadicFlags: ["--mcp-config", "--disallowedTools", "--add-dir", "--allowedTools", "--tools"],
@@ -61,6 +63,8 @@ function parseInvocation(args: string[]): Invocation {
     prompt: positionals[0] ?? "",
     resumeId: values.get("--resume"),
     model: values.get("--model"),
+    appendSystemPrompt: values.get("--append-system-prompt"),
+    recordSystemPrompt: values.get("--system-prompt-snapshot") !== "off",
     mcpServers: readMcpServers(variadicValues.get("--mcp-config") ?? []),
   };
 }

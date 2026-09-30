@@ -84,6 +84,31 @@ describe("buildRunOptions", () => {
     expect(options.onSession).toBe(onSession);
   });
 
+  test("hands the adapter a brief to append to the system prompt, on a resumed turn too", () => {
+    const options = buildRunOptions(
+      session({ runtime_session_id: "native-1" }),
+      "/work/repo",
+      "do it",
+      () => undefined,
+      "/logs/run.jsonl",
+      undefined,
+      undefined,
+      "# AOP project brief",
+    );
+
+    expect(options.appendSystemPrompt).toBe("# AOP project brief");
+    expect(options.resumeSessionId).toBe("native-1");
+    const command = new ClaudeCodeProvider().buildCommand(options);
+    // Each takes one value, then comes the prompt.
+    expect(command.slice(command.indexOf("--append-system-prompt"))).toEqual([
+      "--append-system-prompt",
+      "# AOP project brief",
+      "--system-prompt-snapshot",
+      "off",
+      "do it",
+    ]);
+  });
+
   test("leaves an unbound session without a resume id or alias", () => {
     const options = buildRunOptions(
       session({ runtime_session_id: null, runtime_alias: null }),

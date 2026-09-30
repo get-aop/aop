@@ -191,6 +191,7 @@ export class ClaudeCodeProvider implements LLMProvider {
       cmd.push("--effort", normalizeClaudeCodeEffort(options.reasoningEffort));
     }
 
+    appendClaudeSystemPromptFlags(cmd, options);
     cmd.push(options.prompt);
     appendClaudeVariadicFlags(cmd, options);
 
@@ -392,6 +393,18 @@ const appendClaudeVariadicFlags = (cmd: string[], options: RunOptions): void => 
   if (options.builtInTools) {
     cmd.push("--tools", normalizeToolList(options.builtInTools).join(","));
   }
+};
+
+// By default Claude Code records the system prompt of a conversation's first request, appended
+// text included, and sends that record on every later request and resume, ignoring different
+// text passed on a later launch (CLI reference: "System prompt flags in resumed conversations").
+// `--system-prompt-snapshot off` (Claude Code 2.1.257 or later) renders the prompt afresh each
+// request, so an edited instruction reaches a resumed turn. Both flags take one value, so they
+// also end any variadic flag before them and keep the positional prompt from being swallowed.
+const appendClaudeSystemPromptFlags = (cmd: string[], options: RunOptions): void => {
+  const text = options.appendSystemPrompt?.trim();
+  if (!text) return;
+  cmd.push("--append-system-prompt", text, "--system-prompt-snapshot", "off");
 };
 
 const appendClaudeBrowserFlags = (cmd: string[], options: RunOptions): void => {

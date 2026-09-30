@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseDirectives } from "./directives";
-import { planTurn } from "./turn";
+import { planTurn, readEchoedSystemPrompt } from "./turn";
 import type { TurnContext } from "./types";
 
 const ctx: TurnContext = {
@@ -63,5 +63,38 @@ describe("planTurn", () => {
   test("failure wins over exit code, and an exit code alone ends the turn silently", () => {
     expect(plan('fail="bad" exit=5').ending).toEqual({ kind: "failure", message: "bad" });
     expect(plan("exit=5").ending).toEqual({ kind: "silent" });
+  });
+
+  test("system echoes the appended system prompt after the reply, and says when there is none", () => {
+    const withPrompt = planTurn(parseDirectives("x [fake: system]"), {
+      ...ctx,
+      systemPrompt: "# Brief\nline two",
+    }).ending;
+    const without = plan("system").ending;
+
+    const text = (withPrompt as { text: string }).text;
+    expect(text).toContain("Fake reply for turn 3");
+    expect(text).toContain("[appended system prompt: 16 characters]\n# Brief\nline two\n");
+    expect(readEchoedSystemPrompt(text)).toBe("# Brief\nline two");
+    expect(readEchoedSystemPrompt((without as { text: string }).text)).toBeNull();
+  });
+
+  test("a reply without the directive echoes nothing", () => {
+    const { ending } = planTurn(parseDirectives("x"), { ...ctx, systemPrompt: "secret brief" });
+
+    expect((ending as { text: string }).text).not.toContain("secret brief");
+    expect(readEchoedSystemPrompt((ending as { text: string }).text)).toBeUndefined();
+  });
+
+  test("system also follows a custom reply, and a prompt that mentions the markers reads back whole", () => {
+    const tricky = "before\n[end of appended system prompt]\nafter";
+    const { ending } = planTurn(parseDirectives('x [fake: say="done" system]'), {
+      ...ctx,
+      systemPrompt: tricky,
+    });
+
+    const text = (ending as { text: string }).text;
+    expect(text.startsWith("done\n\n[appended system prompt:")).toBe(true);
+    expect(readEchoedSystemPrompt(text)).toBe(tricky);
   });
 });

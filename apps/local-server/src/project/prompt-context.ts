@@ -1,44 +1,80 @@
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
-import { type BriefRepo, buildCoordinatorBrief, buildThreadBrief } from "./briefs.ts";
+import type { ProjectMemory } from "./memory-block.ts";
 import { MEMORY_INDEX_NAME } from "./memory-service.ts";
+import {
+  buildCoordinatorSystemPrompt,
+  buildThreadSystemPrompt,
+  type PromptRepo,
+} from "./system-prompt.ts";
+import { buildThreadDigest } from "./thread-digest.ts";
 
-/** What the engine adds to a project session's turn: the role's brief and the extra folders it may read. */
-export interface ProjectPromptContext {
-  /** Prompt lines that replace the platform instructions plain sessions get. */
-  instructions: string[];
+/** What the engine adds to a project session's run: the system prompt for its role and the extra folders it may read. */
+export interface ProjectRunContext {
+  /** Appended to the CLI's system prompt on every turn, resumed ones included. */
+  systemPrompt: string;
   /** Other repos of the project, readable but not the thread's workspace. */
   readableDirectories: string[];
 }
 
-/** Null for a session that belongs to no project, or whose project or thread is gone. */
-export const loadProjectPromptContext = async (
+/**
+ * Read fresh for each turn, so a change to the instructions or memory reaches the next one.
+ * Null for a session that belongs to no project, or whose project or thread is gone.
+ */
+export const loadProjectRunContext = async (
   ctx: LocalServerContext,
   session: ChatSession,
-): Promise<ProjectPromptContext | null> => {
+): Promise<ProjectRunContext | null> => {
   if (!session.project_id) return null;
   const project = await ctx.projectRepository.getById(session.project_id);
   if (!project) return null;
   const repos = await loadRepos(ctx, project.repoIds);
-  const memoryIndex = (await ctx.memoryRepository.get(project.id, MEMORY_INDEX_NAME))?.body ?? null;
-  const base = { project, repos, memoryIndex };
+  const base = { project, repos, memory: await loadMemory(ctx, project.id) };
 
   if (session.kind === "coordinator") {
-    const threads = await ctx.threadRepository.listByProject(project.id);
-    return { instructions: buildCoordinatorBrief({ ...base, threads }), readableDirectories: [] };
+    return { systemPrompt: buildCoordinatorSystemPrompt(base), readableDirectories: [] };
   }
   const thread = await ctx.threadRepository.getById(session.id);
   if (!thread) return null;
   return {
-    instructions: buildThreadBrief({ ...base, thread, workspace: session.workspace_path ?? "" }),
+    systemPrompt: buildThreadSystemPrompt({
+      ...base,
+      thread,
+      workspace: session.workspace_path ?? "",
+    }),
     readableDirectories: repos.filter((repo) => repo.id !== thread.repoId).map((repo) => repo.path),
+  };
+};
+
+/**
+ * Lines added to the message of each turn, for what changes too often to sit in the system
+ * prompt: the coordinator's list of its threads. A thread has none. Undefined for a session that
+ * is not a project session, which keeps the message's default note.
+ */
+export const loadTurnContext = async (
+  ctx: LocalServerContext,
+  session: ChatSession,
+): Promise<string[] | undefined> => {
+  if (!session.project_id) return undefined;
+  if (session.kind !== "coordinator") return [];
+  return buildThreadDigest(await ctx.threadRepository.listByProject(session.project_id));
+};
+
+const loadMemory = async (ctx: LocalServerContext, projectId: string): Promise<ProjectMemory> => {
+  const [index, summaries] = await Promise.all([
+    ctx.memoryRepository.get(projectId, MEMORY_INDEX_NAME),
+    ctx.memoryRepository.summaries(projectId),
+  ]);
+  return {
+    index: index?.body ?? null,
+    topics: summaries.filter((file) => file.name !== MEMORY_INDEX_NAME),
   };
 };
 
 const loadRepos = async (
   ctx: LocalServerContext,
   repoIds: readonly string[],
-): Promise<BriefRepo[]> => {
+): Promise<PromptRepo[]> => {
   const repos = await Promise.all(repoIds.map((repoId) => ctx.repoRepository.getById(repoId)));
   return repos.flatMap((repo) =>
     repo

@@ -58,6 +58,13 @@ export interface RunOptions {
    * built-in tool and leaves MCP tools only; unset keeps the provider's default set.
    */
   builtInTools?: string[];
+  /**
+   * Text added to the CLI's system prompt on this launch (Claude Code `--append-system-prompt`).
+   * Pass it on every launch of a conversation, resumes included: the adapter also stops Claude
+   * Code reusing the prompt it recorded on the first launch, which would ignore a change made
+   * since. The text goes on the command line, so a caller keeps it well under 128 KiB.
+   */
+  appendSystemPrompt?: string;
   /** Enable Claude Code fast mode for faster output */
   fastMode?: boolean;
   /** Enable Claude Code Ultracode workflow orchestration for the session */

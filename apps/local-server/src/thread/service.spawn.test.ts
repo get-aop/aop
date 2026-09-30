@@ -65,7 +65,7 @@ describe("spawning a thread", () => {
     });
   });
 
-  test("the run is briefed with the project's instructions, goal and memory, and may read the other repos", async () => {
+  test("the run's system prompt carries the project's instructions, goal and memory, its message only the brief, and it may read the other repos", async () => {
     const { s, project } = await setup({ repos: 2 });
     await s.services.memory.write(project.id, {
       name: "MEMORY.md",
@@ -76,10 +76,10 @@ describe("spawning a thread", () => {
     await spawnAndSettle(s, project.id, { prompt: "Audit", repoId: s.repos[1]?.id });
 
     const run = s.runs[0];
-    expect(run?.prompt).toContain("Audit");
-    expect(run?.prompt).toContain("Keep pull requests small.");
-    expect(run?.prompt).toContain("Ship the new checkout");
-    expect(run?.prompt).toContain("- Ledger is append-only");
+    expect(run?.prompt).toBe("Audit");
+    expect(run?.appendSystemPrompt).toContain("Keep pull requests small.");
+    expect(run?.appendSystemPrompt).toContain("Ship the new checkout");
+    expect(run?.appendSystemPrompt).toContain("- Ledger is append-only");
     expect(run?.cwd).toContain(s.repos[1]?.path.split("/").pop() ?? "");
     expect(run?.allowedDirectories).toEqual([s.repos[0]?.path ?? ""]);
     expect(run?.isolation).toBe("open");

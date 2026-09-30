@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseRawJsonlContent } from "../src/logs";
 
+export { readEchoedSystemPrompt } from "./fake-cli/turn";
+
 /** Absolute path to hand an adapter as `runtimeAlias`. */
 export const FAKE_CLI_PATH = resolve(import.meta.dir, "fake-cli.ts");
 

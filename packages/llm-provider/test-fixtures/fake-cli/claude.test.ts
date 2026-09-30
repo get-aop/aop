@@ -35,7 +35,24 @@ describe("claudeDialect.parse", () => {
       prompt: "do the thing",
       resumeId: "sess-1",
       model: "opus",
+      recordSystemPrompt: true,
       mcpServers: { aop: { url: "http://127.0.0.1:1/mcp" } },
+    });
+  });
+
+  test("recovers the appended system prompt and the snapshot switch the adapter sends", () => {
+    const [, ...args] = new ClaudeCodeProvider().buildCommand({
+      prompt: "the prompt",
+      appendSystemPrompt: "# Brief\n--- not a flag",
+      isolation: "hermetic",
+      mcpServerUrl: "http://127.0.0.1:1/mcp",
+      disallowedTools: ["AskUserQuestion"],
+    });
+
+    expect(claudeDialect.parse(args)).toMatchObject({
+      prompt: "the prompt",
+      appendSystemPrompt: "# Brief\n--- not a flag",
+      recordSystemPrompt: false,
     });
   });
 
@@ -62,6 +79,8 @@ describe("claudeDialect.parse", () => {
       prompt: "first turn",
       resumeId: undefined,
       model: undefined,
+      appendSystemPrompt: undefined,
+      recordSystemPrompt: true,
       mcpServers: {},
     });
   });

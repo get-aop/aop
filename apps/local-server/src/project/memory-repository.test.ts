@@ -67,6 +67,20 @@ describe("memory repository", () => {
     expect(await memory.get("p2", "b.md")).toBeNull();
   });
 
+  test("summarises one project's files by name, with descriptions and no bodies", async () => {
+    await memory.save("p1", { name: "b.md", description: "How to build", body: "x".repeat(5000) });
+    await memory.save("p1", { name: "MEMORY.md", description: "", body: "index" });
+    await memory.save("p2", { name: "a.md", description: "other", body: "other project" });
+
+    const summaries = await memory.summaries("p1");
+
+    expect(summaries).toEqual([
+      { name: "MEMORY.md", description: "" },
+      { name: "b.md", description: "How to build" },
+    ]);
+    expect(summaries.every((summary) => !("body" in summary))).toBe(true);
+  });
+
   test("removes a file once and reports the second removal as absent", async () => {
     await memory.save("p1", { name: "a.md", description: "", body: "a" });
     await memory.save("p2", { name: "a.md", description: "", body: "a" });

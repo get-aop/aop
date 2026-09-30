@@ -51,7 +51,10 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
   const directives = parseDirectives(invocation.prompt, runtime.env.FAKE_CLI_SCRIPT);
   await io.sleep(directives.startupMs);
 
-  const session = beginTurn(resolveHome(runtime.env), dialect.name, invocation.resumeId);
+  const session = beginTurn(resolveHome(runtime.env), dialect.name, invocation.resumeId, {
+    appended: invocation.appendSystemPrompt,
+    recording: invocation.recordSystemPrompt,
+  });
   if (!session) {
     const message = `No conversation found with session ID: ${invocation.resumeId}`;
     return abort(io, message, FAILURE_EXIT_CODE);
@@ -64,6 +67,7 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
     prompt: invocation.prompt,
     turn: session.turn,
     resumed: session.resumed,
+    systemPrompt: session.appendedSystemPrompt,
   };
   const { beats, ending } = planTurn(directives, ctx);
   const server = invocation.mcpServers[AOP_MCP_SERVER];

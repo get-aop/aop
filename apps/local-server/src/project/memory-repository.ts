@@ -12,9 +12,14 @@ export interface MemoryFile {
 
 export type MemoryFileInput = Pick<MemoryFile, "name" | "description" | "body">;
 
+/** A memory file without its body, for listing many files cheaply. */
+export type MemoryFileSummary = Pick<MemoryFile, "name" | "description">;
+
 export interface MemoryRepository {
   /** Sorted by name. */
   list: (projectId: string) => Promise<MemoryFile[]>;
+  /** Every file's name and description, sorted by name, without reading the bodies. */
+  summaries: (projectId: string) => Promise<MemoryFileSummary[]>;
   get: (projectId: string, name: string) => Promise<MemoryFile | null>;
   /** Creates the file or replaces its description and body. */
   save: (projectId: string, file: MemoryFileInput) => Promise<MemoryFile>;
@@ -34,6 +39,14 @@ export const createMemoryRepository = (
       .execute();
     return rows.map(toMemoryFile);
   },
+
+  summaries: (projectId) =>
+    db
+      .selectFrom("memory_files")
+      .select(["name", "description"])
+      .where("project_id", "=", projectId)
+      .orderBy("name")
+      .execute(),
 
   get: async (projectId, name) => {
     const row = await db

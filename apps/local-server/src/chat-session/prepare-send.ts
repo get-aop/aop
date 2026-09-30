@@ -2,7 +2,7 @@ import type { ChatActionPayload, ChatDocumentAttachment, ChatImageAttachment } f
 import { generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatContextStrategy, ChatMessage, ChatRun, ChatSession } from "../db/schema.ts";
-import { loadProjectPromptContext } from "../project/prompt-context.ts";
+import { loadTurnContext } from "../project/prompt-context.ts";
 import type { RuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { prepareConversationPrompt } from "./conversation-history.ts";
 import {
@@ -145,7 +145,7 @@ const prepareRuntimeSend = async (
   const workspacePath = await resolveSessionWorkspaceBinding(ctx, session);
   if (!workspacePath) return { success: false, error: { code: "SESSION_NOT_FOUND" } };
   const globalInstructions = await loadChatGlobalInstructions(ctx.settingsRepository);
-  const projectContext = await loadProjectPromptContext(ctx, session);
+  const turnContext = await loadTurnContext(ctx, session);
   const baseRuntimePrompt = buildRuntimePrompt(
     text,
     sessionId,
@@ -153,7 +153,7 @@ const prepareRuntimeSend = async (
     storedDocuments,
     pastes,
     globalInstructions,
-    projectContext?.instructions,
+    turnContext,
   );
   const context = await prepareConversationPrompt({
     ctx,

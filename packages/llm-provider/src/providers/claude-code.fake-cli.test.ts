@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import {
   createFakeCliSandbox,
   FAKE_CLI_PATH,
+  readEchoedSystemPrompt,
   readEvents,
   readLog,
   waitFor,
@@ -148,6 +149,22 @@ describe("ClaudeCodeProvider against the fake CLI", () => {
     expect(finalText(second.log)).toContain(
       `Fake reply for turn 2 of session ${sessionId} (resumed)`,
     );
+  });
+
+  test("the appended system prompt reaches the process on every turn, and an edit reaches a resumed turn", async () => {
+    const { runToEnd } = createHarness();
+
+    const first = await runToEnd("one [fake: system]", { appendSystemPrompt: "rules v1" });
+    const second = await runToEnd("two [fake: system]", {
+      appendSystemPrompt: "rules v2 (edited)",
+      resumeSessionId: first.result.sessionId,
+    });
+    const plain = await runToEnd("three [fake: system]");
+
+    expect(readEchoedSystemPrompt(finalText(first.log))).toBe("rules v1");
+    expect(readEchoedSystemPrompt(finalText(second.log))).toBe("rules v2 (edited)");
+    expect(finalText(second.log)).toContain("(resumed)");
+    expect(readEchoedSystemPrompt(finalText(plain.log))).toBeNull();
   });
 
   test("refuses to resume a session the CLI never issued", async () => {

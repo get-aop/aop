@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLAUDE_ARGS, play, removeHomes, types } from "./test-utils";
+import { readEchoedSystemPrompt } from "./turn";
 
 afterEach(removeHomes);
 
@@ -83,6 +84,42 @@ describe("runFakeCli", () => {
     const run = await play([...CLAUDE_ARGS, 'x [fake: say="custom answer"]']);
 
     expect(run.events.at(-1)).toMatchObject({ result: "custom answer" });
+  });
+
+  test("[fake: system] echoes the appended system prompt in the reply and the result", async () => {
+    const run = await play([
+      ...CLAUDE_ARGS,
+      "--append-system-prompt",
+      "# Brief\nInstructions: keep PRs small.",
+      "--system-prompt-snapshot",
+      "off",
+      "hello [fake: system]",
+    ]);
+
+    const reply = (run.events.at(-1)?.result ?? "") as string;
+    expect(run.exitCode).toBe(0);
+    expect(readEchoedSystemPrompt(reply)).toBe("# Brief\nInstructions: keep PRs small.");
+    expect(reply).toContain("You said: hello");
+  });
+
+  test("a resume without --system-prompt-snapshot off still sees the first turn's prompt; with it, the new one", async () => {
+    const echo = (text: string, snapshot: string[]) => [
+      ...CLAUDE_ARGS,
+      "--append-system-prompt",
+      text,
+      ...snapshot,
+    ];
+    const first = await play([...echo("rules v1", []), "one [fake: system]"]);
+    const sessionId = first.events[0]?.session_id as string;
+    const resume = (text: string, snapshot: string[]) =>
+      play([...echo(text, snapshot), "--resume", sessionId, "two [fake: system]"], {}, first.home);
+
+    const kept = await resume("rules v2", []);
+    const fresh = await resume("rules v2", ["--system-prompt-snapshot", "off"]);
+
+    const replyOf = (run: typeof kept) => (run.events.at(-1)?.result ?? "") as string;
+    expect(readEchoedSystemPrompt(replyOf(kept))).toBe("rules v1");
+    expect(readEchoedSystemPrompt(replyOf(fresh))).toBe("rules v2");
   });
 
   test("resumes a known session and rejects an unknown one", async () => {

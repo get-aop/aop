@@ -61,6 +61,8 @@ export interface TurnContext {
   prompt: string;
   turn: number;
   resumed: boolean;
+  /** The appended system prompt this turn ran with: what the launch passed, or the recorded one on a resume. */
+  systemPrompt?: string;
 }
 
 /** What the adapter asked the CLI to do, recovered from argv. */
@@ -68,6 +70,10 @@ export interface Invocation {
   prompt: string;
   resumeId?: string;
   model?: string;
+  /** `--append-system-prompt`. */
+  appendSystemPrompt?: string;
+  /** False with `--system-prompt-snapshot off`. */
+  recordSystemPrompt: boolean;
   /** HTTP MCP servers from `--mcp-config`, by name. Other transports are not imitated. */
   mcpServers: Record<string, { url: string }>;
 }

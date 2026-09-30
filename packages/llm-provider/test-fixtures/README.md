@@ -54,6 +54,7 @@ A value is bare (`steps=2`), `"double quoted"` or `'single quoted'`. A quoted va
 | `exit=<n>` | Exits with code `n` and no terminal event. Combined with `fail`, sets the failing exit code. |
 | `crash[=<k>]` | Writes `k` whole events (default 2), then half of the next line, then SIGKILLs itself. |
 | `usage=<in>,<out>,<cacheWrite>,<cacheRead>` | Tokens the turn reports as consumed. Omitted or non-numeric parts are 0. Without the key, or with a bare `usage`, the turn reports 10, 5, 200 and 4000. |
+| `system` | Adds the appended system prompt the turn ran with (`--append-system-prompt`) to the end of its reply, between two marker lines, or `[appended system prompt: none]`. Lets a test or a screenshot read what the CLI was told. See [System prompt](#system-prompt). |
 
 Events are one JSON line each, written synchronously to stdout, so a log file tails and resumes exactly like the real CLI's.
 
@@ -76,7 +77,7 @@ The adapter hands a run the AOP server as `--mcp-config '{"mcpServers":{"aop":{"
 
 Each call happens when the fake reaches it, after the events before it are in the log and before its own result is written. The `tool_use` and `tool_result` lines are written together once the call returns.
 
-`--mcp-config`, `--allowedTools`, `--disallowedTools`, `--add-dir` and `--tools` are variadic in the real parser, so the fake's argv parser lets each swallow a prompt that follows it. The adapter puts `--allowedTools`, `--tools` and `--add-dir` after the prompt for that reason. It still emits `--mcp-config` and `--disallowedTools` before the prompt, so they only leave the prompt alone while `--model` or `--effort` follows them; a run that sets neither would lose its prompt in the real CLI, and the fake reports it as `no prompt given`.
+`--mcp-config`, `--allowedTools`, `--disallowedTools`, `--add-dir` and `--tools` are variadic in the real parser, so the fake's argv parser lets each swallow a prompt that follows it. The adapter puts `--allowedTools`, `--tools` and `--add-dir` after the prompt for that reason. It still emits `--mcp-config` and `--disallowedTools` before the prompt, so they only leave the prompt alone while `--model`, `--effort` or the single-valued `--append-system-prompt` and `--system-prompt-snapshot` follow them; a run that sets none of those would lose its prompt in the real CLI, and the fake reports it as `no prompt given`.
 
 ```bash
 # A coordinator turn that starts a thread, asks the user something, and waits:
@@ -84,14 +85,34 @@ Each call happens when the fake reaches it, after the events before it are in th
 [fake: ask="Which one?" options="a|b"]
 ```
 
+## System prompt
+
+`RunOptions.appendSystemPrompt` becomes `--append-system-prompt <text> --system-prompt-snapshot off` (see `appendClaudeSystemPromptFlags` in `src/providers/claude-code.ts`), placed right before the prompt. The fake reads both flags. Add `[fake: system]` to a prompt, or `FAKE_CLI_SCRIPT=system` to the process, and the reply ends with what the turn ran with:
+
+```
+Fake reply for turn 2 of session <id> (resumed). You said: ...
+
+[appended system prompt: 1234 characters]
+# AOP project brief
+...
+[end of appended system prompt]
+```
+
+`readEchoedSystemPrompt(reply)` from `@aop/llm-provider/test-fixtures` reads it back (`null` for "none", `undefined` when the reply echoed nothing).
+
+The fake also imitates what Claude Code does with that text on resume, because it decides whether an edit to a project's instructions reaches a resumed thread. By default (`--system-prompt-snapshot on`) Claude Code records the system prompt of a conversation's first request, appended text included, and sends that record on every later request and resume, even when a later launch passes different text or none, until the conversation is compacted. With `--system-prompt-snapshot off` it renders the prompt afresh each request. The fake stores the first launch's text in the session file and, unless `off` is passed, echoes that record on every resume. So a caller that forgets `off` sees stale text in the echo, as it would with the real CLI.
+
+Where this comes from: `claude --help` (2.1.285, no model call) and the [CLI reference](https://code.claude.com/docs/en/cli-reference#system-prompt-flags-in-resumed-conversations), which says the flag needs Claude Code 2.1.257 or later. It has not been observed on a real model: nothing in this repo runs `claude`. Compaction, which also re-renders the prompt, is not imitated.
+
 ## Sessions and resume
 
-Each invocation records its session under `$FAKE_CLI_HOME/sessions/claude/<id>.json`. `FAKE_CLI_HOME` falls back to `$AOP_HOME/fake-cli`, then the OS temp dir. `--resume <id>` continues a known id (same `session_id`, turn counter +1) and fails with exit 1 and `No conversation found with session ID: <id>` for an unknown one. A turn is recorded before any output, so killed and crashed turns leave resumable sessions.
+Each invocation records its session under `$FAKE_CLI_HOME/sessions/claude/<id>.json` (the turn count and the recorded system prompt). `FAKE_CLI_HOME` falls back to `$AOP_HOME/fake-cli`, then the OS temp dir. `--resume <id>` continues a known id (same `session_id`, turn counter +1) and fails with exit 1 and `No conversation found with session ID: <id>` for an unknown one. A turn is recorded before any output, so killed and crashed turns leave resumable sessions.
 
 ## Tests
 
 - `src/providers/claude-code.fake-cli.test.ts` runs the real `ClaudeCodeProvider` against it: spawn, streaming, resume, SIGTERM then resume, crash then resume, exit codes, failure, questions, both watchdogs.
 - `src/providers/claude-code.fake-cli-mcp.test.ts` runs the same adapter, in hermetic and open isolation, against a small HTTP MCP endpoint: the fake's `calls` and `ask` reach it with the run's session token, a tool it does not list is refused, and the call happens mid-turn.
+- `src/providers/claude-code.system-prompt.test.ts` and the system prompt case of `claude-code.fake-cli.test.ts` cover the flags the adapter builds and an edit reaching a resumed turn.
 - `apps/local-server/src/chat-session/fake-cli.test.ts` drives the chat engine through the runtime-configuration seam: streamed progress, resume, Stop then resume, crash then resume. Its provider factory refuses to spawn anything but the fake, so a misrouted alias fails the test instead of calling a model.
 - `fake-cli/*.test.ts` unit-test the fake itself, including that its argv parser accepts what the real adapter builds. `fake-cli/test-utils.ts` plays a turn in-process with a stubbed MCP connection.
 - `test-utils.ts` has the sandbox, log reader and `waitFor` helpers, and is importable as `@aop/llm-provider/test-fixtures`.

@@ -13,7 +13,13 @@ describe("parseDirectives", () => {
       exitCode: undefined,
       crashAfter: undefined,
       usage: { input: 10, output: 5, cacheWrite: 200, cacheRead: 4000 },
+      echoSystemPrompt: false,
     });
+  });
+
+  test("a bare `system` asks the reply to echo the appended system prompt", () => {
+    expect(parseDirectives("hi [fake: system]").echoSystemPrompt).toBe(true);
+    expect(parseDirectives("hi", "system steps=1").echoSystemPrompt).toBe(true);
   });
 
   test("reads the four token counts in order; omitted or non-numeric ones are 0", () => {

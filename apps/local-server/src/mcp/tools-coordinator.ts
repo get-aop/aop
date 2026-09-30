@@ -2,8 +2,6 @@ import {
   getThreadProgress,
   type Message,
   NotificationLevelSchema,
-  PROJECT_GOAL_MAX_LENGTH,
-  PROJECT_INSTRUCTIONS_MAX_LENGTH,
   type ProjectPatch,
   ReasoningEffortSchema,
   SUGGESTED_THREADS_MAX,
@@ -242,26 +240,37 @@ export const projectSettingsGetTool = defineTool({
   },
 });
 
-// Settings the coordinator may change: how the work is described and how loudly it is reported.
-// Thread access (full access), repositories and the coordinator's own runtime stay with the person.
+// What the coordinator may change: how threads run and how loudly they are reported. The goal and
+// the instructions are the person's: they are system-prompt text of every session (see
+// project/system-prompt.ts), so a coordinator that reads thread reports and user text must not be
+// able to rewrite them; its own channel for what it learns is memory, which sessions read as data.
+// Thread access, repositories and the coordinator's own runtime stay with the person too. The
+// schema is strict, so a call naming any of these fails with a message instead of being trimmed
+// to the settings that remain and reported as done.
+const SETTINGS_OF_THE_PERSON =
+  "Only the person changes the goal, the instructions, thread access and the repositories; here you can set threadModel, threadEffort and notificationLevel. Save what you learn with memory_write.";
+
 export const projectSettingsSetTool = defineTool({
   name: "project_settings_set",
   description:
-    "Change how the project runs, when the person asks: the goal, the instructions every thread receives, the model and effort threads use, or the notification level. Omit what should stay. Thread access and repositories can only be changed by the person.",
+    "Change how threads run, when the person asks: the model and effort they use, or the notification level. Omit what should stay. The goal, the instructions, thread access and the repositories can only be changed by the person.",
   input: z
-    .object({
-      goal: z.string().max(PROJECT_GOAL_MAX_LENGTH).optional(),
-      instructions: z.string().max(PROJECT_INSTRUCTIONS_MAX_LENGTH).optional(),
-      threadModel: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("null uses the provider's default model."),
-      threadEffort: ReasoningEffortSchema.nullable()
-        .optional()
-        .describe("null uses the provider's default effort."),
-      notificationLevel: NotificationLevelSchema.optional(),
-    })
+    .strictObject(
+      {
+        threadModel: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("null uses the provider's default model."),
+        threadEffort: ReasoningEffortSchema.nullable()
+          .optional()
+          .describe("null uses the provider's default effort."),
+        notificationLevel: NotificationLevelSchema.optional(),
+      },
+      {
+        error: (issue) => (issue.code === "unrecognized_keys" ? SETTINGS_OF_THE_PERSON : undefined),
+      },
+    )
     .refine((settings) => Object.values(settings).some((value) => value !== undefined), {
       error: "Send at least one setting to change",
     }),
@@ -269,8 +278,6 @@ export const projectSettingsSetTool = defineTool({
     const projectId = projectIdOf(call);
     const { project } = unwrap(await call.services.projects.get(projectId));
     const patch: ProjectPatch = {
-      ...(args.goal !== undefined && { goal: args.goal }),
-      ...(args.instructions !== undefined && { instructions: args.instructions }),
       ...(args.notificationLevel !== undefined && { notificationLevel: args.notificationLevel }),
       ...((args.threadModel !== undefined || args.threadEffort !== undefined) && {
         thread: {

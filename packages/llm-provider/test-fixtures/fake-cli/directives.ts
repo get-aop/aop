@@ -23,6 +23,8 @@ export interface Directives {
   crashAfter?: number;
   /** Tokens the turn reports as consumed, so accounting can be asserted against known numbers. */
   usage: TokenUsage;
+  /** Adds the appended system prompt the turn ran with to its reply, so a test or a screenshot can read it. */
+  echoSystemPrompt: boolean;
 }
 
 const MARKER_OPEN = "[fake:";
@@ -53,6 +55,7 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
     exitCode: optionalNumber(tokens.get("exit")),
     crashAfter: readCrashAfter(tokens),
     usage: readUsage(tokens.get("usage")),
+    echoSystemPrompt: tokens.has("system"),
   };
 };
 

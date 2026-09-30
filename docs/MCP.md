@@ -21,7 +21,7 @@ The coordinator is hermetic: it runs with the AOP tools only, with no Claude set
 | `thread_report` | Returns one thread's state and the end of its transcript. |
 | `propose_threads` | Attaches a "Suggested threads" block to the reply; nothing runs until the person starts one. |
 | `project_settings_get` | Reads goal, instructions, models and effort, notification level, thread access and repositories. |
-| `project_settings_set` | Changes goal, instructions, the thread model and effort, or the notification level. Thread access, repositories and the coordinator's own runtime stay with the person. |
+| `project_settings_set` | Changes the thread model and effort, or the notification level. The goal and instructions (which go into every session's system prompt), thread access, repositories and the coordinator's own runtime stay with the person: a call that names any of them fails with an error and changes nothing, also when it names a valid setting too. |
 | `memory_read`, `memory_write` | Read and write the project's memory files. |
 
 A thread's report reaches the coordinator as a `Thread report:` message that wakes it, so it does not poll.
@@ -53,5 +53,6 @@ The MCP endpoint listens on localhost and requires a token that is valid for one
 
 ## Related guides
 
+- [What a project session is told](./architecture/project-context.md): the project brief, instructions and memory each session's system prompt carries
 - [Runtimes](./RUNTIMES.md)
 - [Architecture](./architecture/README.md)

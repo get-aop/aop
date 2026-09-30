@@ -148,6 +148,8 @@ export const runSessionPrompt = async (input: {
   registration?: SessionRunRegistration;
   /** Extra dirs the provider may read (e.g. chat image attachments). */
   allowedDirectories?: string[];
+  /** Added to the CLI's system prompt for this launch; pass it on every turn (see RunOptions). */
+  appendSystemPrompt?: string;
   /** Durable path allocated before launch so a reloaded server can resume the run. */
   logFilePath?: string;
   createProviderFn?: CreateProviderFn;
@@ -180,6 +182,7 @@ export const runSessionPrompt = async (input: {
       repoPath,
       prompt,
       input.allowedDirectories,
+      input.appendSystemPrompt,
       input.logFilePath,
       input.createProviderFn,
       input.onProgress,
@@ -347,6 +350,7 @@ const executeProviderRun = async (
   repoPath: string,
   prompt: string,
   allowedDirectories: string[] | undefined,
+  appendSystemPrompt: string | undefined,
   durableLogFilePath: string | undefined,
   createProviderFn: CreateProviderFn | undefined,
   onProgress: StreamProgressListener | undefined,
@@ -463,6 +467,7 @@ const executeProviderRun = async (
       repoPath,
       prompt,
       allowedDirectories,
+      appendSystemPrompt,
       logFilePath,
       provider,
       handle,
@@ -513,6 +518,7 @@ const raceProviderAgainstInterrupt = async (input: {
   repoPath: string;
   prompt: string;
   allowedDirectories: string[] | undefined;
+  appendSystemPrompt: string | undefined;
   logFilePath: string;
   provider: LLMProvider;
   handle: ActiveRunHandle;
@@ -538,6 +544,7 @@ const raceProviderAgainstInterrupt = async (input: {
       input.handle.phase = input.handle.owner.interrupted ? "cancelling" : "running";
       await reportSpawnedPid(input.onSpawn, pid, input.session.id);
     },
+    input.appendSystemPrompt,
   );
   const providerPromise = completeProviderRun({
     runtime: input.session.runtime,

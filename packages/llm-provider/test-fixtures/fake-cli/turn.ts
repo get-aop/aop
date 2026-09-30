@@ -8,6 +8,10 @@ export interface TurnPlan {
 
 const ASK_WAIT_TEXT = "Waiting on your answer.";
 const MAX_ECHO_LENGTH = 200;
+const ECHO_NONE = "[appended system prompt: none]";
+const ECHO_END = "[end of appended system prompt]";
+const ECHO_PATTERN =
+  /\[appended system prompt: \d+ characters\]\n([\s\S]*)\n\[end of appended system prompt\]/;
 
 /** Turns the script into CLI-neutral beats: N tool rounds, MCP calls, an optional question, then how the turn ends. */
 export const planTurn = (directives: Directives, ctx: TurnContext): TurnPlan => {
@@ -32,7 +36,24 @@ const chooseEnding = (directives: Directives, ctx: TurnContext): Ending => {
   }
   if (directives.exitCode !== undefined) return { kind: "silent" };
   const fallback = directives.ask ? ASK_WAIT_TEXT : defaultReply(ctx);
-  return { kind: "success", text: directives.say ?? fallback };
+  const reply = directives.say ?? fallback;
+  return {
+    kind: "success",
+    text: directives.echoSystemPrompt ? withSystemPrompt(reply, ctx) : reply,
+  };
+};
+
+/** What `[fake: system]` appends to a reply: the appended system prompt the turn ran with, between two marker lines. */
+const withSystemPrompt = (reply: string, ctx: TurnContext): string => {
+  const prompt = ctx.systemPrompt;
+  if (!prompt) return `${reply}\n\n${ECHO_NONE}`;
+  return `${reply}\n\n[appended system prompt: ${prompt.length} characters]\n${prompt}\n${ECHO_END}`;
+};
+
+/** The system prompt a reply echoed, `null` when it echoed none, `undefined` when it echoed nothing. */
+export const readEchoedSystemPrompt = (reply: string): string | null | undefined => {
+  if (reply.includes(ECHO_NONE)) return null;
+  return ECHO_PATTERN.exec(reply)?.[1];
 };
 
 // The reply names the turn and session so a test or a screenshot can tell a

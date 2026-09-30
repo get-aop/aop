@@ -212,7 +212,7 @@ export const buildRuntimePrompt = (
   documents: StoredChatDocument[] = [],
   pastes: StoredChatPaste[] = [],
   globalInstructions?: string | null,
-  /** What follows the message: the platform note for plain sessions, the role brief for project sessions. */
+  /** What follows the message: the platform note for plain sessions, the coordinator's thread list for project sessions (a project session's brief is in its system prompt). */
   platformInstructions: readonly string[] = AOP_PLATFORM_INSTRUCTIONS,
 ): string => {
   const dir = chatSessionAttachmentsDir(sessionId);

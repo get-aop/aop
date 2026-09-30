@@ -15,6 +15,7 @@ export const buildRunOptions = (
   logFilePath: string,
   allowedDirectories?: string[],
   onSpawn?: (pid: number) => Promise<void>,
+  appendSystemPrompt?: string,
 ): RunOptions => {
   const profile = runProfileFor(session);
   return {
@@ -30,6 +31,7 @@ export const buildRunOptions = (
     onSession,
     onSpawn,
     allowedDirectories,
+    appendSystemPrompt,
     mcpServerUrl: resolveAopMcpUrl(session.runtime, session.id),
     startupTimeoutMs: CHAT_RUNTIME_TIMEOUT_POLICY.startupTimeoutMs,
     isolation: profile.isolation,

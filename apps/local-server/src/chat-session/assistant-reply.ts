@@ -6,7 +6,7 @@ import type {
   ChatRunInterruptionKind,
   ChatSession,
 } from "../db/schema.ts";
-import { loadProjectPromptContext } from "../project/prompt-context.ts";
+import { loadProjectRunContext } from "../project/prompt-context.ts";
 import { executeChatCommand } from "./commands.ts";
 import { prepareConversationPrompt } from "./conversation-history.ts";
 import {
@@ -206,7 +206,7 @@ const runRuntimeReply = async (input: RuntimeReplyInput) => {
     input.images,
     input.documents,
   );
-  const projectContext = await loadProjectPromptContext(ctx, session);
+  const projectContext = await loadProjectRunContext(ctx, session);
   const allowedDirectories = [
     ...(attachmentDirectories ?? []),
     ...(projectContext?.readableDirectories ?? []),
@@ -215,6 +215,8 @@ const runRuntimeReply = async (input: RuntimeReplyInput) => {
     input,
     repoPath,
     allowedDirectories.length > 0 ? allowedDirectories : undefined,
+    // Read for every turn, resumed ones included: what the CLI was told before is not kept.
+    projectContext?.systemPrompt,
     runtimePrompt,
   );
 };
@@ -223,6 +225,7 @@ const runMainRuntimeReply = async (
   input: RuntimeReplyInput,
   repoPath: string,
   allowedDirectories: string[] | undefined,
+  appendSystemPrompt: string | undefined,
   runtimePrompt: string,
 ): Promise<RuntimeRunResult> => {
   const { ctx, session } = input;
@@ -232,6 +235,7 @@ const runMainRuntimeReply = async (
     prompt: composeRuntimePrompt(runtimePrompt, input.runtimePromptPrefix),
     registration: input.registration,
     allowedDirectories,
+    appendSystemPrompt,
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,
     onProgress: input.onProgress,
@@ -256,6 +260,7 @@ const runMainRuntimeReply = async (
     prompt: composeRuntimePrompt(freshContext.prompt, input.runtimePromptPrefix),
     registration: input.registration,
     allowedDirectories,
+    appendSystemPrompt,
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,
     onProgress: input.onProgress,
