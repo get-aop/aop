@@ -26,6 +26,10 @@ export type ThreadError =
   | { code: "PULL_REQUEST_MERGED" }
   /** The branch holds work that its pull request does not. */
   | { code: "UNPUBLISHED_WORK" }
-  | { code: "THREAD_BUSY" };
+  | { code: "THREAD_BUSY" }
+  /** A changed-file path that is empty, absolute, or would leave the worktree. */
+  | { code: "INVALID_PATH" }
+  /** The path has no change to show. */
+  | { code: "FILE_NOT_FOUND" };
 
 export type ThreadResult<T> = ({ success: true } & T) | { success: false; error: ThreadError };

@@ -4,9 +4,9 @@ import { unseenCount } from "./chat/project-chat";
 import { useProjectChat } from "./chat/use-project-chat";
 import { ProjectHeader } from "./ProjectHeader";
 import { useProjectEntry, useProjectsState } from "./ProjectsProvider";
-import { ThreadPane } from "./panes";
 import { ProjectSettingsPane } from "./settings/ProjectSettingsPane";
-import { ThreadGrid } from "./ThreadGrid";
+import { ThreadOverview } from "./ThreadOverview";
+import { ThreadPane } from "./thread/ThreadPane";
 
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
 
@@ -29,7 +29,7 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
         coordinatorUnseen={route.name === "coordinator" ? 0 : unseenCount(model)}
       />
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {route.name === "project" ? <ThreadGrid entry={entry} /> : null}
+        {route.name === "project" ? <ThreadOverview entry={entry} /> : null}
         {route.name === "coordinator" ? (
           <CoordinatorChatPane
             project={project}
@@ -43,6 +43,8 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
           <ThreadPane
             project={project}
             thread={threads.find((thread) => thread.id === route.threadId)}
+            threads={threads}
+            threadsLoaded={threadsLoaded}
           />
         ) : null}
         {route.name === "project-settings" ? (

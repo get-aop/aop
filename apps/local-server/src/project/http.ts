@@ -32,8 +32,10 @@ export const errorResponse = (c: Context, error: ServiceError): Response => {
     case "THREAD_NOT_FOUND":
     case "MEMORY_FILE_NOT_FOUND":
     case "REPO_NOT_FOUND":
+    case "FILE_NOT_FOUND":
       return c.json(body, 404);
     case "INVALID_MESSAGE":
+    case "INVALID_PATH":
     case "REPO_REQUIRED":
     case "REPO_NOT_IN_PROJECT":
       return c.json(body, 400);

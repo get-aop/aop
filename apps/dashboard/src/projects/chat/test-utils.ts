@@ -105,6 +105,8 @@ export const createFakeEvents = () => {
   };
   return {
     events,
+    /** Delivers any stream event as it is: for what the helpers below do not build, such as a thread's live text. */
+    send,
     listenerCount: () => eventListeners.size + stateListeners.size,
     entry: (id: number, message: Message) =>
       send({ kind: "entry", entry: messageEntry(id, message) }),

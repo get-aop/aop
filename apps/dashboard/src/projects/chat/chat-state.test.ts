@@ -3,6 +3,7 @@ import {
   applyDelta,
   applyMessage,
   applySnapshot,
+  createChatState,
   dropLiveText,
   initialChatState,
   setLoadError,
@@ -189,5 +190,82 @@ describe("unansweredMessages", () => {
   test("are all of them before the first reply, and none once every one is answered", () => {
     expect(ids(unansweredMessages([userMessage("u1", 1)]))).toEqual(["u1"]);
     expect(unansweredMessages([userMessage("u1", 1), reply("a1", 2)])).toEqual([]);
+  });
+});
+
+describe("a thread's conversation", () => {
+  const inThread = (id: string, seconds: number, threadId = "thr_1") =>
+    reply(id, seconds, undefined, { threadId });
+  const userIn = (id: string, seconds: number, threadId = "thr_1") =>
+    userMessage(id, seconds, { threadId });
+  const threadReady = (...messages: Parameters<typeof applySnapshot>[1]) =>
+    applySnapshot(createChatState("thr_1"), messages);
+
+  test("starts loading, knows which thread it holds, and the coordinator's state holds none", () => {
+    expect(createChatState("thr_1")).toMatchObject({
+      scope: "thr_1",
+      phase: "loading",
+      messages: [],
+    });
+    expect(initialChatState.scope).toBeNull();
+  });
+
+  test("keeps only its own thread's messages on a fetch", () => {
+    const state = threadReady(
+      userIn("mine-u", 1),
+      inThread("mine-a", 2),
+      inThread("other", 3, "thr_2"),
+      userMessage("coordinator", 4),
+    );
+
+    expect(state.phase).toBe("ready");
+    expect(state.scope).toBe("thr_1");
+    expect(ids(state.messages)).toEqual(["mine-u", "mine-a"]);
+  });
+
+  test("takes a message of its own thread and ignores the coordinator's and other threads'", () => {
+    const state = threadReady();
+
+    expect(ids(applyMessage(state, inThread("a1", 1)).messages)).toEqual(["a1"]);
+    expect(applyMessage(state, userMessage("coordinator", 1))).toBe(state);
+    expect(applyMessage(state, inThread("other", 1, "thr_2"))).toBe(state);
+  });
+
+  test("puts an agent's reply after the steer it answers, as the host stores them", () => {
+    let state = threadReady(inThread("brief", 1));
+    state = applyMessage(state, userIn("steer", 3));
+    state = applyMessage(state, inThread("answer", 4));
+
+    expect(ids(state.messages)).toEqual(["brief", "steer", "answer"]);
+  });
+
+  test("takes its own live text and not the coordinator's or another thread's", () => {
+    let state = threadReady();
+    state = applyDelta(state, delta("a1", "Working", { threadId: "thr_1" }));
+    state = applyDelta(state, delta("a1", " on it", { threadId: "thr_1" }));
+    state = applyDelta(state, delta("c1", "coordinator"));
+    state = applyDelta(state, delta("t2", "elsewhere", { threadId: "thr_2" }));
+
+    expect(state.live).toEqual({ a1: "Working on it" });
+  });
+
+  test("its finished reply replaces its live text, as the coordinator's does", () => {
+    const state = applyMessage(
+      applyDelta(threadReady(), delta("a1", "Working", { threadId: "thr_1" })),
+      inThread("a1", 2),
+    );
+
+    expect(state.live).toEqual({});
+    expect(ids(state.messages)).toEqual(["a1"]);
+  });
+
+  test("a fetch keeps the live text of a reply it does not hold yet and drops one it does", () => {
+    let state = applyDelta(createChatState("thr_1"), delta("a1", "One", { threadId: "thr_1" }));
+    state = applyDelta(state, delta("a2", "Two", { threadId: "thr_1" }));
+
+    const next = applySnapshot(state, [inThread("a1", 1)]);
+
+    expect(next.live).toEqual({ a2: "Two" });
+    expect(next.scope).toBe("thr_1");
   });
 });

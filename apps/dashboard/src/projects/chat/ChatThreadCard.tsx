@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Link, threadPath } from "../../shell/router";
 import { PullRequestChip } from "../PullRequestChip";
+import { ResumeThreadButton } from "../ResumeThreadButton";
 import { StepsRing } from "../StepsRing";
 import { ThreadStatusDot } from "../ThreadStatusDot";
 import { useChatThread } from "./chat-context";
@@ -130,11 +131,19 @@ const CardBody = ({ thread, variant }: { thread: Thread; variant: ThreadCardVari
     );
   }
   const line = thread.liveStatusLine ?? (variant === "live" ? "Working…" : null);
-  return line ? (
-    <p data-testid="chat-thread-card-status" className="line-clamp-2 text-[12.5px] text-text-muted">
-      {line}
-    </p>
-  ) : null;
+  return (
+    <>
+      {line ? (
+        <p
+          data-testid="chat-thread-card-status"
+          className="line-clamp-2 text-[12.5px] text-text-muted"
+        >
+          {line}
+        </p>
+      ) : null}
+      <ResumeThreadButton thread={thread} className="mt-1 self-start" />
+    </>
+  );
 };
 
 const UnavailableCard = ({

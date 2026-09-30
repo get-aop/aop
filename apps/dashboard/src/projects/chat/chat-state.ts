@@ -1,12 +1,15 @@
 import type { Message, MessageDelta } from "@aop/common";
 
 /**
- * The coordinator chat of one project as the page holds it: the messages, oldest first, and
- * the live text of a reply still being written. Every step below is a pure function from one
- * state to the next, applied by message id, so a message that arrives twice (from a fetch and
- * from the stream, or from a replay after a reconnect) changes nothing the second time.
+ * One conversation of a project as the page holds it, the coordinator chat or a thread's own:
+ * the messages, oldest first, and the live text of a reply still being written. Every step
+ * below is a pure function from one state to the next, applied by message id, so a message
+ * that arrives twice (from a fetch and from the stream, or from a replay after a reconnect)
+ * changes nothing the second time.
  */
 export interface ChatState {
+  /** The conversation this state holds: a thread's id, or null for the coordinator chat. */
+  scope: string | null;
   /** `loading` until the messages have been fetched once. */
   phase: "loading" | "ready";
   /** Why the last fetch failed; the messages held may be behind the host until one succeeds. */
@@ -16,17 +19,26 @@ export interface ChatState {
   live: Readonly<Record<string, string>>;
 }
 
-export const initialChatState: ChatState = {
+export const createChatState = (scope: string | null): ChatState => ({
+  scope,
   phase: "loading",
   loadError: null,
   messages: [],
   live: {},
-};
+});
 
-/** The result of a fetch of the whole chat: it replaces the messages, and a live text whose message it holds is done. */
+export const initialChatState: ChatState = createChatState(null);
+
+/** The result of a fetch of the whole conversation: it replaces the messages, and a live text whose message it holds is done. */
 export const applySnapshot = (state: ChatState, messages: readonly Message[]): ChatState => {
-  const own = messages.filter(inCoordinatorChat);
-  return { phase: "ready", loadError: null, messages: own, live: withoutHeld(state.live, own) };
+  const own = messages.filter((message) => message.threadId === state.scope);
+  return {
+    ...state,
+    phase: "ready",
+    loadError: null,
+    messages: own,
+    live: withoutHeld(state.live, own),
+  };
 };
 
 export const setLoadError = (state: ChatState, loadError: string): ChatState => ({
@@ -36,7 +48,7 @@ export const setLoadError = (state: ChatState, loadError: string): ChatState => 
 
 /** One message from the stream or from sending. The finished message replaces its live text. */
 export const applyMessage = (state: ChatState, message: Message): ChatState => {
-  if (!inCoordinatorChat(message)) return state;
+  if (message.threadId !== state.scope) return state;
   const known = state.messages.findIndex(({ id }) => id === message.id);
   const messages =
     known === -1
@@ -50,7 +62,7 @@ export const applyMessage = (state: ChatState, message: Message): ChatState => {
  * shown: deltas and entries travel apart, so a delta can arrive after its message.
  */
 export const applyDelta = (state: ChatState, delta: MessageDelta): ChatState => {
-  if (delta.threadId !== null) return state;
+  if (delta.threadId !== state.scope) return state;
   if (state.messages.some(({ id }) => id === delta.messageId)) return state;
   const next = delta.replace ? delta.text : (state.live[delta.messageId] ?? "") + delta.text;
   if (next === "") return { ...state, live: withoutKey(state.live, delta.messageId) };
@@ -78,8 +90,6 @@ export const isReply = (message: Message): boolean => message.role === "assistan
 
 /** A person's message, or a thread's report: the two things that make the coordinator work. */
 export const isUserSide = (message: Message): boolean => message.role !== "assistant";
-
-const inCoordinatorChat = (message: Message): boolean => message.threadId === null;
 
 /**
  * Where a message that is new to the page goes. The host runs one turn at a time, oldest

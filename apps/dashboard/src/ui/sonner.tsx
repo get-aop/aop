@@ -24,7 +24,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-bg": "var(--color-overlay)",
           "--normal-text": "var(--color-text)",
           "--normal-border": "var(--color-border-strong)",
-          "var(--color-border)-radius": "var(--radius-card)",
+          "--border-radius": "var(--radius-card)",
         } as React.CSSProperties
       }
       {...props}

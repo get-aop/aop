@@ -1,5 +1,5 @@
 import type { EventLogEntry, Project, Thread, ThreadStatus } from "@aop/common";
-import type { LiveProjects } from "./live-projects";
+import type { LiveProjects, ProjectStreamEvent } from "./live-projects";
 import type { ProjectEntry, ProjectsState } from "./projects-state";
 
 export const AT = "2026-09-29T10:00:00.000Z";
@@ -202,13 +202,17 @@ export const stubLiveProjects = (initial: ProjectsState) => {
     adopted: [] as Project[],
     forgotten: [] as string[],
   };
+  const eventListeners = new Set<(event: ProjectStreamEvent) => void>();
   const live: LiveProjects = {
     getState: () => state,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    subscribeEvents: () => () => {},
+    subscribeEvents: (_projectId, listener) => {
+      eventListeners.add(listener);
+      return () => eventListeners.delete(listener);
+    },
     start: () => {},
     stop: () => {},
     setSelected: (projectId) => {
@@ -225,6 +229,10 @@ export const stubLiveProjects = (initial: ProjectsState) => {
   return {
     live,
     calls,
+    /** Delivers one stream event (an entry, live text, a resync) to whoever listens to the project's stream. */
+    emit: (event: ProjectStreamEvent) => {
+      for (const listener of eventListeners) listener(event);
+    },
     /** Replaces the state and tells the components, as a stream entry would. */
     set: (next: ProjectsState) => {
       state = next;

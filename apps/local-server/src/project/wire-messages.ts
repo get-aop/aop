@@ -108,7 +108,8 @@ const userSideMessage = (
   }
 };
 
-const displayText = (row: ChatMessage): string => {
+/** What a stored message says, as a person reads it: attachments' markers and pasted text expanded. */
+export const displayText = (row: Pick<ChatMessage, "content" | "session_id">): string => {
   const decoded = decodeMessageContent(row.content, row.session_id);
   return expandStoredPastes(decoded.text, decoded.pastes).trim();
 };

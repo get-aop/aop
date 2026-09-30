@@ -168,7 +168,7 @@
 }
 
 /* Shiki emits both light and dark token values; dark is the only theme. */
-:root[data-theme="dark"] .session-diff-syntax-token {
+:root[data-theme="dark"] .thread-diff-syntax-token {
   color: var(--shiki-dark) !important;
 }
 

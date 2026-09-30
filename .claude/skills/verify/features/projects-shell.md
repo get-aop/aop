@@ -1,6 +1,6 @@
 # Projects shell (dashboard)
 
-The dashboard's front door: a sidebar of projects with what needs attention in each, the projects screen, a project's home (its threads as cards), the New project dialog, and the pairing screen a browser sees when the host does not know it. A thread's transcript is a placeholder pane in this build; drive the coordinator and threads through the API, as [Projects](./projects.md) describes, and watch the cards move. The coordinator chat has its own map ([Projects chat](./projects-chat.md)), and project settings are built too: see [Project settings, memory, usage and Devices](./projects-settings.md).
+The dashboard's front door: a sidebar of projects with what needs attention in each, the projects screen, a project's home (its Overview: the threads grouped by status), the New project dialog, and the pairing screen a browser sees when the host does not know it. Drive the coordinator and threads through the API, as [Projects](./projects.md) describes, and watch the cards move. The coordinator chat has its own map ([Projects chat](./projects-chat.md)), a thread's own screen and the Overview's groups have theirs ([Projects thread pane and Overview](./projects-thread.md)), and project settings are built too: see [Project settings, memory, usage and Devices](./projects-settings.md).
 
 Everything that starts an agent needs a stack seeded with `--fake-runtime`. Start it with the tripwire stubs first on `PATH` (a directory holding `claude`, `codex` and `pi` scripts that log and exit 99), so a misrouted call cannot reach the real CLIs.
 
@@ -32,8 +32,8 @@ Everything that starts an agent needs a stack seeded with `--fake-runtime`. Star
 | `projects-index`, `project-card`, `project-card-link`, `project-search`, `projects-new`, `projects-empty` | The `/` screen |
 | `new-project-dialog`, `new-project-{name,goal,instructions,instructions-count,repos,repo,attach-repo,submit,error}` | The New project dialog |
 | `project-page`, `project-title`, `project-attention`, `project-stream-state` (`data-state`), `project-tab-{threads,coordinator,settings}` | A project's header |
-| `thread-grid`, `thread-card` (`data-thread-id`, `data-status`, `data-unread`), `thread-card-link`, `thread-status-label`, `thread-status-line`, `thread-steps` (`data-done`, `data-total`), `thread-pr-chip`, `thread-search`, `thread-count` | The project home |
-| `thread-pane` | The placeholder pane; the coordinator chat's handles are in [Projects chat](./projects-chat.md) |
+| `thread-overview`, `thread-groups`, `thread-card` (`data-thread-id`, `data-status`, `data-unread`), `thread-card-link`, `thread-status-label`, `thread-status-line`, `thread-steps` (`data-done`, `data-total`), `thread-pr-chip`, `thread-search`, `thread-count` | The project home; the groups and counters are in [Projects thread pane and Overview](./projects-thread.md) |
+| `thread-pane` | The thread's screen; its handles are in [Projects thread pane and Overview](./projects-thread.md), the coordinator chat's in [Projects chat](./projects-chat.md) |
 | `project-settings-pane` (`data-section`) | The project's settings (see [Project settings](./projects-settings.md)) |
 | `connection-status` (`data-state` = `connected`, `reconnecting` or `offline`) | The sidebar footer |
 | `pairing-screen`, `pairing-code-input`, `pairing-device-name`, `pairing-submit`, `pairing-error`, `host-unreachable` | The pairing screen |

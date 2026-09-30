@@ -1,3 +1,20 @@
+export type {
+  ActivityGroup,
+  ActivityRow,
+  ThreadActivity,
+  ThreadTurnActivity,
+} from "./activity.ts";
+export {
+  ACTIVITY_DETAIL_MAX_LENGTH,
+  ACTIVITY_LABEL_MAX_LENGTH,
+  ACTIVITY_NARRATION_MAX_LENGTH,
+  ACTIVITY_ROWS_PER_TURN_MAX,
+  ACTIVITY_TURNS_MAX,
+  ActivityGroupSchema,
+  ActivityRowSchema,
+  ThreadActivitySchema,
+  ThreadTurnActivitySchema,
+} from "./activity.ts";
 export type { Artifact, PullRequestRef, PullRequestState } from "./artifact.ts";
 export { ArtifactSchema, PullRequestRefSchema } from "./artifact.ts";
 export type { MessageBlock, SuggestedThread, ThreadCardVariant } from "./blocks.ts";
@@ -66,6 +83,11 @@ export {
   ProjectStatusSchema,
   ThreadAccessSchema,
 } from "./project.ts";
+export {
+  DEFAULT_MAX_CONCURRENT_RUNS,
+  MAX_CONCURRENT_RUNS_LIMIT,
+  parseMaxConcurrentRuns,
+} from "./run-cap.ts";
 export type {
   CliProvider,
   ReasoningEffort,

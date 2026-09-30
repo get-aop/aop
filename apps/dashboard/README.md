@@ -2,7 +2,7 @@
 
 React operational UI for AOP. Built with Bun (no Vite); static assets are produced by `build.ts` and served by `@aop/local-server` in production.
 
-The dashboard is Projects-first. A project is one coordinator chat plus the threads the coordinator starts. The sidebar lists projects with what needs attention in each (threads waiting on you, threads working), `/` shows them as cards, and a project's home is a grid of its threads that changes live as the host's event stream delivers entries. Settings is a dialog over the app for host-level settings (repositories, runtimes, execution hosts, about).
+The dashboard is Projects-first. A project is one coordinator chat plus the threads the coordinator starts. The sidebar lists projects with what needs attention in each (threads waiting on you, threads working), `/` shows them as cards, and a project's home is its Overview, its threads grouped by what they need from you, which changes live as the host's event stream delivers entries. Settings is a dialog over the app for host-level settings (the run cap, repositories, runtimes, devices, about).
 
 ## Run
 
@@ -24,10 +24,10 @@ Dev expects `AOP_LOCAL_SERVER_URL` pointing at the API (local-server sets CORS f
 | Path | Screen | Purpose |
 | --- | --- | --- |
 | `/` | `ProjectsIndex` | Every project as a card, search, New project |
-| `/projects/:id` | `ThreadGrid` | The project home: its threads as cards, questions first, search |
+| `/projects/:id` | `ThreadOverview` | The project home: counters, then its threads grouped by status (questions first, resolved folded), search |
 | `/projects/:id/chat` | `CoordinatorChatPane` | The coordinator chat (see [The coordinator chat](#the-coordinator-chat)) |
-| `/projects/:id/threads/:threadId` | `ThreadPane` | One thread (placeholder) |
-| `/projects/:id/settings` | `ProjectSettingsPane` | Project settings, memory, usage (placeholder) |
+| `/projects/:id/threads/:threadId` | `ThreadPane` | One thread: transcript, its question, steering, pull request, changes (see [The thread pane](#the-thread-pane)) |
+| `/projects/:id/settings` | `ProjectSettingsPane` | Project settings, memory, usage |
 | any other path | none | Rewritten to `/` |
 
 There is no router library: `src/shell/router.tsx` parses the path and `navigate()` uses the History API.
@@ -49,25 +49,23 @@ The host answers `401 UNAUTHENTICATED` to a browser it does not know. `src/auth/
 
 ## The coordinator chat
 
-`src/projects/chat/` is the conversation with a project's coordinator. `docs/architecture/coordinator-chat.md` describes how it stays correct across reconnects, resyncs and reloads; in short, `useProjectChat` runs for as long as a project is open, keeps the messages in a pure state applied by message id (`chat-state.ts`), and gets them from a fetch of `GET /api/projects/:id/messages`, from the stream's entries and live-text deltas (`useLiveProjects().subscribeEvents`), and from the message a send returns. Whatever a reply is made of is drawn by `MessageBlocks`: prose with thread and pull request chips, the routing receipt, thread cards that follow their thread, suggested threads, and forwarded quotes. `Composer` and `MessageBlocks` do not know the coordinator, so the thread pane reuses them.
+`src/projects/chat/` is the conversation with a project's coordinator. `docs/architecture/coordinator-chat.md` describes how it stays correct across reconnects, resyncs and reloads; in short, `useProjectChat` runs for as long as a project is open, keeps the messages in a pure state applied by message id (`chat-state.ts`), and gets them from a fetch of `GET /api/projects/:id/messages`, from the stream's entries and live-text deltas (`useLiveProjects().subscribeEvents`), and from the message a send returns. Whatever a reply is made of is drawn by `MessageBlocks`: prose with thread and pull request chips, the routing receipt, thread cards that follow their thread, suggested threads, and forwarded quotes. `Composer`, `MessageList` and `MessageBlocks` do not know the coordinator, so the thread pane reuses them.
 
-## Extension points
+## The thread pane
 
-Two placeholder screens live in `src/projects/panes.tsx` and already receive the data they need, typed. Replacing a body changes nothing in the shell.
-
-- `ThreadPane({ project, thread })`: the thread's transcript and its own composer.
-- `ProjectSettingsPane({ project })`: the tab already links here; the project menu's Settings item does too.
+`src/projects/thread/` is one thread at `/projects/:id/threads/:threadId`. `docs/architecture/thread-pane.md` describes it; in short, the thread comes from the project's live state, its transcript from `chat/conversation.ts` (the coordinator chat's engine, scoped to the thread id), the tool calls of each turn from `GET /api/threads/:id/activity`, and the changed files from `GET /api/threads/:id/diff`. The pane holds no state the host owns: Stop, Resume, Resolve, Delete, answering and merging call the host (`src/projects/thread-actions.ts`, `thread/use-pull-request.ts`), and the page follows the entry the host publishes. The diff view (`thread/changes/`) takes line comments that queue in the browser and go to the thread as one message.
 
 ## Layout
 
 ```text
 src/
-  projects/     the domain: live state, stream, sidebar rows, project home, New project dialog
+  projects/     the domain: live state, stream, sidebar rows, the Overview, New project dialog
   projects/chat/  the coordinator chat: state, messages and blocks, composer
+  projects/thread/  the thread pane: header, transcript, answer card, pull request bar
+  projects/thread/changes/  the thread's changed files: diff view and review comments
   auth/         the authentication gate and the pairing screen
   shell/        the sidebar, router, dialog store, settings dialog, shortcuts
   api/          typed fetch wrapper (request/domain modules), host config, re-export hub
-  views/sessions/  git, pull request, diff and markdown panel components kept for the thread pane; not mounted yet
   ui/           the one component kit (shadcn + custom)
   components/   dialogs, confirmation host
 ```

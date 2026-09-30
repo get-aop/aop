@@ -5,7 +5,7 @@ import type {
   UserMessage,
 } from "@aop/common";
 import { CircleAlertIcon, CircleCheckIcon, HandIcon } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, type ReactNode, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Bubble } from "@/ui/bubble";
 import { ChatMarkdown } from "./ChatMarkdown";
@@ -36,8 +36,17 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
   );
 });
 
-/** The coordinator's reply, or a message it relayed: blocks on the left, no bubble. */
-export const AssistantRow = memo(function AssistantRow({ message }: { message: AssistantMessage }) {
+/**
+ * An agent's reply, or a message the coordinator relayed: blocks on the left, no bubble.
+ * `workLog` is what the agent did to write it, shown above the words.
+ */
+export const AssistantRow = memo(function AssistantRow({
+  message,
+  workLog,
+}: {
+  message: AssistantMessage;
+  workLog?: ReactNode;
+}) {
   return (
     <div
       className="group pb-4"
@@ -46,6 +55,7 @@ export const AssistantRow = memo(function AssistantRow({ message }: { message: A
       data-message-role="assistant"
     >
       <div className="relative min-w-0 px-1 py-0.5">
+        {workLog}
         <MessageBlocks blocks={message.blocks} />
         <div className="mt-1.5">
           <MessageMeta timestamp={message.createdAt} copyText={textOf(message)} />

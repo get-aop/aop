@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { MessageBlock, Thread } from "@aop/common";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { makeThread } from "../test-utils";
+import { json, mockHost } from "../thread/test-utils";
 
 setupDashboardDom();
 
-const { act, cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, screen, waitFor, within } = await import(
+  "@testing-library/react"
+);
 const { ChatProvider } = await import("./chat-context");
 const { MessageBlocks } = await import("./MessageBlocks");
 
@@ -249,5 +252,50 @@ describe("a block the app does not know", () => {
     await act(async () => {});
 
     expect(screen.getByTestId("message-blocks").textContent).toContain("Hello.");
+  });
+});
+
+describe("resuming a rate-limited thread from its card", () => {
+  let host: ReturnType<typeof mockHost>;
+  beforeEach(() => {
+    host = mockHost();
+    host.respondWith(() => json({ thread: makeThread({ id: "thr_1", status: "working" }) }));
+  });
+  afterEach(() => host.restore());
+
+  const limited = makeThread({
+    id: "thr_1",
+    title: "Fix login",
+    status: "rate-limited",
+    liveStatusLine: "Paused: You've hit your session limit. Resuming automatically at 3:45 PM.",
+  });
+
+  test("a card of a rate-limited thread keeps its line and offers Resume", () => {
+    renderBlocks([{ type: "thread-card", threadId: "thr_1", variant: "live" }], [limited]);
+
+    expect(screen.getByTestId("chat-thread-card").getAttribute("data-status")).toBe("rate-limited");
+    expect(screen.getByTestId("chat-thread-card-status").textContent).toContain("Resuming");
+    expect(
+      within(screen.getByTestId("chat-thread-card")).getByTestId("thread-card-resume"),
+    ).toBeTruthy();
+  });
+
+  test("Resume ends the wait without opening the thread, and the button goes when the thread works again", async () => {
+    const blocks: MessageBlock[] = [{ type: "thread-card", threadId: "thr_1", variant: "live" }];
+    const { rerender } = render(tree(blocks, [limited]));
+
+    fireEvent.click(screen.getByTestId("thread-card-resume"));
+
+    await waitFor(() => expect(host.to("/api/threads/thr_1/resume", "POST")).toHaveLength(1));
+    expect(window.location.pathname).toBe("/");
+
+    rerender(tree(blocks, [{ ...limited, status: "working" } as Thread]));
+    expect(screen.queryByTestId("thread-card-resume")).toBeNull();
+  });
+
+  test("a card of a thread in any other state has no Resume", () => {
+    renderBlocks([{ type: "thread-card", threadId: "thr_1", variant: "live" }], [fixLogin]);
+
+    expect(screen.queryByTestId("thread-card-resume")).toBeNull();
   });
 });

@@ -45,6 +45,21 @@ export const createThreadRoutes = ({ threads }: ProjectServices) => {
     return result.success ? c.json({ messages: result.messages }) : errorResponse(c, result.error);
   });
 
+  routes.get("/threads/:threadId/activity", async (c) => {
+    const result = await threads.activity(c.req.param("threadId"));
+    return result.success ? c.json(result.activity) : errorResponse(c, result.error);
+  });
+
+  routes.get("/threads/:threadId/diff", async (c) => {
+    const result = await threads.changes(c.req.param("threadId"));
+    return result.success ? c.json(result.diff) : errorResponse(c, result.error);
+  });
+
+  routes.get("/threads/:threadId/diff/file", async (c) => {
+    const result = await threads.changedFile(c.req.param("threadId"), c.req.query("path") ?? "");
+    return result.success ? c.json(result.file) : errorResponse(c, result.error);
+  });
+
   routes.post("/threads/:threadId/messages", async (c) => {
     const parsed = await readBody(c, MessageBodySchema);
     if ("response" in parsed) return parsed.response;

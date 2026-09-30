@@ -11,7 +11,7 @@ curl -X PUT http://127.0.0.1:25150/api/settings/max_concurrent_runs \
   -H 'content-type: application/json' -d '{"value":"2"}'
 ```
 
-A value outside that range is refused with a `400` and the old value stays. Raising the cap starts waiting turns at once. Lowering it never stops a turn that is running; the count falls as turns end.
+The cap can also be set in the dashboard, under Settings > General > Runs, which refuses a value outside that range before it is sent. A value outside that range is refused by the host with a `400` and the old value stays. Raising the cap starts waiting turns at once. Lowering it never stops a turn that is running; the count falls as turns end.
 
 - **Only thread turns count and only they wait.** A coordinator turn or a plain chat is something a person is waiting on, and it is bounded by one per session. It never uses a slot, never queues, and so is never starved: a thread report wakes the coordinator even while every slot is taken.
 - **A turn that has to wait puts its thread in the `queued` status**, with the status line "Waiting for a free run slot". Starting it makes the thread `working`. Both changes are `thread.upserted` entries on the project's event stream.

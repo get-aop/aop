@@ -1,11 +1,8 @@
+import { DEFAULT_MAX_CONCURRENT_RUNS, parseMaxConcurrentRuns } from "@aop/common";
 import { type Kysely, sql } from "kysely";
 import type { Database } from "../db/schema.ts";
 import type { SettingsRepository } from "../settings/repository.ts";
-import {
-  DEFAULT_MAX_CONCURRENT_RUNS,
-  parseMaxConcurrentRuns,
-  SettingKey,
-} from "../settings/types.ts";
+import { SettingKey } from "../settings/types.ts";
 
 /*
  * The host runs at most `max_concurrent_runs` thread turns at once. Only thread turns count and

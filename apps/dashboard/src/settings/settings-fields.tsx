@@ -23,9 +23,19 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
     label: "Chat",
     keys: ["chat_global_instructions"],
   },
+  {
+    label: "Runs",
+    keys: ["max_concurrent_runs"],
+  },
 ];
 
 export const SETTING_META: Record<string, SettingMeta> = {
+  max_concurrent_runs: {
+    label: "Concurrent thread runs",
+    description:
+      "How many thread turns this host runs at once. The rest wait their turn, in order. Raising it starts waiting turns at once; lowering it never stops a turn that is running.",
+    type: "number",
+  },
   chat_global_instructions: {
     label: "Global instructions",
     description:
@@ -51,11 +61,20 @@ interface SettingRowProps {
   settingKey: string;
   value: string;
   options?: { value: string; label: string; sub?: string }[];
+  /** Why the value cannot be saved; the row says so under the field and the value is not saved. */
+  error?: string | null;
   onChange: (key: string, value: string) => void;
   isLast: boolean;
 }
 
-export const SettingRow = ({ settingKey, value, options, onChange, isLast }: SettingRowProps) => {
+export const SettingRow = ({
+  settingKey,
+  value,
+  options,
+  error = null,
+  onChange,
+  isLast,
+}: SettingRowProps) => {
   const baseMeta = SETTING_META[settingKey] ?? { label: settingKey, description: "", type: "text" };
   const meta =
     baseMeta.type === "select"
@@ -75,13 +94,24 @@ export const SettingRow = ({ settingKey, value, options, onChange, isLast }: Set
         <p className="text-[11.5px] mt-1 text-text-muted">{meta.description}</p>
       </div>
 
-      <div className={stacked ? "w-full" : "flex shrink-0 items-center gap-2"}>
+      <div className={stacked ? "w-full" : "flex shrink-0 flex-col items-end gap-1.5"}>
         <SettingInput
           id={inputId}
           meta={meta}
           value={value}
+          invalid={error !== null}
           onChange={(nextValue: string) => onChange(settingKey, nextValue)}
         />
+        {error ? (
+          <p
+            id={`${inputId}-error`}
+            role="alert"
+            data-testid={`setting-error-${settingKey}`}
+            className="text-[11.5px] text-blocked"
+          >
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -91,10 +121,11 @@ interface SettingInputProps {
   id: string;
   meta: SettingMeta;
   value: string;
+  invalid: boolean;
   onChange: (value: string) => void;
 }
 
-const SettingInput = ({ id, meta, value, onChange }: SettingInputProps) => {
+const SettingInput = ({ id, meta, value, invalid, onChange }: SettingInputProps) => {
   if (meta.type === "toggle") {
     return (
       <Switch
@@ -137,21 +168,26 @@ const SettingInput = ({ id, meta, value, onChange }: SettingInputProps) => {
     );
   }
 
-  return (
-    <div className="relative">
-      <Input
-        id={id}
-        type={meta.type === "password" ? "password" : "text"}
-        inputMode={meta.type === "number" ? "numeric" : undefined}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={`${meta.type === "number" ? "w-24 text-right" : "w-52"} ${meta.suffix ? "pr-6" : ""}`}
-      />
-      {meta.suffix ? (
-        <span className="text-[11.5px] pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-subtle">
-          {meta.suffix}
-        </span>
-      ) : null}
-    </div>
-  );
+  return <LineInput id={id} meta={meta} value={value} invalid={invalid} onChange={onChange} />;
 };
+
+const LineInput = ({ id, meta, value, invalid, onChange }: SettingInputProps) => (
+  <div className="relative">
+    <Input
+      id={id}
+      data-testid={id}
+      type={meta.type === "password" ? "password" : "text"}
+      inputMode={meta.type === "number" ? "numeric" : undefined}
+      aria-invalid={invalid || undefined}
+      aria-describedby={invalid ? `${id}-error` : undefined}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className={`${meta.type === "number" ? "w-24 text-right" : "w-52"} ${meta.suffix ? "pr-6" : ""}`}
+    />
+    {meta.suffix ? (
+      <span className="text-[11.5px] pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-subtle">
+        {meta.suffix}
+      </span>
+    ) : null}
+  </div>
+);

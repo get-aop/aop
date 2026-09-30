@@ -1,4 +1,4 @@
-import type { Thread, ThreadStatus } from "@aop/common";
+import type { Artifact, PullRequestRef, Thread, ThreadStatus } from "@aop/common";
 import type { ProjectEntry, ProjectsState } from "./projects-state";
 
 export interface Attention {
@@ -47,6 +47,51 @@ export const sortThreads = (threads: readonly Thread[]): Thread[] =>
       Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt),
   );
 
+/** Every status in the order a person should look at them; the Overview shows one group per status. */
+export const THREAD_STATUS_ORDER: readonly ThreadStatus[] = Object.entries(STATUS_RANK)
+  .sort(([, a], [, b]) => a - b)
+  .map(([status]) => status as ThreadStatus);
+
+export interface ThreadGroup {
+  status: ThreadStatus;
+  threads: Thread[];
+}
+
+/**
+ * The Overview's groups: one per status, questions first and closed work last, each newest
+ * activity first, except the queue, which lists threads in the order the host starts them
+ * (oldest first). A status with no thread has no group.
+ */
+export const groupThreads = (threads: readonly Thread[]): ThreadGroup[] => {
+  const sorted = sortThreads(threads);
+  return THREAD_STATUS_ORDER.flatMap((status) => {
+    const inStatus = sorted.filter((thread) => thread.status === status);
+    if (inStatus.length === 0) return [];
+    return [{ status, threads: status === "queued" ? inStatus.toReversed() : inStatus }];
+  });
+};
+
+export interface OverviewCounters {
+  waiting: number;
+  /** Threads with a turn running, or lined up to run: working, queued and rate-limited. */
+  running: number;
+  readyForReview: number;
+  openPullRequests: number;
+  resolved: number;
+}
+
+export const overviewCounters = (threads: readonly Thread[]): OverviewCounters => ({
+  waiting: threads.filter((thread) => thread.status === "waiting-on-you").length,
+  running: threads.filter((thread) => RUNNING_STATUSES.has(thread.status)).length,
+  readyForReview: threads.filter((thread) => thread.status === "ready-for-review").length,
+  openPullRequests: threads.filter((thread) =>
+    thread.artifacts.some((artifact) => artifact.type === "pr" && artifact.state === "open"),
+  ).length,
+  resolved: threads.filter((thread) => thread.status === "resolved").length,
+});
+
+const RUNNING_STATUSES: ReadonlySet<ThreadStatus> = new Set(["working", "queued", "rate-limited"]);
+
 export const THREAD_STATUS_LABEL: Record<ThreadStatus, string> = {
   "waiting-on-you": "Waiting on you",
   working: "Working",
@@ -57,6 +102,12 @@ export const THREAD_STATUS_LABEL: Record<ThreadStatus, string> = {
   idle: "Idle",
   resolved: "Resolved",
 };
+
+/** The pull request a thread opened, if it has: a thread has at most one. */
+export const pullRequestOf = (thread: Thread): PullRequestRef | null =>
+  thread.artifacts.find(
+    (artifact): artifact is Artifact & { type: "pr" } => artifact.type === "pr",
+  ) ?? null;
 
 export const matchesThreadSearch = (thread: Thread, query: string): boolean => {
   const needle = query.trim().toLowerCase();

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { Message } from "@aop/common";
 import type { ChatApi } from "./chat-api";
-import { createProjectChat, FETCH_RETRY_MS, unseenCount } from "./project-chat";
+import { FETCH_RETRY_MS } from "./conversation";
+import { createProjectChat, unseenCount } from "./project-chat";
 import {
   at,
   createFakeEvents,

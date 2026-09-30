@@ -60,7 +60,8 @@ export const ProjectHeader = ({
               </span>
             ) : null}
           </div>
-          {project.goal ? (
+          {/* A thread needs the height: what the project is for is one tab away. */}
+          {project.goal && route.name !== "thread" ? (
             <p className="mt-0.5 line-clamp-2 max-w-3xl text-[13px] text-text-muted">
               {project.goal}
             </p>

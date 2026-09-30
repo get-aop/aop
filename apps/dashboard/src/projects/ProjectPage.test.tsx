@@ -3,6 +3,7 @@ import { setupDashboardDom } from "../test/setup-dom";
 import { at, reply } from "./chat/test-utils";
 import type { ProjectsState } from "./projects-state";
 import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "./test-utils";
+import { hostError, json, mockHost } from "./thread/test-utils";
 
 setupDashboardDom();
 
@@ -22,11 +23,27 @@ const silentHost: ChatApi = {
 };
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
 
+let host: ReturnType<typeof mockHost>;
+
+// A thread's pane asks the host for what it shows; these tests are about the page around it.
 beforeEach(() => {
   window.localStorage.clear();
   window.history.pushState({}, "", "/");
+  host = mockHost();
+  host.respondWith(({ url }) => {
+    if (url.endsWith("/messages")) return json({ messages: [] });
+    if (url.endsWith("/activity")) return json({ turns: [] });
+    if (url.endsWith("/status")) return json({ repos: [] });
+    if (url.endsWith("/diff")) {
+      return json({ defaultBranch: "main", files: [], perFileLineCap: 2000, summaryOnly: true });
+    }
+    return hostError(404, "NOT_FOUND", "not found");
+  });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  host.restore();
+});
 
 const renderPage = (state: ProjectsState, route: ProjectRoute) => {
   const stub = stubLiveProjects(state);
@@ -80,6 +97,18 @@ describe("project home", () => {
     expect(screen.getByTestId("thread-count").textContent).toBe("3 threads");
   });
 
+  test("groups the cards by status, so the question is set apart from the rest", () => {
+    renderPage(makeState([makeEntry(project, threads)]), home);
+
+    expect(
+      screen.getAllByTestId("thread-group").map((group) => group.getAttribute("data-status")),
+    ).toEqual(["waiting-on-you", "working", "idle"]);
+    expect(
+      screen.getByTestId("overview-counters").querySelector('[data-counter="waiting"]')
+        ?.textContent,
+    ).toContain("1");
+  });
+
   test("a new thread on the stream appears as a card, and a finished one moves", () => {
     const stub = renderPage(
       makeState([makeEntry(project, [threads[2] as (typeof threads)[number]])]),
@@ -111,7 +140,7 @@ describe("project home", () => {
     expect(busy?.getAttribute("data-status")).toBe("ready-for-review");
   });
 
-  test("search narrows the grid by title, status line or question, and says when nothing matches", () => {
+  test("search narrows the threads by title, status line or question, and says when nothing matches", () => {
     renderPage(makeState([makeEntry(project, threads)]), home);
     const search = screen.getByTestId("thread-search");
 
@@ -124,7 +153,7 @@ describe("project home", () => {
 
     fireEvent.change(search, { target: { value: "zzz" } });
     expect(screen.getByTestId("threads-no-match").textContent).toContain("zzz");
-    expect(screen.queryByTestId("thread-grid")).toBeNull();
+    expect(screen.queryByTestId("thread-groups")).toBeNull();
   });
 
   test("a project with no threads points at the coordinator", () => {
@@ -165,13 +194,13 @@ describe("project home", () => {
 describe("project screens", () => {
   const state = () => makeState([makeEntry(project, threads)]);
 
-  test("the tabs move between the thread grid and the coordinator, and mark where you are", () => {
+  test("the tabs move between the threads and the coordinator, and mark where you are", () => {
     renderPage(state(), { name: "coordinator", projectId: "p1" });
 
     expect(screen.getByTestId("project-tab-coordinator").getAttribute("aria-current")).toBe("page");
     expect(screen.getByTestId("project-tab-threads").getAttribute("aria-current")).toBeNull();
     expect(screen.getByTestId("coordinator-chat-pane")).toBeTruthy();
-    expect(screen.queryByTestId("thread-grid")).toBeNull();
+    expect(screen.queryByTestId("thread-groups")).toBeNull();
 
     fireEvent.click(screen.getByTestId("project-tab-threads"));
     expect(window.location.pathname).toBe("/projects/p1");
@@ -179,8 +208,9 @@ describe("project screens", () => {
     expect(window.location.pathname).toBe("/projects/p1/settings");
   });
 
-  test("a thread route shows that thread's pane under the Threads tab", () => {
+  test("a thread route shows that thread's pane under the Threads tab", async () => {
     renderPage(state(), { name: "thread", projectId: "p1", threadId: "blocked" });
+    await act(async () => {});
 
     expect(screen.getByTestId("thread-pane").textContent).toContain("Pick a database");
     expect(screen.getByTestId("project-tab-threads").getAttribute("aria-current")).toBe("page");

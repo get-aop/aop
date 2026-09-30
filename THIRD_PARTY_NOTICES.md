@@ -18,8 +18,6 @@ presentation — includes code copied and adapted from T3 Code.
   `apps/dashboard/src/t3/ui/` copy and its derivatives)
 - Upstream license: MIT, `Copyright (c) 2026 T3 Tools Inc.`
 - Affected paths (derived files in HEAD):
-  - `apps/dashboard/src/views/sessions/SessionChangedFilesCard.tsx`
-  - `apps/dashboard/src/views/sessions/changed-files-tree.ts`
   - `apps/dashboard/src/projects/chat/chat-markdown.css`
   - Historical copies of the same presentation live under
     `apps/dashboard/src/t3/` in earlier revisions of this repository; this

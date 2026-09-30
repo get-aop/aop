@@ -56,6 +56,10 @@ export const describeServiceError = (error: ServiceError): string => {
       return "The thread's pull request already merged; start a new thread for further work";
     case "UNPUBLISHED_WORK":
       return "The thread has work its pull request does not include; open the pull request again to push it, then merge";
+    case "INVALID_PATH":
+      return "The path must be a file inside the thread's worktree";
+    case "FILE_NOT_FOUND":
+      return "The thread has no change to that file";
     case "THREAD_BUSY":
       return "The thread is busy: a turn is running, queued or waiting on a usage limit, or its pull request is landing; stop it or wait for it first";
   }

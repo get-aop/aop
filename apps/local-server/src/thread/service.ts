@@ -3,6 +3,7 @@ import type {
   Message,
   Project,
   Thread,
+  ThreadActivity,
   ThreadStatus,
   ThreadStep,
 } from "@aop/common";
@@ -16,6 +17,7 @@ import { resolveSessionRuntime } from "../project/runtime.ts";
 import { stopProjectSession } from "../project/session-control.ts";
 import { listWireMessages } from "../project/wire-messages.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import { readThreadActivity } from "./activity.ts";
 import { changeThread as applyPatch } from "./change.ts";
 import type { ThreadGit } from "./git.ts";
 import { createThreadRepository, type ThreadPatch } from "./repository.ts";
@@ -63,6 +65,11 @@ export interface ThreadService {
     report: { line?: string | null; steps?: ThreadStep[] },
   ) => Promise<ThreadResult<{ thread: Thread }>>;
   markRead: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
+  /** The tool calls and status paragraphs of the thread's latest turns, which its messages do not carry. */
+  activity: (threadId: string) => Promise<ThreadResult<{ activity: ThreadActivity }>>;
+  /** What the thread changed in its worktree: the files, and one file's hunks. */
+  changes: ThreadGit["changes"];
+  changedFile: ThreadGit["changedFile"];
   /** The thread's pull request: opened at most once, merged, and kept in step with GitHub. */
   openPullRequest: ThreadGit["openPullRequest"];
   mergePullRequest: ThreadGit["mergePullRequest"];
@@ -311,6 +318,9 @@ export const createThreadService = (
       return reload(threadId);
     },
 
+    activity: (threadId) => readThreadActivity(ctx, threadId),
+    changes: git.changes,
+    changedFile: git.changedFile,
     openPullRequest: git.openPullRequest,
     mergePullRequest: git.mergePullRequest,
     syncPullRequest: git.syncPullRequest,

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { Message, Project, Thread } from "@aop/common";
+import type {
+  Message,
+  Project,
+  SessionDiffFile,
+  SessionGitDiff,
+  Thread,
+  ThreadActivity,
+} from "@aop/common";
 import { createProjectStack, type ProjectStack, useTempAopHome } from "../project/test-utils.ts";
 
 const home = useTempAopHome();
@@ -176,6 +183,85 @@ describe("stopping, reading and deleting a thread", () => {
       ["DELETE", "/api/threads/isess_nope"],
     ] as const) {
       expect((await s.api(method, path)).status).toBe(404);
+    }
+  });
+});
+
+describe("what a thread did: its changed files and its activity", () => {
+  const workingThread = async () => {
+    const { s, project } = await setup();
+    const { body } = await spawn(s, project.id, {
+      prompt: 'Add notes [fake: steps=1 write="notes.md=hello"]',
+    });
+    return { s, id: body.thread.id };
+  };
+
+  test("GET diff lists the file the thread wrote, and diff/file answers its hunks", async () => {
+    const { s, id } = await workingThread();
+
+    const summary = await s.api<SessionGitDiff>("GET", `/api/threads/${id}/diff`);
+    const file = await s.api<SessionDiffFile>("GET", `/api/threads/${id}/diff/file?path=notes.md`);
+
+    expect(summary.status).toBe(200);
+    expect(summary.body).toMatchObject({
+      defaultBranch: "main",
+      summaryOnly: true,
+      files: [{ path: "notes.md", status: "added" }],
+    });
+    expect(file.status).toBe(200);
+    expect(file.body).toMatchObject({
+      path: "notes.md",
+      hunks: [{ lines: [{ type: "add", text: "hello" }] }],
+    });
+  });
+
+  test("diff/file is 400 for a path that is missing or leaves the worktree, and 404 for one with no change", async () => {
+    const { s, id } = await workingThread();
+
+    const missing = await s.api("GET", `/api/threads/${id}/diff/file`);
+    const escaping = await s.api("GET", `/api/threads/${id}/diff/file?path=..%2Foutside`);
+    const absolute = await s.api("GET", `/api/threads/${id}/diff/file?path=%2Fetc%2Fpasswd`);
+    const untouched = await s.api("GET", `/api/threads/${id}/diff/file?path=nothing.md`);
+
+    for (const refused of [missing, escaping, absolute]) {
+      expect(refused).toMatchObject({ status: 400, body: { code: "INVALID_PATH" } });
+    }
+    expect(untouched).toMatchObject({ status: 404, body: { code: "FILE_NOT_FOUND" } });
+  });
+
+  test("diff answers 409 with the reason once the thread is resolved and its worktree is gone", async () => {
+    const { s, id } = await workingThread();
+    await s.api("POST", `/api/threads/${id}/resolve`);
+
+    const summary = await s.api<{ error: string }>("GET", `/api/threads/${id}/diff`);
+    const file = await s.api("GET", `/api/threads/${id}/diff/file?path=notes.md`);
+
+    expect(summary).toMatchObject({ status: 409, body: { code: "WORKTREE_FAILED" } });
+    expect(summary.body.error).toContain("does not exist");
+    expect(file).toMatchObject({ status: 409, body: { code: "WORKTREE_FAILED" } });
+  });
+
+  test("GET activity lists the turn's tool calls without their output", async () => {
+    const { s, id } = await workingThread();
+
+    const activity = await s.api<ThreadActivity>("GET", `/api/threads/${id}/activity`);
+
+    expect(activity.status).toBe(200);
+    expect(activity.body.turns).toMatchObject([
+      {
+        running: false,
+        groups: [{ rows: [{ label: "Bash", detail: "echo step 1", status: "done" }] }],
+      },
+    ]);
+    expect(JSON.stringify(activity.body)).not.toContain("result");
+  });
+
+  test("an unknown thread is 404 on all three", async () => {
+    const { s } = await setup();
+
+    for (const path of ["diff", "diff/file?path=a.md", "activity"]) {
+      const response = await s.api("GET", `/api/threads/isess_nope/${path}`);
+      expect(response).toMatchObject({ status: 404, body: { code: "THREAD_NOT_FOUND" } });
     }
   });
 });

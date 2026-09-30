@@ -3,6 +3,7 @@ import { FileTextIcon, GitBranchIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Link, threadPath } from "../shell/router";
 import { PullRequestChip } from "./PullRequestChip";
+import { ResumeThreadButton } from "./ResumeThreadButton";
 import { StepsRing } from "./StepsRing";
 import { formatAge, THREAD_STATUS_LABEL } from "./selectors";
 import { ThreadStatusDot } from "./ThreadStatusDot";
@@ -95,6 +96,7 @@ const CardFooter = ({ thread }: { thread: Thread }) => {
           className="relative z-10"
         />
       ) : null}
+      <ResumeThreadButton thread={thread} />
       {docCount > 0 ? (
         <span className="inline-flex items-center gap-1" data-testid="thread-docs">
           <FileTextIcon className="size-3" />

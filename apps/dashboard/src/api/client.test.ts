@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type * as SessionsApi from "./sessions";
 import type * as SettingsApi from "./settings";
 
 // Import from the domain modules directly (query-string instances) so
@@ -8,9 +7,6 @@ import type * as SettingsApi from "./settings";
 // No query instance for request: ApiError identity must match the module the
 // domain functions throw (request.ts is never mock.module'd by other files).
 const { ApiError } = await import("./request");
-const { abortChatSession, resetChatSessionRuntime, sendChatMessage } = (await import(
-  "./sessions" + "?dashboard-client-test"
-)) as typeof SessionsApi;
 const { getRepos, getSettings, listDirectories, registerRepo, updateSettings } = (await import(
   "./settings" + "?dashboard-client-test"
 )) as typeof SettingsApi;
@@ -41,36 +37,6 @@ describe("ApiError", () => {
     expect(error.code).toBe("NOT_FOUND");
     expect(error.message).toBe("Resource not found");
     expect(error.name).toBe("ApiError");
-  });
-});
-
-describe("abortChatSession", () => {
-  test("posts to the active session abort endpoint", async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ aborted: true }));
-
-    await expect(abortChatSession("session-1")).resolves.toEqual({ aborted: true });
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/chat-sessions/session-1/abort",
-      expect.objectContaining({ method: "POST" }),
-    );
-  });
-});
-
-describe("resetChatSessionRuntime", () => {
-  test("posts to the reset-runtime endpoint", async () => {
-    mockFetch.mockResolvedValueOnce(
-      jsonResponse({ reset: true, clearedBinding: true, cancelledRun: false }),
-    );
-
-    await expect(resetChatSessionRuntime("session-1")).resolves.toEqual({
-      reset: true,
-      clearedBinding: true,
-      cancelledRun: false,
-    });
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/chat-sessions/session-1/reset-runtime",
-      expect.objectContaining({ method: "POST" }),
-    );
   });
 });
 
@@ -136,35 +102,6 @@ describe("getRepos", () => {
         throw e;
       }),
     ).rejects.toThrow();
-  });
-});
-
-describe("sendChatMessage", () => {
-  test("posts only the composer payload the dashboard still produces", async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ message: { id: "m1" }, session: { id: "s1" } }));
-
-    await sendChatMessage("session-1", "hello", undefined, undefined, "steer", true, [
-      { index: 1, lineCount: 5, content: "a\nb" },
-    ]);
-
-    const [url, init] = mockFetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/chat-sessions/session-1/messages");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(String(init.body))).toEqual({
-      content: "hello",
-      midRunMode: "steer",
-      confirmToolInterrupt: true,
-      pastes: [{ index: 1, lineCount: 5, content: "a\nb" }],
-    });
-  });
-
-  test("omits empty attachment lists from the body", async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ message: { id: "m1" }, session: { id: "s1" } }));
-
-    await sendChatMessage("session-1", "hi", [], []);
-
-    const [, init] = mockFetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(JSON.parse(String(init.body))).toEqual({ content: "hi" });
   });
 });
 

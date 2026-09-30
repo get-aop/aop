@@ -5,6 +5,7 @@ import { Card } from "@/ui/card";
 import { Spinner } from "@/ui/spinner";
 import type { SettingEntry } from "../api/client";
 import { updateSettings } from "../api/client";
+import { settingError } from "./setting-validation";
 import {
   isSettingVisible,
   resolveSettingOptions,
@@ -55,8 +56,8 @@ export const SettingsGeneral = ({
       await updateSettings(entries);
       onSaved(entries);
       toast.success("Settings saved");
-    } catch {
-      toast.error("Save failed");
+    } catch (error) {
+      toast.error(saveFailure(error));
     } finally {
       saveInFlightRef.current = false;
       setSaving(false);
@@ -97,6 +98,7 @@ export const SettingsGeneral = ({
                 settingKey={key}
                 value={editedValues[key] ?? ""}
                 options={resolveSettingOptions(key, editedValues, runtimeConfigurations)}
+                error={settingError(key, editedValues[key] ?? "")}
                 onChange={onChange}
                 isLast={index === groupKeys.length - 1}
               />
@@ -121,6 +123,9 @@ export const SettingsGeneral = ({
   );
 };
 
+const saveFailure = (error: unknown): string =>
+  error instanceof Error && error.message ? `Save failed: ${error.message}` : "Save failed";
+
 export const mergeSavedSettings = (
   values: Record<string, string>,
   settings: SettingEntry[],
@@ -130,10 +135,12 @@ export const mergeSavedSettings = (
   return next;
 };
 
+// A value the row is flagging as invalid stays on screen for the person to fix and is not sent;
+// the other edits still are.
 const buildSavableDirtyEntries = (
   editedValues: Record<string, string>,
   savedValues: Record<string, string>,
 ): SettingEntry[] =>
   Object.entries(editedValues)
-    .filter(([key, value]) => value !== savedValues[key])
+    .filter(([key, value]) => value !== savedValues[key] && settingError(key, value) === null)
     .map(([key, value]) => ({ key, value }));

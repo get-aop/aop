@@ -6,6 +6,7 @@ Settings is a dialog over the dashboard for host-level settings, with sections f
 
 - `settings-open` opens the Settings dialog from the sidebar footer.
 - `settings-nav` switches sections with `settings-nav-<section>`.
+- `settings-run-cap` sets how many thread turns the host runs at once (General > Runs).
 
 ## How to get to it (user POV)
 
@@ -22,6 +23,7 @@ Preconditions:
 - **Open Repositories.** Click `data-testid=settings-nav-repositories`, wait for `data-testid=section-repositories`, read the rows with `data-testid=settings-repo-row`, and take a screenshot. One row reads `repo` with its path and an actions menu; there is no task-count badge.
 - **Second view.** Run `curl -s <api>/api/status`. The `repos` list contains `repo`.
 - **Proof.** Keep `settings-repositories.png`, the `text:` output, and the API response, with the feature ID `settings`.
+- **Run cap (`settings-run-cap`).** Open Settings (General is the first section) and find the group **Runs** with the field `data-testid=setting-max_concurrent_runs`, reading `4` (`curl -s <api>/api/settings/max_concurrent_runs` shows `"4"`). Select the field, type `1`, and wait for the toast "Settings saved" (about a second: the value saves 600 ms after the last keystroke). `GET <api>/api/settings/max_concurrent_runs` now shows `"1"`, and a project with three threads started at once shows one working and two queued (see [Projects](./projects.md), `projects-scheduling`). Then type `0` (also `33`, `4.5`, `abc`, or clear the field): `data-testid=setting-error-max_concurrent_runs` (`role=alert`) reads "Enter a whole number from 1 to 32.", the field has `aria-invalid=true`, no toast appears, and after two seconds the API still answers `"1"`. Type `4` to put the default back. A valid edit in another field (Global instructions) still saves while the cap is invalid.
 
 ## Gotchas
 

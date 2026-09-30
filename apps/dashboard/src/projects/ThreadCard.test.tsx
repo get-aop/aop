@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
 import { AT, makeThread } from "./test-utils";
+import { json, mockHost } from "./thread/test-utils";
 
 setupDashboardDom();
 
-const { cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, screen, waitFor, within } = await import(
+  "@testing-library/react"
+);
 const { ThreadCard } = await import("./ThreadCard");
 
 const NOW = Date.parse(AT) + 5 * 60_000;
@@ -147,5 +150,40 @@ describe("ThreadCard", () => {
   test("a resolved thread reads as closed", () => {
     render(<ThreadCard now={NOW} thread={makeThread({ status: "resolved" })} />);
     expect(card().className).toContain("opacity-70");
+  });
+});
+
+describe("Resume on a rate-limited card", () => {
+  let host: ReturnType<typeof mockHost>;
+  beforeEach(() => {
+    host = mockHost();
+    host.respondWith(() => json({ thread: makeThread({ status: "working" }) }));
+  });
+  afterEach(() => host.restore());
+
+  test("a rate-limited thread's card has a Resume button; no other card has one", () => {
+    const { rerender } = render(
+      <ThreadCard now={NOW} thread={makeThread({ status: "rate-limited" })} />,
+    );
+    expect(within(card()).getByTestId("thread-card-resume")).toBeTruthy();
+
+    for (const status of ["working", "queued", "idle", "waiting-on-you"] as const) {
+      rerender(<ThreadCard now={NOW} thread={makeThread({ status })} />);
+      expect(screen.queryByTestId("thread-card-resume")).toBeNull();
+    }
+  });
+
+  test("Resume ends the wait and does not open the thread", async () => {
+    render(
+      <ThreadCard
+        now={NOW}
+        thread={makeThread({ id: "thr_9", projectId: "p1", status: "rate-limited" })}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("thread-card-resume"));
+
+    await waitFor(() => expect(host.to("/api/threads/thr_9/resume", "POST")).toHaveLength(1));
+    expect(window.location.pathname).toBe("/");
   });
 });

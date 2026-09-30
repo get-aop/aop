@@ -53,5 +53,8 @@ Every step can be run again after a crash and ends in the same state: creating a
 | `POST /api/threads/:id/pull-request/sync` | Brings the thread in line with GitHub. |
 | `POST /api/threads/:id/resolve` | Resolves the thread. |
 | `DELETE /api/threads/:id` | Deletes the thread with its worktree and branch. |
+| `GET /api/threads/:id/diff` | The files the thread changed in its worktree, against where its branch left the default branch (committed, uncommitted and untracked), with line counts and no hunks. A thread with no repository answers 409 `NO_REPOSITORY`, and a resolved or merged thread, whose worktree is gone, answers 409 `WORKTREE_FAILED`: nothing is made to compare. |
+| `GET /api/threads/:id/diff/file?path=` | One changed file's hunks, capped. `path` is relative to the worktree: an empty, absolute or escaping one answers 400 `INVALID_PATH`, and a file with no change 404 `FILE_NOT_FOUND`. |
+| `GET /api/threads/:id/activity` | What the thread did besides talk: for each of its latest 30 turns that did something, the tool calls (label, detail, status) in batches and the status paragraphs it said, oldest first. A running turn is last, keyed by the id its message will have, and carries its tool calls only, since its text is the stream's live text. Tool output and reasoning are never returned. |
 
 The MCP tools `aop_open_pr` (thread) and `thread_open_pr`, `thread_merge_pr` and `thread_resolve` (coordinator) do the same; see [the MCP guide](./MCP.md). The server runs a maintenance pass at start and every hour that settles landing threads and resolves threads idle for seven days.
