@@ -27,7 +27,7 @@ Preconditions:
 
 ## Gotchas
 
-- Only `/clear`, `/workflow`, and `/alias` are handled by AOP. Any other text, including `/status`, is forwarded to the session's runtime (default `claude-code`), which runs the real CLI with the user's auth. Observed: `/status` returned `/status isn't available in this environment.` from Claude Code. The AOP-handled commands are defined in `apps/local-server/src/chat-session/commands.ts`.
+- Only `/clear` and `/alias` are handled by AOP. Any other text, including `/status` and `/workflow`, is forwarded to the session's runtime (default `claude-code`), which runs the real CLI with the user's auth. Observed: `/status` returned `/status isn't available in this environment.` from Claude Code. The AOP-handled commands are defined in `apps/local-server/src/chat-session/commands.ts`.
 - The thread can list `N changed files` for the session's repo (seen when stray files sat in `repoPath`). The seed leaves the fixture repo clean; changed files you did not create mean something wrote there.
 - The composer's `/`, `#`, `%`, `~`, `$`, and `@` menus are typeahead only until a message is sent; opening them is safe, sending is not.
 - A new session showed `Claude Code` as its runtime, not the test-mode fixture agent. In the code, `AOP_TEST_MODE` is read by the task orchestrator, not by chat.

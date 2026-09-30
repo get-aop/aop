@@ -8,12 +8,12 @@ import type { LLMProvider, RunResult } from "@aop/llm-provider";
 import type { LocalServerContext } from "../context.ts";
 import type { NewStepUsage, Task } from "../db/schema.ts";
 import { createExecHostsService } from "../exec-hosts/service.ts";
+import { loadOutputSignalsSection } from "../prompts/template-loader.ts";
 import {
   createTemplateContext,
   resolveTemplate,
   type TaskAttachmentContext,
-} from "../orchestrator/sync/template-resolver.ts";
-import { loadOutputSignalsSection } from "../prompts/template-loader.ts";
+} from "../prompts/template-resolver.ts";
 import { SettingKey } from "../settings/types.ts";
 import { resolveTaskExecutionContext } from "../task/execution-model.ts";
 import { resolveTaskDir } from "../task-docs/paths.ts";

@@ -1,5 +1,5 @@
 import type { LocalServerContext } from "../context.ts";
-import { resolveLinearCallbackUrl } from "../context.ts";
+import { resolveLinearCallbackUrl } from "./linear-callback-url.ts";
 import {
   DEFAULT_SETTINGS,
   isSecretSettingKey,

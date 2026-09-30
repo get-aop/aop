@@ -64,15 +64,11 @@ describe("executeChatCommand", () => {
     await db.destroy();
   });
 
-  test("/workflow unknown lists available; valid returns card", async () => {
+  test("/workflow is no longer handled locally and forwards to the runtime", async () => {
     const db = await createTestDb();
     const ctx = createCommandContext(db);
-    const usage = await executeChatCommand(ctx, baseSession("r1"), "/workflow");
-    expect(usage?.text).toContain("Usage:");
-
-    const unknown = await executeChatCommand(ctx, baseSession("r1"), "/workflow run no-such-flow");
-    expect(unknown?.text).toContain("Unknown workflow");
-
+    const result = await executeChatCommand(ctx, baseSession("r1"), "/workflow run ship-it");
+    expect(result?.forwardToRuntime).toBe(true);
     await db.destroy();
   });
 
@@ -94,7 +90,7 @@ describe("executeChatCommand", () => {
     expect(slashCommandMayReachRuntime("/review")).toBe(true);
     expect(slashCommandMayReachRuntime("/skill tdd")).toBe(true);
     expect(slashCommandMayReachRuntime("/clear")).toBe(false);
-    expect(slashCommandMayReachRuntime("/workflow run ship-it")).toBe(false);
+    expect(slashCommandMayReachRuntime("/workflow run ship-it")).toBe(true);
     expect(slashCommandMayReachRuntime("/alias")).toBe(false);
   });
 });

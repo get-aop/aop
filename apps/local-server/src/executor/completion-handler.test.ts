@@ -5,9 +5,10 @@ import { join } from "node:path";
 import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
-import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { createLogBuffer } from "../events/index.ts";
 import { SettingKey } from "../settings/types.ts";
+import { createTestTask } from "../task/test-utils.ts";
 import {
   cleanupLogFile,
   ensureDir,

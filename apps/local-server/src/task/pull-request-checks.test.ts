@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { useTestAopHome } from "@aop/infra";
 import { createCommandContext } from "../context.ts";
-import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import * as prGithub from "./pr-github.ts";
+import { createTestTask } from "./test-utils.ts";
 
 mock.module("./pr-github.ts", () => ({
   ...prGithub,

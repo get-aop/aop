@@ -3,7 +3,8 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCommandContext } from "../context.ts";
-import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestDb, createTestRepo } from "../db/test-utils.ts";
+import { createTestTask } from "../task/test-utils.ts";
 import { buildFactoryHealthSnapshot, getFactoryHealthSnapshot } from "./factory-health.ts";
 
 const healthyDeps = () => ({

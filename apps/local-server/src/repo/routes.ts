@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { LocalServerContext } from "../context.ts";
-import { createTaskRoutes } from "../task/routes";
-import { getRepoById, getRepoTasks, initRepo, listRepoBranches, removeRepo } from "./handlers.ts";
+import { getRepoById, initRepo, listRepoBranches, removeRepo } from "./handlers.ts";
 
 export const createRepoRoutes = (ctx: LocalServerContext) => {
   const routes = new Hono();
@@ -30,24 +29,14 @@ export const createRepoRoutes = (ctx: LocalServerContext) => {
 
   routes.delete("/:id", async (c) => {
     const id = c.req.param("id");
-    const force = c.req.query("force") === "true";
 
     const repo = await getRepoById(ctx, id);
     if (!repo) {
       return c.json({ error: "Repo not found" }, 404);
     }
 
-    const result = await removeRepo(ctx, repo.path, { force });
+    const result = await removeRepo(ctx, repo.path);
     if (!result.success) {
-      if (result.error.code === "HAS_WORKING_TASKS") {
-        return c.json(
-          {
-            error: "Cannot remove repo with working tasks",
-            count: result.error.count,
-          },
-          409,
-        );
-      }
       if (result.error.code === "CHAT_HISTORY_UNSAFE") {
         return c.json(
           {
@@ -64,7 +53,6 @@ export const createRepoRoutes = (ctx: LocalServerContext) => {
     return c.json({
       ok: true,
       repoId: result.repoId,
-      abortedTasks: result.abortedTasks,
       factoryReset: result.factoryReset,
     });
   });
@@ -80,20 +68,6 @@ export const createRepoRoutes = (ctx: LocalServerContext) => {
     const result = await listRepoBranches(repo.path);
     return c.json(result);
   });
-
-  routes.get("/:id/tasks", async (c) => {
-    const id = c.req.param("id");
-
-    const repo = await getRepoById(ctx, id);
-    if (!repo) {
-      return c.json({ error: "Repo not found" }, 404);
-    }
-
-    const tasks = await getRepoTasks(ctx, id);
-    return c.json({ tasks });
-  });
-
-  routes.route("/:repoId/tasks", createTaskRoutes(ctx));
 
   return routes;
 };

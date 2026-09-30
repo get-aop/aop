@@ -14,7 +14,7 @@ mock.module("./bulk-actions.ts", () => ({
   runRepoBulkAction: mockRunRepoBulkAction,
 }));
 
-const { createRepoRoutes } = await import("../repo/routes.ts");
+const { createTaskRoutes } = await import("./routes.ts");
 
 afterAll(() => {
   mock.module("./bulk-actions.ts", () => ({ runRepoBulkAction: realRunRepoBulkAction }));
@@ -31,7 +31,7 @@ describe("task/routes bulk action wiring", () => {
     db = await createTestDb();
     ctx = createCommandContext(db);
     app = new Hono();
-    app.route("/api/repos", createRepoRoutes(ctx));
+    app.route("/api/repos/:repoId/tasks", createTaskRoutes(ctx));
     mockRunRepoBulkAction.mockReset();
   });
 

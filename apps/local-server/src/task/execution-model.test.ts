@@ -4,8 +4,9 @@ import { useTestAopHome } from "@aop/infra";
 import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
-import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { resolveTaskExecutionContext } from "./execution-model.ts";
+import { createTestTask } from "./test-utils.ts";
 
 describe("task/execution-model", () => {
   let db: Kysely<Database>;

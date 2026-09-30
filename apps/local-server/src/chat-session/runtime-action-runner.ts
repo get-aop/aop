@@ -4,10 +4,9 @@ import type { ChatRuntimeActionSelection } from "@aop/common";
 import { aopPaths } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatRun, ChatSession } from "../db/schema.ts";
-import { createTemplateContext, resolveTemplate } from "../orchestrator/sync/template-resolver.ts";
 import { createTemplateLoader } from "../prompts/template-loader.ts";
+import { createTemplateContext, resolveTemplate } from "../prompts/template-resolver.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
-import { getStepBlock } from "../workflow-engine/step-library.ts";
 import {
   delegationOutcomeFor,
   finishDelegationRun,
@@ -23,13 +22,47 @@ import {
   type SessionRunRegistration,
 } from "./runtime-engine.ts";
 
-const BLOCK_BY_INTENT = {
-  implement: "implement",
-  review: "nuclear_review",
-  audit: "audit",
-  test: "run-tests",
-  security: "security-review",
-} as const;
+interface QuickActionBlock {
+  type: "implement" | "review" | "test";
+  promptTemplate: string;
+  signals: { name: string; description: string }[];
+}
+
+const BLOCK_BY_INTENT: Record<ChatRuntimeActionSelection["intent"], QuickActionBlock> = {
+  implement: { type: "implement", promptTemplate: "implement.md.hbs", signals: [] },
+  review: {
+    type: "review",
+    promptTemplate: "nuclear-review.md.hbs",
+    signals: [
+      { name: "REVIEW_PASSED", description: "code is clean and ready" },
+      { name: "REVIEW_FAILED", description: "found issues that need the implementer to address" },
+    ],
+  },
+  audit: {
+    type: "review",
+    promptTemplate: "audit.md.hbs",
+    signals: [
+      { name: "AUDIT_PASSED", description: "no material audit findings" },
+      { name: "AUDIT_FAILED", description: "material audit findings were reported" },
+    ],
+  },
+  test: {
+    type: "test",
+    promptTemplate: "run-tests.md.hbs",
+    signals: [
+      { name: "TESTS_PASS", description: "required local verification passed" },
+      { name: "TESTS_FAIL", description: "required local verification failed" },
+    ],
+  },
+  security: {
+    type: "review",
+    promptTemplate: "security-review.md.hbs",
+    signals: [
+      { name: "SECURITY_PASSED", description: "no material security findings" },
+      { name: "SECURITY_FAILED", description: "material security findings were reported" },
+    ],
+  },
+};
 
 interface RuntimeActionPlanInput {
   ctx: LocalServerContext;
@@ -98,8 +131,7 @@ const runAction = async (
   const configurations = await createRuntimeConfigurationRepository(input.ctx.db).list();
   const configuration = configurations.find((item) => item.id === action.runtimeConfigurationId);
   if (!configuration) return failedAction("Runtime configuration is no longer available");
-  const block = getStepBlock(BLOCK_BY_INTENT[action.intent]);
-  if (!block) return failedAction(`Shared workflow block is missing for ${action.intent}`);
+  const block = BLOCK_BY_INTENT[action.intent];
   const template = await createTemplateLoader().load(block.promptTemplate);
   const actionContext = await createActionContext(input, action);
   const resolvedTemplate = resolveTemplate(
@@ -193,7 +225,7 @@ const actionPrompt = (
   hasWriter: boolean,
 ): string =>
   [
-    `Quick Action intent: ${action.intent}. This uses shared Workflow block '${BLOCK_BY_INTENT[action.intent]}'.`,
+    `Quick Action intent: ${action.intent}.`,
     RUNTIME_DELEGATION_EXECUTION_CONTRACT,
     action.phase === "post-work"
       ? postWorkInstruction(baseline, hasWriter)

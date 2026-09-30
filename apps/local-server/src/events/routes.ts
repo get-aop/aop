@@ -1,7 +1,6 @@
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { LocalServerContext } from "../context.ts";
-import { getServerStatus } from "../status/handlers.ts";
 import { createSSEStreamHelper } from "./sse-stream.ts";
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 3_000;
@@ -10,8 +9,10 @@ interface EventsSSEHandlerOptions {
   heartbeatIntervalMs?: number;
 }
 
+/** `loadInitialStatus` supplies the `init` snapshot so this stream stays independent of its source domain. */
 export const createEventsSSEHandler = (
   ctx: LocalServerContext,
+  loadInitialStatus: () => Promise<unknown>,
   options: EventsSSEHandlerOptions = {},
 ) => {
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
@@ -27,7 +28,7 @@ export const createEventsSSEHandler = (
       });
       sse.registerCleanup(unsubscribeTasks);
 
-      const initialStatus = await getServerStatus(ctx);
+      const initialStatus = await loadInitialStatus();
       const initSent = await sse.sendEvent("init", { type: "init", status: initialStatus });
       if (!initSent) return;
 

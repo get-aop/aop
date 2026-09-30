@@ -1,7 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { RemoveRepoOptions } from "@aop/common";
 import { getRemoteOrigin, listLocalBranches } from "@aop/git-manager";
 import { aopPaths, generateTypeId, getLogger, resolveExecHost } from "@aop/infra";
 import {
@@ -13,10 +12,7 @@ import {
 } from "../chat-session/history-maintenance.ts";
 import { forceAbortChatSessionsForPurge } from "../chat-session/service.ts";
 import type { LocalServerContext } from "../context.ts";
-import type { Task } from "../db/schema.ts";
-import { abortTask } from "../executor/index.ts";
 import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
-import { cleanupTaskArtifacts } from "../task-docs/cleanup.ts";
 import { extractRepoName } from "./repository.ts";
 
 const logger = getLogger("repos-handlers");
@@ -32,12 +28,11 @@ export type InitRepoResult =
 export type InitRepoError = { code: "NOT_A_GIT_REPO"; path: string };
 
 export type RemoveRepoResult =
-  | { success: true; repoId: string; abortedTasks: number; factoryReset: boolean }
+  | { success: true; repoId: string; factoryReset: boolean }
   | { success: false; error: RemoveRepoError };
 
 export type RemoveRepoError =
   | { code: "NOT_FOUND"; path: string }
-  | { code: "HAS_WORKING_TASKS"; count: number }
   | { code: "CHAT_HISTORY_UNSAFE"; reason: ChatHistoryMaintenanceFailureReason; message: string }
   | { code: "REMOVE_FAILED" };
 
@@ -99,32 +94,14 @@ export const initRepo = async (
 export const removeRepo = async (
   ctx: LocalServerContext,
   repoPath: string,
-  options: RemoveRepoOptions = {},
 ): Promise<RemoveRepoResult> => {
-  const { repoRepository, taskRepository } = ctx;
+  const { repoRepository } = ctx;
 
   const repo = await repoRepository.getByPath(repoPath);
   if (!repo) {
     logger.warn("Remove repo failed: not found at {path}", { path: repoPath });
     return { success: false, error: { code: "NOT_FOUND", path: repoPath } };
   }
-
-  const workingTasks = await taskRepository.list({
-    status: "WORKING",
-    repo_id: repo.id,
-  });
-  if (workingTasks.length > 0 && !options.force) {
-    logger.warn("Remove repo blocked: {count} working tasks for {repoId}", {
-      count: workingTasks.length,
-      repoId: repo.id,
-    });
-    return {
-      success: false,
-      error: { code: "HAS_WORKING_TASKS", count: workingTasks.length },
-    };
-  }
-
-  const abortedTasks = await forceAbortRepoTasks(ctx, repo.id, workingTasks);
 
   // Hidden checkpoint refs must be gone before anything that identifies the
   // repository or its workspaces is removed, otherwise they can never be found
@@ -148,9 +125,7 @@ export const removeRepo = async (
   }
   await removeChatSessionArtifacts(chatPurge);
 
-  await removeRepoTaskArtifacts(ctx, repo.id, repo.path);
   await deleteRepoOwnedRows(ctx, repo.id);
-  await taskRepository.deleteByRepoId(repo.id);
 
   await pruneWorktrees(repo.id, repo.path);
 
@@ -164,7 +139,6 @@ export const removeRepo = async (
 
   await removePathSafely(aopPaths.worktrees(repo.id), "repo worktrees");
   await removePathSafely(aopPaths.repoDir(repo.id), "repo artifacts");
-  await archiveOrphanedAgents(ctx);
 
   const factoryReset = (await repoRepository.getAll()).length === 0;
   ctx.taskEventEmitter.emit({ type: "repo-removed", repoId: repo.id });
@@ -179,43 +153,8 @@ export const removeRepo = async (
     ctx.taskEventEmitter.emit({ type: "data-reset" });
   }
 
-  logger.info("Repo removed {repoId} at {path} (aborted {abortedTasks} tasks)", {
-    repoId: repo.id,
-    path: repoPath,
-    abortedTasks,
-  });
-  return { success: true, repoId: repo.id, abortedTasks, factoryReset };
-};
-
-const forceAbortRepoTasks = async (
-  ctx: LocalServerContext,
-  repoId: string,
-  workingTasks: Task[],
-): Promise<number> => {
-  if (workingTasks.length === 0) return 0;
-  logger.info("Force removing repo {repoId}, aborting {count} tasks", {
-    repoId,
-    count: workingTasks.length,
-  });
-  return abortWorkingTasks(ctx, workingTasks);
-};
-
-const removeRepoTaskArtifacts = async (
-  ctx: LocalServerContext,
-  repoId: string,
-  repoPath: string,
-): Promise<void> => {
-  const remainingTasks = await ctx.taskRepository.list({
-    repo_id: repoId,
-    excludeRemoved: true,
-  });
-  for (const task of remainingTasks) {
-    await ctx.executionRepository.deleteAllForTask(task.id);
-    await cleanupTaskArtifactsSafely(repoId, repoPath, task);
-    if (task.status !== "WORKING") {
-      await ctx.taskRepository.markRemoved(task.id);
-    }
-  }
+  logger.info("Repo removed {repoId} at {path}", { repoId: repo.id, path: repoPath });
+  return { success: true, repoId: repo.id, factoryReset };
 };
 
 const createRepoDirs = (repoId: string): void => {
@@ -243,50 +182,6 @@ export const listRepoBranches = (
 
 export const getRepoById = async (ctx: LocalServerContext, repoId: string) => {
   return ctx.repoRepository.getById(repoId);
-};
-
-export const getRepoTasks = async (ctx: LocalServerContext, repoId: string) => {
-  return ctx.taskRepository.list({ repo_id: repoId, excludeRemoved: true });
-};
-
-const abortWorkingTasks = async (ctx: LocalServerContext, tasks: Task[]): Promise<number> => {
-  let abortedCount = 0;
-
-  for (const task of tasks) {
-    try {
-      await abortTask(ctx, task.id);
-      abortedCount++;
-    } catch (err) {
-      logger.error("Failed to abort task {taskId}: {error}", {
-        taskId: task.id,
-        error: String(err),
-        err,
-      });
-    }
-  }
-
-  return abortedCount;
-};
-
-const cleanupTaskArtifactsSafely = async (
-  repoId: string,
-  repoPath: string,
-  task: Task,
-): Promise<void> => {
-  try {
-    await cleanupTaskArtifacts({
-      repoId,
-      repoPath,
-      taskId: task.id,
-      changePath: task.change_path,
-      worktreePath: task.worktree_path,
-    });
-  } catch (error) {
-    logger.warn("Failed to clean artifacts for task {taskId}: {error}", {
-      taskId: task.id,
-      error: String(error),
-    });
-  }
 };
 
 const pruneWorktrees = async (repoId: string, repoPath: string): Promise<void> => {
@@ -340,6 +235,7 @@ const deleteRepoOwnedRows = async (ctx: LocalServerContext, repoId: string): Pro
   await ctx.db.deleteFrom("task_assignments").where("repo_id", "=", repoId).execute();
   await ctx.db.deleteFrom("task_sources").where("repo_id", "=", repoId).execute();
   await ctx.db.deleteFrom("agent_repo_memberships").where("repo_id", "=", repoId).execute();
+  await ctx.db.deleteFrom("tasks").where("repo_id", "=", repoId).execute();
 };
 
 /** Main session dir plus delegate/control siblings created by chat runtimes. */
@@ -361,27 +257,6 @@ const removePathSafely = async (path: string, label: string): Promise<void> => {
       path,
       error: String(error),
     });
-  }
-};
-
-/**
- * A worker whose only repository was just purged has nothing left to act on:
- * archive it (matching the dashboard's worker-delete semantics) and scrub its
- * artifact directory. Workers shared with other repos are untouched.
- */
-const archiveOrphanedAgents = async (ctx: LocalServerContext): Promise<void> => {
-  const agents = await ctx.agentRepository.list();
-  for (const agent of agents) {
-    if (agent.status === "archived") {
-      continue;
-    }
-    const memberships = await ctx.agentRepository.listRepoMemberships(agent.id);
-    if (memberships.length > 0) {
-      continue;
-    }
-    await ctx.agentRepository.update(agent.id, { status: "archived" });
-    await removePathSafely(aopPaths.agent(agent.id), "agent artifacts");
-    logger.info("Archived orphaned worker {agentId} after repo removal", { agentId: agent.id });
   }
 };
 
@@ -413,7 +288,6 @@ export const resetAllRuntimeData = async (
     })),
   );
   await resetRuntimeDirs();
-  await ctx.workflowService.listWorkflows();
   return { success: true };
 };
 

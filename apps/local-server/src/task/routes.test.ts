@@ -7,9 +7,10 @@ import type { Kysely } from "kysely";
 import { createApp } from "../app.ts";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
-import { type AnyJson, createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { type AnyJson, createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { ExecutionStatus } from "../executor/execution-types.ts";
-import { createRepoRoutes } from "../repo/routes.ts";
+import { createTaskRoutes } from "./routes.ts";
+import { createTestTask } from "./test-utils.ts";
 
 describe("task/routes", () => {
   let db: Kysely<Database>;
@@ -22,7 +23,7 @@ describe("task/routes", () => {
     db = await createTestDb();
     ctx = createCommandContext(db);
     app = new Hono();
-    app.route("/api/repos", createRepoRoutes(ctx));
+    app.route("/api/repos/:repoId/tasks", createTaskRoutes(ctx));
   });
 
   afterEach(async () => {

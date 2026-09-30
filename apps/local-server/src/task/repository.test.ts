@@ -4,13 +4,14 @@ import { join } from "node:path";
 import { useTestAopHome } from "@aop/infra";
 import type { Kysely } from "kysely";
 import type { Database } from "../db/schema.ts";
-import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import type { TaskEvent, TaskEventEmitter } from "../events/task-events.ts";
 import { createExternalIssueStore } from "../integrations/external-issues/store.ts";
 import { createLinearStore, type LinearStore } from "../integrations/linear/store.ts";
 import { resolveTaskFilePath } from "../task-docs/paths.ts";
 import { updateTaskDocStatus } from "../task-docs/task.ts";
 import { createTaskRepository, type TaskRepository } from "./repository.ts";
+import { createTestTask } from "./test-utils.ts";
 
 describe("task/repository", () => {
   let cleanupAopHome: (() => void) | undefined;

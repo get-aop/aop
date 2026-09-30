@@ -53,7 +53,8 @@ describe("MCP HTTP routes", () => {
     const listBody = (await listed.json()) as {
       result: { tools: Array<{ name: string }> };
     };
-    expect(listBody.result.tools.some((tool) => tool.name === "aop_list_workflows")).toBe(true);
+    expect(listBody.result.tools.some((tool) => tool.name === "aop_list_repos")).toBe(true);
+    expect(listBody.result.tools.some((tool) => tool.name === "aop_list_workflows")).toBe(false);
     expect(listBody.result.tools.some((tool) => tool.name === "aop_create_task")).toBe(false);
 
     const toolsResponse = await app.request(
@@ -100,21 +101,13 @@ describe("MCP HTTP routes", () => {
         jsonrpc: "2.0",
         id: 2,
         method: "tools/call",
-        params: {
-          name: "aop_create_task",
-          arguments: {
-            title: "From MCP with forged session",
-            description: "Body",
-            repoId: "repo-route-no-session",
-            planMarkdown: "## Plan\n\n- [ ] Body",
-          },
-        },
+        params: { name: "aop_list_repos", arguments: {} },
       }),
     });
 
     expect(response.status).toBe(401);
-    const tasks = await ctx.taskRepository.list({ repo_id: "repo-route-no-session" });
-    expect(tasks).toHaveLength(0);
+    const body = await response.text();
+    expect(body).not.toContain("repo-route-no-session");
   });
 
   test("notifications/initialized returns 202 and unknown methods return JSON-RPC on HTTP 200", async () => {

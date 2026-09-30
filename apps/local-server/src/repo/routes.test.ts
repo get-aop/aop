@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
-import { type AnyJson, createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { type AnyJson, createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { resolveCheckpointWorkspaceIdentity } from "../session-git/checkpoints.ts";
 import { DEFAULT_SETTINGS, SettingKey } from "../settings/types.ts";
 import { resetAllRuntimeData } from "./handlers.ts";
@@ -144,34 +144,6 @@ describe("repo/routes", () => {
     test("purges repo-owned rows and files without touching other repos", async () => {
       await createTestRepo(db, "repo-1", "/path/to/repo-1");
       await createTestRepo(db, "repo-2", "/path/to/repo-2");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DONE");
-      await createTestTask(db, "task-2", "repo-2", "changes/feat-2", "DONE");
-
-      await ctx.executionRepository.createExecution({
-        id: "exec-1",
-        task_id: "task-1",
-        status: "completed",
-        started_at: new Date().toISOString(),
-      });
-      await ctx.executionRepository.createStepExecution({
-        id: "step-1",
-        execution_id: "exec-1",
-        status: "success",
-        started_at: new Date().toISOString(),
-      });
-      await db
-        .insertInto("runtime_events")
-        .values({
-          id: "event-1",
-          task_id: "task-1",
-          execution_id: "exec-1",
-          step_execution_id: "step-1",
-          kind: "tool_started",
-          source_kind: "test",
-          source_id: "step-1",
-          occurred_at: new Date().toISOString(),
-        })
-        .execute();
 
       await db
         .insertInto("channels")
@@ -310,7 +282,7 @@ describe("repo/routes", () => {
         .values({
           id: "sig-1",
           repo_id: "repo-1",
-          source_task_id: "task-1",
+          source_task_id: null,
           source_execution_id: null,
           kind: "follow-up",
           title: "Follow up",
@@ -339,7 +311,7 @@ describe("repo/routes", () => {
         .values({
           id: "sig-2",
           repo_id: "repo-2",
-          source_task_id: "task-2",
+          source_task_id: null,
           source_execution_id: null,
           kind: "docs-gap",
           title: "Keep",
@@ -357,42 +329,13 @@ describe("repo/routes", () => {
       writeFileSync(join(aopPaths.logs(), "chat-sessions", "chat-1-delegate", "log.txt"), "del");
       writeFileSync(join(aopPaths.logs(), "chat-sessions", "chat-1-control", "log.txt"), "ctl");
 
-      const insertAgent = (id: string) =>
-        db
-          .insertInto("agents")
-          .values({
-            id,
-            name: id,
-            role: "developer",
-            runtime_provider: "pi",
-            provider: "pi",
-            model: "test-model",
-            workflow_id: "aop-default-gpt",
-            status: "active",
-            artifact_path: aopPaths.agent(id),
-            source_kind: "manual",
-          })
-          .execute();
-      await insertAgent("agent-exclusive");
-      await insertAgent("agent-shared");
-      await db
-        .insertInto("agent_repo_memberships")
-        .values([
-          { agent_id: "agent-exclusive", repo_id: "repo-1", membership_role: "primary" },
-          { agent_id: "agent-shared", repo_id: "repo-1", membership_role: "primary" },
-          { agent_id: "agent-shared", repo_id: "repo-2", membership_role: "primary" },
-        ])
-        .execute();
-      mkdirSync(aopPaths.agent("agent-exclusive"), { recursive: true });
-      mkdirSync(aopPaths.agent("agent-shared"), { recursive: true });
-
       mkdirSync(aopPaths.repoDir("repo-1"), { recursive: true });
       mkdirSync(aopPaths.repoDir("repo-2"), { recursive: true });
       mkdirSync(aopPaths.worktrees("repo-1"), { recursive: true });
       writeFileSync(join(aopPaths.repoDir("repo-1"), "artifact.txt"), "repo 1");
       writeFileSync(join(aopPaths.repoDir("repo-2"), "artifact.txt"), "repo 2");
 
-      const res = await app.request("/api/repos/repo-1?force=true", { method: "DELETE" });
+      const res = await app.request("/api/repos/repo-1", { method: "DELETE" });
       const body: AnyJson = await res.json();
 
       expect(res.status).toBe(200);
@@ -400,15 +343,6 @@ describe("repo/routes", () => {
       expect(await db.selectFrom("repos").selectAll().where("id", "=", "repo-1").execute()).toEqual(
         [],
       );
-      expect(
-        await db.selectFrom("tasks").selectAll().where("repo_id", "=", "repo-1").execute(),
-      ).toEqual([]);
-      expect(
-        await db.selectFrom("executions").selectAll().where("task_id", "=", "task-1").execute(),
-      ).toEqual([]);
-      expect(
-        await db.selectFrom("runtime_events").selectAll().where("task_id", "=", "task-1").execute(),
-      ).toEqual([]);
       expect(
         await db.selectFrom("channels").selectAll().where("repo_id", "=", "repo-1").execute(),
       ).toEqual([]);
@@ -483,16 +417,7 @@ describe("repo/routes", () => {
       expect(existsSync(aopPaths.repoDir("repo-1"))).toBe(false);
       expect(existsSync(aopPaths.worktrees("repo-1"))).toBe(false);
 
-      // A worker whose only repo was purged is archived and scrubbed.
-      const exclusiveAgent = await ctx.agentRepository.getById("agent-exclusive");
-      expect(exclusiveAgent?.status).toBe("archived");
-      expect(existsSync(aopPaths.agent("agent-exclusive"))).toBe(false);
-
-      // Repo 2 and its shared worker are untouched.
-      const sharedAgent = await ctx.agentRepository.getById("agent-shared");
-      expect(sharedAgent?.status).toBe("active");
-      expect(existsSync(aopPaths.agent("agent-shared"))).toBe(true);
-      expect(await ctx.agentRepository.listRepoMemberships("agent-shared")).toHaveLength(1);
+      // Repo 2 is untouched.
       expect(
         await db.selectFrom("repos").selectAll().where("id", "=", "repo-2").execute(),
       ).toHaveLength(1);
@@ -551,7 +476,7 @@ describe("repo/routes", () => {
       writeFileSync(join(aopPaths.agents(), "artifact.txt"), "agent");
       writeFileSync(join(aopPaths.logs(), "local-server.log"), "log");
 
-      const res = await app.request("/api/repos/repo-1?force=true", { method: "DELETE" });
+      const res = await app.request("/api/repos/repo-1", { method: "DELETE" });
       const body: AnyJson = await res.json();
 
       expect(res.status).toBe(200);
@@ -563,7 +488,6 @@ describe("repo/routes", () => {
       expect(await ctx.settingsRepository.get(SettingKey.MAX_CONCURRENT_TASKS)).toBe(
         DEFAULT_SETTINGS[SettingKey.MAX_CONCURRENT_TASKS],
       );
-      expect(await ctx.workflowService.listWorkflows()).not.toContain("aop-default-gpt");
       expect(existsSync(join(aopPaths.agents(), "artifact.txt"))).toBe(false);
       expect(existsSync(aopPaths.logs())).toBe(true);
     });
@@ -596,52 +520,6 @@ describe("repo/routes", () => {
       expect(await ctx.settingsRepository.get(SettingKey.MAX_CONCURRENT_TASKS)).toBe("17");
       expect(await db.selectFrom("chat_run_checkpoints").selectAll().execute()).toHaveLength(1);
       expect(await db.selectFrom("chat_checkpoint_cleanup_jobs").selectAll().execute()).toEqual([]);
-    });
-
-    test("returns 409 when repo has working tasks without force", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat", "WORKING");
-
-      const res = await app.request("/api/repos/repo-1", { method: "DELETE" });
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(409);
-      expect(body.error).toBe("Cannot remove repo with working tasks");
-      expect(body.count).toBe(1);
-    });
-  });
-
-  describe("GET /api/repos/:id/tasks", () => {
-    test("returns 404 for non-existent repo", async () => {
-      const res = await app.request("/api/repos/non-existent/tasks");
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(404);
-      expect(body.error).toBe("Repo not found");
-    });
-
-    test("returns tasks for repo", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DRAFT");
-      await createTestTask(db, "task-2", "repo-1", "changes/feat-2", "READY");
-
-      const res = await app.request("/api/repos/repo-1/tasks");
-      const body: AnyJson = await res.json();
-
-      expect(res.status).toBe(200);
-      expect(body.tasks).toHaveLength(2);
-    });
-
-    test("excludes REMOVED tasks", async () => {
-      await createTestRepo(db, "repo-1", "/path/to/repo");
-      await createTestTask(db, "task-1", "repo-1", "changes/feat-1", "DRAFT");
-      await createTestTask(db, "task-2", "repo-1", "changes/feat-2", "REMOVED");
-
-      const res = await app.request("/api/repos/repo-1/tasks");
-      const body: AnyJson = await res.json();
-
-      expect(body.tasks).toHaveLength(1);
-      expect(body.tasks[0].id).toBe("task-1");
     });
   });
 });

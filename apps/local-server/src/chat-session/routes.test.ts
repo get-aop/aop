@@ -748,7 +748,8 @@ describe("chat-session routes", () => {
     expect(captured).toHaveLength(2);
     expect(captured[0]?.model).toBe("gpt-5.5");
     expect(captured[0]?.prompt).toContain("Fix the regression");
-    expect(captured[0]?.prompt).toContain("shared Workflow block 'nuclear_review'");
+    expect(captured[0]?.prompt).toContain("Quick Action intent: review.");
+    expect(captured[0]?.prompt).toContain("# Thermo-Nuclear Code Quality Review");
     expect(captured[0]?.prompt).toContain("You are already the AOP-selected runtime");
     expect(captured[0]?.prompt).toContain("AOP workers are a separate platform concept");
     expect(captured[0]?.prompt).toContain("No writer action was requested");

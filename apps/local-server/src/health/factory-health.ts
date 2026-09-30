@@ -2,7 +2,7 @@ import type { FactoryHealthItem, FactoryHealthSeverity, FactoryHealthSnapshot } 
 import { TaskStatus } from "@aop/common";
 import type { OrchestratorStatus } from "../app.ts";
 import type { LocalServerContext } from "../context.ts";
-import { isGhAuthenticated } from "../task/pr-github.ts";
+import { isGhAuthenticated } from "../github-cli/index.ts";
 
 interface HealthFailureInput {
   id: string;

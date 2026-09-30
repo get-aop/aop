@@ -32,6 +32,7 @@ import { createSettingsRoutes } from "./settings/routes";
 import { createSignalRoutes } from "./signals/routes.ts";
 import { getServerStatus } from "./status/handlers.ts";
 import { resolveTaskByIdentifier } from "./task/handlers.ts";
+import { createTaskRoutes } from "./task/routes.ts";
 import { createUpdateRoutes } from "./updates/routes.ts";
 import { createAgentMemoryRoutes } from "./worker-memory/routes.ts";
 import { createWorkflowRoutes } from "./workflow/routes.ts";
@@ -179,7 +180,10 @@ export const createApp = (deps: AppDependencies) => {
     return c.json({ task });
   });
 
-  app.get("/api/events", createEventsSSEHandler(ctx, deps.eventsSSEOptions));
+  app.get(
+    "/api/events",
+    createEventsSSEHandler(ctx, () => getServerStatus(ctx), deps.eventsSSEOptions),
+  );
   app.get("/api/executions/:executionId/logs", createLogStreamHandler(ctx));
   app.route("/api", createRuntimeEventRoutes(ctx));
 
@@ -202,6 +206,7 @@ export const createApp = (deps: AppDependencies) => {
 
   app.route("/api/agents", createAgentRoutes(ctx));
   app.route("/api/repos", createRepoRoutes(ctx));
+  app.route("/api/repos/:repoId/tasks", createTaskRoutes(ctx));
   app.route("/api/settings", createSettingsRoutes(ctx));
   app.route("/api/exec-hosts", createExecHostRoutes(ctx));
   app.route("/api/runtime-profiles", createRuntimeProfileRoutes(ctx));

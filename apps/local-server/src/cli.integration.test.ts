@@ -8,7 +8,8 @@ import type { Kysely } from "kysely";
 import { createApp } from "./app.ts";
 import { createCommandContext, type LocalServerContext } from "./context.ts";
 import type { Database } from "./db/schema.ts";
-import { type AnyJson, createTestDb, createTestRepo, createTestTask } from "./db/test-utils.ts";
+import { type AnyJson, createTestDb, createTestRepo } from "./db/test-utils.ts";
+import { createTestTask } from "./task/test-utils.ts";
 
 const TEST_PORT = 25151;
 const TEST_SERVER_URL = `http://localhost:${TEST_PORT}`;

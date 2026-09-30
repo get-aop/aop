@@ -39,7 +39,6 @@ import type {
   ChatRunInterruptionKind,
   ChatSession,
   Repo,
-  Workflow,
 } from "../db/schema.ts";
 import {
   createRuntimeConfigurationRepository,
@@ -121,12 +120,6 @@ import { finalizeActivityContent, type StreamProgressSnapshot } from "./stream-p
 import { runTerminalCommand } from "./terminal.ts";
 import { nextChatTurnIndex } from "./turn-order.ts";
 import { buildUpdatePatch } from "./update-patch.ts";
-import {
-  createWorkflowRunRecord,
-  executeChatWorkflowRun,
-  hasActiveWorkflowRun,
-  interruptStaleWorkflowRuns,
-} from "./workflow-run.ts";
 import {
   resolveChatWorkspace,
   resolveSessionWorkspaceBinding,
@@ -285,9 +278,6 @@ export type SendChatMessageResult =
         | { code: "INVALID_DOCUMENTS"; message: string }
         | { code: "RUNTIME_CONFIGURATION_NOT_FOUND" }
         | { code: "INVALID_ORCHESTRATION"; message: string }
-        | { code: "WORKFLOW_NOT_FOUND" }
-        | { code: "WORKFLOW_RUN_IN_PROGRESS" }
-        | { code: "REPOSITORY_REQUIRED" }
         | { code: "TOOL_INTERRUPT_CONFIRMATION_REQUIRED" }
         | { code: "RUN_IN_PROGRESS" };
     };
@@ -300,9 +290,6 @@ export interface SendChatMessageInput {
   pastes?: unknown;
   midRunMode?: unknown;
   confirmToolInterrupt?: unknown;
-  workflowId?: unknown;
-  /** When true, the message triggers the armed chat workflow run instead of a normal reply. */
-  workflowArmed?: unknown;
   runtimeActions?: unknown;
 }
 
@@ -398,10 +385,7 @@ export const createChatSessionService = (
     },
 
     list: async (): Promise<{ sessions: ChatSessionDto[] }> => {
-      const [rows, pendingApprovalSessionIds] = await Promise.all([
-        ctx.chatSessionRepository.list(),
-        listPendingApprovalSessionIds(ctx),
-      ]);
+      const rows = await ctx.chatSessionRepository.list();
       const lifecycleBySession = await resolveAssistantLifecycles(
         ctx,
         rows.map((row) => row.id),
@@ -418,7 +402,6 @@ export const createChatSessionService = (
           return {
             ...session,
             branch: gitLocation.branch,
-            hasPendingApproval: pendingApprovalSessionIds.has(row.id),
             assistantActive: lifecycle !== "idle",
             assistantLifecycle: lifecycle,
           };
@@ -704,21 +687,8 @@ const acceptIdleSessionMessage = async (
 
   let transferredRegistration = false;
   try {
-    const prepared = await prepareSend(ctx, runtimeConfigurations, sessionId, input, deps);
+    const prepared = await prepareSend(ctx, runtimeConfigurations, sessionId, input);
     if (!prepared.success) return prepared;
-
-    if (prepared.workflowRunStarted) {
-      // The armed workflow runs under its own lock; no chat-run lifecycle here.
-      releaseSessionRunRegistration(registration);
-      abortRequestedSessions.delete(sessionId);
-      const sessionDto = await sessionDtoFor(ctx, prepared.session, prepared.displayText);
-      publishChatSessionEvent({ type: "session-updated", sessionId, session: sessionDto });
-      return {
-        success: true,
-        message: toMessageDto(prepared.message),
-        session: sessionDto,
-      };
-    }
 
     pendingSessionReplies.add(sessionId);
 
@@ -986,12 +956,7 @@ const storeValidatedMidRunMessage = async (
 ) => {
   const session = await ctx.chatSessionRepository.getById(sessionId);
   if (!session) return { success: false as const, error: { code: "SESSION_NOT_FOUND" as const } };
-  const orchestration = await resolveMessageOrchestration(
-    ctx,
-    runtimeConfigurations,
-    session,
-    input,
-  );
+  const orchestration = await resolveMessageOrchestration(runtimeConfigurations, input);
   if (!orchestration.success) return orchestration;
   return storeSteerUserMessage(
     ctx,
@@ -1579,20 +1544,6 @@ const hasRunningChatRun = async (ctx: LocalServerContext, sessionId: string): Pr
   return Boolean(run);
 };
 
-const listPendingApprovalSessionIds = async (ctx: LocalServerContext): Promise<Set<string>> => {
-  const rows = await ctx.db
-    .selectFrom("tasks")
-    .select("origin_chat_session_id")
-    .where("origin_chat_session_id", "is not", null)
-    .where("handoff_pending_approval", "=", true)
-    .execute();
-  return new Set(
-    rows
-      .map((row) => row.origin_chat_session_id)
-      .filter((sessionId): sessionId is string => sessionId !== null),
-  );
-};
-
 const settlementUpdatePatch = (
   override: ChatSessionSettledOverride | undefined,
   now: string,
@@ -2010,31 +1961,21 @@ const CHAT_RUNTIME_ACTION_INTENTS = new Set<ChatRuntimeActionIntent>([
 ]);
 
 const resolveMessageOrchestration = async (
-  ctx: LocalServerContext,
   configurations: RuntimeConfigurationRepository,
-  session: ChatSession,
   input: SendChatMessageInput,
 ): Promise<
   | { success: true; action: ChatActionPayload | null }
   | Extract<SendChatMessageResult, { success: false }>
 > => {
-  const workflowId = typeof input.workflowId === "string" ? input.workflowId.trim() : "";
   const hasRuntimeActions = Array.isArray(input.runtimeActions) && input.runtimeActions.length > 0;
-  const content = typeof input.content === "string" ? input.content : "";
-  if ((workflowId || hasRuntimeActions) && hasLegacyOrchestrationMarker(content)) {
-    return {
-      success: false,
-      error: { code: "INVALID_ORCHESTRATION", message: "Choose one orchestration mode" },
-    };
-  }
-  if (workflowId && hasRuntimeActions) {
-    return {
-      success: false,
-      error: { code: "INVALID_ORCHESTRATION", message: "Choose one orchestration mode" },
-    };
-  }
-  if (workflowId) return resolveWorkflowAction(ctx, session, workflowId);
   if (!hasRuntimeActions) return { success: true, action: null };
+  const content = typeof input.content === "string" ? input.content : "";
+  if (hasLegacyOrchestrationMarker(content)) {
+    return {
+      success: false,
+      error: { code: "INVALID_ORCHESTRATION", message: "Choose one orchestration mode" },
+    };
+  }
 
   return resolveRuntimeActions(configurations, input.runtimeActions as unknown[]);
 };
@@ -2045,31 +1986,6 @@ const hasLegacyOrchestrationMarker = (content: string): boolean => {
   return (
     Boolean(delegation && !("error" in delegation)) || Boolean(control && "command" in control)
   );
-};
-
-const resolveWorkflowAction = async (
-  ctx: LocalServerContext,
-  session: ChatSession,
-  workflowId: string,
-): Promise<
-  { success: true; action: ChatActionPayload } | Extract<SendChatMessageResult, { success: false }>
-> => {
-  if (!session.repo_id) return { success: false, error: { code: "REPOSITORY_REQUIRED" } };
-  const workflow = await ctx.workflowRepository.findById(workflowId);
-  if (!workflow?.active) return { success: false, error: { code: "WORKFLOW_NOT_FOUND" } };
-  const stepCount = workflowStepCount(workflow.definition);
-  return {
-    success: true,
-    action: {
-      type: "workflow-run",
-      id: workflow.id,
-      label: "Workflow",
-      sub: workflow.name,
-      meta: `${stepCount} steps`,
-      status: "proposed",
-      proposal: { workflowId: workflow.id, workflowName: workflow.name, stepCount },
-    },
-  };
 };
 
 const resolveRuntimeActions = async (
@@ -2167,14 +2083,6 @@ const invalidRuntimeActions = (): Extract<SendChatMessageResult, { success: fals
 type PreparedSendResult =
   | {
       success: true;
-      workflowRunStarted: true;
-      session: ChatSession;
-      message: ChatMessage;
-      displayText: string;
-    }
-  | {
-      success: true;
-      workflowRunStarted: false;
       session: ChatSession;
       displayText: string;
       runtimePrompt: string;
@@ -2184,129 +2092,6 @@ type PreparedSendResult =
       run: ChatRun;
     }
   | Extract<SendChatMessageResult, { success: false }>;
-
-const workflowStepCount = (definition: string): number => {
-  try {
-    const parsed = JSON.parse(definition) as { steps?: Record<string, unknown> };
-    return parsed.steps ? Object.keys(parsed.steps).length : 0;
-  } catch {
-    return 0;
-  }
-};
-
-const isWorkflowArmed = (input: SendChatMessageInput): boolean =>
-  input.workflowArmed === true || input.workflowArmed === "true";
-
-/**
- * Armed-message path: persist the user message, create the workflow run, and
- * kick off the sequential background execution. The composer stays locked
- * until the run reaches a terminal state.
- */
-const resolveWorkflowRunGate = async (
-  ctx: LocalServerContext,
-  sessionId: string,
-  input: SendChatMessageInput,
-): Promise<{ armed: boolean; error?: Extract<SendChatMessageResult, { success: false }> }> => {
-  if (!isWorkflowArmed(input)) {
-    if (await hasActiveWorkflowRun(ctx, sessionId)) {
-      return {
-        armed: false,
-        error: { success: false, error: { code: "WORKFLOW_RUN_IN_PROGRESS" } },
-      };
-    }
-    return { armed: false };
-  }
-  if (await hasRunningChatRun(ctx, sessionId)) {
-    return { armed: true, error: { success: false, error: { code: "RUN_IN_PROGRESS" } } };
-  }
-  if (await hasActiveWorkflowRun(ctx, sessionId)) {
-    return { armed: true, error: { success: false, error: { code: "WORKFLOW_RUN_IN_PROGRESS" } } };
-  }
-  return { armed: true };
-};
-
-const resolveWorkflowRunTarget = async (
-  ctx: LocalServerContext,
-  session: ChatSession,
-  input: SendChatMessageInput,
-): Promise<
-  { workflow: Workflow } | { error: Extract<SendChatMessageResult, { success: false }>["error"] }
-> => {
-  const workflowId = typeof input.workflowId === "string" ? input.workflowId.trim() : "";
-  if (!workflowId) return { error: { code: "WORKFLOW_NOT_FOUND" } };
-  const workflow = await ctx.workflowRepository.findById(workflowId);
-  if (!workflow?.active) return { error: { code: "WORKFLOW_NOT_FOUND" } };
-  const workspacePath = await resolveSessionWorkspace(ctx, session);
-  if (!workspacePath) return { error: { code: "REPOSITORY_REQUIRED" } };
-  return { workflow };
-};
-
-const startWorkflowRunForSession = async (
-  ctx: LocalServerContext,
-  session: ChatSession,
-  input: SendChatMessageInput,
-  text: string,
-  createProviderFn?: CreateProviderFn,
-): Promise<PreparedSendResult> => {
-  const target = await resolveWorkflowRunTarget(ctx, session, input);
-  if ("error" in target) return { success: false, error: target.error };
-  const { workflow } = target;
-
-  await interruptStaleWorkflowRuns(ctx, session.id);
-
-  const now = new Date().toISOString();
-  const messageId = generateTypeId("smsg");
-  const turnIndex = await nextChatTurnIndex(ctx.db, session.id);
-  await ctx.db
-    .insertInto("chat_messages")
-    .values({
-      id: messageId,
-      session_id: session.id,
-      role: "user",
-      content: text,
-      action: null,
-      activity: null,
-      turn_index: turnIndex,
-      disposition: "immediate",
-      created_at: now,
-    })
-    .execute();
-
-  const run = await createWorkflowRunRecord(ctx, {
-    sessionId: session.id,
-    workflowId: workflow.id,
-    workflowName: workflow.name,
-    request: text,
-    userMessageId: messageId,
-  });
-
-  publishChatSessionEvent({
-    type: "workflow-run-started",
-    sessionId: session.id,
-    runId: run.id,
-    workflowName: workflow.name,
-    stepCount: workflowStepCount(workflow.definition),
-  });
-
-  void executeChatWorkflowRun(
-    ctx,
-    run.id,
-    createProviderFn ? (agent) => createProviderFn(agent.provider) : undefined,
-  );
-
-  const storedMessage = await ctx.db
-    .selectFrom("chat_messages")
-    .selectAll()
-    .where("id", "=", messageId)
-    .executeTakeFirstOrThrow();
-  return {
-    success: true,
-    workflowRunStarted: true,
-    session,
-    message: storedMessage,
-    displayText: text,
-  };
-};
 
 const resolvePreparedSendSession = async (
   ctx: LocalServerContext,
@@ -2329,7 +2114,6 @@ const prepareSend = async (
   runtimeConfigurations: RuntimeConfigurationRepository,
   sessionId: string,
   input: SendChatMessageInput,
-  deps: ChatSessionServiceDeps,
 ): Promise<PreparedSendResult> => {
   const resolved = await resolvePreparedSendSession(ctx, runtimeConfigurations, sessionId);
   if (!("session" in resolved)) return resolved;
@@ -2338,18 +2122,7 @@ const prepareSend = async (
   const sendInput = validatePreparedSendInput(sessionId, input);
   if (!sendInput.success) return sendInput;
 
-  const workflowGate = await resolveWorkflowRunGate(ctx, sessionId, input);
-  if (workflowGate.error) return workflowGate.error;
-  if (workflowGate.armed) {
-    return startWorkflowRunForSession(ctx, session, input, sendInput.text, deps.createProviderFn);
-  }
-
-  const orchestration = await resolveMessageOrchestration(
-    ctx,
-    runtimeConfigurations,
-    session,
-    input,
-  );
+  const orchestration = await resolveMessageOrchestration(runtimeConfigurations, input);
   if (!orchestration.success) return orchestration;
 
   return prepareRuntimeSend(ctx, session, sendInput, orchestration);
@@ -2423,7 +2196,6 @@ const prepareRuntimeSend = async (
 
   return {
     success: true,
-    workflowRunStarted: false,
     session: prepared.session,
     displayText,
     runtimePrompt: context.prompt,
@@ -3675,7 +3447,6 @@ const toSessionDto = (
   settledOverride: session.settled_override,
   settledAt: session.settled_at,
   lastActivityAt: extras.last_message_at,
-  hasPendingApproval: false,
   assistantActive: false,
   assistantLifecycle: "idle",
   snippet: truncateSnippet(extras.last_message_content),

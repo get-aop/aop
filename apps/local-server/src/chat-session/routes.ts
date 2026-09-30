@@ -213,8 +213,6 @@ export const createChatSessionRoutes = (
         pastes?: unknown;
         midRunMode?: unknown;
         confirmToolInterrupt?: unknown;
-        workflowId?: unknown;
-        workflowArmed?: unknown;
         runtimeActions?: unknown;
       }>()
       .catch(
@@ -226,8 +224,6 @@ export const createChatSessionRoutes = (
             pastes?: unknown;
             midRunMode?: unknown;
             confirmToolInterrupt?: unknown;
-            workflowId?: unknown;
-            workflowArmed?: unknown;
             runtimeActions?: unknown;
           },
       );
@@ -238,8 +234,6 @@ export const createChatSessionRoutes = (
       pastes: body.pastes,
       midRunMode: body.midRunMode,
       confirmToolInterrupt: body.confirmToolInterrupt,
-      workflowId: body.workflowId,
-      workflowArmed: body.workflowArmed,
       runtimeActions: body.runtimeActions,
     });
     if (!result.success) {
@@ -461,18 +455,6 @@ const mapSendError = (c: Context, result: Extract<SendChatMessageResult, { succe
       return c.json({ error: "Runtime configuration not found" }, 404);
     case "INVALID_ORCHESTRATION":
       return c.json({ error: result.error.message }, 400);
-    case "WORKFLOW_NOT_FOUND":
-      return c.json({ error: "Workflow is no longer available" }, 404);
-    case "WORKFLOW_RUN_IN_PROGRESS":
-      return c.json(
-        {
-          code: "WORKFLOW_RUN_IN_PROGRESS",
-          error: "A workflow run is already in progress for this session",
-        },
-        409,
-      );
-    case "REPOSITORY_REQUIRED":
-      return c.json({ error: "Choose a repository before running a workflow" }, 400);
     case "RUN_IN_PROGRESS":
       return c.json({ error: "A run is already in progress for this session" }, 409);
   }

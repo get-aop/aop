@@ -75,6 +75,7 @@ import {
   type TrackerReimporter,
 } from "./scheduler/service.ts";
 import { createTrackerReimporter } from "./scheduler/tracker-reimporter.ts";
+import { resolveLinearCallbackUrl } from "./settings/linear-callback-url.ts";
 import { createSettingsRepository, type SettingsRepository } from "./settings/repository.ts";
 import { SettingKey } from "./settings/types.ts";
 import { createTaskRepository, type TaskRepository } from "./task/repository.ts";
@@ -328,41 +329,6 @@ export const createCommandContext = (
   context.agentService = createAgentService(context);
 
   return context;
-};
-
-export const resolveLinearCallbackUrl = ({
-  configuredCallbackUrl,
-  env,
-}: {
-  configuredCallbackUrl: string;
-  env: NodeJS.ProcessEnv;
-}): string => {
-  if (!configuredCallbackUrl.length) {
-    return getDefaultLinearCallbackUrl(env);
-  }
-
-  return isLegacyLinearCallbackUrl(configuredCallbackUrl)
-    ? getDefaultLinearCallbackUrl(env)
-    : configuredCallbackUrl;
-};
-
-const getDefaultLinearCallbackUrl = (env: NodeJS.ProcessEnv): string => {
-  const callbackBase =
-    env.AOP_LINEAR_CALLBACK_BASE ?? env.AOP_LOCAL_SERVER_URL ?? "http://127.0.0.1:4310";
-  return new URL("/api/linear/callback", callbackBase).toString();
-};
-
-const isLegacyLinearCallbackUrl = (value: string): boolean => {
-  try {
-    const url = new URL(value);
-    return (
-      (url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
-      url.port === "4310" &&
-      url.pathname === "/api/linear/callback"
-    );
-  } catch {
-    return false;
-  }
 };
 
 const LINEAR_GRAPHQL_URL = "https://api.linear.app/graphql";

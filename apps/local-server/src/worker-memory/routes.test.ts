@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createApp } from "../app.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { AnyJson } from "../db/test-utils.ts";
-import { createTestContext, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestContext, createTestRepo } from "../db/test-utils.ts";
+import { createTestTask } from "../task/test-utils.ts";
 
 const originalFetch = globalThis.fetch;
 const originalEnv = {

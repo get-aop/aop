@@ -9,7 +9,7 @@ import { McpToolError } from "./tools-errors.ts";
 
 export { McpToolError } from "./tools-errors.ts";
 
-export type McpToolName = "aop_list_workflows" | "aop_list_repos" | "aop_set_chat_workspace";
+export type McpToolName = "aop_list_repos" | "aop_set_chat_workspace";
 
 export interface McpToolDefinition {
   name: McpToolName;
@@ -32,11 +32,6 @@ export interface McpToolCallContext {
 
 export const listAopMcpTools = (): McpToolDefinition[] => [
   {
-    name: "aop_list_workflows",
-    description: "List available workflow ids.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
     name: "aop_list_repos",
     description: "List registered repositories.",
     inputSchema: { type: "object", properties: {} },
@@ -57,7 +52,7 @@ export const listAopMcpTools = (): McpToolDefinition[] => [
 ];
 
 export const isAopMcpTool = (name: string): name is McpToolName =>
-  name === "aop_list_workflows" || name === "aop_list_repos" || name === "aop_set_chat_workspace";
+  name === "aop_list_repos" || name === "aop_set_chat_workspace";
 
 export const isProposeTool = (_name: string): boolean => false;
 
@@ -72,8 +67,6 @@ export const callAopMcpTool = async (
   }
 
   switch (name) {
-    case "aop_list_workflows":
-      return { content: await readWorkflows(ctx), isProposal: false };
     case "aop_list_repos":
       return { content: await readRepos(ctx), isProposal: false };
     case "aop_set_chat_workspace":
@@ -104,11 +97,6 @@ const setChatWorkspace = async (
     }
     throw error;
   }
-};
-
-const readWorkflows = async (ctx: LocalServerContext) => {
-  const workflows = await ctx.workflowService.listWorkflows();
-  return { workflows };
 };
 
 const readRepos = async (ctx: LocalServerContext) => ({

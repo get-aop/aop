@@ -23,22 +23,16 @@ describe("aop MCP tools", () => {
     await cleanup();
   });
 
-  test("lists only workflow, repo, and workspace tools", () => {
+  test("lists only repo and workspace tools", () => {
     const names = listAopMcpTools().map((tool) => tool.name);
-    expect(names.sort()).toEqual([
-      "aop_list_repos",
-      "aop_list_workflows",
-      "aop_set_chat_workspace",
-    ]);
+    expect(names.sort()).toEqual(["aop_list_repos", "aop_set_chat_workspace"]);
+    expect(isAopMcpTool("aop_list_workflows")).toBe(false);
     expect(isAopMcpTool("aop_create_task")).toBe(false);
   });
 
-  test("read tools return live catalog data from real services", async () => {
+  test("repo tool returns live catalog data from real services", async () => {
     const repos = await callAopMcpTool(ctx, "aop_list_repos", {});
     const repoList = (repos.content as { repos: Array<{ id: string }> }).repos;
     expect(repoList.some((repo) => repo.id === "repo-mcp-1")).toBe(true);
-
-    const workflows = await callAopMcpTool(ctx, "aop_list_workflows", {});
-    expect((workflows.content as { workflows: string[] }).workflows).toEqual([]);
   });
 });

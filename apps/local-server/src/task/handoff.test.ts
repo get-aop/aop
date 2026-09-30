@@ -4,8 +4,9 @@ import { GitManager, WorktreeNotFoundError } from "@aop/git-manager";
 import { useTestAopHome } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import { createCommandContext } from "../context.ts";
-import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { handoffCompletedTask } from "./handoff.ts";
+import { createTestTask } from "./test-utils.ts";
 
 describe("handoffCompletedTask", () => {
   let cleanupAopHome: () => void;

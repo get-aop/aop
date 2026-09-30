@@ -5,7 +5,7 @@ import { aopPaths, useTestAopHome } from "@aop/infra";
 import { Hono } from "hono";
 import { createCommandContext } from "../context.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
-import { createRepoRoutes } from "../repo/routes.ts";
+import { createTaskRoutes } from "./routes.ts";
 
 describe("task/change-files", () => {
   let cleanupAopHome: (() => void) | undefined;
@@ -25,7 +25,7 @@ describe("task/change-files", () => {
       status: "DRAFT",
     });
     app = new Hono();
-    app.route("/api/repos", createRepoRoutes(ctx));
+    app.route("/api/repos/:repoId/tasks", createTaskRoutes(ctx));
   });
 
   afterEach(async () => {

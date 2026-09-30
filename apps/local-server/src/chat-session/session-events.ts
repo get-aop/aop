@@ -63,34 +63,6 @@ export type ChatSessionEvent =
       commandGroups: ChatStreamCommandGroup[];
       /** True for replay frames: replace the accumulated client text instead of appending. */
       replace?: boolean;
-    }
-  | {
-      /** A chat-native workflow run started; the composer locks until completion. */
-      type: "workflow-run-started";
-      sessionId: string;
-      runId: string;
-      workflowName: string;
-      stepCount: number;
-    }
-  | {
-      /** One step of a chat-native workflow run started or finished. */
-      type: "workflow-run-step";
-      sessionId: string;
-      runId: string;
-      index: number;
-      stepCount: number;
-      stepId: string;
-      stepType: string;
-      status: "started" | "finished";
-      resultStatus?: string;
-    }
-  | {
-      /** A chat-native workflow run reached a terminal state; the composer unlocks. */
-      type: "workflow-run-completed";
-      sessionId: string;
-      runId: string;
-      status: "done" | "blocked" | "paused" | "failed";
-      answer: string;
     };
 
 type Listener = (event: ChatSessionEvent) => void;

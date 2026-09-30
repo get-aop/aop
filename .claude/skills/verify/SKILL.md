@@ -51,7 +51,7 @@ bun $S/verify-stack.ts env --name <run>          # exports, to run other command
 
 If Chrome shows an error page for a stack that `curl` reaches (`Frame with ID 0 is showing error page`), the tools are almost certainly driving a Chrome on a different computer. Call `list_connected_browsers`. If a browser with `isLocal: false` (for example a Windows Chrome) is `inUse`, ask the user which browser to use with AskUserQuestion, one option per browser, then call `select_browser`. Never pick a browser yourself. Do not work around it with another browser driver.
 
-**Sending chat messages runs the real runtime.** A Sessions message on a `claude-code` or `codex-cli` session spawns that CLI with the user's own auth, including unknown slash commands like `/status`, which are forwarded to it. Only `/clear`, `/workflow`, and `/alias` are handled by AOP. Do not send chat text unless the feature file says to, or the user has agreed to that runtime spend.
+**Sending chat messages runs the real runtime.** A Sessions message on a `claude-code` or `codex-cli` session spawns that CLI with the user's own auth, including unknown slash commands like `/status`, which are forwarded to it. Only `/clear` and `/alias` are handled by AOP; `/workflow` now reaches the runtime. Do not send chat text unless the feature file says to, or the user has agreed to that runtime spend.
 
 ## Evidence
 

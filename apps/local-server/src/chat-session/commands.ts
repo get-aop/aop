@@ -21,12 +21,11 @@ export interface CommandResult {
 }
 
 const USAGE = {
-  workflow: "Usage: /workflow run <name> — opens the named workflow in Workflow Studio.",
   skill: "Usage: /skill <name> — run a discoverable runtime skill in this session.",
   clear: "Usage: /clear — settle this session and open a fresh one (new CLI runtime context).",
 } as const;
 
-const LOCAL_SLASH_COMMANDS = new Set(["/alias", "/workflow", "/clear"]);
+const LOCAL_SLASH_COMMANDS = new Set(["/alias", "/clear"]);
 
 /**
  * Intercepts slash commands that should not rely solely on the runtime agent.
@@ -63,8 +62,6 @@ const handleSlashCommand = async (
       return {
         text: "Runtime executables are configured in Settings → Runtime configuration (command on each runtime). /alias is no longer supported.",
       };
-    case "/workflow":
-      return handleWorkflow(ctx, session, trimmed);
     case "/skill":
       return handleSkill(ctx, session, trimmed);
     case "/clear":
@@ -130,38 +127,6 @@ const handleClear = async (
   };
 };
 
-const handleWorkflow = async (
-  ctx: LocalServerContext,
-  session: ChatSession,
-  text: string,
-): Promise<CommandResult> => {
-  const name = text.replace(/^\/workflow\s*(run\s+)?/i, "").trim();
-  if (!name) return { text: USAGE.workflow };
-
-  const workflows = await ctx.workflowRepository.listActive();
-  const match = workflows.find(
-    (w) => w.name.toLowerCase() === name.toLowerCase() || w.id.toLowerCase() === name.toLowerCase(),
-  );
-  if (!match) {
-    const available = workflows.map((w) => w.name).join(", ") || "(none)";
-    return {
-      text: `Unknown workflow “${name}”. Available: ${available}.`,
-    };
-  }
-
-  const repoName = await resolveRepoName(ctx, session.repo_id);
-  return {
-    text: `Opened ${match.name} for ${repoName} — open Workflow Studio to inspect or edit steps.`,
-    action: {
-      type: "workflows",
-      id: match.id,
-      label: "Workflow targeted",
-      sub: match.name,
-      meta: repoName,
-    },
-  };
-};
-
 const handleSkill = async (
   ctx: LocalServerContext,
   session: ChatSession,
@@ -196,13 +161,6 @@ const skillsForSession = async (
 ): Promise<string[]> => {
   const repo = session.repo_id ? await ctx.repoRepository.getById(session.repo_id) : null;
   return discoverRuntimeSkills(session.runtime, repo?.path ?? aopPaths.generalChatWorkspace());
-};
-
-const resolveRepoName = async (ctx: LocalServerContext, repoId: string | null): Promise<string> => {
-  if (!repoId) return "AOP";
-  const repo = await ctx.repoRepository.getById(repoId);
-  if (!repo) return repoId;
-  return repo.name ?? repo.path.split("/").pop() ?? repoId;
 };
 
 const runtimeDisplayCmd = (runtime: string, alias: string | null): string => {

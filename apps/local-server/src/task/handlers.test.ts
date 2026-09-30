@@ -5,7 +5,7 @@ import { aopPaths, useTestAopHome } from "@aop/infra";
 import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
-import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import {
   archiveTask,
   blockTask,
@@ -17,6 +17,7 @@ import {
   resumeTask,
   unarchiveTask,
 } from "./handlers.ts";
+import { createTestTask } from "./test-utils.ts";
 
 const TEST_REPO_ID = "repo-1";
 

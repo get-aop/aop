@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aopPaths } from "@aop/infra";
 import { createCommandContext } from "../context.ts";
-import { createTestDb, createTestRepo, createTestTask } from "../db/test-utils.ts";
+import { createTestDb, createTestRepo } from "../db/test-utils.ts";
+import { createTestTask } from "./test-utils.ts";
 import {
   ensureTaskWorktreeAndBindOriginSession,
   rebindOriginSessionAfterHandoff,
