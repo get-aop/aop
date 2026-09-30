@@ -206,7 +206,7 @@ describe("registerCommands", () => {
     expect(commandNames).toContain("task:ready");
     expect(commandNames).toContain("task:remove");
     expect(commandNames).toContain("create-task");
-    expect(commandNames).toContain("run-task");
+    expect(commandNames).not.toContain("run-task");
     expect(commandNames).toContain("config:get");
     expect(commandNames).toContain("config:set");
     expect(commandNames).toContain("linear:configure");
@@ -289,7 +289,6 @@ describe("registerCommands", () => {
       taskReadyCommand: mock(() => undefined),
       taskRemoveCommand: mock(() => undefined),
       createTaskCommand: mock(async () => undefined),
-      runTaskCommand: mock(() => undefined),
       configGetCommand: mock(() => undefined),
       configSetCommand: mock(() => undefined),
     };
@@ -323,7 +322,6 @@ describe("registerCommands", () => {
     getCommandAction("task:ready")("task-123", { resume: "design_brief" });
     getCommandAction("task:remove")("task-123", { force: false });
     await getCommandAction("create-task")("build feature", { debug: true, raw: true });
-    getCommandAction("run-task")("change-name");
     getCommandAction("config:get")("max_concurrent_tasks");
     getCommandAction("config:set")("max_concurrent_tasks", "10");
 
@@ -348,7 +346,6 @@ describe("registerCommands", () => {
       debug: true,
       raw: true,
     });
-    expect(handlers.runTaskCommand).toHaveBeenCalledWith("change-name");
     expect(handlers.configGetCommand).toHaveBeenCalledWith("max_concurrent_tasks");
     expect(handlers.configSetCommand).toHaveBeenCalledWith("max_concurrent_tasks", "10");
   });

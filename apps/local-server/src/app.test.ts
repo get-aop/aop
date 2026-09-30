@@ -260,24 +260,6 @@ describe("app", () => {
       expect(body.providers[0].readinessProbe).toHaveProperty("canWriteLogs");
     });
 
-    test("lists review inbox items and rejects invalid filters", async () => {
-      await createTestRepo(db, "repo-review", "/tmp/repo-review");
-      await createTestTask(db, "task-review", "repo-review", "docs/tasks/review", "DONE");
-      await ctx.taskRepository.update("task-review", { handoff_pending_approval: true });
-
-      const res = await app.request("/api/review-inbox?source=approval");
-      const body: AnyJson = await res.json();
-      const invalid = await app.request("/api/review-inbox?severity=urgent");
-
-      expect(res.status).toBe(200);
-      expect(body.items).toHaveLength(1);
-      expect(body.items[0]).toMatchObject({
-        type: "handoff_approval",
-        taskId: "task-review",
-      });
-      expect(invalid.status).toBe(400);
-    });
-
     test("creates, lists, and consumes signals through API routes", async () => {
       await createTestRepo(db, "repo-signals", "/tmp/repo-signals");
 

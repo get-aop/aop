@@ -20,7 +20,6 @@ import {
   linearUnlockCommand,
   repoInitCommand,
   repoRemoveCommand,
-  runTaskCommand,
   sessionWorkspaceResetCommand,
   sessionWorkspaceSetCommand,
   statusCommand,
@@ -43,7 +42,6 @@ type CommandHandlers = {
   linearUnlockCommand: typeof linearUnlockCommand;
   repoInitCommand: typeof repoInitCommand;
   repoRemoveCommand: typeof repoRemoveCommand;
-  runTaskCommand: typeof runTaskCommand;
   sessionWorkspaceResetCommand: typeof sessionWorkspaceResetCommand;
   sessionWorkspaceSetCommand: typeof sessionWorkspaceSetCommand;
   statusCommand: typeof statusCommand;
@@ -77,7 +75,6 @@ const defaultCommandHandlers: CommandHandlers = {
   linearUnlockCommand,
   repoInitCommand,
   repoRemoveCommand,
-  runTaskCommand,
   sessionWorkspaceResetCommand,
   sessionWorkspaceSetCommand,
   statusCommand,
@@ -246,10 +243,6 @@ export const registerCommands = (
         raw: options.raw,
       });
     });
-
-  cli
-    .command("run-task <taskName>", "Create task documents for a task name")
-    .action((taskName) => commands.runTaskCommand(taskName));
 
   cli
     .command(

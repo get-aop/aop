@@ -20,8 +20,6 @@ import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
 import { createProviderRoutes } from "./providers/routes.ts";
 import { createRepoRoutes } from "./repo/routes";
-import { createReviewInboxRoutes } from "./review-inbox/routes.ts";
-import { createRunTaskRoutes } from "./run-task/routes.ts";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
 import { createRuntimeEventRoutes } from "./runtime-events/routes.ts";
 import { createRuntimeProfileRoutes } from "./runtime-profile/routes.ts";
@@ -189,7 +187,6 @@ export const createApp = (deps: AppDependencies) => {
 
   app.route("/api/agents", createAgentRoutes(ctx));
   app.route("/api", createProviderRoutes());
-  app.route("/api", createReviewInboxRoutes(ctx));
   app.route("/api", createSignalRoutes(ctx));
   app.route("/api/agent-memory", createAgentMemoryRoutes(ctx));
   app.route("/api/channels", createChannelRoutes(ctx));
@@ -212,7 +209,6 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/runtime-profiles", createRuntimeProfileRoutes(ctx));
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/create-task", createCreateTaskRoutes(ctx));
-  app.route("/api/run-task", createRunTaskRoutes(ctx));
   app.route("/api/scheduler", createSchedulerRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/updates", createUpdateRoutes());

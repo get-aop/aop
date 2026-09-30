@@ -10,7 +10,6 @@ export { linearStatusCommand } from "./linear-status.ts";
 export { linearUnlockCommand } from "./linear-unlock.ts";
 export { repoInitCommand } from "./repo-init.ts";
 export { repoRemoveCommand } from "./repo-remove.ts";
-export { runTaskCommand } from "./run-task.ts";
 export {
   sessionWorkspaceResetCommand,
   sessionWorkspaceSetCommand,
