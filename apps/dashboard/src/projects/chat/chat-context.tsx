@@ -8,6 +8,8 @@ interface ChatContextValue {
   threads: ReadonlyMap<string, Thread>;
   /** False until the project's threads have been fetched: a thread not found then may only not have arrived. */
   threadsLoaded: boolean;
+  /** Why the last fetch of the threads failed; null while it has not failed. */
+  threadsError: string | null;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -21,12 +23,14 @@ export const ChatProvider = ({
   projectActive,
   threads,
   threadsLoaded,
+  threadsError,
   children,
 }: {
   projectId: string;
   projectActive: boolean;
   threads: readonly Thread[];
   threadsLoaded: boolean;
+  threadsError: string | null;
   children: ReactNode;
 }) => {
   const value = useMemo<ChatContextValue>(
@@ -35,8 +39,9 @@ export const ChatProvider = ({
       projectActive,
       threads: new Map(threads.map((thread) => [thread.id, thread])),
       threadsLoaded,
+      threadsError,
     }),
-    [projectId, projectActive, threads, threadsLoaded],
+    [projectId, projectActive, threads, threadsLoaded, threadsError],
   );
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 };
@@ -47,10 +52,13 @@ export const useChatContext = (): ChatContextValue => {
   return value;
 };
 
-/** One thread by id, and whether it could still turn up (the project's threads are still loading). */
+/**
+ * One thread by id, whether it could still turn up (the project's threads are still loading),
+ * and why they did not load when fetching them failed.
+ */
 export const useChatThread = (
   threadId: string,
-): { thread: Thread | undefined; loaded: boolean; projectId: string } => {
-  const { threads, threadsLoaded, projectId } = useChatContext();
-  return { thread: threads.get(threadId), loaded: threadsLoaded, projectId };
+): { thread: Thread | undefined; loaded: boolean; error: string | null; projectId: string } => {
+  const { threads, threadsLoaded, threadsError, projectId } = useChatContext();
+  return { thread: threads.get(threadId), loaded: threadsLoaded, error: threadsError, projectId };
 };

@@ -15,6 +15,7 @@ import {
   setConnection,
   setListError,
   setProjectList,
+  setThreadsError,
   upsertProject,
 } from "./projects-state";
 import { nextWatchSet } from "./watch-set";
@@ -41,7 +42,8 @@ export interface LiveProjectsDeps {
 
 /** How often projects without a stream, and the list itself, are refetched. */
 export const POLL_INTERVAL_MS = 30_000;
-const SNAPSHOT_RETRY_MS = 3_000;
+/** How soon a failed fetch of a streamed project is tried again, until the host answers. */
+export const SNAPSHOT_RETRY_MS = 3_000;
 
 export interface LiveProjects {
   getState: () => ProjectsState;
@@ -56,6 +58,11 @@ export interface LiveProjects {
   /** The project the page is showing: it always gets a stream. */
   setSelected: (projectId: string | null) => void;
   refresh: () => Promise<void>;
+  /**
+   * Fetches one project and its threads again now: the Try again of a load that failed. While
+   * the project has a stream a failure keeps being retried on its own, as after a resync.
+   */
+  refetch: (projectId: string) => Promise<void>;
   /** A project this client just created or changed; the stream repeats it harmlessly. */
   adopt: (project: Project) => void;
   /** A project this client just deleted. */
@@ -173,7 +180,8 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
     }
   };
 
-  // True when the project's project and threads were fetched and stored.
+  // True when the project's project and threads were fetched and stored. A failure other than a
+  // deleted project is kept on the entry, so the pages say why instead of loading forever.
   const snapshot = async (projectId: string): Promise<boolean> => {
     try {
       const [project, threads] = await Promise.all([
@@ -184,6 +192,7 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
       return true;
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) forget(projectId);
+      else setState(setThreadsError(state, projectId, describe(error)));
       return false;
     }
   };
@@ -254,6 +263,7 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
       reconcile();
     },
     refresh,
+    refetch: resyncProject,
     adopt: (project) => setState(upsertProject(state, project)),
     forget,
   };

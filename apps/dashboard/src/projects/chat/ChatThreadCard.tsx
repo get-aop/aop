@@ -13,6 +13,7 @@ import { PullRequestChip } from "../PullRequestChip";
 import { ResumeThreadButton } from "../ResumeThreadButton";
 import { StepsRing } from "../StepsRing";
 import { ThreadStatusDot } from "../ThreadStatusDot";
+import { ThreadsLoadError } from "../ThreadsLoadError";
 import { useChatThread } from "./chat-context";
 
 type PullRequest = Extract<Artifact, { type: "pr" }>;
@@ -29,9 +30,19 @@ export const ChatThreadCard = ({
   threadId: string;
   variant: ThreadCardVariant;
 }) => {
-  const { thread, loaded, projectId } = useChatThread(threadId);
+  const { thread, loaded, error, projectId } = useChatThread(threadId);
 
-  if (!thread) return <UnavailableCard threadId={threadId} variant={variant} loaded={loaded} />;
+  if (!thread) {
+    return (
+      <UnavailableCard
+        threadId={threadId}
+        variant={variant}
+        loaded={loaded}
+        error={error}
+        projectId={projectId}
+      />
+    );
+  }
 
   const shown = threadCardVariant(thread.status);
   return (
@@ -150,10 +161,14 @@ const UnavailableCard = ({
   threadId,
   variant,
   loaded,
+  error,
+  projectId,
 }: {
   threadId: string;
   variant: ThreadCardVariant;
   loaded: boolean;
+  error: string | null;
+  projectId: string;
 }) => (
   <article
     data-testid="chat-thread-card-unavailable"
@@ -161,6 +176,16 @@ const UnavailableCard = ({
     data-variant={variant}
     className="my-2 max-w-xl rounded-card border border-dashed border-border-strong p-3 text-[12.5px] text-text-subtle"
   >
-    {loaded ? "This thread no longer exists." : "Loading thread…"}
+    {unavailableReason(loaded, error, projectId)}
   </article>
 );
+
+const unavailableReason = (
+  loaded: boolean,
+  error: string | null,
+  projectId: string,
+): React.ReactNode => {
+  if (loaded) return "This thread no longer exists.";
+  if (error) return <ThreadsLoadError projectId={projectId} subject="this thread" error={error} />;
+  return "Loading thread…";
+};

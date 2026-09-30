@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { delta, messageEntry, reply, userMessage } from "../chat/test-utils";
-import { makeProject, makeThread } from "../test-utils";
+import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "../test-utils";
 import { mockHost } from "./test-utils";
 
 setupDashboardDom();
 
 const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
 const { ThreadPane } = await import("./ThreadPane");
+const { ProjectsProvider } = await import("../ProjectsProvider");
 const { flush, setupPane } = await import("./pane-test-harness");
 
 let host: ReturnType<typeof mockHost>;
@@ -29,11 +30,42 @@ const messagesRequests = () => host.to("/api/threads/thr_1/messages", "GET");
 describe("a thread that is not there", () => {
   test("says it is loading while the project's threads are still coming", () => {
     render(
-      <ThreadPane project={makeProject()} thread={undefined} threads={[]} threadsLoaded={false} />,
+      <ThreadPane
+        project={makeProject()}
+        thread={undefined}
+        threads={[]}
+        threadsLoaded={false}
+        threadsError={null}
+      />,
     );
 
     expect(screen.getByTestId("thread-loading")).toBeTruthy();
     expect(screen.queryByTestId("thread-not-found")).toBeNull();
+  });
+
+  test("says why when fetching the project's threads failed, and fetches them again on Try again", () => {
+    const project = makeProject({ id: "prj_1" });
+    const stub = stubLiveProjects(makeState([makeEntry(project)]));
+    render(
+      <ProjectsProvider live={stub.live}>
+        <ThreadPane
+          project={project}
+          thread={undefined}
+          threads={[]}
+          threadsLoaded={false}
+          threadsError="Request failed (500)"
+        />
+      </ProjectsProvider>,
+    );
+
+    expect(screen.getByTestId("threads-error-message").textContent).toBe(
+      "Could not load this thread: Request failed (500)",
+    );
+    expect(screen.queryByTestId("thread-loading")).toBeNull();
+    expect(screen.queryByTestId("thread-not-found")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("threads-retry"));
+    expect(stub.calls.refetched).toEqual(["prj_1"]);
   });
 
   test("says it is not found once they have come, with the way back", () => {
@@ -43,6 +75,7 @@ describe("a thread that is not there", () => {
         thread={undefined}
         threads={[]}
         threadsLoaded
+        threadsError={null}
       />,
     );
 

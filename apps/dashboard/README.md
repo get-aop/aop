@@ -38,6 +38,7 @@ There is no router library: `src/shell/router.tsx` parses the path and `navigate
 
 - **Reconnect.** A dropped connection is resumed by the browser with `Last-Event-ID`. When the browser gives up (any HTTP error, as while the host restarts), a fresh source opens with `?after=` set to the newest entry seen, after a growing delay.
 - **Resync.** A `resync` event means the log cannot catch the page up. The page refetches the project and its threads and replaces its state, and replays the entries that arrived while it fetched.
+- **A fetch that fails.** The project keeps the host's reason (`threadsError`) until a fetch succeeds, and tries again every three seconds while it has a stream. Until its threads have loaded once, the Threads tab, a thread's page and the coordinator's thread cards show that reason with Try again (`ThreadsLoadError.tsx`) instead of loading forever.
 - **Stream cap.** A browser allows six HTTP/1.1 connections to a host, and a stream holds one. At most four projects have a stream (`watch-set.ts`): the open project, then the most recently changed. The rest are refetched every 30 seconds, so their sidebar attention stays roughly current.
 - **Pin, icon, colour.** Pinning is a per-device choice kept in local storage. A project's icon is its first letter on a colour taken from its id.
 

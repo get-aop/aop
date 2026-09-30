@@ -60,7 +60,13 @@ const setup = (
   };
   const tree = (threads: Thread[], active: boolean) => (
     <ChatApiProvider value={api}>
-      <ChatProvider projectId="prj_1" projectActive={active} threads={threads} threadsLoaded>
+      <ChatProvider
+        projectId="prj_1"
+        projectActive={active}
+        threads={threads}
+        threadsLoaded
+        threadsError={null}
+      >
         <SuggestedThreads suggestions={suggestions} store={store} />
       </ChatProvider>
     </ChatApiProvider>

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { MessageBlock, Thread } from "@aop/common";
 import { setupDashboardDom } from "../../test/setup-dom";
-import { makeThread } from "../test-utils";
+import { makeState, makeThread, stubLiveProjects } from "../test-utils";
 import { json, mockHost } from "../thread/test-utils";
 
 setupDashboardDom();
@@ -11,6 +11,7 @@ const { act, cleanup, fireEvent, render, screen, waitFor, within } = await impor
 );
 const { ChatProvider } = await import("./chat-context");
 const { MessageBlocks } = await import("./MessageBlocks");
+const { ProjectsProvider } = await import("../ProjectsProvider");
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -21,8 +22,19 @@ afterEach(cleanup);
 const fixLogin = makeThread({ id: "thr_1", title: "Fix login", status: "working" });
 const audit = makeThread({ id: "thr_2", title: "Audit retries", status: "idle" });
 
-const tree = (blocks: MessageBlock[], threads: Thread[], threadsLoaded = true) => (
-  <ChatProvider projectId="prj_1" projectActive threads={threads} threadsLoaded={threadsLoaded}>
+const tree = (
+  blocks: MessageBlock[],
+  threads: Thread[],
+  threadsLoaded = true,
+  threadsError: string | null = null,
+) => (
+  <ChatProvider
+    projectId="prj_1"
+    projectActive
+    threads={threads}
+    threadsLoaded={threadsLoaded}
+    threadsError={threadsError}
+  >
     <MessageBlocks blocks={blocks} />
   </ChatProvider>
 );
@@ -226,6 +238,25 @@ describe("thread card", () => {
     expect(screen.getByTestId("chat-thread-card-unavailable").textContent).toBe(
       "This thread no longer exists.",
     );
+  });
+
+  test("says why when the project's threads failed to load, and fetches them again on Try again", () => {
+    const stub = stubLiveProjects(makeState([]));
+    const blocks: MessageBlock[] = [{ type: "thread-card", threadId: "thr_9", variant: "live" }];
+    render(
+      <ProjectsProvider live={stub.live}>
+        {tree(blocks, [], false, "Request failed (500)")}
+      </ProjectsProvider>,
+    );
+
+    const card = screen.getByTestId("chat-thread-card-unavailable");
+    expect(within(card).getByTestId("threads-error-message").textContent).toBe(
+      "Could not load this thread: Request failed (500)",
+    );
+    expect(card.textContent).not.toContain("Loading thread");
+
+    fireEvent.click(within(card).getByTestId("threads-retry"));
+    expect(stub.calls.refetched).toEqual(["prj_1"]);
   });
 });
 

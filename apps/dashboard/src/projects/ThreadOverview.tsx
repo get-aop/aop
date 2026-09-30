@@ -15,6 +15,7 @@ import {
 } from "./selectors";
 import { ThreadCard } from "./ThreadCard";
 import { ThreadStatusDot } from "./ThreadStatusDot";
+import { ThreadsLoadError } from "./ThreadsLoadError";
 import { useNow } from "./use-now";
 
 // Closed work is out of the way until asked for; everything else is what the person may need.
@@ -29,7 +30,7 @@ export const ThreadOverview = ({ entry }: { entry: ProjectEntry }) => {
   const [query, setQuery] = useState("");
   const [toggled, setToggled] = useState<ReadonlySet<ThreadStatus>>(new Set());
   const now = useNow();
-  const { project, threads, threadsLoaded } = entry;
+  const { project, threads, threadsLoaded, threadsError } = entry;
   const searching = query.trim() !== "";
   const visible = useMemo(
     () => threads.filter((thread) => matchesThreadSearch(thread, query)),
@@ -37,6 +38,17 @@ export const ThreadOverview = ({ entry }: { entry: ProjectEntry }) => {
   );
   const groups = useMemo(() => groupThreads(visible), [visible]);
   const counters = useMemo(() => overviewCounters(threads), [threads]);
+
+  if (!threadsLoaded && threadsError) {
+    return (
+      <ThreadsLoadError
+        projectId={project.id}
+        subject="this project's threads"
+        error={threadsError}
+        className="p-6 text-[13px]"
+      />
+    );
+  }
 
   if (!threadsLoaded) {
     return (

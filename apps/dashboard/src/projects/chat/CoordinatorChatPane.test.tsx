@@ -65,6 +65,7 @@ const Harness = ({
       project={project}
       threads={threads}
       threadsLoaded
+      threadsError={null}
       chat={chat}
       model={model}
     />

@@ -40,6 +40,7 @@ const Harness = ({ threadId }: { threadId: string }) => {
       thread={entry.threads.find((thread) => thread.id === threadId)}
       threads={entry.threads}
       threadsLoaded={entry.threadsLoaded}
+      threadsError={entry.threadsError}
     />
   );
 };

@@ -78,6 +78,7 @@ export const makeEntry = (
   project,
   threads,
   threadsLoaded: true,
+  threadsError: null,
   connection: "live",
   ...overrides,
 });
@@ -202,6 +203,7 @@ export const stubLiveProjects = (initial: ProjectsState) => {
     setSelected: [] as (string | null)[],
     adopted: [] as Project[],
     forgotten: [] as string[],
+    refetched: [] as string[],
   };
   const eventListeners = new Set<(event: ProjectStreamEvent) => void>();
   const live: LiveProjects = {
@@ -220,6 +222,9 @@ export const stubLiveProjects = (initial: ProjectsState) => {
       calls.setSelected.push(projectId);
     },
     refresh: async () => {},
+    refetch: async (projectId) => {
+      calls.refetched.push(projectId);
+    },
     adopt: (project) => {
       calls.adopted.push(project);
     },

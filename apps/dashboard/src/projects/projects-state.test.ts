@@ -8,6 +8,7 @@ import {
   setConnection,
   setListError,
   setProjectList,
+  setThreadsError,
   upsertProject,
 } from "./projects-state";
 import {
@@ -29,6 +30,7 @@ describe("setProjectList", () => {
     expect(Object.keys(after.byId)).toEqual(["prj_1"]);
     expect(after.byId.prj_1).toMatchObject({
       threadsLoaded: false,
+      threadsError: null,
       connection: "idle",
       threads: [],
     });
@@ -160,6 +162,35 @@ describe("snapshots and connection", () => {
     expect(after.byId.prj_1?.threads.map((t) => t.id)).toEqual(["fresh"]);
     expect(after.byId.prj_1?.threadsLoaded).toBe(true);
     expect(after.byId.prj_1?.connection).toBe("reconnecting");
+  });
+
+  test("setThreadsError keeps why the threads did not load, without touching what is known", () => {
+    const thread = makeThread();
+    const before = makeState([makeEntry(project, [thread], { threadsLoaded: false })]);
+    const after = setThreadsError(before, "prj_1", "Request failed (500)");
+
+    expect(after.byId.prj_1).toMatchObject({
+      threadsError: "Request failed (500)",
+      threadsLoaded: false,
+      threads: [thread],
+    });
+    // The same failure again, or one for a project the page does not know, changes nothing.
+    expect(setThreadsError(after, "prj_1", "Request failed (500)")).toBe(after);
+    expect(setThreadsError(after, "unknown", "Request failed (500)")).toBe(after);
+  });
+
+  test("a snapshot that succeeds clears the error; a list refetch keeps it", () => {
+    const failing = setThreadsError(
+      makeState([makeEntry(project, [], { threadsLoaded: false })]),
+      "prj_1",
+      "Request failed (500)",
+    );
+
+    expect(setProjectList(failing, [project]).byId.prj_1?.threadsError).toBe(
+      "Request failed (500)",
+    );
+    const healed = applySnapshot(failing, project, [makeThread()]);
+    expect(healed.byId.prj_1).toMatchObject({ threadsError: null, threadsLoaded: true });
   });
 
   test("setConnection returns the same state when nothing changes", () => {

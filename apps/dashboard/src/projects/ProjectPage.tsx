@@ -20,7 +20,7 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
     return phase === "ready" ? <ProjectNotFound /> : <ProjectLoading />;
   }
 
-  const { project, threads, threadsLoaded } = entry;
+  const { project, threads, threadsLoaded, threadsError } = entry;
   return (
     <div data-testid="project-page" data-project-id={project.id} className="flex h-full flex-col">
       <ProjectHeader
@@ -35,6 +35,7 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
             project={project}
             threads={threads}
             threadsLoaded={threadsLoaded}
+            threadsError={threadsError}
             chat={chat}
             model={model}
           />
@@ -45,6 +46,7 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
             thread={threads.find((thread) => thread.id === route.threadId)}
             threads={threads}
             threadsLoaded={threadsLoaded}
+            threadsError={threadsError}
           />
         ) : null}
         {route.name === "project-settings" ? (

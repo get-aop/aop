@@ -25,12 +25,14 @@ export const CoordinatorChatPane = ({
   project,
   threads,
   threadsLoaded,
+  threadsError,
   chat,
   model,
 }: {
   project: Project;
   threads: readonly Thread[];
   threadsLoaded: boolean;
+  threadsError: string | null;
   chat: ProjectChat;
   model: ChatModel;
 }) => {
@@ -76,6 +78,7 @@ export const CoordinatorChatPane = ({
         projectActive={projectActive}
         threads={threads}
         threadsLoaded={threadsLoaded}
+        threadsError={threadsError}
       >
         <Body
           model={model}

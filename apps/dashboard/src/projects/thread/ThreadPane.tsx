@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { markThreadRead } from "../../api/threads";
 import { Link, projectPath } from "../../shell/router";
 import { pullRequestOf } from "../selectors";
+import { ThreadsLoadError } from "../ThreadsLoadError";
 import { ThreadChanges } from "./changes/ThreadChanges";
 import { useThreadDiff } from "./changes/use-thread-diff";
 import { PullRequestBar, PullRequestProblemNotice } from "./PullRequestBar";
@@ -24,11 +25,13 @@ export const ThreadPane = ({
   thread,
   threads,
   threadsLoaded,
+  threadsError,
 }: {
   project: Project;
   thread: Thread | undefined;
   threads: readonly Thread[];
   threadsLoaded: boolean;
+  threadsError: string | null;
 }) => {
   if (thread) {
     return (
@@ -38,10 +41,22 @@ export const ThreadPane = ({
         thread={thread}
         threads={threads}
         threadsLoaded={threadsLoaded}
+        threadsError={threadsError}
       />
     );
   }
-  return threadsLoaded ? <ThreadMissing project={project} /> : <ThreadLoading />;
+  if (threadsLoaded) return <ThreadMissing project={project} />;
+  if (threadsError) {
+    return (
+      <ThreadsLoadError
+        projectId={project.id}
+        subject="this thread"
+        error={threadsError}
+        className="p-6 text-[13px]"
+      />
+    );
+  }
+  return <ThreadLoading />;
 };
 
 const ThreadView = ({
@@ -49,11 +64,13 @@ const ThreadView = ({
   thread,
   threads,
   threadsLoaded,
+  threadsError,
 }: {
   project: Project;
   thread: Thread;
   threads: readonly Thread[];
   threadsLoaded: boolean;
+  threadsError: string | null;
 }) => {
   const [tab, setTab] = useState<Tab>("transcript");
   useMarkRead(thread);
@@ -120,6 +137,7 @@ const ThreadView = ({
           thread={thread}
           threads={threads}
           threadsLoaded={threadsLoaded}
+          threadsError={threadsError}
         />
       </div>
     </div>

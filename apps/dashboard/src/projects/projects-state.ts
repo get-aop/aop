@@ -8,6 +8,11 @@ export interface ProjectEntry {
   /** Every thread of the project. Meaningful once `threadsLoaded`. */
   threads: readonly Thread[];
   threadsLoaded: boolean;
+  /**
+   * Why the last fetch of the threads failed, in the host's words; null once one succeeds. It
+   * tells a load that is failing from one that is only slow.
+   */
+  threadsError: string | null;
   connection: StreamConnection;
 }
 
@@ -42,7 +47,7 @@ export const setProjectList = (
     const known = state.byId[project.id];
     byId[project.id] = known
       ? { ...known, project: newerProject(known.project, project) }
-      : { project, threads: [], threadsLoaded: false, connection: "idle" };
+      : newEntry(project);
   }
   return { phase: "ready", error: null, reachable: true, byId };
 };
@@ -58,7 +63,7 @@ export const upsertProject = (state: ProjectsState, project: Project): ProjectsS
   const known = state.byId[project.id];
   const entry: ProjectEntry = known
     ? { ...known, project: newerProject(known.project, project) }
-    : { project, threads: [], threadsLoaded: false, connection: "idle" };
+    : newEntry(project);
   return { ...state, phase: "ready", byId: { ...state.byId, [project.id]: entry } };
 };
 
@@ -79,10 +84,22 @@ export const applySnapshot = (
     project,
     threads,
     threadsLoaded: true,
+    threadsError: null,
     connection: known?.connection ?? "idle",
   };
   // Anything the host answered proves it is reachable, so a fetch that failed while it was down stops counting.
   return { ...state, reachable: true, byId: { ...state.byId, [project.id]: entry } };
+};
+
+/** A fetch of one project's threads that failed: the pages say why until one succeeds. */
+export const setThreadsError = (
+  state: ProjectsState,
+  projectId: string,
+  error: string,
+): ProjectsState => {
+  const entry = state.byId[projectId];
+  if (!entry || entry.threadsError === error) return state;
+  return { ...state, byId: { ...state.byId, [projectId]: { ...entry, threadsError: error } } };
 };
 
 export const setConnection = (
@@ -130,6 +147,14 @@ const removeThread = (state: ProjectsState, projectId: string, threadId: string)
   const threads = entry.threads.filter((thread) => thread.id !== threadId);
   return { ...state, byId: { ...state.byId, [projectId]: { ...entry, threads } } };
 };
+
+const newEntry = (project: Project): ProjectEntry => ({
+  project,
+  threads: [],
+  threadsLoaded: false,
+  threadsError: null,
+  connection: "idle",
+});
 
 // A list fetched a moment ago must not roll back a project a stream entry has since updated.
 const newerProject = (known: Project, incoming: Project): Project =>

@@ -27,11 +27,13 @@ export const ThreadTranscript = ({
   thread,
   threads,
   threadsLoaded,
+  threadsError,
 }: {
   project: Project;
   thread: Thread;
   threads: readonly Thread[];
   threadsLoaded: boolean;
+  threadsError: string | null;
 }) => {
   const { conversation, state } = useThreadConversation(project.id, thread.id);
   const agentReplies = state.messages.filter((message) => message.role === "assistant").length;
@@ -68,6 +70,7 @@ export const ThreadTranscript = ({
         projectActive={project.status === "active"}
         threads={threads}
         threadsLoaded={threadsLoaded}
+        threadsError={threadsError}
       >
         <Body
           state={state}

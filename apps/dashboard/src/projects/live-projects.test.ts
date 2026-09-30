@@ -13,7 +13,7 @@ import {
 setupDashboardDom();
 
 const { ApiError } = await import("../api/request");
-const { createLiveProjects, POLL_INTERVAL_MS } = await import("./live-projects");
+const { createLiveProjects, POLL_INTERVAL_MS, SNAPSHOT_RETRY_MS } = await import("./live-projects");
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -56,7 +56,17 @@ const harness = (projects: Project[], threads: Record<string, Thread[]> = {}) =>
   /** Poll timers that are armed and not cancelled: more than one means two chains are running. */
   const pendingPolls = () =>
     scheduled.filter((t) => t.delayMs === POLL_INTERVAL_MS && !t.cancelled).length;
-  return { live, api, sourceOf, openStreams, poll, pendingPolls, stream };
+  const pendingRetries = () =>
+    scheduled.filter((t) => t.delayMs === SNAPSHOT_RETRY_MS && !t.cancelled);
+  /** Runs the snapshot retry that is pending, as its timer would, and lets it settle. */
+  const retry = async () => {
+    const [timer] = pendingRetries();
+    if (!timer) throw new Error("no snapshot retry is pending");
+    scheduled.splice(scheduled.indexOf(timer), 1);
+    timer.run();
+    await flush();
+  };
+  return { live, api, sourceOf, openStreams, poll, pendingPolls, pendingRetries, retry, stream };
 };
 
 const started = async (...args: Parameters<typeof harness>) => {
@@ -237,6 +247,73 @@ describe("resync", () => {
     expect(h.live.getState().byId.a?.threadsLoaded).toBe(false);
     expect(h.live.getState().byId.a?.threads.map((t) => t.id)).toEqual(["t1"]);
     expect(h.api.listThreads).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a fetch of the threads that fails", () => {
+  // A project whose threads the host cannot list (a 500, as a row it cannot read gives), until `heal`.
+  const failing = async () => {
+    const h = harness([makeProject({ id: "a" })]);
+    h.api.listThreads.mockImplementation(async () => {
+      throw new ApiError(500, "UNKNOWN", "Request failed (500)");
+    });
+    h.live.start();
+    await flush();
+    h.sourceOf("a").emit("resync", { cursor: 1, reason: "start" }, "1");
+    await flush();
+    const heal = () =>
+      h.api.listThreads.mockImplementation(async () => [makeThread({ id: "t1", projectId: "a" })]);
+    return { h, heal };
+  };
+
+  test("says why on the project, instead of loading forever", async () => {
+    const { h } = await failing();
+
+    expect(h.live.getState().byId.a).toMatchObject({
+      threadsLoaded: false,
+      threadsError: "Request failed (500)",
+    });
+  });
+
+  test("keeps being retried on its own, and the error clears once the host answers", async () => {
+    const { h, heal } = await failing();
+    await h.retry();
+
+    expect(h.api.listThreads).toHaveBeenCalledTimes(2);
+    expect(h.live.getState().byId.a?.threadsError).toBe("Request failed (500)");
+    expect(h.pendingRetries()).toHaveLength(1);
+
+    heal();
+    await h.retry();
+
+    expect(h.live.getState().byId.a).toMatchObject({ threadsLoaded: true, threadsError: null });
+    expect(h.live.getState().byId.a?.threads.map((t) => t.id)).toEqual(["t1"]);
+    expect(h.pendingRetries()).toHaveLength(0);
+  });
+
+  test("refetch tries again at once and leaves one retry waiting while it still fails", async () => {
+    const { h, heal } = await failing();
+    await h.live.refetch("a");
+
+    expect(h.api.listThreads).toHaveBeenCalledTimes(2);
+    expect(h.live.getState().byId.a?.threadsError).toBe("Request failed (500)");
+    expect(h.pendingRetries()).toHaveLength(1);
+
+    heal();
+    await h.live.refetch("a");
+
+    expect(h.live.getState().byId.a).toMatchObject({ threadsLoaded: true, threadsError: null });
+  });
+
+  test("a project the host no longer has is dropped, not shown as failing", async () => {
+    const h = await started([makeProject({ id: "a" })]);
+    h.api.listThreads.mockImplementation(async () => {
+      throw new ApiError(404, "NOT_FOUND", "Project not found");
+    });
+    h.sourceOf("a").emit("resync", { cursor: 1, reason: "start" }, "1");
+    await flush();
+
+    expect(h.live.getState().byId.a).toBeUndefined();
   });
 });
 

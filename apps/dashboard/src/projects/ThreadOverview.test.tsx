@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Thread, ThreadStatus } from "@aop/common";
 import { setupDashboardDom } from "../test/setup-dom";
 import type { ProjectEntry } from "./projects-state";
-import { makeEntry, makeProject, makeThread } from "./test-utils";
+import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "./test-utils";
 
 setupDashboardDom();
 
 const { cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
 const { ThreadOverview } = await import("./ThreadOverview");
+const { ProjectsProvider } = await import("./ProjectsProvider");
 
 afterEach(cleanup);
 beforeEach(() => window.history.pushState({}, "", "/"));
@@ -260,7 +261,37 @@ describe("before there is anything to group", () => {
     render(<ThreadOverview entry={entryOf([], { threadsLoaded: false })} />);
 
     expect(screen.getByTestId("threads-loading")).toBeTruthy();
+    expect(screen.queryByTestId("threads-error")).toBeNull();
     expect(screen.queryByTestId("overview-counters")).toBeNull();
+  });
+
+  test("says why the threads did not load instead of loading forever, and fetches them again on Try again", () => {
+    const entry = entryOf([], { threadsLoaded: false, threadsError: "Request failed (500)" });
+    const stub = stubLiveProjects(makeState([entry]));
+    render(
+      <ProjectsProvider live={stub.live}>
+        <ThreadOverview entry={entry} />
+      </ProjectsProvider>,
+    );
+
+    expect(screen.getByTestId("threads-error").getAttribute("role")).toBe("alert");
+    expect(screen.getByTestId("threads-error-message").textContent).toBe(
+      "Could not load this project's threads: Request failed (500)",
+    );
+    expect(screen.queryByTestId("threads-loading")).toBeNull();
+    expect(screen.queryByTestId("threads-empty")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("threads-retry"));
+    expect(stub.calls.refetched).toEqual(["p1"]);
+  });
+
+  test("an error left from an earlier fetch does not hide threads that have loaded", () => {
+    render(
+      <ThreadOverview entry={entryOf(onePerStatus(), { threadsError: "Request failed (500)" })} />,
+    );
+
+    expect(screen.getByTestId("thread-overview")).toBeTruthy();
+    expect(screen.queryByTestId("threads-error")).toBeNull();
   });
 
   test("a project with no threads points at the coordinator", () => {
