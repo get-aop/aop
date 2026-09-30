@@ -3,10 +3,10 @@ import { join } from "node:path";
 import type { UpdateChatSessionInput } from "@aop/common";
 import type { Context } from "hono";
 import { Hono } from "hono";
+import { createMiddleware } from "hono/factory";
 import { streamSSE } from "hono/streaming";
 import type { LocalServerContext } from "../context.ts";
 import { createSSEStreamHelper } from "../events/sse-stream.ts";
-import { getChatDelegation, listChatDelegations, readDelegationOutput } from "./delegation-runs.ts";
 import { chatSessionAttachmentsDir, isSafeAttachmentFileName } from "./message-images.ts";
 import {
   type AbortChatSessionResult,
@@ -16,7 +16,6 @@ import {
   type GetChatSessionResult,
   type ResetRuntimeSessionResult,
   type RetryFreshChatRunResult,
-  type RunTerminalResult,
   type SendChatMessageResult,
   type UpdateChatSessionResult,
   type UpdateChatWorkspaceResult,
@@ -24,7 +23,6 @@ import {
 import {
   createChatSessionEventQueue,
   getLatestChatSessionProgress,
-  getLatestDelegationProgressBySession,
   subscribeChatSession,
 } from "./session-events.ts";
 
@@ -37,6 +35,15 @@ export const createChatSessionRoutes = (
 ) => {
   const routes = new Hono();
   const service = createChatSessionService(ctx, deps);
+
+  // Project sessions have their own lifecycle (pause, delete, hooks), so they are not served here.
+  const hideProjectSessions = createMiddleware(async (c, next) =>
+    (await service.belongsToProject(c.req.param("sessionId") ?? ""))
+      ? c.json({ error: "Session not found" }, 404)
+      : next(),
+  );
+  routes.use("/:sessionId", hideProjectSessions);
+  routes.use("/:sessionId/*", hideProjectSessions);
 
   routes.post("/", async (c) => {
     const body = await c.req
@@ -51,28 +58,6 @@ export const createChatSessionRoutes = (
 
   routes.get("/", async (c) => {
     return c.json(await service.list());
-  });
-
-  // Literal routes before /:sessionId so "delegations" never binds as a session id.
-  routes.get("/delegations/active", async (c) => {
-    return c.json({ delegations: await listChatDelegations(ctx) });
-  });
-
-  routes.get("/:sessionId/delegations", async (c) => {
-    const sessionId = c.req.param("sessionId");
-    const exists = await service.exists(sessionId);
-    if (!exists) return c.json({ error: "Session not found" }, 404);
-    return c.json({ delegations: await listChatDelegations(ctx, sessionId) });
-  });
-
-  routes.get("/:sessionId/delegations/:delegationId/output", async (c) => {
-    const sessionId = c.req.param("sessionId");
-    const exists = await service.exists(sessionId);
-    if (!exists) return c.json({ error: "Session not found" }, 404);
-    const delegation = await getChatDelegation(ctx, sessionId, c.req.param("delegationId"));
-    if (!delegation) return c.json({ error: "Delegation not found" }, 404);
-    const output = await readDelegationOutput(delegation.logFilePath);
-    return c.json({ delegation, output });
   });
 
   routes.get("/:sessionId/stream", async (c) => {
@@ -96,11 +81,6 @@ export const createChatSessionRoutes = (
       if (!connected) return;
       const latestProgress = getLatestChatSessionProgress(sessionId);
       if (latestProgress) await helper.sendEvent(latestProgress.type, latestProgress);
-      // Delegations replay their full cumulative text so delta frames that
-      // follow (late subscriber) have a baseline to append onto.
-      for (const delegationProgress of getLatestDelegationProgressBySession(sessionId)) {
-        await helper.sendEvent(delegationProgress.type, delegationProgress);
-      }
       await service.ensureRecovery(sessionId);
 
       const pingInterval = setInterval(async () => {
@@ -251,17 +231,6 @@ export const createChatSessionRoutes = (
   routes.get("/:sessionId/attachments/:fileName", async (c) =>
     serveChatAttachment(c, service, c.req.param("sessionId"), c.req.param("fileName")),
   );
-
-  routes.post("/:sessionId/terminal", async (c) => {
-    const body = await c.req
-      .json<{ command?: unknown }>()
-      .catch(() => ({}) as { command?: unknown });
-    const result = await service.runTerminal(c.req.param("sessionId"), body.command);
-    if (!result.success) {
-      return mapTerminalError(c, result);
-    }
-    return c.json({ lines: result.lines });
-  });
 
   return routes;
 };
@@ -452,16 +421,5 @@ const mapSendError = (c: Context, result: Extract<SendChatMessageResult, { succe
       return c.json({ error: "Runtime configuration not found" }, 404);
     case "RUN_IN_PROGRESS":
       return c.json({ error: "A run is already in progress for this session" }, 409);
-  }
-};
-
-const mapTerminalError = (c: Context, result: Extract<RunTerminalResult, { success: false }>) => {
-  switch (result.error.code) {
-    case "SESSION_NOT_FOUND":
-      return c.json({ error: "Session not found" }, 404);
-    case "REPO_NOT_FOUND":
-      return c.json({ error: "Repository not found" }, 404);
-    case "INVALID_COMMAND":
-      return c.json({ error: "command is required" }, 400);
   }
 };

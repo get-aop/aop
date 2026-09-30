@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { MessageBlockSchema } from "./blocks.ts";
+import { MessageBlockSchema, SUGGESTED_THREADS_MAX } from "./blocks.ts";
 import { makePrArtifact, parsed, rejectedPaths } from "./test-utils.ts";
 
 const prChip = () => {
@@ -17,6 +17,36 @@ describe("MessageBlockSchema", () => {
     ["quote-forwarded", { type: "quote-forwarded", text: "release moved to Monday" }],
   ])("accepts a %s block", (_type, block) => {
     expect(parsed(MessageBlockSchema, block)).toEqual(block);
+  });
+
+  test("accepts suggested threads and rejects an empty, oversized, or duplicated list", () => {
+    const suggestion = (id: string) => ({
+      id,
+      title: "Audit the retry logic",
+      prompt: "Read the retry code and list every place a retry can double-charge.",
+      repoId: "repo_1",
+    });
+    const block = (suggestions: unknown[]) => ({ type: "suggested-threads", suggestions });
+    expect(parsed(MessageBlockSchema, block([suggestion("s1"), suggestion("s2")]))).toEqual(
+      block([suggestion("s1"), suggestion("s2")]),
+    );
+    expect(rejectedPaths(MessageBlockSchema, block([]))).toEqual(["suggestions"]);
+    expect(rejectedPaths(MessageBlockSchema, block([suggestion("s1"), suggestion("s1")]))).toEqual([
+      "suggestions",
+    ]);
+    const nine = Array.from({ length: SUGGESTED_THREADS_MAX + 1 }, (_, i) => suggestion(`s${i}`));
+    expect(rejectedPaths(MessageBlockSchema, block(nine))).toEqual(["suggestions"]);
+  });
+
+  test("a suggestion may name no repo but needs a title and a prompt", () => {
+    const suggestions = [{ id: "s1", title: "Sketch the API", prompt: "Draft it.", repoId: null }];
+    expect(MessageBlockSchema.safeParse({ type: "suggested-threads", suggestions }).success).toBe(
+      true,
+    );
+    const blank = [{ id: "s1", title: " ", prompt: "", repoId: null }];
+    expect(
+      rejectedPaths(MessageBlockSchema, { type: "suggested-threads", suggestions: blank }),
+    ).toEqual(["suggestions.0.title", "suggestions.0.prompt"]);
   });
 
   test.each(["live", "needs-call", "done"])("accepts the %s thread card variant", (variant) => {

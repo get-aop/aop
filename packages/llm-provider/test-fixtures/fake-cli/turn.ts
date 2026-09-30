@@ -1,28 +1,32 @@
 import { type Directives, stripDirectives } from "./directives";
-import type { Beat, Ending, TurnContext } from "./types";
+import type { Ending, PlannedBeat, TurnContext } from "./types";
 
 export interface TurnPlan {
-  beats: Beat[];
+  beats: PlannedBeat[];
   ending: Ending;
 }
 
 const ASK_WAIT_TEXT = "Waiting on your answer.";
 const MAX_ECHO_LENGTH = 200;
 
-/** Turns the script into CLI-neutral beats: N tool rounds, an optional question, then how the turn ends. */
+/** Turns the script into CLI-neutral beats: N tool rounds, MCP calls, an optional question, then how the turn ends. */
 export const planTurn = (directives: Directives, ctx: TurnContext): TurnPlan => {
-  const beats: Beat[] = [];
+  const beats: PlannedBeat[] = [];
   for (let step = 1; step <= directives.steps; step += 1) {
     beats.push(
       { kind: "text", text: `Working on step ${step} of ${directives.steps}.` },
       { kind: "shell", command: `echo step ${step}`, output: `step ${step}` },
     );
   }
+  for (const call of directives.calls ?? []) beats.push({ kind: "call", call });
   if (directives.ask) beats.push({ kind: "ask", ask: directives.ask });
   return { beats, ending: chooseEnding(directives, ctx) };
 };
 
 const chooseEnding = (directives: Directives, ctx: TurnContext): Ending => {
+  if (directives.callsError !== undefined) {
+    return { kind: "failure", message: directives.callsError };
+  }
   if (directives.failMessage !== undefined) {
     return { kind: "failure", message: directives.failMessage };
   }

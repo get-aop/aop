@@ -59,7 +59,6 @@ export const deleteRunGraph = async (
     await db.deleteFrom("chat_run_events").where("run_id", "in", batch).execute();
     await db.deleteFrom("chat_run_changed_files").where("run_id", "in", batch).execute();
     await db.deleteFrom("chat_run_checkpoints").where("run_id", "in", batch).execute();
-    await db.deleteFrom("chat_delegation_runs").where("chat_run_id", "in", batch).execute();
     await db.deleteFrom("chat_runs").where("id", "in", batch).execute();
   }
 };

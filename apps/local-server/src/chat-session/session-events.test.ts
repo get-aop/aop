@@ -4,12 +4,9 @@ import {
   type ChatSessionEvent,
   createChatSessionEventQueue,
   getLatestChatSessionProgress,
-  getLatestDelegationProgressBySession,
   publishAssistantProgress,
   publishChatSessionEvent,
-  publishDelegationProgress,
   resetAssistantProgress,
-  resetDelegationProgress,
   subscribeChatSession,
   suffixDelta,
 } from "./session-events";
@@ -297,121 +294,5 @@ describe("publishAssistantProgress", () => {
       { replace: false, thinking: "d", content: "!" },
     ]);
     unsubscribe();
-  });
-});
-
-describe("publishDelegationProgress", () => {
-  beforeEach(() => {
-    resetDelegationProgress("d1");
-    resetDelegationProgress("d2");
-  });
-
-  const delegationProgress = (delegationId: string): ChatSessionEvent => ({
-    type: "delegation-progress",
-    sessionId: "s1",
-    delegationId,
-    thinking: "",
-    content: `p${delegationId}`,
-    commandGroups: [],
-  });
-
-  test("emits suffix deltas relative to the previous frame", () => {
-    const received: ChatSessionEvent[] = [];
-    const unsubscribe = subscribeChatSession("s1", (event) => received.push(event));
-
-    publishDelegationProgress("s1", "d1", {
-      thinking: "pond",
-      content: "Hello world",
-      commandGroups: [],
-    });
-    publishDelegationProgress("s1", "d1", {
-      thinking: "ponder",
-      content: "Hello world again",
-      commandGroups: [],
-    });
-
-    expect(
-      received.map((event) => [
-        event.type,
-        event.type === "delegation-progress" ? event.content : "",
-        event.type === "delegation-progress" ? event.replace : undefined,
-      ]),
-    ).toEqual([
-      ["delegation-progress", "Hello world", true],
-      ["delegation-progress", " again", false],
-    ]);
-    unsubscribe();
-  });
-
-  test("deltas are computed per delegation, not per session", () => {
-    const received: ChatSessionEvent[] = [];
-    const unsubscribe = subscribeChatSession("s1", (event) => received.push(event));
-
-    publishDelegationProgress("s1", "d1", { thinking: "", content: "alpha", commandGroups: [] });
-    publishDelegationProgress("s1", "d2", { thinking: "", content: "beta", commandGroups: [] });
-    publishDelegationProgress("s1", "d1", { thinking: "", content: "alphabet", commandGroups: [] });
-
-    expect(
-      received.map((event) => (event.type === "delegation-progress" ? event.content : "")),
-    ).toEqual(["alpha", "beta", "bet"]);
-    unsubscribe();
-  });
-
-  test("replay frame carries the full cumulative text with replace flag", () => {
-    publishDelegationProgress("s1", "d1", {
-      thinking: "a",
-      content: "one",
-      commandGroups: [],
-    });
-    publishDelegationProgress("s1", "d1", {
-      thinking: "ab",
-      content: "one two",
-      commandGroups: [],
-    });
-    publishDelegationProgress("s1", "d2", {
-      thinking: "",
-      content: "other",
-      commandGroups: [],
-    });
-
-    const replays = getLatestDelegationProgressBySession("s1");
-    expect(replays).toHaveLength(2);
-    const d1 = replays.find((event) => event.delegationId === "d1");
-    expect(d1?.replace).toBe(true);
-    expect(d1?.content).toBe("one two");
-    expect(d1?.thinking).toBe("ab");
-    expect(getLatestDelegationProgressBySession("other-session")).toEqual([]);
-  });
-
-  test("resetDelegationProgress starts a fresh replace frame", () => {
-    publishDelegationProgress("s1", "d1", { thinking: "a", content: "one", commandGroups: [] });
-    resetDelegationProgress("d1");
-    publishDelegationProgress("s1", "d1", { thinking: "b", content: "two", commandGroups: [] });
-
-    expect(getLatestDelegationProgressBySession("s1")).toMatchObject([
-      { delegationId: "d1", content: "two", replace: true },
-    ]);
-  });
-
-  test("queue coalesces consecutive delegation progress for the same delegation", async () => {
-    let release: (() => void) | undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const sent: string[] = [];
-    const queue = createChatSessionEventQueue(async (event) => {
-      if (sent.length === 0) await gate;
-      sent.push(event.type === "delegation-progress" ? event.content : event.type);
-    });
-
-    queue.push(delegationProgress("d1"));
-    queue.push(delegationProgress("d1"));
-    queue.push(delegationProgress("d1"));
-    queue.push(delegationProgress("d2"));
-    release?.();
-    await Bun.sleep(10);
-
-    // Same-delegation deltas concatenate; different delegations stay separate.
-    expect(sent).toEqual(["pd1", "pd1pd1", "pd2"]);
   });
 });

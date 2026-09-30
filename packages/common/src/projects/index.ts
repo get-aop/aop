@@ -1,7 +1,7 @@
 export type { Artifact, PullRequestRef, PullRequestState } from "./artifact.ts";
 export { ArtifactSchema, PullRequestRefSchema } from "./artifact.ts";
-export type { MessageBlock, ThreadCardVariant } from "./blocks.ts";
-export { MessageBlockSchema } from "./blocks.ts";
+export type { MessageBlock, SuggestedThread, ThreadCardVariant } from "./blocks.ts";
+export { MessageBlockSchema, SUGGESTED_THREADS_MAX, SuggestedThreadSchema } from "./blocks.ts";
 export type { Device } from "./device.ts";
 export { DeviceSchema } from "./device.ts";
 export type {
@@ -18,16 +18,31 @@ export {
 } from "./device-auth.ts";
 export type { EventLogEntry } from "./event-log.ts";
 export { EventLogEntrySchema } from "./event-log.ts";
-export type { AssistantMessage, Message, UserMessage } from "./message.ts";
-export { AssistantMessageSchema, MessageSchema, UserMessageSchema } from "./message.ts";
 export type {
+  AssistantMessage,
+  Message,
+  ThreadReportMessage,
+  ThreadReportOutcome,
+  UserMessage,
+} from "./message.ts";
+export {
+  AssistantMessageSchema,
+  MessageSchema,
+  ThreadReportMessageSchema,
+  ThreadReportOutcomeSchema,
+  UserMessageSchema,
+} from "./message.ts";
+export type {
+  CreateProjectInput,
   NotificationLevel,
   Project,
   ProjectPatch,
   ProjectSettings,
   ProjectStatus,
+  ThreadAccess,
 } from "./project.ts";
 export {
+  CreateProjectInputSchema,
   NotificationLevelSchema,
   PROJECT_GOAL_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
@@ -35,6 +50,7 @@ export {
   ProjectSchema,
   ProjectSettingsSchema,
   ProjectStatusSchema,
+  ThreadAccessSchema,
 } from "./project.ts";
 export type {
   CliProvider,

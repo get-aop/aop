@@ -192,11 +192,7 @@ export class ClaudeCodeProvider implements LLMProvider {
     }
 
     cmd.push(options.prompt);
-
-    const allowedDirectories = dedupeAllowedDirectories(options.allowedDirectories ?? []);
-    if (allowedDirectories.length > 0) {
-      cmd.push("--add-dir", ...allowedDirectories);
-    }
+    appendClaudeVariadicFlags(cmd, options);
 
     return cmd;
   }
@@ -382,6 +378,22 @@ const appendClaudePermissionFlags = (cmd: string[], options: RunOptions): void =
   cmd.push("--dangerously-skip-permissions");
 };
 
+// Variadic flags swallow every following argument up to the next flag, so they go after the
+// positional prompt; `--tools` takes one comma-joined value, and "" means no built-in tools.
+const appendClaudeVariadicFlags = (cmd: string[], options: RunOptions): void => {
+  const allowedDirectories = dedupeAllowedDirectories(options.allowedDirectories ?? []);
+  if (allowedDirectories.length > 0) {
+    cmd.push("--add-dir", ...allowedDirectories);
+  }
+  const allowedTools = normalizeToolList(options.allowedTools);
+  if (allowedTools.length > 0) {
+    cmd.push("--allowedTools", ...allowedTools);
+  }
+  if (options.builtInTools) {
+    cmd.push("--tools", normalizeToolList(options.builtInTools).join(","));
+  }
+};
+
 const appendClaudeBrowserFlags = (cmd: string[], options: RunOptions): void => {
   if (options.browserControl) cmd.push("--chrome");
 };
@@ -403,7 +415,9 @@ const buildClaudeCodeSettings = (options: RunOptions): Record<string, unknown> |
 const buildClaudeMcpConfig = (options: RunOptions): Record<string, unknown> | null => {
   const servers: Record<string, unknown> = {};
   const normalized = options.mcpServerUrl?.trim();
-  if (normalized && (options.isolation ?? "hermetic") === "open") {
+  // Both isolation modes get the aop server: hermetic adds --strict-mcp-config, so there it is
+  // the only server the run can reach.
+  if (normalized) {
     servers.aop = { type: "http", url: normalized };
   }
   if (options.browserControl) {

@@ -29,6 +29,7 @@ export type RemoveRepoResult =
 
 export type RemoveRepoError =
   | { code: "NOT_FOUND"; path: string }
+  | { code: "REPO_IN_PROJECT"; projectNames: string[] }
   | { code: "CHAT_HISTORY_UNSAFE"; reason: ChatHistoryMaintenanceFailureReason; message: string }
   | { code: "REMOVE_FAILED" };
 
@@ -98,6 +99,18 @@ export const removeRepo = async (
     return { success: false, error: { code: "NOT_FOUND", path: repoPath } };
   }
 
+  // A repo that projects use is a project setting: it leaves through the projects, which tell
+  // their clients, and its threads are not deleted as a side effect of unregistering it.
+  const usedBy = (await ctx.projectRepository.list()).filter((project) =>
+    project.repoIds.includes(repo.id),
+  );
+  if (usedBy.length > 0) {
+    return {
+      success: false,
+      error: { code: "REPO_IN_PROJECT", projectNames: usedBy.map((project) => project.name) },
+    };
+  }
+
   // Hidden checkpoint refs must be gone before anything that identifies the
   // repository or its workspaces is removed, otherwise they can never be found
   // again. A failure here preserves the registration, sessions, and paths.
@@ -133,7 +146,10 @@ export const removeRepo = async (
   await removePathSafely(aopPaths.worktrees(repo.id), "repo worktrees");
   await removePathSafely(aopPaths.repoDir(repo.id), "repo artifacts");
 
-  const factoryReset = (await repoRepository.getAll()).length === 0;
+  // The last repo going resets all data, which would take repo-less projects with it.
+  const factoryReset =
+    (await repoRepository.getAll()).length === 0 &&
+    (await ctx.projectRepository.list()).length === 0;
   ctx.taskEventEmitter.emit({ type: "repo-removed", repoId: repo.id });
   if (factoryReset) {
     const reset = await resetAllRuntimeData(ctx);
@@ -204,15 +220,8 @@ const pruneWorktrees = async (repoId: string, repoPath: string): Promise<void> =
   }
 };
 
-/** Main session dir plus delegate/control siblings created by chat runtimes. */
-const chatSessionArtifactDirs = (sessionId: string): string[] => {
-  const root = join(aopPaths.logs(), "chat-sessions");
-  return [
-    join(root, sessionId),
-    join(root, `${sessionId}-delegate`),
-    join(root, `${sessionId}-control`),
-  ];
-};
+const chatSessionArtifactDir = (sessionId: string): string =>
+  join(aopPaths.logs(), "chat-sessions", sessionId);
 
 const removePathSafely = async (path: string, label: string): Promise<void> => {
   try {
@@ -261,9 +270,7 @@ const removeChatSessionArtifacts = async (
   purge: ChatHistoryMaintenanceResult & { success: true },
 ): Promise<void> => {
   for (const sessionId of purge.deletedSessionIds) {
-    for (const dir of chatSessionArtifactDirs(sessionId)) {
-      await removePathSafely(dir, "chat session artifacts");
-    }
+    await removePathSafely(chatSessionArtifactDir(sessionId), "chat session artifacts");
   }
 };
 

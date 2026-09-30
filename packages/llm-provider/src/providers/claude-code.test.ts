@@ -74,6 +74,23 @@ describe("buildCommand", () => {
     expect(cmd).not.toContain(retiredSafeModeFlag);
   });
 
+  test("hermetic runs reach only the AOP server when one is provided", () => {
+    const provider = new ClaudeCodeProvider();
+    const cmd = provider.buildCommand({
+      prompt: "coordinate",
+      isolation: "hermetic",
+      mcpServerUrl: "http://127.0.0.1:25350/api/mcp",
+    });
+
+    expect(cmd).toContain("--strict-mcp-config");
+    expect(
+      cmd.slice(cmd.indexOf("--setting-sources"), cmd.indexOf("--setting-sources") + 2),
+    ).toEqual(["--setting-sources", "project"]);
+    expect(JSON.parse(cmd[cmd.indexOf("--mcp-config") + 1] ?? "{}")).toEqual({
+      mcpServers: { aop: { type: "http", url: "http://127.0.0.1:25350/api/mcp" } },
+    });
+  });
+
   test("adds no isolation or MCP flags to open runs without an AOP server", () => {
     const provider = new ClaudeCodeProvider();
     const cmd = provider.buildCommand({ prompt: "chat", isolation: "open" });
@@ -373,6 +390,81 @@ describe("buildCommand", () => {
       "--add-dir",
       "/repo/tasks/demo/attachments",
       "/tmp/aop-shared",
+    ]);
+  });
+
+  test("pre-approves allowed tools after the prompt so the variadic flag cannot swallow it", () => {
+    const provider = new ClaudeCodeProvider();
+    const cmd = provider.buildCommand({
+      prompt: "work on it",
+      isolation: "open",
+      accessMode: "auto-accept-edits",
+      allowedTools: [
+        "mcp__aop__aop_ask_user",
+        " mcp__aop__aop_report_status ",
+        "mcp__aop__aop_ask_user",
+      ],
+    });
+
+    expect(cmd).toEqual([
+      "claude",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      "work on it",
+      "--allowedTools",
+      "mcp__aop__aop_ask_user",
+      "mcp__aop__aop_report_status",
+    ]);
+  });
+
+  test("an empty built-in tool list disables every built-in tool with an empty --tools value", () => {
+    const provider = new ClaudeCodeProvider();
+    const cmd = provider.buildCommand({ prompt: "coordinate", builtInTools: [] });
+
+    expect(cmd.slice(-3)).toEqual(["coordinate", "--tools", ""]);
+  });
+
+  test("a built-in tool list is one comma-joined --tools value", () => {
+    const provider = new ClaudeCodeProvider();
+    const cmd = provider.buildCommand({ prompt: "read only", builtInTools: ["Read", "Grep"] });
+
+    expect(cmd.slice(-3)).toEqual(["read only", "--tools", "Read,Grep"]);
+  });
+
+  test("leaves the built-in tool set alone when builtInTools is unset", () => {
+    const provider = new ClaudeCodeProvider();
+
+    expect(provider.buildCommand({ prompt: "x", allowedTools: [] })).not.toContain("--tools");
+    expect(provider.buildCommand({ prompt: "x", allowedTools: [] })).not.toContain(
+      "--allowedTools",
+    );
+  });
+
+  test("emits the variadic flags after the prompt in add-dir, allowedTools, tools order", () => {
+    const provider = new ClaudeCodeProvider();
+    const cmd = provider.buildCommand({
+      prompt: "coordinate",
+      model: "opus",
+      reasoningEffort: "low",
+      isolation: "hermetic",
+      accessMode: "full-access",
+      mcpServerUrl: "http://127.0.0.1:25350/api/mcp?sessionId=s&accessToken=t",
+      allowedDirectories: ["/notes"],
+      allowedTools: ["mcp__aop__thread_spawn"],
+      builtInTools: [],
+    });
+
+    expect(cmd.slice(cmd.indexOf("coordinate"))).toEqual([
+      "coordinate",
+      "--add-dir",
+      "/notes",
+      "--allowedTools",
+      "mcp__aop__thread_spawn",
+      "--tools",
+      "",
     ]);
   });
 });

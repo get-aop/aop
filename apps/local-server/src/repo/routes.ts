@@ -37,6 +37,15 @@ export const createRepoRoutes = (ctx: LocalServerContext) => {
 
     const result = await removeRepo(ctx, repo.path);
     if (!result.success) {
+      if (result.error.code === "REPO_IN_PROJECT") {
+        return c.json(
+          {
+            error: "Remove the repository from its projects first",
+            projects: result.error.projectNames,
+          },
+          409,
+        );
+      }
       if (result.error.code === "CHAT_HISTORY_UNSAFE") {
         return c.json(
           {

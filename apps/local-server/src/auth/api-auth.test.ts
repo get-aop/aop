@@ -209,7 +209,6 @@ describe("createApiAuth", () => {
         ["GET", "/api/auth/devices"],
         ["DELETE", "/api/auth/devices/some-device"],
         ["POST", "/api/updates/install"],
-        ["POST", "/api/chat-sessions/session-1/terminal"],
       ] as const;
 
       for (const [method, path] of hostOnly) {

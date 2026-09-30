@@ -129,31 +129,9 @@ export interface ChatMessagesTable {
   turn_index: Generated<number>;
   disposition: Generated<ChatMessageDisposition>;
   created_at: Generated<string>;
+  /** JSON `MessageOrigin`, added by migration v4; null on what a person typed. */
+  origin_json: string | null;
 }
-
-export interface ChatDelegationRunsTable {
-  id: string;
-  chat_run_id: string;
-  kind: string;
-  label: string;
-  runtime: string;
-  runtime_alias: string | null;
-  runtime_configuration_id: string | null;
-  model: string;
-  reasoning: string;
-  fast_mode: number;
-  status: string;
-  activity: string | null;
-  runtime_session_id: string | null;
-  log_file_path: string;
-  error: string | null;
-  tool_use_id: string | null;
-  started_at: string;
-  updated_at: string;
-}
-
-export type ChatDelegationRunRecord = Selectable<ChatDelegationRunsTable>;
-export type NewChatDelegationRunRecord = Insertable<ChatDelegationRunsTable>;
 
 export interface ChatRunsTable {
   id: string;
@@ -178,6 +156,8 @@ export interface ChatRunsTable {
   error_message: string | null;
   /** OS pid of the detached CLI, recorded at spawn so Stop and recovery work after a server restart. */
   pid: number | null;
+  /** JSON `MessageBlock[]` the run's tools produced, added by migration v4. */
+  blocks_json: Generated<string>;
   created_at: Generated<string>;
   updated_at: Generated<string>;
 }
@@ -198,7 +178,6 @@ export interface Database extends ChatHistoryDatabase, ProjectsDatabase, UsageDa
   chat_sessions: ChatSessionsTable;
   chat_messages: ChatMessagesTable;
   chat_runs: ChatRunsTable;
-  chat_delegation_runs: ChatDelegationRunsTable;
 }
 
 export type Setting = Selectable<SettingsTable>;

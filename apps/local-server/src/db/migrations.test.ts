@@ -9,7 +9,6 @@ import type { Database } from "./schema.ts";
 
 const BASELINE_TABLES = [
   "chat_checkpoint_cleanup_jobs",
-  "chat_delegation_runs",
   "chat_messages",
   "chat_revert_operations",
   "chat_run_changed_files",
@@ -57,6 +56,7 @@ describe("runMigrations", () => {
       { version: 1, name: "baseline" },
       { version: 2, name: "projects" },
       { version: 3, name: "run-usage" },
+      { version: 4, name: "coordinator" },
     ]);
   });
 
@@ -79,7 +79,7 @@ describe("runMigrations", () => {
       .executeTakeFirstOrThrow();
     expect(saved.value).toBe("be brief");
     const ledger = await db.selectFrom("schema_migrations").select("version").execute();
-    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3]);
+    expect(ledger.map((row) => row.version)).toEqual([1, 2, 3, 4]);
   });
 
   test("refuses a database written by a newer build", async () => {
@@ -164,31 +164,6 @@ describe("baseline v1 foreign keys", () => {
     return Number(row.count);
   };
 
-  const seedDelegationRun = (runId: string) =>
-    db
-      .insertInto("chat_delegation_runs")
-      .values({
-        id: `del_${runId}`,
-        chat_run_id: runId,
-        kind: "delegation",
-        label: "Codex",
-        runtime: "codex-cli",
-        runtime_alias: null,
-        runtime_configuration_id: null,
-        model: "m",
-        reasoning: "high",
-        fast_mode: 0,
-        status: "active",
-        activity: null,
-        runtime_session_id: null,
-        log_file_path: "/tmp/x.jsonl",
-        error: null,
-        tool_use_id: null,
-        started_at: "2026-07-24T09:00:00.000Z",
-        updated_at: "2026-07-24T09:00:00.000Z",
-      })
-      .execute();
-
   test("enforces foreign keys: a child cannot point at a missing parent", async () => {
     await expect(
       db
@@ -199,8 +174,7 @@ describe("baseline v1 foreign keys", () => {
   });
 
   test("deleting a session cascades to its messages, runs, and run-owned rows", async () => {
-    const seeded = await seedChatSessionGraph(db, { sessionId: "s1", withCheckpoints: false });
-    await seedDelegationRun(seeded.runIds[0] as string);
+    await seedChatSessionGraph(db, { sessionId: "s1", withCheckpoints: false });
 
     await db.deleteFrom("chat_sessions").where("id", "=", "s1").execute();
 
@@ -209,7 +183,6 @@ describe("baseline v1 foreign keys", () => {
       "chat_runs",
       "chat_run_events",
       "chat_run_changed_files",
-      "chat_delegation_runs",
     ] as const) {
       expect(await count(table)).toBe(0);
     }

@@ -1,5 +1,5 @@
-import type { ChatActionPayload, ChatDelegationRun } from "@aop/common";
-import type { Transaction } from "kysely";
+import type { ChatActionPayload } from "@aop/common";
+import type { Kysely } from "kysely";
 import type {
   ChatMessage,
   ChatRun,
@@ -7,12 +7,6 @@ import type {
   ChatRunInterruptionKind,
   Database,
 } from "../db/schema.ts";
-import { listDelegationRuns, replaceDelegationRuns } from "./delegation-run-store.ts";
-import {
-  cascadeDelegationsForHostTerminal,
-  publishDelegationUpdate,
-  toDelegationDto,
-} from "./delegation-runs.ts";
 import { encodeMessageContent, type StoredChatArtifact } from "./message-images.ts";
 
 type SessionBindingPolicy = "preserve" | "set" | "clear";
@@ -31,7 +25,7 @@ const SECOND_EMPTY_OUTPUT_MESSAGE =
   "AOP reset the runtime session because the runtime produced no response twice. The next message will start a fresh runtime session.";
 
 export const persistFinalizedChatRun = async (
-  trx: Transaction<Database>,
+  trx: Kysely<Database>,
   run: ChatRun,
   text: string,
   action: ChatActionPayload | null,
@@ -70,13 +64,6 @@ export const persistFinalizedChatRun = async (
     .onConflict((conflict) => conflict.column("id").doNothing())
     .execute();
 
-  // Re-read under this transaction so concurrent progress notes/starts are not lost
-  // by cascading from a stale delegation snapshot.
-  const latestDelegations = await listDelegationRuns(trx, current.id);
-  const delegationCascade = buildDelegationCascade(latestDelegations, outcome, createdAt);
-  if (delegationCascade.changed) {
-    await replaceDelegationRuns(trx, current.id, delegationCascade.entries);
-  }
   const claimed = await trx
     .updateTable("chat_runs")
     .set({
@@ -94,8 +81,6 @@ export const persistFinalizedChatRun = async (
     .executeTakeFirst();
   if (!claimed) return null;
 
-  await publishDelegationCascade(trx, current, outcome, delegationCascade.entries);
-
   await applySessionBindingPolicy(
     trx,
     current.session_id,
@@ -110,43 +95,8 @@ export const persistFinalizedChatRun = async (
     .executeTakeFirst();
 };
 
-const buildDelegationCascade = (
-  entries: ChatDelegationRun[],
-  outcome: FinalizeChatRunOutcome,
-  createdAt: string,
-): { changed: boolean; entries: ChatDelegationRun[] } => {
-  const cascade = cascadeDelegationsForHostTerminal(entries, outcome.status, createdAt);
-  return { changed: cascade.changed.length > 0, entries: cascade.entries };
-};
-
-const publishDelegationCascade = async (
-  trx: Transaction<Database>,
-  current: ChatRun,
-  outcome: FinalizeChatRunOutcome,
-  changed: ChatDelegationRun[],
-): Promise<void> => {
-  if (changed.length === 0) return;
-  const session = await trx
-    .selectFrom("chat_sessions")
-    .select("title")
-    .where("id", "=", current.session_id)
-    .executeTakeFirst();
-  for (const entry of changed) {
-    publishDelegationUpdate(
-      current.session_id,
-      current.id,
-      toDelegationDto(entry, {
-        hostRunId: current.id,
-        hostRunStatus: outcome.status,
-        sessionId: current.session_id,
-        sessionTitle: session?.title ?? null,
-      }),
-    );
-  }
-};
-
 const resolveBindingDecision = async (
-  trx: Transaction<Database>,
+  trx: Kysely<Database>,
   current: ChatRun,
   outcome: FinalizeChatRunOutcome,
   runtimeSessionId: string | null,
@@ -178,7 +128,7 @@ const resolveBindingDecision = async (
 };
 
 const resolveEmptyOutputBindingDecision = async (
-  trx: Transaction<Database>,
+  trx: Kysely<Database>,
   current: ChatRun,
   text: string,
   errorMessage: string | null,
@@ -212,7 +162,7 @@ const resolveEmptyOutputBindingDecision = async (
 };
 
 const applySessionBindingPolicy = async (
-  trx: Transaction<Database>,
+  trx: Kysely<Database>,
   sessionId: string,
   policy: SessionBindingPolicy,
   runtimeSessionId: string | null,

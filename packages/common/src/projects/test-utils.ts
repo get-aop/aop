@@ -62,6 +62,7 @@ export const makeProject = (overrides: Overrides = {}) => ({
   coordinator: { provider: "claude-code", model: null, effort: "low" },
   thread: { provider: "claude-code", model: "claude-opus-5", effort: "high" },
   notificationLevel: "coordinator",
+  threadAccess: "auto-accept-edits",
   repoIds: ["repo_1"],
   status: "active",
   createdAt: AT,
@@ -85,6 +86,18 @@ export const makeAssistantMessage = (overrides: Overrides = {}) => ({
   threadId: null,
   role: "assistant",
   blocks: [{ type: "text", text: "On it. Two threads; I'll flag anything that needs you." }],
+  createdAt: AT,
+  ...overrides,
+});
+
+export const makeThreadReportMessage = (overrides: Overrides = {}) => ({
+  id: "msg_3",
+  projectId: "prj_1",
+  threadId: null,
+  role: "thread-report",
+  reportedThreadId: "thr_1",
+  outcome: "finished",
+  text: 'Thread "Fix 4s cold start regression" finished a turn.',
   createdAt: AT,
   ...overrides,
 });

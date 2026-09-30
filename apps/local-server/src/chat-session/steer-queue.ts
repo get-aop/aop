@@ -2,6 +2,7 @@ import type { ChatActionPayload } from "@aop/common";
 import { generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatMessage, ChatRun, ChatSession } from "../db/schema.ts";
+import { loadProjectPromptContext } from "../project/prompt-context.ts";
 import { prepareConversationPrompt } from "./conversation-history.ts";
 import {
   buildRuntimePrompt,
@@ -15,6 +16,7 @@ import {
   validateChatDocumentAttachments,
   validateChatImageAttachments,
 } from "./message-images.ts";
+import { type MessageOrigin, serializeMessageOrigin } from "./message-origin.ts";
 import {
   createSessionRunLogPath,
   isSessionRunActive,
@@ -86,6 +88,7 @@ export const storeSteerUserMessage = async (
     imageAttachments?: unknown;
     documentAttachments?: unknown;
     action?: ChatActionPayload | null;
+    origin?: MessageOrigin | null;
   },
   disposition: "queued" | "steered",
 ): Promise<SteerStoreResult> => {
@@ -121,7 +124,8 @@ export const storeSteerUserMessage = async (
   const storedContent = encodeMessageContent(text, storedImages, storedDocuments);
   const now = new Date().toISOString();
 
-  const result = await ctx.db.transaction().execute(async (trx) => {
+  const result = await ctx.eventPublisher.transaction(async (tx) => {
+    const trx = tx.db;
     const turnIndex = await nextChatTurnIndex(trx, sessionId);
     const existing = await trx
       .selectFrom("chat_messages")
@@ -140,6 +144,7 @@ export const storeSteerUserMessage = async (
         turn_index: turnIndex,
         disposition,
         created_at: now,
+        origin_json: input.origin ? serializeMessageOrigin(input.origin) : null,
       })
       .execute();
 
@@ -162,6 +167,7 @@ export const storeSteerUserMessage = async (
         .where("id", "=", messageId)
         .executeTakeFirstOrThrow(),
     ]);
+    await ctx.sessionHooks.onUserMessageStored(tx, userMessage);
     return { session: updated, userMessage };
   });
 
@@ -201,6 +207,7 @@ export const claimNextQueuedSteer = async (
   const decoded = decodeStoredImages(queued.content);
   const workspacePath = await resolveSessionWorkspaceBinding(ctx, session);
   const globalInstructions = await loadChatGlobalInstructions(ctx.settingsRepository);
+  const projectContext = await loadProjectPromptContext(ctx, session);
   const basePrompt = buildRuntimePrompt(
     decoded.text,
     sessionId,
@@ -208,6 +215,7 @@ export const claimNextQueuedSteer = async (
     decoded.documents,
     decoded.pastes,
     globalInstructions,
+    projectContext?.instructions,
   );
   const context = await prepareConversationPrompt({
     ctx,

@@ -1,104 +1,82 @@
-import type { ChatActionPayload } from "@aop/common";
+import { type SessionRole, toolNamesFor } from "./availability.ts";
 import {
-  setSessionWorkspaceBinding,
-  WorkspaceBindingError,
-} from "../chat-session/workspace-binding.ts";
-import type { LocalServerContext } from "../context.ts";
-import { listPlatformRepos } from "./platform-query.ts";
-import { McpToolError } from "./tools-errors.ts";
+  describeIssues,
+  jsonSchemaOf,
+  type McpTool,
+  type McpToolCall,
+  McpToolError,
+  type McpToolResult,
+} from "./registry.ts";
+import {
+  projectSettingsGetTool,
+  projectSettingsSetTool,
+  proposeThreadsTool,
+  threadListTool,
+  threadReportTool,
+  threadSpawnTool,
+  threadSteerTool,
+  threadStopTool,
+} from "./tools-coordinator.ts";
+import { memoryReadTool, memoryWriteTool } from "./tools-memory.ts";
+import { listReposTool, setChatWorkspaceTool } from "./tools-platform.ts";
+import { askUserTool, reportStatusTool } from "./tools-thread.ts";
 
-export { McpToolError } from "./tools-errors.ts";
+export { McpToolError } from "./registry.ts";
 
-export type McpToolName = "aop_list_repos" | "aop_set_chat_workspace";
+const TOOLS: readonly McpTool[] = [
+  listReposTool,
+  setChatWorkspaceTool,
+  threadSpawnTool,
+  threadSteerTool,
+  threadStopTool,
+  threadListTool,
+  threadReportTool,
+  proposeThreadsTool,
+  projectSettingsGetTool,
+  projectSettingsSetTool,
+  askUserTool,
+  reportStatusTool,
+  memoryReadTool,
+  memoryWriteTool,
+];
 
 export interface McpToolDefinition {
-  name: McpToolName;
+  name: string;
   description: string;
   inputSchema: Record<string, unknown>;
 }
 
-export interface McpToolResult {
-  /** JSON-serializable content returned to the agent. */
-  content: unknown;
-  /** When set, the host can attach this as assistant message.action. */
-  action?: ChatActionPayload;
-  /** True when this is a propose tool (never mutates). */
-  isProposal: boolean;
-}
+/** The tools a session of this role is offered, in the order the role's tool list gives them. */
+export const listMcpTools = (role: SessionRole): McpToolDefinition[] =>
+  availableTools(role).map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: jsonSchemaOf(tool),
+  }));
 
-export interface McpToolCallContext {
-  chatSessionId?: string;
-}
+export const isMcpToolAvailable = (role: SessionRole, name: string): boolean =>
+  availableTools(role).some((tool) => tool.name === name);
 
-export const listAopMcpTools = (): McpToolDefinition[] => [
-  {
-    name: "aop_list_repos",
-    description: "List registered repositories.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "aop_set_chat_workspace",
-    description:
-      "Bind a chat session to a Git worktree path. Use after creating or switching to a Git worktree.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        sessionId: { type: "string" },
-        absolutePath: { type: "string" },
-      },
-      required: ["sessionId", "absolutePath"],
-    },
-  },
-];
-
-export const isAopMcpTool = (name: string): name is McpToolName =>
-  name === "aop_list_repos" || name === "aop_set_chat_workspace";
-
-export const isProposeTool = (_name: string): boolean => false;
-
-export const callAopMcpTool = async (
-  ctx: LocalServerContext,
+/**
+ * Runs one tool. Bad arguments and refused actions throw `McpToolError`, which the endpoint
+ * returns as an `isError` result so the model can correct itself; a tool the session is not
+ * offered is not a tool result at all, and the endpoint answers it as an unknown tool.
+ */
+export const callMcpTool = async (
+  role: SessionRole,
   name: string,
-  args: Record<string, unknown> = {},
-  _toolContext: McpToolCallContext = {},
+  args: unknown,
+  call: McpToolCall,
 ): Promise<McpToolResult> => {
-  if (!isAopMcpTool(name)) {
-    throw new McpToolError(`Unknown tool: ${name}`, "UNKNOWN_TOOL");
-  }
-
-  switch (name) {
-    case "aop_list_repos":
-      return { content: await readRepos(ctx), isProposal: false };
-    case "aop_set_chat_workspace":
-      return setChatWorkspace(ctx, args);
-  }
+  const tool = availableTools(role).find((candidate) => candidate.name === name);
+  if (!tool) throw new McpToolError(`Unknown tool: ${name}`, "UNKNOWN_TOOL");
+  const parsed = tool.input.safeParse(args ?? {});
+  if (!parsed.success) throw new McpToolError(describeIssues(parsed.error), "INVALID_INPUT");
+  return tool.handler(parsed.data as never, call);
 };
 
-const setChatWorkspace = async (
-  ctx: LocalServerContext,
-  args: Record<string, unknown>,
-): Promise<McpToolResult> => {
-  const sessionId = typeof args.sessionId === "string" ? args.sessionId.trim() : "";
-  const absolutePath = typeof args.absolutePath === "string" ? args.absolutePath.trim() : "";
-  if (!sessionId || !absolutePath) {
-    throw new McpToolError("sessionId and absolutePath are required", "INVALID_INPUT");
-  }
-  try {
-    const session = await setSessionWorkspaceBinding(ctx, sessionId, absolutePath);
-    if (!session) throw new McpToolError("Chat session not found", "SESSION_NOT_FOUND");
-    return {
-      content: { sessionId: session.id, workspacePath: session.workspace_path },
-      isProposal: false,
-    };
-  } catch (error) {
-    if (error instanceof McpToolError) throw error;
-    if (error instanceof WorkspaceBindingError) {
-      throw new McpToolError(error.message, "INVALID_WORKSPACE");
-    }
-    throw error;
-  }
-};
+const availableTools = (role: SessionRole): McpTool[] =>
+  toolNamesFor(role).flatMap((name) => TOOLS.filter((tool) => tool.name === name));
 
-const readRepos = async (ctx: LocalServerContext) => ({
-  repos: await listPlatformRepos(ctx),
-});
+/** Every tool the registry defines, for the check that availability.ts and the registry agree. */
+export const allMcpToolNames = (): string[] => TOOLS.map((tool) => tool.name);

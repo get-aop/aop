@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  CreateProjectInputSchema,
   NotificationLevelSchema,
   PROJECT_GOAL_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
   ProjectPatchSchema,
   ProjectSchema,
   ProjectSettingsSchema,
+  ThreadAccessSchema,
 } from "./project.ts";
 import { makeProject, rejectedPaths } from "./test-utils.ts";
 
@@ -94,6 +96,50 @@ describe("ProjectSettingsSchema", () => {
   test("is what creating a project takes: no id, status, or timestamps", () => {
     const { id: _id, status: _status, createdAt: _c, updatedAt: _u, ...settings } = makeProject();
     expect(ProjectSettingsSchema.safeParse(settings).success).toBe(true);
+  });
+});
+
+describe("CreateProjectInputSchema", () => {
+  test("takes just a name and fills in Claude Projects' defaults", () => {
+    expect(CreateProjectInputSchema.parse({ name: "  checkout  " })).toEqual({
+      name: "checkout",
+      goal: "",
+      instructions: "",
+      coordinator: { provider: "claude-code", model: null, effort: "low" },
+      thread: { provider: "claude-code", model: null, effort: "high" },
+      notificationLevel: "coordinator",
+      threadAccess: "auto-accept-edits",
+      repoIds: [],
+    });
+  });
+
+  test("keeps what the client sent over the defaults", () => {
+    const input = { name: "checkout", goal: "Ship", threadAccess: "full-access", repoIds: ["r1"] };
+    expect(CreateProjectInputSchema.parse(input)).toMatchObject(input);
+  });
+
+  test("still needs a name and applies the settings limits", () => {
+    expect(rejectedPaths(CreateProjectInputSchema, {})).toEqual(["name"]);
+    expect(rejectedPaths(CreateProjectInputSchema, { name: "x", goal: "g".repeat(8001) })).toEqual([
+      "goal",
+    ]);
+  });
+});
+
+describe("ThreadAccessSchema", () => {
+  test.each(["auto-accept-edits", "full-access"])("accepts %s", (access) => {
+    expect(ThreadAccessSchema.parse(access)).toBe(access);
+  });
+
+  test("rejects a mode that would prompt or bypass differently", () => {
+    for (const access of ["auto", "approval-required", "root"]) {
+      expect(ThreadAccessSchema.safeParse(access).success).toBe(false);
+    }
+  });
+
+  test("a project without threadAccess is not a project", () => {
+    const { threadAccess: _threadAccess, ...missing } = makeProject();
+    expect(rejectedPaths(ProjectSchema, missing)).toEqual(["threadAccess"]);
   });
 });
 

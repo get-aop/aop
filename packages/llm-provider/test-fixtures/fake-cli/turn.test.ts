@@ -38,6 +38,28 @@ describe("planTurn", () => {
     expect(ending).toEqual({ kind: "success", text: "Waiting on your answer." });
   });
 
+  test("MCP calls run in order after the steps and before the question", () => {
+    const script = `steps=1 ask="Ready?" calls='[{"name":"a"},{"name":"b","arguments":{"n":1}}]'`;
+    const { beats } = plan(script);
+
+    expect(beats.map((beat) => beat.kind)).toEqual(["text", "shell", "call", "call", "ask"]);
+    expect(beats[3]).toEqual({ kind: "call", call: { name: "b", arguments: { n: 1 } } });
+  });
+
+  test("a call-only turn replies normally, since nothing waits on the user", () => {
+    const { ending } = plan(`calls='[{"name":"a"}]'`);
+
+    expect(ending).toMatchObject({ kind: "success" });
+    expect((ending as { text: string }).text).toContain("Fake reply for turn 3");
+  });
+
+  test("an invalid calls directive plans no calls and fails the turn", () => {
+    const { beats, ending } = plan("steps=1 calls='[oops'");
+
+    expect(beats.map((beat) => beat.kind)).toEqual(["text", "shell"]);
+    expect(ending).toEqual({ kind: "failure", message: "fake CLI: invalid calls directive" });
+  });
+
   test("failure wins over exit code, and an exit code alone ends the turn silently", () => {
     expect(plan('fail="bad" exit=5').ending).toEqual({ kind: "failure", message: "bad" });
     expect(plan("exit=5").ending).toEqual({ kind: "silent" });

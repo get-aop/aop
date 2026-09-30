@@ -29,6 +29,12 @@ describe("generateTypeId", () => {
     expect(chatRunId.startsWith("crun_")).toBe(true);
   });
 
+  test("supports project IDs", () => {
+    const id = generateTypeId("proj");
+    expect(id).toMatch(/^proj_[0-9a-z]{26}$/);
+    expect(isValidTypeId(id, "proj")).toBe(true);
+  });
+
   test("supports runtime profile IDs", () => {
     const id = generateTypeId("rprof");
     expect(id).toStartWith("rprof_");

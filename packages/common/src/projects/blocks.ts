@@ -42,6 +42,32 @@ const QuoteForwardedBlockSchema = z.object({
   text: z.string().min(1),
 });
 
+export const SUGGESTED_THREADS_MAX = 8;
+
+/** One thread the coordinator proposes; the person starts it (or all of them) from the block. */
+export const SuggestedThreadSchema = z.object({
+  /** Stable within the block, so a client can start or dismiss one suggestion. */
+  id: IdSchema,
+  title: z.string().trim().min(1).max(200),
+  /** Sent to the thread as its first message when the suggestion is started. */
+  prompt: z.string().trim().min(1).max(8000),
+  /** The repo the thread would work in; null for a thread that needs none. */
+  repoId: IdSchema.nullable(),
+});
+export type SuggestedThread = z.infer<typeof SuggestedThreadSchema>;
+
+/** "Suggested threads": proposals with Start and Start all buttons. Nothing runs until one is started. */
+const SuggestedThreadsBlockSchema = z.object({
+  type: z.literal("suggested-threads"),
+  suggestions: z
+    .array(SuggestedThreadSchema)
+    .min(1)
+    .max(SUGGESTED_THREADS_MAX)
+    .refine((suggestions) => new Set(suggestions.map(({ id }) => id)).size === suggestions.length, {
+      error: "A suggestion id can appear once in a block",
+    }),
+});
+
 export const MessageBlockSchema = z.discriminatedUnion("type", [
   TextBlockSchema,
   ThreadChipBlockSchema,
@@ -49,5 +75,6 @@ export const MessageBlockSchema = z.discriminatedUnion("type", [
   ThreadCardBlockSchema,
   RoutingReceiptBlockSchema,
   QuoteForwardedBlockSchema,
+  SuggestedThreadsBlockSchema,
 ]);
 export type MessageBlock = z.infer<typeof MessageBlockSchema>;

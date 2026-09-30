@@ -24,7 +24,11 @@ export interface ChatSessionListRow extends ChatSession {
 export interface ChatSessionRepository {
   create: (session: NewChatSession) => Promise<ChatSession>;
   getById: (id: string) => Promise<ChatSession | null>;
+  /** The chat sessions that belong to no project; a project's sessions are read through `listByProject`. */
   list: () => Promise<ChatSessionListRow[]>;
+  /** A project's coordinator and threads. */
+  listByProject: (projectId: string) => Promise<ChatSession[]>;
+  getCoordinator: (projectId: string) => Promise<ChatSession | null>;
   update: (id: string, patch: ChatSessionUpdate) => Promise<ChatSession | null>;
   delete: (id: string) => Promise<boolean>;
   deleteGraph: (
@@ -122,6 +126,7 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
               AND unread_message.created_at > COALESCE(chat_sessions.last_read_at, '')
           )`.as("unread_count"),
         ])
+        .where("chat_sessions.project_id", "is", null)
         .orderBy("chat_sessions.pinned", "desc")
         .orderBy("chat_sessions.updated_at", "desc")
         .execute();
@@ -129,6 +134,25 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
         ...session,
         unread_count: Number(session.unread_count),
       }));
+    },
+
+    listByProject: (projectId) =>
+      db
+        .selectFrom("chat_sessions")
+        .selectAll()
+        .where("project_id", "=", projectId)
+        .orderBy("created_at")
+        .orderBy("id")
+        .execute(),
+
+    getCoordinator: async (projectId) => {
+      const session = await db
+        .selectFrom("chat_sessions")
+        .selectAll()
+        .where("project_id", "=", projectId)
+        .where("kind", "=", "coordinator")
+        .executeTakeFirst();
+      return session ?? null;
     },
 
     update: async (id: string, patch: ChatSessionUpdate): Promise<ChatSession | null> => {

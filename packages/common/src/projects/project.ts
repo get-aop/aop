@@ -15,6 +15,14 @@ export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
 export const NotificationLevelSchema = z.enum(["coordinator", "every-turn", "off"]);
 export type NotificationLevel = z.infer<typeof NotificationLevelSchema>;
 
+/**
+ * How much a project's threads may do without asking. `auto-accept-edits` lets a thread edit
+ * files in its workspace and nothing more; `full-access` also runs any command. The person
+ * opts in per project: no tool the coordinator holds can change it.
+ */
+export const ThreadAccessSchema = z.enum(["auto-accept-edits", "full-access"]);
+export type ThreadAccess = z.infer<typeof ThreadAccessSchema>;
+
 /** What a person edits in project settings, and what creating a project takes. */
 export const ProjectSettingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -24,6 +32,7 @@ export const ProjectSettingsSchema = z.object({
   coordinator: RuntimePreferenceSchema,
   thread: RuntimePreferenceSchema,
   notificationLevel: NotificationLevelSchema,
+  threadAccess: ThreadAccessSchema,
   repoIds: z.array(IdSchema).refine((ids) => new Set(ids).size === ids.length, {
     error: "A repo can be attached to a project once",
   }),
@@ -38,6 +47,24 @@ export const ProjectSchema = ProjectSettingsSchema.extend({
   updatedAt: TimestampSchema,
 });
 export type Project = z.infer<typeof ProjectSchema>;
+
+const { shape } = ProjectSettingsSchema;
+
+/**
+ * What a client sends to create a project: only the name is required. The rest starts at Claude
+ * Projects' own defaults: a quiet coordinator (low effort), thinking threads (high effort), the
+ * provider's default model, and threads that may edit files but not run any command.
+ */
+export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
+  goal: shape.goal.default(""),
+  instructions: shape.instructions.default(""),
+  coordinator: shape.coordinator.default({ provider: "claude-code", model: null, effort: "low" }),
+  thread: shape.thread.default({ provider: "claude-code", model: null, effort: "high" }),
+  notificationLevel: shape.notificationLevel.default("coordinator"),
+  threadAccess: shape.threadAccess.default("auto-accept-edits"),
+  repoIds: shape.repoIds.default([]),
+});
+export type CreateProjectInput = z.input<typeof CreateProjectInputSchema>;
 
 export const ProjectPatchSchema = ProjectSettingsSchema.partial().refine(
   (patch) => Object.keys(patch).length > 0,

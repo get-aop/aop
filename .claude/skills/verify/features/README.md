@@ -36,3 +36,4 @@ This directory is the maintained source for verifying the user-facing behavior o
 - [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the dashboard attach dialog.
 - [Sessions](./sessions.md) covers the chat workbench, the composer, runtime-free commands, and settling.
 - [Settings](./settings.md) covers the Settings dialog and its sections.
+- [Projects](./projects.md) covers the project, coordinator and thread API (no UI yet), driven with the fake runtime.

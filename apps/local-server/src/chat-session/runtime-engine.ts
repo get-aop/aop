@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { type FSWatcher, watch } from "node:fs";
 import { mkdir, open, readFile, stat } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
-import { AOP_PORTS, type ControlCommand } from "@aop/common";
 import { aopPaths, getLogger } from "@aop/infra";
 import {
   createProvider,
@@ -10,25 +9,18 @@ import {
   extractFinalAssistantTextFromRawJsonl,
   extractRuntimeSessionIdFromRawJsonl,
   type LLMProvider,
-  listDescendantPids,
-  needsControlProcessCleanup,
   parseRawJsonlContent,
   type RunOptions,
-  terminateProcessTree,
 } from "@aop/llm-provider";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
-import { createAuthenticatedMcpUrl } from "../mcp/auth.ts";
-import { isMcpCapableRuntime } from "../mcp/routes.ts";
 import { runAndReap } from "../process/reaper.ts";
 import { isProviderFailureEvent } from "./provider-event-classifier.ts";
+import { buildRunOptions } from "./run-options.ts";
 import {
   createRuntimeSessionLineInspector,
   startRuntimeSessionTail,
 } from "./runtime-session-tail.ts";
-import {
-  buildChatRuntimeTimeoutFacts,
-  CHAT_RUNTIME_TIMEOUT_POLICY,
-} from "./runtime-timeout-policy.ts";
+import { buildChatRuntimeTimeoutFacts } from "./runtime-timeout-policy.ts";
 import {
   type ActiveRunHandle,
   beginSessionRunExecution,
@@ -52,7 +44,6 @@ export {
 } from "./session-run-lifecycle.ts";
 
 export type CreateProviderFn = (key: string) => LLMProvider;
-export type RuntimeControl = Pick<ControlCommand, "provider" | "capability">;
 
 /** Chat live runs share durable recovery timeouts for consistent UX. */
 export const CHAT_STARTUP_TIMEOUT_MS = 30_000;
@@ -155,8 +146,6 @@ export const runSessionPrompt = async (input: {
   repoPath: string;
   prompt: string;
   registration?: SessionRunRegistration;
-  /** A one-turn provider-native browser or computer capability. */
-  control?: RuntimeControl;
   /** Extra dirs the provider may read (e.g. chat image attachments). */
   allowedDirectories?: string[];
   /** Durable path allocated before launch so a reloaded server can resume the run. */
@@ -190,7 +179,6 @@ export const runSessionPrompt = async (input: {
       session,
       repoPath,
       prompt,
-      input.control,
       input.allowedDirectories,
       input.logFilePath,
       input.createProviderFn,
@@ -358,7 +346,6 @@ const executeProviderRun = async (
   session: ChatSession,
   repoPath: string,
   prompt: string,
-  control: RuntimeControl | undefined,
   allowedDirectories: string[] | undefined,
   durableLogFilePath: string | undefined,
   createProviderFn: CreateProviderFn | undefined,
@@ -475,7 +462,6 @@ const executeProviderRun = async (
       session,
       repoPath,
       prompt,
-      control,
       allowedDirectories,
       logFilePath,
       provider,
@@ -526,7 +512,6 @@ const raceProviderAgainstInterrupt = async (input: {
   session: ChatSession;
   repoPath: string;
   prompt: string;
-  control: RuntimeControl | undefined;
   allowedDirectories: string[] | undefined;
   logFilePath: string;
   provider: LLMProvider;
@@ -544,7 +529,6 @@ const raceProviderAgainstInterrupt = async (input: {
     input.session,
     input.repoPath,
     input.prompt,
-    input.control,
     input.captureRuntimeSession,
     input.logFilePath,
     input.allowedDirectories,
@@ -586,39 +570,8 @@ const completeProviderRun = async (input: {
   captureRuntimeSession: (sessionId: string) => Promise<void>;
 }): Promise<RuntimeRunResult> => {
   const providerStartedAt = Date.now();
-  // Control turns leave native helpers (Codex computer_use mouse, Playwright MCP).
-  // Snapshot while the root is alive so cleanup still finds reparented orphans.
-  const controlGuard = beginControlProcessGuard(input.handle, input.options);
-  try {
-    const result = await runAndReap(input.provider, input.options);
-    return await finalizeCompletedProviderRun({ ...input, result, providerStartedAt });
-  } finally {
-    await controlGuard.stop();
-  }
-};
-
-const beginControlProcessGuard = (
-  handle: ActiveRunHandle,
-  options: RunOptions,
-): { stop: () => Promise<void> } => {
-  if (!needsControlProcessCleanup(options)) {
-    return { stop: async () => undefined };
-  }
-  const knownDescendants = new Set<number>();
-  const timer = setInterval(() => {
-    const pid = handle.pid;
-    if (!pid) return;
-    for (const child of listDescendantPids(pid)) knownDescendants.add(child);
-  }, 50);
-  return {
-    stop: async () => {
-      clearInterval(timer);
-      const pid = handle.pid;
-      if (!pid) return;
-      for (const child of listDescendantPids(pid)) knownDescendants.add(child);
-      await terminateProcessTree(pid, knownDescendants);
-    },
-  };
+  const result = await runAndReap(input.provider, input.options);
+  return finalizeCompletedProviderRun({ ...input, result, providerStartedAt });
 };
 
 const finalizeCompletedProviderRun = async (input: {
@@ -955,64 +908,6 @@ const interruptedText = (reason: InterruptReason): string =>
       : reason === "reset"
         ? "Runtime session reset. The next message will start a fresh runtime session."
         : "Conversation stopped.";
-
-const buildRunOptions = (
-  session: ChatSession,
-  repoPath: string,
-  prompt: string,
-  control: RuntimeControl | undefined,
-  onSession: (id: string) => Promise<void> | void,
-  logFilePath: string,
-  allowedDirectories?: string[],
-  onSpawn?: (pid: number) => Promise<void>,
-): RunOptions => {
-  const nativeControl = control?.provider === session.runtime ? control : undefined;
-  return {
-    prompt,
-    cwd: repoPath,
-    isolation: "open",
-    model: session.model,
-    reasoningEffort: session.reasoning_effort,
-    fastMode: Boolean(session.fast_mode),
-    accessMode: session.runtime_access_mode ?? "full-access",
-    browserControl: nativeControl?.capability === "browser",
-    computerControl: nativeControl?.capability === "computer",
-    runtimeAlias: session.runtime_alias ?? undefined,
-    resumeSessionId: session.runtime_session_id ?? undefined,
-    logFilePath,
-    onSession,
-    onSpawn,
-    allowedDirectories,
-    mcpServerUrl: resolveAopMcpUrl(session.runtime, session.id),
-    startupTimeoutMs: CHAT_RUNTIME_TIMEOUT_POLICY.startupTimeoutMs,
-    env: {
-      AOP_CHAT_SESSION_ID: session.id,
-      AOP_CHAT_WORKSPACE_PATH: repoPath,
-    },
-  };
-};
-
-/** Per-provider capability flag: only MCP-capable CLIs receive the aop endpoint. */
-export const resolveAopMcpUrl = (runtime: string, chatSessionId: string): string | undefined => {
-  if (!isMcpCapableRuntime(runtime)) return undefined;
-  if (process.env.AOP_MCP_URL?.trim()) {
-    return createAuthenticatedMcpUrl(process.env.AOP_MCP_URL.trim(), chatSessionId);
-  }
-  // Prefer explicit env; avoid throwing when AOP_PORTS.LOCAL_SERVER is unset in unit tests.
-  const raw = process.env.PORT ?? process.env.AOP_LOCAL_SERVER_PORT;
-  const port = raw ? Number(raw) : Number.NaN;
-  if (!Number.isFinite(port) || port <= 0) {
-    try {
-      return createAuthenticatedMcpUrl(
-        `http://127.0.0.1:${AOP_PORTS.LOCAL_SERVER}/api/mcp`,
-        chatSessionId,
-      );
-    } catch {
-      return undefined;
-    }
-  }
-  return createAuthenticatedMcpUrl(`http://127.0.0.1:${port}/api/mcp`, chatSessionId);
-};
 
 const interpretRunResult = async (
   runtime: string,

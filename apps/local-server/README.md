@@ -23,7 +23,7 @@ Default after install: **`http://aop.localhost:25150`** (serves dashboard static
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                 Local Server (Bun + Hono)                     │
-│  Chat sessions · Repos · Runtime configuration · MCP         │
+│  Projects · Threads · Chat sessions · Repos · MCP            │
 │  SQLite: ~/.aop/projects.sqlite                                    │
 └────────────────────────────┬─────────────────────────────────┘
                              │ REST + SSE
@@ -43,11 +43,13 @@ Registered in `src/app.ts`:
 | `/api/health` | Liveness (no credentials) |
 | `/api/auth` | Device pairing, session cookie, device list and revocation; see [Running the AOP host](../../docs/HOST.md) |
 | `/api/status` | Registered repos and summaries |
-| `/api/chat-sessions` | Chat sessions, messages, runs, session git |
+| `/api/projects` | Projects: settings, pause/archive/restore, the coordinator chat, memory files |
+| `/api/projects/:id/threads`, `/api/threads` | A project's threads: start, steer, answer a question, stop, read |
+| `/api/chat-sessions` | Chat sessions that belong to no project: messages, runs, session git |
 | `/api/repos` | Register/remove repositories |
 | `/api/settings` | Key/value settings |
 | `/api/runtime-profiles`, `/api/runtime-configuration` | Runtime catalog and per-runtime configuration |
-| `/api/mcp` | MCP server configuration |
+| `/api/mcp` | The AOP MCP server (its tools depend on the calling session) |
 | `/api/exec-hosts` | Exec hosts |
 | `/api/fs` | Directory browse for settings UI |
 | `/api/updates` | Self-update |
@@ -74,7 +76,8 @@ Paths: `@aop/infra` `aopPaths` — DB `projects.sqlite`, tasks under `repos/<id>
 ```text
 src/
   app.ts, run.ts, server.ts, context.ts, config.ts
-  chat-session/       chat sessions, runs, delegation
+  chat-session/       the chat engine: turns, runs, steer queue, recovery
+  project/, thread/   projects, the coordinator, threads, their event log entries
   repo/, session-git/ repo registration, git state
   process/            process supervision
   runtime-configuration/, runtime-profile/, providers/

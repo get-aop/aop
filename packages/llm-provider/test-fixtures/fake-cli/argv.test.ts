@@ -26,6 +26,23 @@ describe("parseArgv", () => {
     expect(bounded.positionals).toEqual(["the prompt"]);
   });
 
+  test("records what a variadic flag consumed, accumulating across repeats", () => {
+    const parsed = parseArgv(
+      ["--add-dir", "/a", "/b", "--model", "m1", "--add-dir", "/c", "--model", "m2", "the prompt"],
+      spec,
+    );
+
+    expect(parsed.variadicValues.get("--add-dir")).toEqual(["/a", "/b", "/c"]);
+    expect(parsed.positionals).toEqual(["the prompt"]);
+  });
+
+  test("an empty-string argument is a value, not the end of a variadic flag", () => {
+    const parsed = parseArgv(["the prompt", "--add-dir", ""], spec);
+
+    expect(parsed.variadicValues.get("--add-dir")).toEqual([""]);
+    expect(parsed.positionals).toEqual(["the prompt"]);
+  });
+
   test("tolerates a value flag at the end of argv", () => {
     expect(parseArgv(["--model"], spec).values.get("--model")).toBe("");
   });

@@ -48,6 +48,16 @@ export interface RunOptions {
   allowedDirectories?: string[];
   /** Provider tool names to deny for this run. */
   disallowedTools?: string[];
+  /**
+   * Tool names to pre-approve for this run (Claude `--allowedTools`). A run with no terminal
+   * cannot ask for permission, so MCP tools such as `mcp__aop__aop_ask_user` must be listed here.
+   */
+  allowedTools?: string[];
+  /**
+   * Restricts the provider's built-in tool set (Claude `--tools`). An empty array disables every
+   * built-in tool and leaves MCP tools only; unset keeps the provider's default set.
+   */
+  builtInTools?: string[];
   /** Enable Claude Code fast mode for faster output */
   fastMode?: boolean;
   /** Enable Claude Code Ultracode workflow orchestration for the session */

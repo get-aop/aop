@@ -1,0 +1,224 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { ClaudeCodeProvider } from "@aop/llm-provider";
+import type { ChatSession } from "../db/schema.ts";
+import { hasValidMcpAccess } from "../mcp/auth.ts";
+import {
+  COORDINATOR_TOOL_NAMES,
+  claudeMcpToolName,
+  THREAD_TOOL_NAMES,
+} from "../mcp/availability.ts";
+import { buildRunOptions, resolveAopMcpUrl } from "./run-options.ts";
+import { NO_PROJECT_COLUMNS } from "./test-utils.ts";
+
+/** The arguments after `flag` up to the next flag: one value, or the whole list of a variadic one. */
+const flagValues = (command: string[], flag: string): string[] => {
+  const start = command.indexOf(flag);
+  if (start === -1) return [];
+  const rest = command.slice(start + 1);
+  const end = rest.findIndex((arg) => arg.startsWith("--"));
+  return end === -1 ? rest : rest.slice(0, end);
+};
+
+const session = (overrides: Partial<ChatSession> = {}): ChatSession => ({
+  id: "isess_options",
+  repo_id: "repo_1",
+  title: "New session",
+  named: false,
+  runtime: "claude-code",
+  runtime_configuration_id: null,
+  model: "claude-opus-4-8",
+  reasoning_effort: "high",
+  runtime_alias: "cpe",
+  runtime_session_id: "native-1",
+  workspace_path: null,
+  fast_mode: true,
+  runtime_access_mode: "auto-accept-edits",
+  pinned: false,
+  settled_override: null,
+  settled_at: null,
+  last_read_at: null,
+  created_at: "2026-09-30T09:00:00.000Z",
+  updated_at: "2026-09-30T09:00:00.000Z",
+  ...NO_PROJECT_COLUMNS,
+  ...overrides,
+});
+
+let previousMcpUrl: string | undefined;
+
+beforeEach(() => {
+  previousMcpUrl = process.env.AOP_MCP_URL;
+  process.env.AOP_MCP_URL = "http://127.0.0.1:25150/api/mcp";
+});
+
+afterEach(() => {
+  if (previousMcpUrl === undefined) delete process.env.AOP_MCP_URL;
+  else process.env.AOP_MCP_URL = previousMcpUrl;
+});
+
+describe("buildRunOptions", () => {
+  test("maps the session row onto the adapter's run options", () => {
+    const onSession = () => undefined;
+    const options = buildRunOptions(
+      session(),
+      "/work/repo",
+      "do it",
+      onSession,
+      "/logs/run.jsonl",
+      ["/attachments"],
+    );
+
+    expect(options).toMatchObject({
+      prompt: "do it",
+      cwd: "/work/repo",
+      isolation: "open",
+      model: "claude-opus-4-8",
+      reasoningEffort: "high",
+      fastMode: true,
+      accessMode: "auto-accept-edits",
+      runtimeAlias: "cpe",
+      resumeSessionId: "native-1",
+      logFilePath: "/logs/run.jsonl",
+      allowedDirectories: ["/attachments"],
+      env: { AOP_CHAT_SESSION_ID: "isess_options", AOP_CHAT_WORKSPACE_PATH: "/work/repo" },
+    });
+    expect(options.onSession).toBe(onSession);
+  });
+
+  test("leaves an unbound session without a resume id or alias", () => {
+    const options = buildRunOptions(
+      session({ runtime_session_id: null, runtime_alias: null }),
+      "/work/repo",
+      "first turn",
+      () => undefined,
+      "/logs/run.jsonl",
+    );
+
+    expect(options.resumeSessionId).toBeUndefined();
+    expect(options.runtimeAlias).toBeUndefined();
+  });
+});
+
+describe("buildRunOptions for project sessions", () => {
+  const build = (overrides: Partial<ChatSession>) =>
+    buildRunOptions(session(overrides), "/work/dir", "hi", () => undefined, "/logs/run.jsonl");
+
+  test("a plain chat keeps its own settings, hooks and tools", () => {
+    const options = build({});
+
+    expect(options.isolation).toBe("open");
+    expect(options.allowedTools).toBeUndefined();
+    expect(options.disallowedTools).toBeUndefined();
+    expect(options.builtInTools).toBeUndefined();
+  });
+
+  test("the coordinator is hermetic, holds the AOP tools only, and reads no CLAUDE.md or auto memory", () => {
+    const options = build({
+      kind: "coordinator",
+      project_id: "proj_1",
+      runtime_access_mode: "approval-required",
+    });
+
+    expect(options.isolation).toBe("hermetic");
+    expect(options.accessMode).toBe("approval-required");
+    expect(options.builtInTools).toEqual([]);
+    expect(options.allowedTools).toContain("mcp__aop__thread_spawn");
+    expect(options.allowedTools).toContain("mcp__aop__memory_write");
+    expect(options.allowedTools).not.toContain("mcp__aop__aop_ask_user");
+    expect(options.env).toMatchObject({
+      CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1",
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
+      AOP_CHAT_SESSION_ID: "isess_options",
+    });
+    expect(new URL(options.mcpServerUrl ?? "").searchParams.get("sessionId")).toBe("isess_options");
+  });
+
+  test("no stored access mode can reopen the coordinator: a row saying full-access still runs approval-required", () => {
+    for (const stored of ["full-access", "auto", "auto-accept-edits"] as const) {
+      const options = build({
+        kind: "coordinator",
+        project_id: "proj_1",
+        runtime_access_mode: stored,
+      });
+
+      expect(options.accessMode).toBe("approval-required");
+    }
+  });
+
+  test("the coordinator's command line skips no permissions, asks for no built-in tool, and pre-approves only its own AOP tools", () => {
+    const options = build({
+      kind: "coordinator",
+      project_id: "proj_1",
+      runtime_access_mode: "full-access",
+    });
+
+    const command = new ClaudeCodeProvider().buildCommand(options);
+
+    expect(command).not.toContain("--dangerously-skip-permissions");
+    expect(command).not.toContain("--permission-mode");
+    expect(command).toContain("--strict-mcp-config");
+    expect(flagValues(command, "--tools")).toEqual([""]);
+    expect(flagValues(command, "--allowedTools")).toEqual(
+      COORDINATOR_TOOL_NAMES.map(claudeMcpToolName),
+    );
+  });
+
+  test("a thread's command line carries the permission mode its project chose and its own tools", () => {
+    const thread = (access: ChatSession["runtime_access_mode"]) =>
+      new ClaudeCodeProvider().buildCommand(
+        build({
+          kind: "thread",
+          project_id: "proj_1",
+          state: "working",
+          runtime_access_mode: access,
+        }),
+      );
+
+    const accepting = thread("auto-accept-edits");
+    const full = thread("full-access");
+
+    expect(flagValues(accepting, "--permission-mode")).toEqual(["acceptEdits"]);
+    expect(accepting).not.toContain("--dangerously-skip-permissions");
+    expect(full).toContain("--dangerously-skip-permissions");
+    expect(flagValues(accepting, "--allowedTools")).toEqual(
+      THREAD_TOOL_NAMES.map(claudeMcpToolName),
+    );
+    expect(flagValues(accepting, "--disallowedTools")).toEqual(["AskUserQuestion"]);
+  });
+
+  test("a thread runs like the person's own Claude Code plus the thread tools, with the access its project chose", () => {
+    const options = build({
+      kind: "thread",
+      project_id: "proj_1",
+      state: "working",
+      runtime_access_mode: "auto-accept-edits",
+    });
+
+    expect(options.isolation).toBe("open");
+    expect(options.accessMode).toBe("auto-accept-edits");
+    expect(options.builtInTools).toBeUndefined();
+    expect(options.allowedTools).toEqual([
+      "mcp__aop__aop_ask_user",
+      "mcp__aop__aop_report_status",
+      "mcp__aop__memory_read",
+      "mcp__aop__memory_write",
+    ]);
+    expect(options.disallowedTools).toEqual(["AskUserQuestion"]);
+    expect(options.env).not.toHaveProperty("CLAUDE_CODE_DISABLE_CLAUDE_MDS");
+  });
+});
+
+describe("resolveAopMcpUrl", () => {
+  test("hands an MCP-capable runtime an endpoint that only its own session can use", () => {
+    const url = new URL(resolveAopMcpUrl("claude-code", "isess_a") ?? "");
+
+    expect(url.origin + url.pathname).toBe("http://127.0.0.1:25150/api/mcp");
+    expect(url.searchParams.get("sessionId")).toBe("isess_a");
+    const token = url.searchParams.get("accessToken") ?? undefined;
+    expect(hasValidMcpAccess("isess_a", token)).toBe(true);
+    expect(hasValidMcpAccess("isess_b", token)).toBe(false);
+  });
+
+  test("hands a runtime without MCP support nothing", () => {
+    expect(resolveAopMcpUrl("pi", "isess_a")).toBeUndefined();
+  });
+});

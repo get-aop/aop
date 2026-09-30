@@ -1,0 +1,111 @@
+import { type Message, type MessageBlock, MessageBlockSchema, MessageSchema } from "@aop/common";
+import type { Kysely } from "kysely";
+import { z } from "zod";
+import { decodeMessageContent, expandStoredPastes } from "../chat-session/message-images.ts";
+import { type MessageOrigin, parseMessageOrigin } from "../chat-session/message-origin.ts";
+import type { ChatMessage, ChatSession, Database } from "../db/schema.ts";
+
+export const DEFAULT_MESSAGE_PAGE_SIZE = 200;
+
+/** Where a session's messages sit on the wire: the coordinator chat has no thread id. */
+export interface MessageScope {
+  projectId: string;
+  threadId: string | null;
+}
+
+const BlocksSchema = z.array(MessageBlockSchema);
+
+/**
+ * A project session's messages as clients see them, oldest first, at most the latest `limit`.
+ * An assistant message is its text followed by the blocks its run's tools produced. A message
+ * with nothing to show (an image-only prompt) is left out, since the wire types need content.
+ */
+export const listWireMessages = async (
+  db: Kysely<Database>,
+  session: ChatSession,
+  limit = DEFAULT_MESSAGE_PAGE_SIZE,
+): Promise<Message[]> => {
+  const rows = await db
+    .selectFrom("chat_messages")
+    .leftJoin("chat_runs", "chat_runs.assistant_message_id", "chat_messages.id")
+    .selectAll("chat_messages")
+    .select("chat_runs.blocks_json as run_blocks")
+    .where("chat_messages.session_id", "=", session.id)
+    .orderBy("chat_messages.turn_index", "desc")
+    .orderBy("chat_messages.created_at", "desc")
+    .orderBy("chat_messages.id", "desc")
+    .limit(limit)
+    .execute();
+  const scope = scopeOf(session);
+  return rows.reverse().flatMap((row) => {
+    const message = toWireMessage(scope, row, parseBlocks(row.run_blocks));
+    return message ? [message] : [];
+  });
+};
+
+/** Null when the message has no text or blocks to show. */
+export const toWireMessage = (
+  scope: MessageScope,
+  row: ChatMessage,
+  runBlocks: readonly MessageBlock[] = [],
+): Message | null => {
+  const base = {
+    id: row.id,
+    projectId: scope.projectId,
+    threadId: scope.threadId,
+    createdAt: row.created_at,
+  };
+  const text = displayText(row);
+  if (row.role === "assistant") {
+    const blocks = [...(text ? [{ type: "text" as const, text }] : []), ...runBlocks];
+    return blocks.length === 0 ? null : MessageSchema.parse({ ...base, role: "assistant", blocks });
+  }
+  if (!text) return null;
+  return MessageSchema.parse(userSideMessage(base, text, parseMessageOrigin(row.origin_json)));
+};
+
+export const scopeOf = (session: ChatSession): MessageScope => {
+  if (!session.project_id) throw new Error(`Session ${session.id} belongs to no project`);
+  return {
+    projectId: session.project_id,
+    threadId: session.kind === "thread" ? session.id : null,
+  };
+};
+
+// A user-role row is the person's words, unless an origin says the server or the coordinator
+// wrote it: a report (shown as an event line) or a brief relayed into a thread.
+const userSideMessage = (
+  base: { id: string; projectId: string; threadId: string | null; createdAt: string },
+  text: string,
+  origin: MessageOrigin | null,
+) => {
+  switch (origin?.type) {
+    case "thread-report":
+      return {
+        ...base,
+        role: "thread-report",
+        reportedThreadId: origin.threadId,
+        outcome: origin.outcome,
+        text,
+      };
+    case "coordinator-relay":
+      return {
+        ...base,
+        role: "assistant",
+        blocks: [
+          ...(origin.quote ? [{ type: "quote-forwarded", text: origin.quote }] : []),
+          { type: "text", text },
+        ],
+      };
+    default:
+      return { ...base, role: "user", text };
+  }
+};
+
+const displayText = (row: ChatMessage): string => {
+  const decoded = decodeMessageContent(row.content, row.session_id);
+  return expandStoredPastes(decoded.text, decoded.pastes).trim();
+};
+
+const parseBlocks = (raw: string | null): MessageBlock[] =>
+  raw === null ? [] : BlocksSchema.parse(JSON.parse(raw));

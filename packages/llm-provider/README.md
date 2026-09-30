@@ -55,6 +55,10 @@ interface LLMProvider {
 | `cwd` | `string` | No | Working directory for the agent session |
 | `resumeSessionId` | `string` | No | Session ID to resume a previous session |
 | `onOutput` | `(data: Record<string, unknown>) => void` | No | Callback for stream output |
+| `isolation` | `"hermetic" \| "open"` | No | `hermetic` (the default) loads no user settings or MCP servers; `open` adds the user's own configuration |
+| `mcpServerUrl` | `string` | No | AOP MCP endpoint, passed as the `aop` server in both isolation modes; hermetic also sets `--strict-mcp-config`, so it is then the only MCP server |
+| `allowedTools` | `string[]` | No | Tools to pre-approve (`--allowedTools`); a run without a terminal cannot ask, so list MCP tools such as `mcp__aop__aop_ask_user` |
+| `builtInTools` | `string[]` | No | Restricts the built-in tool set (`--tools`); `[]` disables every built-in tool and leaves MCP tools only. It is not a permission boundary: pair it with an `accessMode` that skips no permissions |
 
 ### `RunResult`
 
@@ -79,4 +83,4 @@ Requires the `claude` CLI to be available in PATH.
 
 ## Testing without a model
 
-`test-fixtures/fake-cli.ts` is an executable that imitates Claude Code's `stream-json` output with scripted timing, questions, failures and crashes. Pass its path as `runtimeAlias` to run the real adapter end to end with no model call. See [`test-fixtures/README.md`](./test-fixtures/README.md).
+`test-fixtures/fake-cli.ts` is an executable that imitates Claude Code's `stream-json` output with scripted timing, questions, MCP tool calls against the AOP endpoint, failures and crashes. Pass its path as `runtimeAlias` to run the real adapter end to end with no model call. See [`test-fixtures/README.md`](./test-fixtures/README.md).

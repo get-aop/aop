@@ -204,6 +204,7 @@ const setupRun = async (
     runtime_session_state: null,
     error_message: null,
     pid: null,
+    blocks_json: "[]",
     created_at: now,
     updated_at: now,
     ...overrides,

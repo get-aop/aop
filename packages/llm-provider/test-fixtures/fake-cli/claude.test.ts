@@ -24,6 +24,8 @@ describe("claudeDialect.parse", () => {
       mcpServerUrl: "http://127.0.0.1:1/mcp",
       disallowedTools: ["Bash", "Edit"],
       allowedDirectories: ["/a", "/b"],
+      allowedTools: ["mcp__aop__aop_ask_user", "mcp__aop__aop_report_status"],
+      builtInTools: [],
       fastMode: true,
       accessMode: "auto",
     });
@@ -33,7 +35,24 @@ describe("claudeDialect.parse", () => {
       prompt: "do the thing",
       resumeId: "sess-1",
       model: "opus",
+      mcpServers: { aop: { url: "http://127.0.0.1:1/mcp" } },
     });
+  });
+
+  test("keeps the prompt when the variadic tool flags are the last ones", () => {
+    const [, ...args] = new ClaudeCodeProvider().buildCommand({
+      prompt: "no model given",
+      allowedTools: ["mcp__aop__thread_list"],
+      builtInTools: ["Read"],
+    });
+
+    expect(claudeDialect.parse(args).prompt).toBe("no model given");
+  });
+
+  test("a variadic --mcp-config swallows an unbounded prompt like the real parser", () => {
+    const args = ["--output-format", "stream-json", "--mcp-config", "{}", "the prompt"];
+
+    expect(claudeDialect.parse(args).prompt).toBe("");
   });
 
   test("handles the hermetic defaults of a first turn", () => {
@@ -43,6 +62,31 @@ describe("claudeDialect.parse", () => {
       prompt: "first turn",
       resumeId: undefined,
       model: undefined,
+      mcpServers: {},
+    });
+  });
+
+  test("reads only HTTP servers from every --mcp-config value and ignores broken JSON", () => {
+    const config = (servers: Record<string, unknown>): string =>
+      JSON.stringify({ mcpServers: servers });
+    const args = [
+      "--output-format",
+      "stream-json",
+      "--mcp-config",
+      config({
+        aop: { type: "http", url: "http://127.0.0.1:9/api/mcp?sessionId=s" },
+        playwright: { type: "stdio", command: "bunx" },
+      }),
+      "not json",
+      config({ other: { type: "http", url: "http://127.0.0.1:8/mcp" }, odd: { type: "http" } }),
+      "--model",
+      "m",
+      "prompt",
+    ];
+
+    expect(claudeDialect.parse(args).mcpServers).toEqual({
+      aop: { url: "http://127.0.0.1:9/api/mcp?sessionId=s" },
+      other: { url: "http://127.0.0.1:8/mcp" },
     });
   });
 
@@ -93,6 +137,34 @@ describe("claudeDialect events", () => {
 
     expect(toolName("aop_ask_user")).toBe("mcp__aop__aop_ask_user");
     expect(toolName("mcp__other__ask")).toBe("mcp__other__ask");
+  });
+
+  test("an MCP beat is a mcp__aop__<tool> call paired with the result the server gave", () => {
+    const beat = (isError: boolean) =>
+      claudeDialect.beat(
+        {
+          kind: "mcp",
+          call: { name: "thread_spawn", arguments: { title: "Fix login" } },
+          result: { text: '{"threadId":"t1"}', isError },
+        },
+        2,
+        ctx,
+      );
+
+    const [call, ok] = beat(false);
+    const [, failed] = beat(true);
+
+    expect(contentOf(call)[0]).toMatchObject({
+      type: "tool_use",
+      name: "mcp__aop__thread_spawn",
+      input: { title: "Fix login" },
+    });
+    expect(contentOf(ok)[0]).toMatchObject({
+      type: "tool_result",
+      content: '{"threadId":"t1"}',
+      is_error: false,
+    });
+    expect(contentOf(failed)[0]).toMatchObject({ is_error: true });
   });
 
   test("a silent ending emits no terminal event", () => {

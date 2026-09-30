@@ -2,6 +2,7 @@ import {
   type BlockedQuestion,
   type PullRequestRef,
   type Thread,
+  type ThreadAccess,
   ThreadSchema,
   type ThreadStatus,
   type ThreadStep,
@@ -47,6 +48,8 @@ export interface ThreadRepository {
   /** Most recent activity first. */
   listByProject: (projectId: string) => Promise<Thread[]>;
   update: (id: string, patch: ThreadPatch) => Promise<Thread | null>;
+  /** Applies a project's thread access to every one of its threads, for their next turns. */
+  setAccessForProject: (projectId: string, access: ThreadAccess) => Promise<void>;
 }
 
 type ThreadRow = ChatSession & { replies_count: number };
@@ -79,6 +82,15 @@ export const createThreadRepository = (
       .execute();
     const row = await selectThreads(db).where("chat_sessions.id", "=", id).executeTakeFirst();
     return row ? toThread(row) : null;
+  },
+
+  setAccessForProject: async (projectId, access) => {
+    await db
+      .updateTable("chat_sessions")
+      .set({ runtime_access_mode: access })
+      .where("project_id", "=", projectId)
+      .where("kind", "=", "thread")
+      .execute();
   },
 });
 

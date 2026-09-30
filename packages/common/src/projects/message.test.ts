@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { AssistantMessageSchema, MessageSchema } from "./message.ts";
-import { makeAssistantMessage, makeUserMessage, parsed, rejectedPaths } from "./test-utils.ts";
+import {
+  makeAssistantMessage,
+  makeThreadReportMessage,
+  makeUserMessage,
+  parsed,
+  rejectedPaths,
+} from "./test-utils.ts";
 
 describe("MessageSchema", () => {
   test("accepts a user message in the coordinator chat", () => {
@@ -32,7 +38,26 @@ describe("MessageSchema", () => {
     expect(parsed(MessageSchema, message)).toEqual(message);
   });
 
-  test("rejects a role that is neither user nor assistant", () => {
+  test("accepts a thread report, which lives in the coordinator chat", () => {
+    for (const outcome of ["finished", "needs-you", "failed"]) {
+      const report = makeThreadReportMessage({ outcome });
+      expect(parsed(MessageSchema, report)).toEqual(report);
+    }
+  });
+
+  test("rejects a thread report inside a thread, without a subject, or with an unknown outcome", () => {
+    expect(rejectedPaths(MessageSchema, makeThreadReportMessage({ threadId: "thr_1" }))).toEqual([
+      "threadId",
+    ]);
+    expect(rejectedPaths(MessageSchema, makeThreadReportMessage({ reportedThreadId: "" }))).toEqual(
+      ["reportedThreadId"],
+    );
+    expect(rejectedPaths(MessageSchema, makeThreadReportMessage({ outcome: "done" }))).toEqual([
+      "outcome",
+    ]);
+  });
+
+  test("rejects a role that is not user, assistant, or thread-report", () => {
     expect(rejectedPaths(MessageSchema, makeUserMessage({ role: "system" }))).toEqual(["role"]);
   });
 

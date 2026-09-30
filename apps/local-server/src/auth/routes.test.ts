@@ -347,7 +347,6 @@ describe("auth routes", () => {
         "GET /api/auth/devices",
         "DELETE /api/auth/devices/:id",
         "POST /api/updates/install",
-        "POST /api/chat-sessions/:sessionId/terminal",
       ];
 
       for (const route of hostOnly) {

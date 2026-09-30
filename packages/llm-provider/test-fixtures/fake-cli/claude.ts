@@ -1,13 +1,14 @@
 import { parseArgv } from "./argv";
-import type {
-  AskUser,
-  Beat,
-  Dialect,
-  Ending,
-  Invocation,
-  JsonLine,
-  TokenUsage,
-  TurnContext,
+import {
+  AOP_MCP_SERVER,
+  type AskUser,
+  type Beat,
+  type Dialect,
+  type Ending,
+  type Invocation,
+  type JsonLine,
+  type TokenUsage,
+  type TurnContext,
 } from "./types";
 
 const DEFAULT_MODEL = "fake-claude";
@@ -43,24 +44,47 @@ export const claudeDialect: Dialect = {
 };
 
 function parseInvocation(args: string[]): Invocation {
-  const { values, positionals } = parseArgv(args, {
+  const { values, variadicValues, positionals } = parseArgv(args, {
     valueFlags: [
       "--output-format",
       "--setting-sources",
       "--permission-mode",
       "--resume",
       "--settings",
-      "--mcp-config",
       "--model",
       "--effort",
     ],
-    variadicFlags: ["--disallowedTools", "--add-dir"],
+    // The real parser treats these as `<values...>`, so each one swallows a prompt placed after it.
+    variadicFlags: ["--mcp-config", "--disallowedTools", "--add-dir", "--allowedTools", "--tools"],
   });
   return {
     prompt: positionals[0] ?? "",
     resumeId: values.get("--resume"),
     model: values.get("--model"),
+    mcpServers: readMcpServers(variadicValues.get("--mcp-config") ?? []),
   };
+}
+
+// `--mcp-config` takes JSON strings (or file paths, which the fake does not follow). Only HTTP
+// servers are imitated.
+function readMcpServers(configs: string[]): Invocation["mcpServers"] {
+  const servers: Invocation["mcpServers"] = {};
+  for (const config of configs) {
+    for (const [name, server] of Object.entries(parseMcpServers(config))) {
+      const { type, url } = server as { type?: unknown; url?: unknown };
+      if (type === "http" && typeof url === "string") servers[name] = { url };
+    }
+  }
+  return servers;
+}
+
+function parseMcpServers(config: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(config) as { mcpServers?: Record<string, unknown> } | null;
+    return parsed?.mcpServers && typeof parsed.mcpServers === "object" ? parsed.mcpServers : {};
+  } catch {
+    return {};
+  }
 }
 
 function renderBeat(beat: Beat, index: number, ctx: TurnContext): JsonLine[] {
@@ -72,6 +96,11 @@ function renderBeat(beat: Beat, index: number, ctx: TurnContext): JsonLine[] {
       return toolRound(ctx, toolUseId, "Bash", { command: beat.command }, beat.output, false);
     case "ask":
       return renderAsk(ctx, toolUseId, beat.ask);
+    case "mcp": {
+      const name = `mcp__${AOP_MCP_SERVER}__${beat.call.name}`;
+      const { text, isError } = beat.result;
+      return toolRound(ctx, toolUseId, name, beat.call.arguments, text, isError);
+    }
   }
 }
 
@@ -90,7 +119,7 @@ function renderAsk(ctx: TurnContext, toolUseId: string, ask: AskUser): JsonLine[
     ];
     return toolRound(ctx, toolUseId, NATIVE_ASK_TOOL, { questions }, "Answer questions?", true);
   }
-  const name = ask.tool.startsWith("mcp__") ? ask.tool : `mcp__aop__${ask.tool}`;
+  const name = ask.tool.startsWith("mcp__") ? ask.tool : `mcp__${AOP_MCP_SERVER}__${ask.tool}`;
   const input = { question: ask.question, options: ask.options };
   return toolRound(
     ctx,

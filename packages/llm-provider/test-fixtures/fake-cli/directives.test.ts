@@ -79,10 +79,92 @@ describe("parseDirectives", () => {
     expect(parseDirectives("hello", "steps=2 delay=10")).toMatchObject({ steps: 2, delayMs: 10 });
     expect(parseDirectives("hello [fake: steps=0]", "steps=2").steps).toBe(0);
   });
+
+  test("values may be single quoted, and a quoted value may hold ]", () => {
+    const directives = parseDirectives(
+      "x [fake: say='it\"s [done]' ask=\"Pick [a]?\" options='a|b']",
+    );
+
+    expect(directives.say).toBe('it"s [done]');
+    expect(directives.ask).toEqual({
+      question: "Pick [a]?",
+      options: ["a", "b"],
+      tool: "aop_ask_user",
+    });
+  });
+
+  test("a quote with no partner is plain text", () => {
+    expect(parseDirectives("x [fake: say=don't steps=2]")).toMatchObject({
+      say: "don't",
+      steps: 2,
+    });
+  });
+
+  test("an unterminated marker is not a marker", () => {
+    expect(parseDirectives("x [fake: steps=2 and no end", "steps=1").steps).toBe(1);
+  });
+});
+
+describe("calls directive", () => {
+  const calls = [
+    { name: "thread_spawn", arguments: { title: "Fix login", repoIds: ["a", "b"] } },
+    { name: "thread_list" },
+  ];
+
+  test("reads a JSON array of MCP calls, defaulting missing arguments to {}", () => {
+    const directives = parseDirectives(`x [fake: calls='${JSON.stringify(calls)}']`);
+
+    expect(directives.callsError).toBeUndefined();
+    expect(directives.calls).toEqual([
+      { name: "thread_spawn", arguments: { title: "Fix login", repoIds: ["a", "b"] } },
+      { name: "thread_list", arguments: {} },
+    ]);
+  });
+
+  test("keeps the rest of the marker around the JSON", () => {
+    const directives = parseDirectives(`x [fake: steps=1 calls='[{"name":"t"}]' say="ok"]`);
+
+    expect(directives).toMatchObject({
+      steps: 1,
+      say: "ok",
+      calls: [{ name: "t", arguments: {} }],
+    });
+  });
+
+  test.each([
+    ["malformed JSON", "[{"],
+    ["not an array", '{"name":"t"}'],
+    ["an entry without a name", '[{"arguments":{}}]'],
+    ["an empty name", '[{"name":""}]'],
+    ["arguments that are not an object", '[{"name":"t","arguments":[1]}]'],
+    ["an entry that is not an object", '["t"]'],
+  ])("%s is reported, not guessed at", (_label, raw) => {
+    const directives = parseDirectives(`x [fake: calls='${raw}']`);
+
+    expect(directives.calls).toBeUndefined();
+    expect(directives.callsError).toBe("fake CLI: invalid calls directive");
+  });
+
+  test("is absent when the marker does not ask for calls", () => {
+    const directives = parseDirectives("x [fake: steps=1]");
+
+    expect(directives).not.toHaveProperty("calls");
+    expect(directives).not.toHaveProperty("callsError");
+  });
 });
 
 describe("stripDirectives", () => {
   test("removes every marker and trims", () => {
     expect(stripDirectives("  hello [fake: steps=2] world [fake: crash]  ")).toBe("hello  world");
+  });
+
+  test("removes a marker whose quoted value holds ]", () => {
+    const prompt = `do it [fake: calls='[{"name":"t"}]' say="a]b"] please`;
+
+    expect(stripDirectives(prompt)).toBe("do it  please");
+  });
+
+  test("leaves an unterminated marker in place", () => {
+    expect(stripDirectives("hello [fake: steps=2")).toBe("hello [fake: steps=2");
   });
 });

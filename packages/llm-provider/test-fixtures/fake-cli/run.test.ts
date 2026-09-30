@@ -1,50 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Io, runFakeCli } from "./run";
+import { CLAUDE_ARGS, play, removeHomes, types } from "./test-utils";
 
-const homes: string[] = [];
-afterEach(() => {
-  for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
-});
-
-const CLAUDE_ARGS = ["--output-format", "stream-json", "--verbose"];
-
-/** Runs the fake in-process with every side effect recorded instead of performed. */
-const play = async (
-  args: string[],
-  env: Record<string, string> = {},
-  home = mkdtempSync(join(tmpdir(), "aop-fake-cli-run-")),
-) => {
-  homes.push(home);
-  const io = {
-    writes: [] as string[],
-    warnings: [] as string[],
-    sleeps: [] as number[],
-    crashes: 0,
-  };
-  const recorder: Io = {
-    write: (text) => void io.writes.push(text),
-    warn: (text) => void io.warnings.push(text),
-    sleep: async (ms) => void io.sleeps.push(ms),
-    crash: () => {
-      io.crashes += 1;
-    },
-  };
-  const exitCode = await runFakeCli(
-    { args, env: { FAKE_CLI_HOME: home, ...env }, cwd: "/work" },
-    recorder,
-  );
-  const events = io.writes
-    .join("")
-    .split("\n")
-    .filter((line) => line.endsWith("}"))
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
-  return { ...io, exitCode, events, home };
-};
-
-const types = (events: Array<Record<string, unknown>>): unknown[] => events.map((e) => e.type);
+afterEach(removeHomes);
 
 describe("runFakeCli", () => {
   test("plays a plain turn: init, reply, success result, exit 0", async () => {
@@ -141,9 +101,8 @@ describe("runFakeCli", () => {
 
   test("keeps session state under AOP_HOME/fake-cli when FAKE_CLI_HOME is unset", async () => {
     const aopHome = mkdtempSync(join(tmpdir(), "aop-fake-cli-aophome-"));
-    homes.push(aopHome);
 
-    await play([...CLAUDE_ARGS, "hi"], { FAKE_CLI_HOME: "", AOP_HOME: aopHome });
+    await play([...CLAUDE_ARGS, "hi"], { FAKE_CLI_HOME: "", AOP_HOME: aopHome }, aopHome);
 
     expect(existsSync(join(aopHome, "fake-cli", "sessions", "claude"))).toBe(true);
   });

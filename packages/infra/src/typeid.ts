@@ -6,6 +6,7 @@ export type TypeIdPrefix =
   | "repo"
   | "step"
   | "isess"
+  | "proj"
   | "smsg"
   | "crun"
   | "agent"
@@ -24,6 +25,7 @@ const VALID_PREFIXES: Set<TypeIdPrefix> = new Set([
   "repo",
   "step",
   "isess",
+  "proj",
   "smsg",
   "crun",
   "agent",

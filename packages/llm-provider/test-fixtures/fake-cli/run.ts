@@ -2,9 +2,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeDialect } from "./claude";
 import { type Directives, parseDirectives } from "./directives";
+import { carryOut } from "./mcp-beats";
 import { beginTurn } from "./session-store";
 import { planTurn } from "./turn";
-import type { Dialect, Ending, JsonLine, TurnContext } from "./types";
+import {
+  AOP_MCP_SERVER,
+  type Dialect,
+  type Ending,
+  type JsonLine,
+  type McpConnection,
+  type PlannedBeat,
+  type TurnContext,
+} from "./types";
 
 const DIALECTS: Dialect[] = [claudeDialect];
 const USAGE_EXIT_CODE = 2;
@@ -25,7 +34,12 @@ export interface Io {
   sleep(ms: number): Promise<void>;
   /** SIGKILLs the process. Tests substitute a recorder. */
   crash(): void;
+  /** Opens a connection to the MCP server at `url`. Nothing is sent until the first tool call. */
+  mcp(url: string): McpConnection;
 }
+
+/** One stretch of the turn's events; MCP calls run when their stretch is reached, not up front. */
+type Segment = () => Promise<JsonLine[]>;
 
 /** Plays one CLI turn and returns the exit code. See directives.ts for the scripting syntax. */
 export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
@@ -52,15 +66,28 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
     resumed: session.resumed,
   };
   const { beats, ending } = planTurn(directives, ctx);
-  const lines = [
-    ...dialect.start(ctx),
-    ...beats.flatMap((beat, index) => dialect.beat(beat, index, ctx)),
-    ...dialect.end(ending, ctx),
+  const server = invocation.mcpServers[AOP_MCP_SERVER];
+  const aop = server ? io.mcp(server.url) : undefined;
+  const segments: Segment[] = [
+    async () => dialect.start(ctx),
+    ...beats.map((beat, index) => beatSegment(dialect, beat, index, ctx, aop)),
+    async () => dialect.end(ending, ctx),
   ];
 
-  if (await emit(lines, directives, io)) return CRASHED_EXIT_CODE;
+  if (await emit(segments, directives, io)) return CRASHED_EXIT_CODE;
   return exitCodeFor(ending, directives, io);
 };
+
+const beatSegment =
+  (
+    dialect: Dialect,
+    beat: PlannedBeat,
+    index: number,
+    ctx: TurnContext,
+    aop: McpConnection | undefined,
+  ): Segment =>
+  async () =>
+    dialect.beat(await carryOut(beat, aop), index, ctx);
 
 // Empty counts as unset: shells and process managers export blank variables.
 const resolveHome = (env: Runtime["env"]): string =>
@@ -72,17 +99,21 @@ const abort = (io: Io, message: string, exitCode: number): number => {
 };
 
 /** Returns true when the script crashed the process mid-line. */
-const emit = async (lines: JsonLine[], directives: Directives, io: Io): Promise<boolean> => {
-  for (const [index, line] of lines.entries()) {
-    if (index > 0 && directives.delayMs > 0) await io.sleep(directives.delayMs);
-    const text = JSON.stringify(line);
-    if (index === directives.crashAfter) {
-      // The half-written line is what a process killed mid-write leaves in the log.
-      io.write(text.slice(0, Math.ceil(text.length / 2)));
-      io.crash();
-      return true;
+const emit = async (segments: Segment[], directives: Directives, io: Io): Promise<boolean> => {
+  let index = 0;
+  for (const segment of segments) {
+    for (const line of await segment()) {
+      if (index > 0 && directives.delayMs > 0) await io.sleep(directives.delayMs);
+      const text = JSON.stringify(line);
+      if (index === directives.crashAfter) {
+        // The half-written line is what a process killed mid-write leaves in the log.
+        io.write(text.slice(0, Math.ceil(text.length / 2)));
+        io.crash();
+        return true;
+      }
+      io.write(`${text}\n`);
+      index += 1;
     }
-    io.write(`${text}\n`);
   }
   return false;
 };

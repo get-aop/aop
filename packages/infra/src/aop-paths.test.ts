@@ -42,6 +42,12 @@ describe("aopPaths", () => {
     expect(aopPaths.generalChatWorkspace()).toBe(join(DEFAULT_AOP_HOME, "chats", "general"));
   });
 
+  test("projectDir returns <home>/projects/<projectId>", () => {
+    expect(aopPaths.projectDir("proj_abc123")).toBe(
+      join(DEFAULT_AOP_HOME, "projects", "proj_abc123"),
+    );
+  });
+
   test("repoDir returns <home>/repos/<repoId>", () => {
     expect(aopPaths.repoDir("repo_abc123")).toBe(join(DEFAULT_AOP_HOME, "repos", "repo_abc123"));
   });

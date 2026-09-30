@@ -20,14 +20,13 @@ const PUBLIC_ROUTES: readonly RoutePattern[] = [
 ];
 
 // A device is trusted with the work (chats, repos, settings) but not with the host itself:
-// pairing more devices or revoking them, upgrading the host, or running its shell. A stolen
+// pairing more devices or revoking them, or upgrading the host. A stolen
 // laptop therefore cannot mint itself a fresh token or lock the owner out of the device list.
 const OWNER_ROUTES: readonly RoutePattern[] = [
   ["POST", /^\/api\/auth\/pairing-codes\/?$/],
   ["GET", /^\/api\/auth\/devices\/?$/],
   ["DELETE", /^\/api\/auth\/devices\/[^/]+\/?$/],
   ["POST", /^\/api\/updates\/install\/?$/],
-  ["POST", /^\/api\/chat-sessions\/[^/]+\/terminal\/?$/],
 ];
 
 export const routeAccess = (method: string, pathname: string): RouteAccess => {

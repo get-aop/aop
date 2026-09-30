@@ -240,8 +240,17 @@ describe("materialize + encode/decode", () => {
 
   test("gently prefers AOP MCP tools for platform actions without attachments", () => {
     const prompt = buildRuntimePrompt("Create a task", "isess_plain", []);
-    expect(prompt).toContain("For AOP platform actions (workflows), prefer the `aop` MCP tools.");
+    expect(prompt).toContain("For AOP platform actions, prefer the `aop` MCP tools.");
     expect(prompt).not.toContain("aop_create_task");
+  });
+
+  test("a project session gets its role brief after the message instead of the platform note", () => {
+    const prompt = buildRuntimePrompt("Fix the retries", "isess_thread", [], [], [], null, [
+      "You are a thread of the AOP project Checkout.",
+    ]);
+
+    expect(prompt).toBe("Fix the retries\n\nYou are a thread of the AOP project Checkout.");
+    expect(prompt).not.toContain("platform actions");
   });
 
   test("injects optional global instructions into the runtime prompt only", () => {

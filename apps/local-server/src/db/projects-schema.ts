@@ -1,4 +1,10 @@
-import type { CliProvider, NotificationLevel, ProjectStatus, ReasoningEffort } from "@aop/common";
+import type {
+  CliProvider,
+  NotificationLevel,
+  ProjectStatus,
+  ReasoningEffort,
+  ThreadAccess,
+} from "@aop/common";
 import type { Generated, Selectable } from "kysely";
 
 export interface ProjectsTable {
@@ -13,6 +19,8 @@ export interface ProjectsTable {
   thread_model: string | null;
   thread_effort: ReasoningEffort | null;
   notification_level: Generated<NotificationLevel>;
+  /** Added by migration v4. */
+  thread_access: Generated<ThreadAccess>;
   status: Generated<ProjectStatus>;
   created_at: Generated<string>;
   updated_at: Generated<string>;

@@ -44,6 +44,19 @@ describe("project repository", () => {
     expect(ProjectSchema.safeParse(created).success).toBe(true);
   });
 
+  test("stores whether threads may run any command, and a patch changes it", async () => {
+    const created = await projects.create({
+      id: "p1",
+      ...projectSettings({ threadAccess: "full-access" }),
+    });
+    expect(created.threadAccess).toBe("full-access");
+
+    const updated = await projects.update("p1", { threadAccess: "auto-accept-edits" });
+
+    expect(updated?.threadAccess).toBe("auto-accept-edits");
+    expect((await projects.getById("p1"))?.threadAccess).toBe("auto-accept-edits");
+  });
+
   test("keeps the order of the repos and returns null for an unknown project", async () => {
     await projects.create({ id: "p1", ...projectSettings({ repoIds: ["r3", "r1", "r2"] }) });
 

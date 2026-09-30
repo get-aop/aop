@@ -212,10 +212,12 @@ export const buildRuntimePrompt = (
   documents: StoredChatDocument[] = [],
   pastes: StoredChatPaste[] = [],
   globalInstructions?: string | null,
+  /** What follows the message: the platform note for plain sessions, the role brief for project sessions. */
+  platformInstructions: readonly string[] = AOP_PLATFORM_INSTRUCTIONS,
 ): string => {
   const dir = chatSessionAttachmentsDir(sessionId);
   const expanded = expandStoredPastes(text, pastes);
-  const lines = [expanded, "", ...AOP_PLATFORM_INSTRUCTIONS, ""];
+  const lines = [expanded, "", ...platformInstructions, ""];
   const preferences = formatGlobalInstructions(globalInstructions);
   if (preferences) {
     lines.push(

@@ -1,4 +1,3 @@
-import { parseControlCommand, parseRuntimeDelegation } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatContextStrategy, ChatRunStatus, ChatSession } from "../db/schema.ts";
 import {
@@ -84,15 +83,7 @@ const semanticOutcome = (
 const visibleHistoryText = (content: string): string => {
   const decoded = decodeStoredAttachmentMetadata(content);
   const attachmentNames = decoded.documents.map((document) => document.originalFileName);
-  let inertText = decoded.text;
-  const delegation = parseRuntimeDelegation(inertText);
-  if (delegation && !("error" in delegation)) inertText = delegation.prompt;
-  const control = parseControlCommand(inertText);
-  if (control && !("error" in control)) inertText = control.prompt;
-  const text = inertText
-    .replace(/\$DELEGATE_[A-Z0-9_-]+(?:\[[^\]]*\])?/g, "")
-    .replace(/\$[A-Z0-9_-]+(?:\[[^\]]*\])?/g, "")
-    .trim();
+  const text = decoded.text.trim();
   return attachmentNames.length > 0
     ? `${text}\n[Attachments: ${attachmentNames.join(", ")}]`
     : text;

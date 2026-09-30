@@ -14,6 +14,8 @@ import { createFsRoutes } from "./fs/routes.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
+import { createProjectRoutes } from "./project/routes.ts";
+import { createProjectServices } from "./project/services.ts";
 import { createProviderRoutes } from "./providers/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
@@ -21,6 +23,7 @@ import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes
 import { createRuntimeProfileRoutes } from "./runtime-profile/routes.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
+import { createThreadRoutes } from "./thread/routes.ts";
 import { createUpdateRoutes } from "./updates/routes.ts";
 import { createUsageRoutes } from "./usage/routes.ts";
 
@@ -124,7 +127,10 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api", createProviderRoutes());
   app.route("/api/chat-sessions", createChatSessionRoutes(ctx));
   app.route("/api/chat-sessions", createSessionGitRoutes(ctx));
-  app.route("/api/mcp", createMcpRoutes(ctx));
+  const projects = createProjectServices(ctx);
+  app.route("/api/mcp", createMcpRoutes(ctx, projects));
+  app.route("/api/projects", createProjectRoutes(projects));
+  app.route("/api", createThreadRoutes(projects));
   app.route("/api/repos", createRepoRoutes(ctx));
   app.route("/api/settings", createSettingsRoutes(ctx));
   app.route("/api/exec-hosts", createExecHostRoutes(ctx));

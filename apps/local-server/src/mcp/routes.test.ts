@@ -1,168 +1,204 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { Hono } from "hono";
-import { createTestContext, createTestRepo } from "../db/test-utils.ts";
+import type { ChatSession } from "../db/schema.ts";
+import {
+  createProjectStack,
+  type ProjectStack,
+  projectSettings,
+  useTempAopHome,
+} from "../project/test-utils.ts";
 import { createAuthenticatedMcpUrl } from "./auth.ts";
-import { createMcpRoutes } from "./routes.ts";
 
-describe("MCP HTTP routes", () => {
-  let cleanup: (() => Promise<void>) | undefined;
+const home = useTempAopHome();
+let stack: ProjectStack | undefined;
 
-  afterEach(async () => {
-    await cleanup?.();
-    cleanup = undefined;
-  });
-
-  test("rejects unsigned MCP protocol requests", async () => {
-    const ctx = await createTestContext();
-    cleanup = async () => {
-      await ctx.db.destroy();
-    };
-    const app = new Hono().route("/mcp", createMcpRoutes(ctx));
-
-    const response = await app.request("http://localhost/mcp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-    });
-    const toolsResponse = await app.request("http://localhost/mcp/tools");
-
-    expect(response.status).toBe(401);
-    expect(toolsResponse.status).toBe(401);
-  });
-
-  test("tools/list and tools/call serve the surviving tool set", async () => {
-    const ctx = await createTestContext();
-    cleanup = async () => {
-      await ctx.db.destroy();
-    };
-    await createTestRepo(ctx.db, "repo-route-1", "route-repo");
-    await createChatSession(ctx, "isess_mcp_create", "repo-route-1");
-
-    const app = new Hono();
-    app.route("/mcp", createMcpRoutes(ctx));
-
-    const listed = await app.request(
-      createAuthenticatedMcpUrl("http://localhost/mcp", "isess_mcp_create"),
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-      },
-    );
-    expect(listed.status).toBe(200);
-    const listBody = (await listed.json()) as {
-      result: { tools: Array<{ name: string }> };
-    };
-    expect(listBody.result.tools.some((tool) => tool.name === "aop_list_repos")).toBe(true);
-    expect(listBody.result.tools.some((tool) => tool.name === "aop_list_workflows")).toBe(false);
-    expect(listBody.result.tools.some((tool) => tool.name === "aop_create_task")).toBe(false);
-
-    const toolsResponse = await app.request(
-      createAuthenticatedMcpUrl("http://localhost/mcp/tools", "isess_mcp_create"),
-    );
-    expect(toolsResponse.status).toBe(200);
-
-    const call = await app.request(
-      createAuthenticatedMcpUrl("http://localhost/mcp", "isess_mcp_create"),
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 2,
-          method: "tools/call",
-          params: { name: "aop_list_repos", arguments: {} },
-        }),
-      },
-    );
-    expect(call.status).toBe(200);
-    const callBody = (await call.json()) as {
-      result: { content: { repos: Array<{ id: string }> }; isProposal: boolean };
-    };
-    expect(callBody.result.content.repos.some((repo) => repo.id === "repo-route-1")).toBe(true);
-    expect(callBody.result.isProposal).toBe(false);
-  });
-
-  test("rejects an access token bound to a different session", async () => {
-    const ctx = await createTestContext();
-    cleanup = async () => {
-      await ctx.db.destroy();
-    };
-    await createTestRepo(ctx.db, "repo-route-no-session", "route-repo-no-session");
-    const app = new Hono().route("/mcp", createMcpRoutes(ctx));
-
-    const forgedUrl = new URL(createAuthenticatedMcpUrl("http://localhost/mcp", "isess_original"));
-    forgedUrl.searchParams.set("sessionId", "isess_forged");
-
-    const response = await app.request(forgedUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 2,
-        method: "tools/call",
-        params: { name: "aop_list_repos", arguments: {} },
-      }),
-    });
-
-    expect(response.status).toBe(401);
-    const body = await response.text();
-    expect(body).not.toContain("repo-route-no-session");
-  });
-
-  test("notifications/initialized returns 202 and unknown methods return JSON-RPC on HTTP 200", async () => {
-    const ctx = await createTestContext();
-    cleanup = async () => {
-      await ctx.db.destroy();
-    };
-    const app = new Hono();
-    app.route("/mcp", createMcpRoutes(ctx));
-
-    const mcpUrl = createAuthenticatedMcpUrl("http://localhost/mcp", "isess_protocol");
-    const initialized = await app.request(mcpUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
-    });
-    expect(initialized.status).toBe(202);
-
-    const unknown = await app.request(mcpUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 9, method: "tools/nope" }),
-    });
-    expect(unknown.status).toBe(200);
-    const body = (await unknown.json()) as {
-      error: { code: number; message: string };
-    };
-    expect(body.error.code).toBe(-32601);
-    expect(body.error.message).toContain("Method not found");
-  });
+afterEach(async () => {
+  await stack?.cleanup();
+  stack = undefined;
 });
 
-const createChatSession = async (
-  ctx: Awaited<ReturnType<typeof createTestContext>>,
-  id: string,
-  repoId: string,
-) => {
+const setup = async () => {
+  const s = await createProjectStack(home.path());
+  stack = s;
+  const created = await s.services.projects.create(
+    projectSettings({ repoIds: s.repos.map((repo) => repo.id) }),
+  );
+  if (!created.success) throw new Error("project not created");
+  const coordinator = (await s.ctx.chatSessionRepository.getCoordinator(
+    created.project.id,
+  )) as ChatSession;
+  return { s, project: created.project, coordinator };
+};
+
+const toolNames = async (s: ProjectStack, sessionId: string): Promise<string[]> => {
+  const { body } = await s.mcp(sessionId, "tools/list");
+  return (body.result?.tools ?? []).map((tool) => tool.name).sort();
+};
+
+const plainSession = async (s: ProjectStack): Promise<string> => {
   const now = new Date().toISOString();
-  await ctx.chatSessionRepository.create({
-    id,
-    repo_id: repoId,
-    title: "MCP task creation",
-    named: false,
+  const session = await s.ctx.chatSessionRepository.create({
+    id: "isess_plain",
+    repo_id: s.repos[0]?.id ?? null,
+    title: "Plain chat",
     runtime: "claude-code",
     runtime_configuration_id: null,
-    model: "claude-opus-4-8",
+    model: "fake-model",
     reasoning_effort: "medium",
     runtime_alias: null,
     runtime_session_id: null,
     workspace_path: null,
-    fast_mode: false,
-    pinned: false,
-    settled_override: null,
-    settled_at: null,
     created_at: now,
     updated_at: now,
   });
+  return session.id;
 };
+
+describe("MCP HTTP routes", () => {
+  test("rejects unsigned requests, tool discovery included", async () => {
+    const { s } = await setup();
+
+    const rpc = await s.app.request("http://localhost/api/mcp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    const listing = await s.app.request("http://localhost/api/mcp/tools");
+
+    expect(rpc.status).toBe(401);
+    expect(listing.status).toBe(401);
+  });
+
+  test("rejects a token signed for a different session", async () => {
+    const { s, coordinator } = await setup();
+    const forged = new URL(createAuthenticatedMcpUrl("http://localhost/api/mcp", "isess_original"));
+    forged.searchParams.set("sessionId", coordinator.id);
+
+    const response = await s.app.request(forged, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+
+    expect(response.status).toBe(401);
+  });
+
+  test("rejects a correctly signed URL whose session no longer exists", async () => {
+    const { s } = await setup();
+
+    const { status } = await s.mcp("isess_deleted", "tools/list");
+
+    expect(status).toBe(401);
+  });
+
+  test("answers initialize, accepts notifications/initialized, and reports unknown methods as JSON-RPC errors", async () => {
+    const { s, coordinator } = await setup();
+
+    const initialized = await s.mcp(coordinator.id, "initialize");
+    expect(initialized.body).toMatchObject({ result: { serverInfo: { name: "aop" } } });
+
+    const url = createAuthenticatedMcpUrl("http://localhost/api/mcp", coordinator.id);
+    const notification = await s.app.request(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+    });
+    expect(notification.status).toBe(202);
+
+    const unknown = await s.mcp(coordinator.id, "tools/nope");
+    expect(unknown.status).toBe(200);
+    expect(unknown.body.error).toMatchObject({ code: -32601 });
+  });
+
+  test("offers each kind of session its own tools", async () => {
+    const { s, project, coordinator } = await setup();
+    const spawned = await s.services.threads.spawn(project.id, { prompt: "work" });
+    if (!spawned.success) throw new Error("thread not spawned");
+    await s.settle();
+
+    expect(await toolNames(s, coordinator.id)).toEqual([
+      "memory_read",
+      "memory_write",
+      "project_settings_get",
+      "project_settings_set",
+      "propose_threads",
+      "thread_list",
+      "thread_report",
+      "thread_spawn",
+      "thread_steer",
+      "thread_stop",
+    ]);
+    expect(await toolNames(s, spawned.thread.id)).toEqual([
+      "aop_ask_user",
+      "aop_report_status",
+      "memory_read",
+      "memory_write",
+    ]);
+    expect(await toolNames(s, await plainSession(s))).toEqual([
+      "aop_list_repos",
+      "aop_set_chat_workspace",
+    ]);
+  });
+
+  test("advertises each tool with a JSON Schema for its arguments", async () => {
+    const { s, coordinator } = await setup();
+
+    const { body } = await s.mcp(coordinator.id, "tools/list");
+
+    for (const tool of body.result?.tools ?? []) {
+      expect(tool.inputSchema).toMatchObject({ type: "object" });
+      expect(tool.inputSchema).not.toHaveProperty("$schema");
+    }
+    const spawn = body.result?.tools?.find((tool) => tool.name === "thread_spawn");
+    expect(spawn?.inputSchema).toMatchObject({ required: ["prompt"] });
+  });
+
+  test("a tool result is an array of content blocks, never a bare object", async () => {
+    const { s } = await setup();
+    const sessionId = await plainSession(s);
+
+    const result = await s.callTool(sessionId, "aop_list_repos");
+
+    expect(Array.isArray(result.content)).toBe(true);
+    expect(result.content[0]?.type).toBe("text");
+    const listed = JSON.parse(result.content[0]?.text ?? "{}") as { repos: { id: string }[] };
+    expect(listed.repos.map((repo) => repo.id)).toEqual(s.repos.map((repo) => repo.id));
+    expect(result).not.toHaveProperty("isProposal");
+  });
+
+  test("a tool the session is not offered is an unknown tool, not a result", async () => {
+    const { s, project, coordinator } = await setup();
+    const spawned = await s.services.threads.spawn(project.id, { prompt: "work" });
+    if (!spawned.success) throw new Error("thread not spawned");
+    await s.settle();
+
+    const threadCallsSpawn = await s.mcp(spawned.thread.id, "tools/call", {
+      name: "thread_spawn",
+      arguments: { prompt: "a thread starting threads" },
+    });
+    const coordinatorAsks = await s.mcp(coordinator.id, "tools/call", {
+      name: "aop_ask_user",
+      arguments: { question: "?" },
+    });
+
+    expect(threadCallsSpawn.body.error).toMatchObject({ code: -32602 });
+    expect(coordinatorAsks.body.error).toMatchObject({ code: -32602 });
+    expect(await s.services.threads.list(project.id)).toMatchObject({
+      threads: [{ id: spawned.thread.id }],
+    });
+  });
+
+  test("bad arguments and refused actions come back as an error result the model can read", async () => {
+    const { s, coordinator } = await setup();
+
+    const missing = await s.callTool(coordinator.id, "thread_spawn", {});
+    const unknownThread = await s.callTool(coordinator.id, "thread_steer", {
+      threadId: "isess_nope",
+      message: "hi",
+    });
+
+    expect(missing.isError).toBe(true);
+    expect(missing.content[0]?.text).toContain("prompt");
+    expect(unknownThread.isError).toBe(true);
+    expect(unknownThread.content[0]?.text).toContain("Thread not found");
+  });
+});

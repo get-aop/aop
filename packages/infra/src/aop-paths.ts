@@ -9,6 +9,8 @@ export const aopPaths = {
   db: () => join(getAopHome(), "projects.sqlite"),
   logs: () => join(getAopHome(), "logs"),
   generalChatWorkspace: () => join(getAopHome(), "chats", "general"),
+  /** A project's own directory: its coordinator's workspace and the scratch space of repo-less threads. */
+  projectDir: (projectId: string) => join(getAopHome(), "projects", projectId),
   repoDir: (repoId: string) => join(getAopHome(), "repos", repoId),
   relativeTaskDocs: () => join("docs", "tasks"),
   worktrees: (repoId: string) => join(getAopHome(), "worktrees", repoId),

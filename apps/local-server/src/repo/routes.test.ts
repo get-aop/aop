@@ -8,6 +8,7 @@ import { type Kysely, sql } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { type AnyJson, createTestDb, createTestRepo } from "../db/test-utils.ts";
+import { insertProjectSession, projectSettings } from "../project/test-utils.ts";
 import { resolveCheckpointWorkspaceIdentity } from "../session-git/checkpoints.ts";
 import { DEFAULT_SETTINGS, SettingKey } from "../settings/types.ts";
 import { resetAllRuntimeData } from "./handlers.ts";
@@ -141,6 +142,46 @@ describe("repo/routes", () => {
       expect(body.repoId).toBe("repo-1");
     });
 
+    test("refuses to remove a repo that a project uses, and deletes none of its threads", async () => {
+      await createTestRepo(db, "repo-1", "/path/to/repo-1");
+      const project = await ctx.projectRepository.create({
+        id: "proj_1",
+        ...projectSettings({ name: "Checkout", repoIds: ["repo-1"] }),
+      });
+      await insertProjectSession(
+        db,
+        { id: "isess_thread", projectId: project.id, kind: "thread" },
+        { repo_id: "repo-1" },
+      );
+
+      const res = await app.request("/api/repos/repo-1", { method: "DELETE" });
+      const body: AnyJson = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(body).toMatchObject({
+        error: "Remove the repository from its projects first",
+        projects: ["Checkout"],
+      });
+      expect(await db.selectFrom("repos").select("id").execute()).toEqual([{ id: "repo-1" }]);
+      expect(await db.selectFrom("chat_sessions").select("id").execute()).toEqual([
+        { id: "isess_thread" },
+      ]);
+    });
+
+    test("does not factory-reset while a repo-less project exists", async () => {
+      await createTestRepo(db, "repo-1", "/path/to/repo-1");
+      await ctx.projectRepository.create({ id: "proj_1", ...projectSettings({ repoIds: [] }) });
+      await ctx.settingsRepository.set(SettingKey.CHAT_GLOBAL_INSTRUCTIONS, "keep me");
+
+      const res = await app.request("/api/repos/repo-1", { method: "DELETE" });
+      const body: AnyJson = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body).toMatchObject({ ok: true, repoId: "repo-1", factoryReset: false });
+      expect(await ctx.projectRepository.list()).toHaveLength(1);
+      expect(await ctx.settingsRepository.get(SettingKey.CHAT_GLOBAL_INSTRUCTIONS)).toBe("keep me");
+    });
+
     test("purges repo-owned chat rows and files without touching other repos", async () => {
       await createTestRepo(db, "repo-1", "/path/to/repo-1");
       await createTestRepo(db, "repo-2", "/path/to/repo-2");
@@ -243,11 +284,7 @@ describe("repo/routes", () => {
         })
         .execute();
       mkdirSync(join(aopPaths.logs(), "chat-sessions", "chat-1"), { recursive: true });
-      mkdirSync(join(aopPaths.logs(), "chat-sessions", "chat-1-delegate"), { recursive: true });
-      mkdirSync(join(aopPaths.logs(), "chat-sessions", "chat-1-control"), { recursive: true });
       writeFileSync(join(aopPaths.logs(), "chat-sessions", "chat-1", "log.txt"), "chat");
-      writeFileSync(join(aopPaths.logs(), "chat-sessions", "chat-1-delegate", "log.txt"), "del");
-      writeFileSync(join(aopPaths.logs(), "chat-sessions", "chat-1-control", "log.txt"), "ctl");
 
       mkdirSync(aopPaths.repoDir("repo-1"), { recursive: true });
       mkdirSync(aopPaths.repoDir("repo-2"), { recursive: true });
@@ -299,8 +336,6 @@ describe("repo/routes", () => {
         "refs/aop/chat-checkpoints/chat-1/chat-run-1/before",
       ]);
       expect(existsSync(join(aopPaths.logs(), "chat-sessions", "chat-1"))).toBe(false);
-      expect(existsSync(join(aopPaths.logs(), "chat-sessions", "chat-1-delegate"))).toBe(false);
-      expect(existsSync(join(aopPaths.logs(), "chat-sessions", "chat-1-control"))).toBe(false);
       expect(
         await db.selectFrom("chat_sessions").selectAll().where("id", "=", "chat-2").execute(),
       ).toHaveLength(1);
