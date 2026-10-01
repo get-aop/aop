@@ -1,9 +1,17 @@
-import type { Project, ProjectPatch, ProjectSettings, ProjectStatus } from "@aop/common";
+import type {
+  Project,
+  ProjectPatch,
+  ProjectSettings,
+  ProjectStatus,
+  ReportedRuntime,
+} from "@aop/common";
 import type { Kysely } from "kysely";
 import type { ProjectRow } from "../db/projects-schema.ts";
 import type { Database } from "../db/schema.ts";
 
 export type NewProject = ProjectSettings & { id: string };
+
+export type ProjectRole = "coordinator" | "thread";
 
 export interface ProjectRepository {
   /** A new project is `active`. */
@@ -14,6 +22,15 @@ export interface ProjectRepository {
   /** Applies only the settings present in the patch; `repoIds`, when present, replaces the list. */
   update: (id: string, patch: ProjectPatch) => Promise<Project | null>;
   setStatus: (id: string, status: ProjectStatus) => Promise<Project | null>;
+  /**
+   * Stores what a role's last run reported; a field left out keeps what was there. Not a
+   * setting, so `updatedAt` stays. Null when there is no such project.
+   */
+  recordReportedRuntime: (
+    id: string,
+    role: ProjectRole,
+    reported: Partial<ReportedRuntime>,
+  ) => Promise<Project | null>;
   /**
    * Fails on a foreign key while any session still belongs to the project: threads own
    * worktrees and processes, so they are deleted first (see the v2 migration).
@@ -39,7 +56,13 @@ export const createProjectRepository = (
         })
         .execute();
       await replaceRepos(trx, project.id, project.repoIds);
-      return { ...project, status: "active", createdAt: at, updatedAt: at };
+      return {
+        ...project,
+        status: "active",
+        reportedRuntime: { coordinator: NOTHING_REPORTED, thread: NOTHING_REPORTED },
+        createdAt: at,
+        updatedAt: at,
+      };
     }),
 
   getById: (id) => getProject(db, id),
@@ -89,6 +112,21 @@ export const createProjectRepository = (
       return { ...current, status, updatedAt };
     }),
 
+  recordReportedRuntime: async (id, role, reported) => {
+    // Kysely leaves a column whose value is undefined out of the update.
+    const columns =
+      role === "coordinator"
+        ? {
+            coordinator_reported_model: reported.model,
+            coordinator_reported_effort: reported.effort,
+          }
+        : { thread_reported_model: reported.model, thread_reported_effort: reported.effort };
+    if (reported.model !== undefined || reported.effort !== undefined) {
+      await db.updateTable("projects").set(columns).where("id", "=", id).execute();
+    }
+    return getProject(db, id);
+  },
+
   remove: async (id) => {
     // The dialect reports no affected-row count, so existence is read first.
     const existing = await db
@@ -108,6 +146,8 @@ const atomically = <T>(
   db: Kysely<Database>,
   run: (trx: Kysely<Database>) => Promise<T>,
 ): Promise<T> => (db.isTransaction ? run(db) : db.transaction().execute(run));
+
+const NOTHING_REPORTED: ReportedRuntime = { model: null, effort: null };
 
 const applyPatch = (current: ProjectSettings, patch: ProjectPatch): ProjectSettings => ({
   name: patch.name ?? current.name,
@@ -186,6 +226,10 @@ const toProject = (row: ProjectRow, repoIds: string[]): Project => ({
   autoFixPullRequests: row.auto_fix_pull_requests === 1,
   repoIds,
   status: row.status,
+  reportedRuntime: {
+    coordinator: { model: row.coordinator_reported_model, effort: row.coordinator_reported_effort },
+    thread: { model: row.thread_reported_model, effort: row.thread_reported_effort },
+  },
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

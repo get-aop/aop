@@ -3,10 +3,13 @@ import {
   getDefaultRuntimeModel,
   getRuntimeModelOptions,
   getThinkingOptions,
+  type Project,
+  type ReportedRuntime,
   type RuntimePreference,
 } from "@aop/common";
-import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { defaultEffortLabel, defaultModelLabel } from "../chat/runtime-options";
+import { ROW_SELECT_CLASS, SettingRow } from "./blocks";
 import type { SettingsDraft } from "./use-settings-draft";
 
 // A Radix select item cannot have an empty value, and null ("use default": no flag is passed) needs one.
@@ -14,93 +17,115 @@ const USE_DEFAULT = "default";
 
 type Kind = "coordinator" | "thread";
 
-/** Model and effort for the coordinator and for the threads, each with "Use default". */
-export const ModelSettings = ({ draft }: { draft: SettingsDraft }) => (
-  <div className="grid gap-5 sm:grid-cols-2">
-    <KindPicker
-      kind="coordinator"
-      title="Coordinator"
-      hint="Reads every message and decides what to do. It rarely needs much thinking, so a low effort keeps it quick."
-      draft={draft}
-    />
-    <KindPicker
-      kind="thread"
-      title="Threads"
-      hint="Do the work. A new thread starts on these and keeps them for its whole life; a change here applies to the threads you start next."
-      draft={draft}
-    />
-  </div>
+const ROLES: Record<Kind, { title: string; model: string; effort: string }> = {
+  coordinator: {
+    title: "Coordinator",
+    model: "Model for reading every message and deciding what to do.",
+    effort: "It rarely needs much thinking, so a low effort keeps it quick.",
+  },
+  thread: {
+    title: "Thread",
+    model: "Model for new threads. A new thread starts on these and keeps them for its whole life.",
+    effort: "Effort for new threads. A change here applies to the threads you start next.",
+  },
+};
+
+/**
+ * Model and effort for the coordinator and for the threads, one row each. The "use default"
+ * choice reads "Default (Opus 5.5)" once a run of the role reported what Claude Code picked, and
+ * plain "Default" before one has.
+ */
+export const ModelSettings = ({
+  draft,
+  reported,
+}: {
+  draft: SettingsDraft;
+  reported: Project["reportedRuntime"];
+}) => (
+  <>
+    <RolePickers kind="coordinator" draft={draft} reported={reported.coordinator} />
+    <RolePickers kind="thread" draft={draft} reported={reported.thread} />
+  </>
 );
 
-const KindPicker = ({
+const RolePickers = ({
   kind,
-  title,
-  hint,
   draft,
+  reported,
 }: {
   kind: Kind;
-  title: string;
-  hint: string;
   draft: SettingsDraft;
+  reported: ReportedRuntime;
 }) => {
+  const role = ROLES[kind];
   const preference = draft.value(kind);
   const efforts = effortOptions(preference);
 
   return (
-    <div data-testid={`settings-${kind}-runtime`} className="flex flex-col gap-2.5">
-      <div>
-        <h3 className="text-[12.5px] font-medium text-text">{title}</h3>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-text-subtle">{hint}</p>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`settings-${kind}-model`} className="text-[12px] text-text-muted">
-          Model
-        </Label>
-        <Select
-          value={preference.model ?? USE_DEFAULT}
-          onValueChange={(model) =>
-            draft.set(kind, changeModel(preference, model === USE_DEFAULT ? null : model))
-          }
-        >
-          <SelectTrigger id={`settings-${kind}-model`} data-testid={`settings-${kind}-model`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={USE_DEFAULT}>Use default</SelectItem>
-            {modelOptions(preference).map((model) => (
-              <SelectItem key={model} value={model}>
-                {formatRuntimeModelLabel(model)}
+    <div data-testid={`settings-${kind}-runtime`} className="flex flex-col">
+      <SettingRow
+        label={`${role.title} model`}
+        description={role.model}
+        htmlFor={`settings-${kind}-model`}
+        control={
+          <Select
+            value={preference.model ?? USE_DEFAULT}
+            onValueChange={(model) =>
+              draft.set(kind, changeModel(preference, model === USE_DEFAULT ? null : model))
+            }
+          >
+            <SelectTrigger
+              id={`settings-${kind}-model`}
+              data-testid={`settings-${kind}-model`}
+              className={ROW_SELECT_CLASS}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={USE_DEFAULT}>{defaultModelLabel(reported)}</SelectItem>
+              {modelOptions(preference).map((model) => (
+                <SelectItem key={model} value={model}>
+                  {formatRuntimeModelLabel(model)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
+      <SettingRow
+        label={`${role.title} effort`}
+        description={role.effort}
+        htmlFor={`settings-${kind}-effort`}
+        control={
+          <Select
+            value={preference.effort ?? USE_DEFAULT}
+            onValueChange={(effort) =>
+              draft.set(kind, {
+                ...preference,
+                effort: efforts.find((option) => option.value === effort)?.value ?? null,
+              })
+            }
+          >
+            <SelectTrigger
+              id={`settings-${kind}-effort`}
+              data-testid={`settings-${kind}-effort`}
+              className={ROW_SELECT_CLASS}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={USE_DEFAULT}>
+                {defaultEffortLabel(preference.provider, reported)}
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`settings-${kind}-effort`} className="text-[12px] text-text-muted">
-          Effort
-        </Label>
-        <Select
-          value={preference.effort ?? USE_DEFAULT}
-          onValueChange={(effort) =>
-            draft.set(kind, {
-              ...preference,
-              effort: efforts.find((option) => option.value === effort)?.value ?? null,
-            })
-          }
-        >
-          <SelectTrigger id={`settings-${kind}-effort`} data-testid={`settings-${kind}-effort`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={USE_DEFAULT}>Use default</SelectItem>
-            {efforts.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+              {efforts.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
     </div>
   );
 };

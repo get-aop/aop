@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { RuntimeConfigurationProvider, RuntimePreference } from "@aop/common";
-import { effortLabel, effortOptions, modelLabel, modelOptions } from "./runtime-options";
+import {
+  defaultEffortLabel,
+  defaultModelLabel,
+  effortLabel,
+  effortOptions,
+  modelLabel,
+  modelOptions,
+} from "./runtime-options";
 
 const preference = (overrides: Partial<RuntimePreference> = {}): RuntimePreference => ({
   provider: "claude-code",
@@ -100,5 +107,21 @@ describe("labels", () => {
     expect(modelLabel(preference({ model: "claude-opus-5" }), options)).toBe("Opus 5");
     expect(effortLabel(preference({ effort: null }))).toBe("Default effort");
     expect(effortLabel(preference({ effort: "high" }))).toBe("High");
+  });
+
+  test("on default, name what the role's last run reported, and say plain Default before one did", () => {
+    const reported = { model: "claude-opus-5-5", effort: "low" as const };
+    const nothing = { model: null, effort: null };
+
+    expect(modelLabel(preference(), options, reported)).toBe("Opus 5.5");
+    expect(modelLabel(preference(), options, { model: "a", effort: null })).toBe("Model A");
+    expect(modelLabel(preference({ model: "a" }), options, reported)).toBe("Model A");
+    expect(effortLabel(preference({ effort: null }), reported)).toBe("Low");
+    expect(effortLabel(preference({ effort: "high" }), reported)).toBe("High");
+
+    expect(defaultModelLabel(reported)).toBe("Default (Opus 5.5)");
+    expect(defaultModelLabel(nothing)).toBe("Default");
+    expect(defaultEffortLabel("claude-code", reported)).toBe("Default (Low)");
+    expect(defaultEffortLabel("claude-code", nothing)).toBe("Default");
   });
 });

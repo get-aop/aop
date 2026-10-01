@@ -23,11 +23,14 @@ export const ProjectLayout = ({
   route,
   chat,
   model,
+  settingsOpen = false,
 }: {
   entry: ProjectEntry;
   route: ProjectScreen;
   chat: ProjectChat;
   model: ChatModel;
+  /** The settings dialog is open over this screen: the top bar marks its gear. */
+  settingsOpen?: boolean;
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
   const threadId = route.name === "thread" ? route.threadId : null;
@@ -47,7 +50,7 @@ export const ProjectLayout = ({
       <ProjectTopBar
         entry={entry}
         panel={{ visible: layout.visible, toggle: layout.toggle }}
-        settingsOpen={false}
+        settingsOpen={settingsOpen}
       />
       <div
         ref={layout.containerRef}

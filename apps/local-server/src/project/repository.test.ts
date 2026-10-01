@@ -37,11 +37,32 @@ describe("project repository", () => {
       id: "p1",
       ...settings,
       status: "active",
+      reportedRuntime: {
+        coordinator: { model: null, effort: null },
+        thread: { model: null, effort: null },
+      },
       createdAt: T0.toISOString(),
       updatedAt: T0.toISOString(),
     });
     expect(await projects.getById("p1")).toEqual(created);
     expect(ProjectSchema.safeParse(created).success).toBe(true);
+  });
+
+  test("stores what a role's run reported, field by field, without touching the settings or updatedAt", async () => {
+    await projects.create({ id: "p1", ...projectSettings() });
+    clock = T1;
+
+    await projects.recordReportedRuntime("p1", "thread", { model: "claude-opus-5-5" });
+    const after = await projects.recordReportedRuntime("p1", "thread", { effort: "medium" });
+
+    expect(after?.reportedRuntime).toEqual({
+      coordinator: { model: null, effort: null },
+      thread: { model: "claude-opus-5-5", effort: "medium" },
+    });
+    expect(after?.updatedAt).toBe(T0.toISOString());
+    expect(await projects.recordReportedRuntime("missing", "coordinator", { model: "x" })).toBe(
+      null,
+    );
   });
 
   test("stores whether threads may run any command, and a patch changes it", async () => {

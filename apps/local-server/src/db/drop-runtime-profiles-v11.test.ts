@@ -53,9 +53,12 @@ describe("migration v11 on a database that ran versions 1 to 10", () => {
         .executeTakeFirstOrThrow(),
     ).toEqual({ value: "be brief" });
     expect((await sql`PRAGMA foreign_key_check`.execute(db)).rows).toEqual([]);
-    expect((await db.selectFrom("schema_migrations").select("version").execute()).at(-1)).toEqual({
-      version: 11,
-    });
+    // Contains, not "ends with": later versions run in the same migrate.
+    expect(
+      (await db.selectFrom("schema_migrations").select("version").execute()).map(
+        (row) => row.version,
+      ),
+    ).toContain(11);
   });
 
   test("a profile that was never copied becomes a custom provider before the table goes", async () => {

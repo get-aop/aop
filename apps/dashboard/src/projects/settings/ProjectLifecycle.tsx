@@ -1,150 +1,194 @@
 import type { Project } from "@aop/common";
+import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
+  PauseIcon,
+  PlayIcon,
+  RotateCwIcon,
+  Trash2Icon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/ui/button";
 import { requestConfirmation } from "../../components/ConfirmationHost";
 import { useProjectActions } from "../use-project-actions";
-import { SettingsBlock } from "./blocks";
+import { SettingRow, SettingsHeading } from "./blocks";
+
+/**
+ * The actions that are not edits: pause, restart the coordinator and archive as plain rows, each
+ * behind a question since they stop work, then Delete alone under "Danger zone".
+ */
+export const ProjectLifecycle = ({ project }: { project: Project }) => (
+  <div data-testid="settings-lifecycle" className="flex flex-col">
+    <SettingsHeading title="Project" />
+    {project.status === "archived" ? null : <PauseRow project={project} />}
+    <RestartRow project={project} />
+    <ArchiveRow project={project} />
+    <div data-testid="settings-danger-zone" className="flex flex-col">
+      <SettingsHeading title="Danger zone" />
+      <DeleteRow project={project} />
+    </div>
+  </div>
+);
+
+const ask = async (
+  options: { title: string; message: string; confirmLabel: string },
+  run: () => Promise<void>,
+) => {
+  if (await requestConfirmation(options)) await run();
+};
+
+const PauseRow = ({ project }: { project: Project }) => {
+  const actions = useProjectActions();
+  if (project.status === "paused") {
+    return (
+      <ActionRow
+        label="Resume project"
+        description="Lets the coordinator and threads run again."
+        testId="settings-pause"
+        icon={<PlayIcon />}
+        action="Resume"
+        onClick={() => void actions.transition(project, "resume")}
+      />
+    );
+  }
+  return (
+    <ActionRow
+      label="Pause project"
+      description="Stops the coordinator and every running thread, and refuses new messages until you resume. This can be undone at any time."
+      testId="settings-pause"
+      icon={<PauseIcon />}
+      action="Pause"
+      onClick={() =>
+        void ask(
+          {
+            title: `Pause “${project.name}”?`,
+            message:
+              "The coordinator and every running thread stop now. Nothing is deleted, and you can resume at any time.",
+            confirmLabel: "Pause project",
+          },
+          () => actions.transition(project, "pause"),
+        )
+      }
+    />
+  );
+};
 
 /** Starts the coordinator over with a fresh session; the chat and the threads stay. */
-export const CoordinatorRestart = ({ project }: { project: Project }) => {
+const RestartRow = ({ project }: { project: Project }) => {
   const actions = useProjectActions();
-  const restart = async () => {
-    const confirmed = await requestConfirmation({
-      title: "Restart the coordinator?",
-      message:
-        "It starts a new session and re-reads the instructions and memory. The chat stays, and no thread is touched or stopped.",
-      confirmLabel: "Restart coordinator",
-    });
-    if (confirmed) await actions.restartCoordinator(project);
-  };
-
   return (
-    <SettingsBlock
-      title="Coordinator"
+    <ActionRow
+      label="Restart coordinator"
       description="If the coordinator is stuck or has lost the thread, restart it. Threads keep running."
-      testId="settings-coordinator"
-    >
-      <div>
+      testId="settings-restart-coordinator"
+      icon={<RotateCwIcon />}
+      action="Restart"
+      disabled={project.status === "archived"}
+      onClick={() =>
+        void ask(
+          {
+            title: "Restart the coordinator?",
+            message:
+              "It starts a new session and re-reads the instructions and memory. The chat stays, and no thread is touched or stopped.",
+            confirmLabel: "Restart coordinator",
+          },
+          () => actions.restartCoordinator(project),
+        )
+      }
+    />
+  );
+};
+
+const ArchiveRow = ({ project }: { project: Project }) => {
+  const actions = useProjectActions();
+  if (project.status === "archived") {
+    return (
+      <ActionRow
+        label="Restore project"
+        description="Brings the project back to the sidebar."
+        testId="settings-archive"
+        icon={<ArchiveRestoreIcon />}
+        action="Restore"
+        onClick={() => void actions.transition(project, "restore")}
+      />
+    );
+  }
+  return (
+    <ActionRow
+      label="Archive project"
+      description="Stops all work and moves the project out of the way. Threads and memory are kept."
+      testId="settings-archive"
+      icon={<ArchiveIcon />}
+      action="Archive"
+      onClick={() =>
+        void ask(
+          {
+            title: `Archive “${project.name}”?`,
+            message:
+              "Every running thread stops and the project moves to Archived. Threads and memory are kept, and you can restore it.",
+            confirmLabel: "Archive project",
+          },
+          () => actions.transition(project, "archive"),
+        )
+      }
+    />
+  );
+};
+
+const DeleteRow = ({ project }: { project: Project }) => {
+  const actions = useProjectActions();
+  return (
+    <SettingRow
+      label="Delete project"
+      description="Deletes its threads, chat and memory for good. Repositories stay attached to AOP."
+      control={
         <Button
           type="button"
-          variant="secondary"
           size="sm"
-          data-testid="settings-restart-coordinator"
-          disabled={project.status === "archived"}
-          onClick={() => void restart()}
-        >
-          Restart coordinator
-        </Button>
-      </div>
-    </SettingsBlock>
-  );
-};
-
-/** Pause, archive and delete, each behind a question, since they stop work or end the project. */
-export const DangerZone = ({ project }: { project: Project }) => {
-  const actions = useProjectActions();
-  const archived = project.status === "archived";
-  const paused = project.status === "paused";
-
-  const askThen = async (
-    options: { title: string; message: string; confirmLabel: string },
-    run: () => Promise<void>,
-  ) => {
-    if (await requestConfirmation(options)) await run();
-  };
-
-  return (
-    <SettingsBlock title="Danger zone" tone="danger" testId="settings-danger-zone">
-      <div className="flex flex-col divide-y divide-border rounded-row border border-border">
-        {archived ? null : (
-          <DangerRow
-            title={paused ? "Resume project" : "Pause project"}
-            description={
-              paused
-                ? "Lets the coordinator and threads run again."
-                : "Stops the coordinator and every running thread, and refuses new messages until you resume."
-            }
-            testId="settings-pause"
-            label={paused ? "Resume" : "Pause"}
-            onClick={() =>
-              paused
-                ? void actions.transition(project, "resume")
-                : void askThen(
-                    {
-                      title: `Pause “${project.name}”?`,
-                      message:
-                        "The coordinator and every running thread stop now. Nothing is deleted, and you can resume at any time.",
-                      confirmLabel: "Pause project",
-                    },
-                    () => actions.transition(project, "pause"),
-                  )
-            }
-          />
-        )}
-        <DangerRow
-          title={archived ? "Restore project" : "Archive project"}
-          description={
-            archived
-              ? "Brings the project back to the sidebar."
-              : "Stops all work and moves the project out of the way. Threads and memory are kept."
-          }
-          testId="settings-archive"
-          label={archived ? "Restore" : "Archive"}
-          onClick={() =>
-            archived
-              ? void actions.transition(project, "restore")
-              : void askThen(
-                  {
-                    title: `Archive “${project.name}”?`,
-                    message:
-                      "Every running thread stops and the project moves to Archived. Threads and memory are kept, and you can restore it.",
-                    confirmLabel: "Archive project",
-                  },
-                  () => actions.transition(project, "archive"),
-                )
-          }
-        />
-        <DangerRow
-          title="Delete project"
-          description="Deletes its threads, chat and memory for good. Repositories stay attached to AOP."
-          testId="settings-delete"
-          label="Delete project"
-          destructive
+          data-testid="settings-delete"
+          className="bg-blocked text-white hover:bg-blocked/90"
           onClick={() => void actions.remove(project)}
-        />
-      </div>
-    </SettingsBlock>
+        >
+          <Trash2Icon />
+          Delete
+        </Button>
+      }
+    />
   );
 };
 
-const DangerRow = ({
-  title,
-  description,
+const ActionRow = ({
   label,
+  description,
   testId,
-  destructive = false,
+  icon,
+  action,
+  disabled = false,
   onClick,
 }: {
-  title: string;
-  description: ReactNode;
   label: string;
+  description: string;
   testId: string;
-  destructive?: boolean;
+  icon: ReactNode;
+  action: string;
+  disabled?: boolean;
   onClick: () => void;
 }) => (
-  <div className="flex items-center gap-4 px-3 py-3">
-    <div className="min-w-0 flex-1">
-      <h3 className="text-[13px] font-medium text-text">{title}</h3>
-      <p className="mt-0.5 text-[12.5px] text-text-subtle">{description}</p>
-    </div>
-    <Button
-      type="button"
-      variant={destructive ? "destructive" : "secondary"}
-      size="sm"
-      data-testid={testId}
-      onClick={onClick}
-    >
-      {label}
-    </Button>
-  </div>
+  <SettingRow
+    label={label}
+    description={description}
+    control={
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        data-testid={testId}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        {icon}
+        {action}
+      </Button>
+    }
+  />
 );

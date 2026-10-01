@@ -19,6 +19,27 @@ describe("ProjectSchema", () => {
     expect(project.thread.model).toBe("claude-opus-5");
   });
 
+  test("reads what a role reported, and nothing reported when a project carries none", () => {
+    const nothing = { model: null, effort: null };
+    expect(ProjectSchema.parse(makeProject()).reportedRuntime).toEqual({
+      coordinator: nothing,
+      thread: nothing,
+    });
+    const reported = {
+      coordinator: { model: "claude-opus-5-5", effort: null },
+      thread: { model: "claude-opus-5-5", effort: "medium" },
+    } as const;
+    expect(ProjectSchema.parse(makeProject({ reportedRuntime: reported })).reportedRuntime).toEqual(
+      reported,
+    );
+    expect(
+      rejectedPaths(
+        ProjectSchema,
+        makeProject({ reportedRuntime: { ...reported, thread: { model: "", effort: "turbo" } } }),
+      ),
+    ).toEqual(["reportedRuntime.thread.model", "reportedRuntime.thread.effort"]);
+  });
+
   test("keeps the limits in one place", () => {
     expect(PROJECT_GOAL_MAX_LENGTH).toBe(8000);
     expect(PROJECT_INSTRUCTIONS_MAX_LENGTH).toBe(16000);

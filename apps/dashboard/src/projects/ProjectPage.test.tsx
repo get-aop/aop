@@ -214,17 +214,86 @@ describe("project screens", () => {
     expect(screen.getByTestId("thread-not-found")).toBeTruthy();
   });
 
-  test("the settings route shows the settings pane alone, on the section the address names", () => {
-    renderPage(state(), { name: "project-settings", projectId: "p1", section: "general" });
-    const pane = screen.getByTestId("project-settings-pane");
-    expect(pane.getAttribute("data-section")).toBe("general");
-    expect((screen.getByTestId("settings-name") as HTMLInputElement).value).toBe("Checkout");
+  test("the settings route opens the settings in a dialog over the project, on the section the address names", async () => {
+    renderPage(state(), { name: "project-settings", projectId: "p1", section: "memory" });
+    await act(async () => {});
+    const dialog = screen.getByTestId("project-settings-dialog");
+    expect(dialog.getAttribute("role")).toBe("dialog");
+    expect(screen.getByTestId("project-settings-pane").getAttribute("data-section")).toBe("memory");
+    expect(screen.getByTestId("project-settings-title").textContent).toBe("Memory");
     expect(screen.getByTestId("project-settings-link").getAttribute("aria-current")).toBe("page");
-    expect(screen.getByTestId("project-settings-nav-general").getAttribute("aria-current")).toBe(
+    expect(screen.getByTestId("project-settings-nav-memory").getAttribute("aria-current")).toBe(
       "page",
     );
-    expect(screen.queryByTestId("coordinator-chat-pane")).toBeNull();
-    expect(screen.queryByTestId("panel-toggle")).toBeNull();
+    // The project screen stays underneath.
+    expect(screen.getByTestId("coordinator-chat-pane")).toBeTruthy();
+    expect(screen.getByTestId("panel-toggle")).toBeTruthy();
+  });
+
+  test("× and Escape close the settings back to the screen they opened over, and the chat keeps its draft", async () => {
+    const stub = stubLiveProjects(state());
+    const page = (route: ProjectRoute) => (
+      <SidebarProvider>
+        <ChatApiProvider value={silentChatHost}>
+          <ProjectsProvider live={stub.live}>
+            <ProjectPage route={route} />
+          </ProjectsProvider>
+        </ChatApiProvider>
+      </SidebarProvider>
+    );
+    const thread: ProjectRoute = { name: "thread", projectId: "p1", threadId: "blocked" };
+    const settings: ProjectRoute = {
+      name: "project-settings",
+      projectId: "p1",
+      section: "general",
+    };
+    const view = render(page(thread));
+    await act(async () => {});
+    const chat = within(screen.getByTestId("coordinator-chat-pane"));
+    const composer = chat.getByTestId("composer-input") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "half a thought" } });
+
+    view.rerender(page(settings));
+    await act(async () => {});
+    fireEvent.click(screen.getByTestId("project-settings-close"));
+    expect(window.location.pathname).toBe("/projects/p1/threads/blocked");
+
+    view.rerender(page(thread));
+    expect(screen.queryByTestId("project-settings-dialog")).toBeNull();
+    expect(chat.getByTestId("composer-input")).toBe(composer);
+    expect(composer.value).toBe("half a thought");
+
+    view.rerender(page(settings));
+    await act(async () => {});
+    fireEvent.keyDown(screen.getByTestId("project-settings-dialog"), { key: "Escape" });
+    expect(window.location.pathname).toBe("/projects/p1/threads/blocked");
+  });
+
+  test("on a phone only the current section keeps its name in the nav; the others are named icons, and the row never scrolls", async () => {
+    renderPage(state(), { name: "project-settings", projectId: "p1", section: "environment" });
+    await act(async () => {});
+
+    const nav = screen.getByRole("navigation", { name: "Project settings" });
+    expect(nav.className).not.toContain("overflow-x");
+    for (const id of ["general", "memory", "environment", "usage"]) {
+      const tab = screen.getByTestId(`project-settings-nav-${id}`);
+      const label = within(tab).getByTestId("project-settings-nav-label");
+      if (id === "environment") {
+        expect(tab.getAttribute("aria-label")).toBeNull();
+        expect(label.className).not.toContain("max-md:hidden");
+      } else {
+        expect(tab.getAttribute("aria-label")).toBe(label.textContent);
+        expect(tab.getAttribute("title")).toBe(label.textContent);
+        expect(label.className).toContain("max-md:hidden");
+      }
+    }
+  });
+
+  test("a deep link to the settings closes to the project's home", async () => {
+    renderPage(state(), { name: "project-settings", projectId: "p1", section: "general" });
+    await act(async () => {});
+    fireEvent.click(screen.getByTestId("project-settings-close"));
+    expect(window.location.pathname).toBe("/projects/p1");
   });
 
   test("the settings button in the top bar opens the settings", () => {

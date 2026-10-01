@@ -1,20 +1,23 @@
-import { Link, projectsPath, type Route } from "../shell/router";
+import { useRef } from "react";
+import { Link, navigate, projectPath, projectsPath, type Route, threadPath } from "../shell/router";
 import { useProjectChat } from "./chat/use-project-chat";
 import { ProjectLayout } from "./layout/ProjectLayout";
 import { useProjectEntry, useProjectsState } from "./ProjectsProvider";
-import { ProjectTopBar } from "./ProjectTopBar";
-import { ProjectSettingsPane } from "./settings/ProjectSettingsPane";
+import { ProjectSettingsDialog } from "./settings/ProjectSettingsDialog";
 
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
+type ProjectScreen = Extract<Route, { name: "project" | "thread" }>;
 
 /**
- * One project: the three-pane screen (chat and threads panel) for its home and its threads,
- * or its settings on a screen of their own, under the same top bar.
+ * One project: the three-pane screen (chat and threads panel) for its home and its threads.
+ * Its settings open in a dialog over that screen, which stays mounted underneath: the chat keeps
+ * its draft and its place, and closing the settings goes back to what was open before.
  */
 export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
   const entry = useProjectEntry(route.projectId);
   const { phase } = useProjectsState();
   const { chat, model } = useProjectChat(route.projectId, entry !== undefined);
+  const screen = useScreenUnderSettings(route);
 
   if (!entry) {
     return phase === "ready" ? <ProjectNotFound /> : <ProjectLoading />;
@@ -26,25 +29,42 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
       data-project-id={entry.project.id}
       className="flex h-full flex-col"
     >
+      <ProjectLayout
+        key={entry.project.id}
+        entry={entry}
+        route={screen}
+        chat={chat}
+        model={model}
+        settingsOpen={route.name === "project-settings"}
+      />
       {route.name === "project-settings" ? (
-        <>
-          <ProjectTopBar entry={entry} panel={null} settingsOpen />
-          <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-            <ProjectSettingsPane entry={entry} section={route.section} />
-          </main>
-        </>
-      ) : (
-        <ProjectLayout
-          key={entry.project.id}
+        <ProjectSettingsDialog
           entry={entry}
-          route={route}
-          chat={chat}
-          model={model}
+          section={route.section}
+          onClose={() => navigate(screenPath(screen))}
         />
-      )}
+      ) : null}
     </div>
   );
 };
+
+/**
+ * The screen the settings open over: the last project or thread screen of this project, or its
+ * home when the settings were the first thing opened (a deep link).
+ */
+const useScreenUnderSettings = (route: ProjectRoute): ProjectScreen => {
+  const last = useRef<ProjectScreen>({ name: "project", projectId: route.projectId });
+  if (route.name !== "project-settings") last.current = route;
+  else if (last.current.projectId !== route.projectId) {
+    last.current = { name: "project", projectId: route.projectId };
+  }
+  return last.current;
+};
+
+const screenPath = (screen: ProjectScreen): string =>
+  screen.name === "thread"
+    ? threadPath(screen.projectId, screen.threadId)
+    : projectPath(screen.projectId);
 
 const ProjectLoading = () => (
   <p data-testid="project-loading" className="p-6 text-body text-text-subtle">

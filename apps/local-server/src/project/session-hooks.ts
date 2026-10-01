@@ -14,6 +14,7 @@ import { createThreadRepository } from "../thread/repository.ts";
 import { statusAfterSchedule, type TurnEnd } from "../thread/state.ts";
 import { settleThreadTurn } from "../thread/turn-outcome.ts";
 import { recordMessageCreated, recordThreadUpserted } from "./events.ts";
+import { recordReportedRuntime } from "./reported-runtime.ts";
 import { isFailedRun, scopeOf, toWireMessage } from "./wire-messages.ts";
 
 /**
@@ -51,6 +52,7 @@ export const createProjectSessionHooks = (publisher: EventPublisher): SessionHoo
         session.kind === "thread"
           ? await finishThreadRun(tx, session, turn)
           : await finishCoordinatorRun(tx, session, turn);
+      await recordReportedRuntime(tx, session, turn.run);
       // A turn that ends with nothing to show has no message.created to replace its live text.
       if (!replied) {
         const { projectId, threadId } = scopeOf(session);

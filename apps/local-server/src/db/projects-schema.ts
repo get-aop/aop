@@ -23,6 +23,11 @@ export interface ProjectsTable {
   thread_access: Generated<ThreadAccess>;
   /** Added by migration v7. SQLite has no boolean: 0 or 1. */
   auto_fix_pull_requests: Generated<0 | 1>;
+  /** Added by migration v13: what a role's last run on "Use default" reported. Null until one does. */
+  coordinator_reported_model: Generated<string | null>;
+  coordinator_reported_effort: Generated<ReasoningEffort | null>;
+  thread_reported_model: Generated<string | null>;
+  thread_reported_effort: Generated<ReasoningEffort | null>;
   status: Generated<ProjectStatus>;
   created_at: Generated<string>;
   updated_at: Generated<string>;

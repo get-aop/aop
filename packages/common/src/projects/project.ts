@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { IdSchema, TimestampSchema } from "./primitives.ts";
-import { RuntimePreferenceSchema } from "./runtime.ts";
+import { ReasoningEffortSchema, RuntimePreferenceSchema } from "./runtime.ts";
 
 export const PROJECT_GOAL_MAX_LENGTH = 8000;
 export const PROJECT_INSTRUCTIONS_MAX_LENGTH = 16000;
@@ -47,10 +47,27 @@ export const ProjectSettingsSchema = z.object({
 });
 export type ProjectSettings = z.infer<typeof ProjectSettingsSchema>;
 
+/**
+ * What a role's last run reported it ran on, read from the run's log. Only a run launched on
+ * "Use default" reports: it is how "Default (Opus 5.5)" learns what the default is. The model is
+ * the CLI's own id; the effort stays null while the log names none. Null until a run reports.
+ */
+export const ReportedRuntimeSchema = z.object({
+  model: z.string().min(1).nullable(),
+  effort: ReasoningEffortSchema.nullable(),
+});
+export type ReportedRuntime = z.infer<typeof ReportedRuntimeSchema>;
+
+const NOTHING_REPORTED: ReportedRuntime = { model: null, effort: null };
+
 export const ProjectSchema = ProjectSettingsSchema.extend({
   id: IdSchema,
   /** Changed by pause, archive, and restore actions, never by editing settings. */
   status: ProjectStatusSchema,
+  /** Written by the host after a run, never by editing settings. */
+  reportedRuntime: z
+    .object({ coordinator: ReportedRuntimeSchema, thread: ReportedRuntimeSchema })
+    .default({ coordinator: NOTHING_REPORTED, thread: NOTHING_REPORTED }),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

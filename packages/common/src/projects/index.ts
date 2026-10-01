@@ -83,6 +83,7 @@ export type {
   ProjectPatch,
   ProjectSettings,
   ProjectStatus,
+  ReportedRuntime,
   ThreadAccess,
 } from "./project.ts";
 export {
@@ -94,6 +95,7 @@ export {
   ProjectSchema,
   ProjectSettingsSchema,
   ProjectStatusSchema,
+  ReportedRuntimeSchema,
   ThreadAccessSchema,
 } from "./project.ts";
 export {

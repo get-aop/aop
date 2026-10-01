@@ -5,6 +5,7 @@ import {
   getThinkingLabel,
   getThinkingOptions,
   type ReasoningEffort,
+  type ReportedRuntime,
   type RuntimeConfigurationProvider,
   type RuntimePreference,
 } from "@aop/common";
@@ -59,18 +60,39 @@ export const effortOptions = (
   }));
 };
 
+const NOTHING_REPORTED: ReportedRuntime = { model: null, effort: null };
+
+/**
+ * A chip's model: the one the role names, or on "Use default" the one its last run reported
+ * (what Claude Code picked), or "Default model" before any run has.
+ */
 export const modelLabel = (
   preference: RuntimePreference,
   options: readonly ModelOption[],
+  reported: ReportedRuntime = NOTHING_REPORTED,
 ): string => {
-  if (preference.model === null) return "Default model";
-  return (
-    options.find((option) => option.model === preference.model)?.label ??
-    formatRuntimeModelLabel(preference.model)
-  );
+  const model = preference.model ?? reported.model;
+  return model === null ? "Default model" : nameOf(model, options);
 };
 
-export const effortLabel = (preference: RuntimePreference): string =>
-  preference.effort === null
-    ? "Default effort"
-    : getThinkingLabel(preference.provider, preference.effort);
+/** A chip's effort, the same way: named, else reported, else "Default effort". */
+export const effortLabel = (
+  preference: RuntimePreference,
+  reported: ReportedRuntime = NOTHING_REPORTED,
+): string => {
+  const effort = preference.effort ?? reported.effort;
+  return effort === null ? "Default effort" : getThinkingLabel(preference.provider, effort);
+};
+
+/** "Use default" in a model picker: "Default (Opus 5.5)" once a run reported it, "Default" before. */
+export const defaultModelLabel = (
+  reported: ReportedRuntime,
+  options: readonly ModelOption[] = [],
+): string => (reported.model === null ? "Default" : `Default (${nameOf(reported.model, options)})`);
+
+/** "Use default" in an effort picker: "Default (Low)" once a run reported it, "Default" before. */
+export const defaultEffortLabel = (provider: CliProvider, reported: ReportedRuntime): string =>
+  reported.effort === null ? "Default" : `Default (${getThinkingLabel(provider, reported.effort)})`;
+
+const nameOf = (model: string, options: readonly ModelOption[]): string =>
+  options.find((option) => option.model === model)?.label ?? formatRuntimeModelLabel(model);

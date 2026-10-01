@@ -1,122 +1,27 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { Message, Project, Thread } from "@aop/common";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { Message } from "@aop/common";
 import { setupDashboardDom } from "../../test/setup-dom";
-import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "../test-utils";
+import { makeProject, makeThread } from "../test-utils";
 import type { ChatApi } from "./chat-api";
-import {
-  at,
-  createFakeEvents,
-  deferred,
-  memorySeenStore,
-  page,
-  pageFrom,
-  reply,
-  report,
-  userMessage,
-} from "./test-utils";
+import { at, deferred, page, reply, report, userMessage } from "./test-utils";
 
 setupDashboardDom();
 
-const { act, cleanup, fireEvent, render, screen, waitFor, within } = await import(
-  "@testing-library/react"
-);
-const { useSyncExternalStore } = await import("react");
-const { ProjectsProvider } = await import("../ProjectsProvider");
-const { CoordinatorChatPane } = await import("./CoordinatorChatPane");
-const { createProjectChat } = await import("./project-chat");
+const { act, cleanup, fireEvent, screen, waitFor, within } = await import("@testing-library/react");
+const { mockFetch, pressEnter, settled, setup, type } = await import("./pane-test-harness");
 
-const originalFetch = globalThis.fetch;
-let requests: { method: string; url: string; body: unknown }[] = [];
-let respond: (method: string, url: string) => Response;
+let net: ReturnType<typeof mockFetch>;
 
 beforeEach(() => {
   window.localStorage.clear();
   window.history.pushState({}, "", "/projects/prj_1/chat");
-  requests = [];
-  respond = () => new Response(null, { status: 204 });
-  globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
-    const method = init?.method ?? "GET";
-    requests.push({
-      method,
-      url: String(input),
-      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
-    });
-    return respond(method, String(input));
-  }) as unknown as typeof fetch;
+  net = mockFetch();
 });
 
 afterEach(() => {
   cleanup();
-  globalThis.fetch = originalFetch;
+  net.restore();
 });
-
-type Chat = ReturnType<typeof createProjectChat>;
-
-const Harness = ({
-  chat,
-  project,
-  threads,
-}: {
-  chat: Chat;
-  project: Project;
-  threads: Thread[];
-}) => {
-  const model = useSyncExternalStore(chat.subscribe, chat.getState);
-  return (
-    <CoordinatorChatPane
-      project={project}
-      threads={threads}
-      threadsLoaded
-      threadsError={null}
-      chat={chat}
-      model={model}
-    />
-  );
-};
-
-interface Options {
-  project?: Project;
-  threads?: Thread[];
-  fetches?: Promise<Message[]>[];
-  listMessages?: ChatApi["listMessages"];
-  seen?: Record<string, string>;
-  sendMessage?: ChatApi["sendMessage"];
-}
-
-const setup = (options: Options = {}) => {
-  const fake = createFakeEvents();
-  const seen = memorySeenStore(options.seen);
-  const pending = [...(options.fetches ?? [Promise.resolve([])])];
-  const sent: string[] = [];
-  const project = options.project ?? makeProject({ id: "prj_1" });
-  const chat = createProjectChat({
-    projectId: "prj_1",
-    api: {
-      listMessages: options.listMessages ?? (() => pageFrom(pending)),
-      sendMessage:
-        options.sendMessage ??
-        (async (_id, text) => {
-          sent.push(text);
-          return userMessage("sent", 30, { text });
-        }),
-    },
-    events: fake.events,
-    seen,
-  });
-  const stub = stubLiveProjects(makeState([makeEntry(project, options.threads ?? [])]));
-  render(
-    <ProjectsProvider live={stub.live}>
-      <Harness chat={chat} project={project} threads={options.threads ?? []} />
-    </ProjectsProvider>,
-  );
-  act(() => chat.start());
-  return { fake, seen, sent, chat, stub };
-};
-
-const settled = () => act(async () => {});
-const type = (text: string) =>
-  fireEvent.change(screen.getByTestId("composer-input"), { target: { value: text } });
-const pressEnter = () => fireEvent.keyDown(screen.getByTestId("composer-input"), { key: "Enter" });
 
 describe("a conversation longer than the host sends at once", () => {
   const host: ChatApi["listMessages"] = async (_projectId, before) =>
@@ -424,7 +329,7 @@ describe("an empty conversation", () => {
 describe("a project that is not active", () => {
   test("a paused project says so, disables the box, and can be resumed from here", async () => {
     const paused = makeProject({ id: "prj_1", status: "paused" });
-    respond = () => Response.json({ project: { ...paused, status: "active" } });
+    net.respond = () => Response.json({ project: { ...paused, status: "active" } });
     const { stub } = setup({ project: paused, fetches: [Promise.resolve([userMessage("u1", 1)])] });
     await settled();
 
@@ -440,7 +345,10 @@ describe("a project that is not active", () => {
     fireEvent.click(screen.getByTestId("chat-closed-action"));
     await settled();
 
-    expect(requests.at(-1)).toMatchObject({ method: "POST", url: "/api/projects/prj_1/resume" });
+    expect(net.requests.at(-1)).toMatchObject({
+      method: "POST",
+      url: "/api/projects/prj_1/resume",
+    });
     expect(stub.calls.adopted.at(-1)?.status).toBe("active");
   });
 
@@ -450,62 +358,5 @@ describe("a project that is not active", () => {
 
     expect(screen.getByTestId("chat-closed-action").textContent).toBe("Restore project");
     expect(screen.queryByTestId("chat-starter")).toBeNull();
-  });
-});
-
-describe("the coordinator's model and effort", () => {
-  test("the chips show what the project's coordinator runs on", async () => {
-    setup({
-      project: makeProject({
-        id: "prj_1",
-        coordinator: { provider: "claude-code", model: "claude-opus-5", effort: "high" },
-      }),
-    });
-    await settled();
-
-    expect(screen.getByTestId("coordinator-model").textContent).toBe("Opus 5");
-    expect(screen.getByTestId("coordinator-effort").textContent).toBe("High");
-  });
-
-  test("choosing a model saves it to the project and hands the result to the live state", async () => {
-    const project = makeProject({ id: "prj_1" });
-    respond = () =>
-      Response.json({
-        project: { ...project, coordinator: { ...project.coordinator, model: "claude-opus-5" } },
-      });
-    const { stub } = setup({ project });
-    await settled();
-
-    fireEvent.pointerDown(screen.getByTestId("coordinator-model"), { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByTestId("coordinator-model-claude-opus-5"));
-    await settled();
-
-    expect(requests.at(-1)).toEqual({
-      method: "PATCH",
-      url: "/api/projects/prj_1",
-      body: { coordinator: { provider: "claude-code", model: "claude-opus-5", effort: "low" } },
-    });
-    expect(stub.calls.adopted.at(-1)?.coordinator.model).toBe("claude-opus-5");
-  });
-
-  test("choosing an effort saves it, and 'Default effort' clears it", async () => {
-    const project = makeProject({ id: "prj_1" });
-    respond = () => Response.json({ project });
-    setup({ project });
-    await settled();
-
-    fireEvent.pointerDown(screen.getByTestId("coordinator-effort"), { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByTestId("coordinator-effort-high"));
-    await settled();
-    expect(requests.at(-1)?.body).toEqual({
-      coordinator: { provider: "claude-code", model: null, effort: "high" },
-    });
-
-    fireEvent.pointerDown(screen.getByTestId("coordinator-effort"), { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByTestId("coordinator-effort-default"));
-    await settled();
-    expect(requests.at(-1)?.body).toEqual({
-      coordinator: { provider: "claude-code", model: null, effort: null },
-    });
   });
 });

@@ -8,7 +8,7 @@ export type ProjectSettingsSection = (typeof PROJECT_SETTINGS_SECTIONS)[number];
 /**
  * The app's screens. `project` is the project screen: the coordinator chat with the threads
  * panel on its overview. `thread` is the same screen with one thread open in the panel;
- * `project-settings` is one section of the project's settings, on a screen of its own.
+ * `project-settings` is one section of the project's settings, in a dialog over the project screen.
  */
 export type Route =
   | { name: "projects" }

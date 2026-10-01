@@ -1,6 +1,7 @@
 import type { ThreadAccess } from "@aop/common";
 import { TriangleAlertIcon } from "lucide-react";
-import { cn } from "@/lib/cn";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { ROW_SELECT_CLASS, SettingRow } from "./blocks";
 import type { SettingsDraft } from "./use-settings-draft";
 
 const OPTIONS: { value: ThreadAccess; label: string; description: string }[] = [
@@ -25,47 +26,45 @@ const OPTIONS: { value: ThreadAccess; label: string; description: string }[] = [
  */
 export const ThreadAccessSetting = ({ draft }: { draft: SettingsDraft }) => {
   const access = draft.value("threadAccess");
+  const chosen = OPTIONS.find((option) => option.value === access);
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <div
-        role="radiogroup"
-        aria-label="Thread access"
-        data-testid="settings-thread-access"
-        data-value={access}
-        className="flex flex-col gap-2"
-      >
-        {OPTIONS.map((option) => (
-          <label
-            key={option.value}
-            htmlFor={`settings-thread-access-${option.value}`}
-            className={cn(
-              "flex cursor-pointer items-start gap-3 rounded-row border px-3 py-2.5 transition-colors duration-[120ms]",
-              access === option.value
-                ? "border-border-bold bg-raised"
-                : "border-border hover:bg-hover",
-            )}
+    <SettingRow
+      label="Thread access"
+      description={
+        <span data-testid="settings-thread-access-description">
+          How much a thread may do on this host without asking you first. {chosen?.description}
+        </span>
+      }
+      htmlFor="settings-thread-access"
+      control={
+        <Select
+          value={access}
+          onValueChange={(value) => draft.set("threadAccess", value as ThreadAccess)}
+        >
+          <SelectTrigger
+            id="settings-thread-access"
+            data-testid="settings-thread-access"
+            data-value={access}
+            className={ROW_SELECT_CLASS}
           >
-            <input
-              id={`settings-thread-access-${option.value}`}
-              type="radio"
-              name="thread-access"
-              data-testid={`settings-thread-access-${option.value}`}
-              checked={access === option.value}
-              onChange={() => draft.set("threadAccess", option.value)}
-              className="mt-0.5 size-3.5 shrink-0 accent-[var(--color-running)]"
-            />
-            <span className="flex flex-col gap-0.5">
-              <span className="text-[13px] font-medium text-text">{option.label}</span>
-              <span className="text-[12.5px] leading-relaxed text-text-subtle">
-                {option.description}
-              </span>
-            </span>
-          </label>
-        ))}
-      </div>
-      {access === "full-access" ? <FullAccessWarning /> : null}
-    </div>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {OPTIONS.map((option) => (
+              <SelectItem
+                key={option.value}
+                value={option.value}
+                data-testid={`settings-thread-access-${option.value}`}
+              >
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+      below={access === "full-access" ? <FullAccessWarning /> : null}
+    />
   );
 };
 

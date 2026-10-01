@@ -14,7 +14,14 @@ import {
 import { patchProject } from "../../api/projects";
 import { useRuntimeConfiguration } from "../../hooks/runtime-configuration";
 import { useLiveProjects } from "../ProjectsProvider";
-import { effortLabel, effortOptions, modelLabel, modelOptions } from "./runtime-options";
+import {
+  defaultEffortLabel,
+  defaultModelLabel,
+  effortLabel,
+  effortOptions,
+  modelLabel,
+  modelOptions,
+} from "./runtime-options";
 
 const DEFAULT_VALUE = "default";
 
@@ -30,6 +37,7 @@ export const CoordinatorChips = ({ project }: { project: Project }) => {
   const live = useLiveProjects();
   const { providers } = useRuntimeConfiguration();
   const preference = project.coordinator;
+  const reported = project.reportedRuntime.coordinator;
   const options = useMemo(
     () => modelOptions(preference.provider, providers),
     [preference.provider, providers],
@@ -56,7 +64,7 @@ export const CoordinatorChips = ({ project }: { project: Project }) => {
             disabled={!editable}
             className={cn(CHIP_CLASS, "max-w-48")}
           >
-            <span className="truncate">{modelLabel(preference, options)}</span>
+            <span className="truncate">{modelLabel(preference, options, reported)}</span>
             <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
           </button>
         </DropdownMenuTrigger>
@@ -69,7 +77,7 @@ export const CoordinatorChips = ({ project }: { project: Project }) => {
             }
           >
             <DropdownMenuRadioItem value={DEFAULT_VALUE} data-testid="coordinator-model-default">
-              Default model
+              {defaultModelLabel(reported, options)}
             </DropdownMenuRadioItem>
             {options.map(({ model, label }) => (
               <DropdownMenuRadioItem
@@ -93,7 +101,7 @@ export const CoordinatorChips = ({ project }: { project: Project }) => {
             disabled={!editable}
             className={CHIP_CLASS}
           >
-            <span>{effortLabel(preference)}</span>
+            <span>{effortLabel(preference, reported)}</span>
             <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
           </button>
         </DropdownMenuTrigger>
@@ -109,7 +117,7 @@ export const CoordinatorChips = ({ project }: { project: Project }) => {
             }
           >
             <DropdownMenuRadioItem value={DEFAULT_VALUE} data-testid="coordinator-effort-default">
-              Default effort
+              {defaultEffortLabel(preference.provider, reported)}
             </DropdownMenuRadioItem>
             {efforts.map(({ value, label }) => (
               <DropdownMenuRadioItem

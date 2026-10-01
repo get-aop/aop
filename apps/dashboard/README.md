@@ -27,7 +27,7 @@ Dev expects `AOP_LOCAL_SERVER_URL` pointing at the API (local-server sets CORS f
 | `/projects/:id` | `ProjectLayout` | The project screen in three panes (see [The project screen](#the-project-screen)): the coordinator chat (`CoordinatorChatPane`, see [The coordinator chat](#the-coordinator-chat)) in the middle and the threads panel at the right, on the overview (`ThreadOverview`: a greeting, then its threads grouped by status, questions first, resolved folded, with search and filter) |
 | `/projects/:id/threads/:threadId` | `ProjectLayout` | The same screen with one thread in the panel (`ThreadPane`: transcript, its question, steering, pull request, changes; see [The thread pane](#the-thread-pane)) |
 | `/projects/:id/chat` | none | The chat's old address; rewritten to `/projects/:id` |
-| `/projects/:id/settings` | `ProjectSettingsPane` | Project settings, memory, usage |
+| `/projects/:id/settings` (and `/memory`, `/environment`, `/usage`) | `ProjectSettingsDialog` | The project's settings in a dialog over the project screen, which stays mounted underneath; × and Escape go back to the screen it opened over |
 | any other path | none | Rewritten to `/` |
 
 There is no router library: `src/shell/router.tsx` parses the path and `navigate()` uses the History API.
@@ -80,7 +80,7 @@ src/
 
 ## Settings
 
-- A project's own settings are the screen `/projects/:id/settings` (`src/projects/settings/`): General (name, goal, models and effort, thread access, notifications, restart, pause, archive, delete), Memory (instructions and memory files), Environment (repositories) and Usage.
+- A project's own settings are a dialog over the project at `/projects/:id/settings` (`src/projects/settings/`), one row per setting: General (name, goal, models and effort, thread access, pull requests, notifications, then pause, restart and archive, and delete under Danger zone), Memory (instructions and memory files), Environment (repositories) and Usage.
 - The Settings dialog is for the host: General, Repositories (attach dialog with git badges), Runtimes (add/clone/remove custom), Devices (host owner only: pairing code, paired devices, revoke) and About (version/update).
 - Kit chrome only: one chip, one menu, one badge. No ad-hoc controls outside `src/ui`
 

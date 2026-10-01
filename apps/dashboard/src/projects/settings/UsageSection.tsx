@@ -23,7 +23,7 @@ export const UsageSection = ({ project }: { project: Project }) => {
   return (
     <div data-testid="settings-usage" data-window={windowId} className="flex flex-col">
       <SettingsBlock
-        title="Usage"
+        title="This project"
         description="Tokens the coordinator and threads used. A run counts in the window it finished in."
       >
         <WindowPicker value={windowId} onChange={setWindowId} />

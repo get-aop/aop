@@ -6,7 +6,7 @@ import { makeEntry, makeProject, makeState, stubLiveProjects } from "../test-uti
 
 setupDashboardDom();
 
-const { cleanup, fireEvent, render, screen, waitFor, within } = await import(
+const { act, cleanup, fireEvent, render, screen, waitFor, within } = await import(
   "@testing-library/react"
 );
 const { ConfirmationHost } = await import("../../components/ConfirmationHost");
@@ -33,7 +33,8 @@ afterEach(() => {
   api.restore();
 });
 
-const renderGeneral = (current: Project = project) => {
+// Async so the switch's size read (a microtask in the test DOM) lands inside act.
+const renderGeneral = async (current: Project = project) => {
   const stub = stubLiveProjects(makeState([makeEntry(current)]));
   render(
     <ProjectsProvider live={stub.live}>
@@ -41,6 +42,7 @@ const renderGeneral = (current: Project = project) => {
       <ConfirmationHost />
     </ProjectsProvider>,
   );
+  await act(async () => {});
   return stub;
 };
 
@@ -57,8 +59,8 @@ const choose = async (triggerTestId: string, option: string | RegExp) => {
 const save = () => fireEvent.click(screen.getByTestId("settings-save"));
 
 describe("GeneralSection form", () => {
-  test("shows what the project has and offers nothing to save until something changes", () => {
-    renderGeneral();
+  test("shows what the project has and offers nothing to save until something changes", async () => {
+    await renderGeneral();
     expect((screen.getByTestId("settings-name") as HTMLInputElement).value).toBe("Checkout");
     expect((screen.getByTestId("settings-goal") as HTMLTextAreaElement).value).toBe(
       "Keep checkout fast",
@@ -69,7 +71,7 @@ describe("GeneralSection form", () => {
   });
 
   test("saves only the fields that changed and hands the result to the live state", async () => {
-    const stub = renderGeneral();
+    const stub = await renderGeneral();
     type("settings-name", "  Checkout service ");
     type("settings-goal", "Keep checkout fast and safe");
     expect(screen.getByTestId("settings-save-bar").getAttribute("data-dirty")).toBe("true");
@@ -85,32 +87,39 @@ describe("GeneralSection form", () => {
     expect(stub.calls.adopted[0]?.name).toBe("Checkout service");
   });
 
-  test("changing a field back to what the project has leaves nothing to save", () => {
-    renderGeneral();
+  test("the goal counts its characters against the limit", async () => {
+    await renderGeneral();
+    expect(screen.getByTestId("settings-goal-count").textContent).toBe("18 / 8,000");
+    type("settings-goal", "x".repeat(1234));
+    expect(screen.getByTestId("settings-goal-count").textContent).toBe("1,234 / 8,000");
+  });
+
+  test("changing a field back to what the project has leaves nothing to save", async () => {
+    await renderGeneral();
     type("settings-name", "Other");
     expect((screen.getByTestId("settings-save") as HTMLButtonElement).disabled).toBe(false);
     type("settings-name", "Checkout");
     expect((screen.getByTestId("settings-save") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  test("Discard puts the saved values back", () => {
-    renderGeneral();
+  test("Discard puts the saved values back", async () => {
+    await renderGeneral();
     type("settings-name", "Other");
     fireEvent.click(screen.getByTestId("settings-discard"));
     expect((screen.getByTestId("settings-name") as HTMLInputElement).value).toBe("Checkout");
     expect(api.calls).toHaveLength(0);
   });
 
-  test("a blank name cannot be saved", () => {
-    renderGeneral();
+  test("a blank name cannot be saved", async () => {
+    await renderGeneral();
     type("settings-name", "   ");
     expect(screen.getByTestId("settings-name-error").textContent).toBe("A project needs a name.");
     expect((screen.getByTestId("settings-save") as HTMLButtonElement).disabled).toBe(true);
     expect(api.calls).toHaveLength(0);
   });
 
-  test("a name past the limit is refused under the name field in plain words, and cannot be saved", () => {
-    renderGeneral();
+  test("a name past the limit is refused under the name field in plain words, and cannot be saved", async () => {
+    await renderGeneral();
     type("settings-name", "x".repeat(101));
 
     expect(screen.getByTestId("settings-name-error").textContent).toBe(
@@ -122,7 +131,7 @@ describe("GeneralSection form", () => {
 
   test("the host's refusal is shown and the edits stay", async () => {
     respond = () => Response.json({ error: "Project name already exists" }, { status: 409 });
-    const stub = renderGeneral();
+    const stub = await renderGeneral();
     type("settings-name", "Taken");
     save();
 
@@ -133,7 +142,7 @@ describe("GeneralSection form", () => {
     expect(stub.calls.adopted).toEqual([]);
   });
 
-  test("a setting that changes elsewhere shows up, and an edit in progress is kept", () => {
+  test("a setting that changes elsewhere shows up, and an edit in progress is kept", async () => {
     const stub = stubLiveProjects(makeState([makeEntry(project)]));
     const page = (current: Project) => (
       <ProjectsProvider live={stub.live}>
@@ -141,6 +150,7 @@ describe("GeneralSection form", () => {
       </ProjectsProvider>
     );
     const view = render(page(project));
+    await act(async () => {});
     type("settings-name", "Mine");
 
     view.rerender(page({ ...project, name: "Theirs", goal: "Changed elsewhere" }));
@@ -154,13 +164,13 @@ describe("GeneralSection form", () => {
 
 describe("models and effort", () => {
   test("each role can pick a model, an effort, or use the default", async () => {
-    renderGeneral();
-    expect(screen.getByTestId("settings-coordinator-model").textContent).toContain("Use default");
+    await renderGeneral();
+    expect(screen.getByTestId("settings-coordinator-model").textContent).toBe("Default");
     expect(screen.getByTestId("settings-coordinator-effort").textContent).toContain("Low");
     expect(screen.getByTestId("settings-thread-effort").textContent).toContain("High");
 
     await choose("settings-thread-model", "Sonnet 4.6");
-    await choose("settings-coordinator-effort", "Use default");
+    await choose("settings-coordinator-effort", "Default");
     save();
 
     await waitFor(() => expect(api.writes()).toHaveLength(1));
@@ -170,8 +180,28 @@ describe("models and effort", () => {
     });
   });
 
+  test("a role on default names what its last run reported, and an explicit value stays as it is", async () => {
+    await renderGeneral(
+      makeProject({
+        id: "p1",
+        name: "Checkout",
+        coordinator: { provider: "claude-code", model: null, effort: null },
+        thread: { provider: "claude-code", model: null, effort: "high" },
+        reportedRuntime: {
+          coordinator: { model: "claude-opus-5-5", effort: "low" },
+          thread: { model: "claude-opus-5-5", effort: null },
+        },
+      }),
+    );
+
+    expect(screen.getByTestId("settings-coordinator-model").textContent).toBe("Default (Opus 5.5)");
+    expect(screen.getByTestId("settings-coordinator-effort").textContent).toBe("Default (Low)");
+    expect(screen.getByTestId("settings-thread-model").textContent).toBe("Default (Opus 5.5)");
+    expect(screen.getByTestId("settings-thread-effort").textContent).toBe("High");
+  });
+
   test("both roles on default save no model and no effort, so nothing is passed to Claude Code", async () => {
-    renderGeneral(
+    await renderGeneral(
       makeProject({
         id: "p1",
         name: "Checkout",
@@ -181,8 +211,8 @@ describe("models and effort", () => {
     );
 
     for (const role of ["coordinator", "thread"]) {
-      await choose(`settings-${role}-model`, "Use default");
-      await choose(`settings-${role}-effort`, "Use default");
+      await choose(`settings-${role}-model`, "Default");
+      await choose(`settings-${role}-effort`, "Default");
     }
     save();
 
@@ -193,18 +223,18 @@ describe("models and effort", () => {
     });
   });
 
-  test("the copy says what a role on default does, and that a thread keeps what it started with", () => {
-    renderGeneral();
+  test("the copy says what a role on default does, and that a thread keeps what it started with", async () => {
+    await renderGeneral();
 
     const models = screen.getByTestId("settings-models").textContent ?? "";
-    expect(models).toContain("“Use default” passes none, so Claude Code picks its own");
+    expect(models).toContain("“Default” passes none, so Claude Code picks its own");
     expect(screen.getByTestId("settings-thread-runtime").textContent).toContain(
       "A new thread starts on these and keeps them",
     );
   });
 
   test("a model that does not take the current effort resets it to the default", async () => {
-    renderGeneral(
+    await renderGeneral(
       makeProject({
         id: "p1",
         name: "Checkout",
@@ -215,7 +245,7 @@ describe("models and effort", () => {
 
     await choose("settings-thread-model", "Sonnet 4.6");
 
-    expect(screen.getByTestId("settings-thread-effort").textContent).toContain("Use default");
+    expect(screen.getByTestId("settings-thread-effort").textContent).toContain("Default");
     // Sonnet has no Max effort to choose either.
     fireEvent.pointerDown(screen.getByTestId("settings-thread-effort"), {
       button: 0,
@@ -231,8 +261,8 @@ describe("thread access", () => {
   const editsOnly = () =>
     makeProject({ id: "p1", name: "Checkout", threadAccess: "auto-accept-edits" });
 
-  test("a new project starts on full access, with the warning showing", () => {
-    renderGeneral();
+  test("a new project starts on full access, with the warning showing", async () => {
+    await renderGeneral();
     expect(screen.getByTestId("settings-thread-access").getAttribute("data-value")).toBe(
       "full-access",
     );
@@ -241,21 +271,21 @@ describe("thread access", () => {
     );
   });
 
-  test("Edit files says other commands are denied and has no warning", () => {
-    renderGeneral(editsOnly());
+  test("Edit files says other commands are denied and has no warning", async () => {
+    await renderGeneral(editsOnly());
     expect(screen.getByTestId("settings-thread-access").getAttribute("data-value")).toBe(
       "auto-accept-edits",
     );
     expect(screen.queryByTestId("settings-full-access-warning")).toBeNull();
-    const label = screen.getByTestId("settings-thread-access-auto-accept-edits").closest("label");
-    expect(label?.textContent).toContain("denied");
-    expect(label?.textContent).toContain("no approval prompt");
-    expect(label?.textContent).not.toContain("until you approve");
+    const description = screen.getByTestId("settings-thread-access-description").textContent;
+    expect(description).toContain("denied");
+    expect(description).toContain("no approval prompt");
+    expect(description).not.toContain("until you approve");
   });
 
   test("choosing full access warns at once, and saving it asks first", async () => {
-    renderGeneral(editsOnly());
-    fireEvent.click(screen.getByTestId("settings-thread-access-full-access"));
+    await renderGeneral(editsOnly());
+    await choose("settings-thread-access", "Full access");
     expect(screen.getByTestId("settings-full-access-warning").textContent).toContain(
       "can run any command on this host",
     );
@@ -271,8 +301,8 @@ describe("thread access", () => {
   });
 
   test("declining the question saves nothing and keeps the choice", async () => {
-    renderGeneral(editsOnly());
-    fireEvent.click(screen.getByTestId("settings-thread-access-full-access"));
+    await renderGeneral(editsOnly());
+    await choose("settings-thread-access", "Full access");
     save();
     await screen.findByRole("alertdialog");
     fireEvent.click(screen.getByTestId("confirm-dialog-cancel"));
@@ -285,9 +315,9 @@ describe("thread access", () => {
   });
 
   test("going back to editing files needs no question and drops the warning", async () => {
-    renderGeneral();
+    await renderGeneral();
     expect(screen.getByTestId("settings-full-access-warning")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("settings-thread-access-auto-accept-edits"));
+    await choose("settings-thread-access", "Edit files");
     expect(screen.queryByTestId("settings-full-access-warning")).toBeNull();
     save();
 
@@ -299,25 +329,25 @@ describe("thread access", () => {
 
 describe("pull requests", () => {
   test("shows whether the host fixes them by itself, and saves turning it off", async () => {
-    renderGeneral();
-    const box = screen.getByTestId("settings-auto-fix") as HTMLInputElement;
-    expect(box.checked).toBe(true);
+    await renderGeneral();
+    const toggle = screen.getByTestId("settings-auto-fix");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
 
-    fireEvent.click(box);
-    expect(box.checked).toBe(false);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
     save();
 
     await waitFor(() => expect(api.writes()).toHaveLength(1));
     expect(api.writes()[0]?.body).toEqual({ autoFixPullRequests: false });
   });
 
-  test("a project that has it off shows it off, and turning it back on leaves nothing to save", () => {
-    renderGeneral(makeProject({ id: "p1", name: "Checkout", autoFixPullRequests: false }));
-    const box = screen.getByTestId("settings-auto-fix") as HTMLInputElement;
-    expect(box.checked).toBe(false);
+  test("a project that has it off shows it off, and turning it back on leaves nothing to save", async () => {
+    await renderGeneral(makeProject({ id: "p1", name: "Checkout", autoFixPullRequests: false }));
+    const toggle = screen.getByTestId("settings-auto-fix");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
 
-    fireEvent.click(box);
-    fireEvent.click(box);
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
 
     expect(screen.getByTestId("settings-save-bar").getAttribute("data-dirty")).toBe("false");
   });
@@ -325,7 +355,7 @@ describe("pull requests", () => {
 
 describe("notifications", () => {
   test("saves the level the person picks", async () => {
-    renderGeneral();
+    await renderGeneral();
     await choose("settings-notifications", "Off");
     save();
 
@@ -334,13 +364,23 @@ describe("notifications", () => {
   });
 });
 
-describe("coordinator and danger zone", () => {
+describe("project actions and danger zone", () => {
+  test("pause, restart and archive are plain rows, and only Delete sits under Danger zone", async () => {
+    await renderGeneral();
+    const danger = within(screen.getByTestId("settings-danger-zone"));
+    expect(danger.getByTestId("settings-delete").textContent).toBe("Delete");
+    for (const action of ["settings-pause", "settings-restart-coordinator", "settings-archive"]) {
+      expect(danger.queryByTestId(action)).toBeNull();
+      expect(within(screen.getByTestId("settings-lifecycle")).getByTestId(action)).toBeTruthy();
+    }
+  });
+
   test("restarting the coordinator asks, then posts", async () => {
     respond = (method, path) =>
       method === "POST" && path === "/projects/p1/coordinator/restart"
         ? Response.json({ project })
         : undefined;
-    renderGeneral();
+    await renderGeneral();
     fireEvent.click(screen.getByTestId("settings-restart-coordinator"));
     await screen.findByText("Restart the coordinator?");
     expect(api.writes()).toHaveLength(0);
@@ -355,7 +395,7 @@ describe("coordinator and danger zone", () => {
       method === "POST" && path === "/projects/p1/pause"
         ? Response.json({ project: { ...project, status: "paused" } })
         : undefined;
-    renderGeneral();
+    await renderGeneral();
     expect(screen.getByTestId("settings-pause").textContent).toBe("Pause");
     fireEvent.click(screen.getByTestId("settings-pause"));
     await screen.findByText("Pause “Checkout”?");
@@ -364,7 +404,7 @@ describe("coordinator and danger zone", () => {
     expect(api.writes()[0]?.path).toBe("/projects/p1/pause");
 
     cleanup();
-    renderGeneral(makeProject({ id: "p1", name: "Checkout", status: "archived" }));
+    await renderGeneral(makeProject({ id: "p1", name: "Checkout", status: "archived" }));
     expect(screen.queryByTestId("settings-pause")).toBeNull();
     expect(screen.getByTestId("settings-archive").textContent).toBe("Restore");
   });
@@ -372,7 +412,7 @@ describe("coordinator and danger zone", () => {
   test("a paused project offers Resume, which needs no question", async () => {
     respond = (method, path) =>
       method === "POST" && path === "/projects/p1/resume" ? Response.json({ project }) : undefined;
-    renderGeneral(makeProject({ id: "p1", name: "Checkout", status: "paused" }));
+    await renderGeneral(makeProject({ id: "p1", name: "Checkout", status: "paused" }));
     fireEvent.click(screen.getByTestId("settings-pause"));
 
     await waitFor(() => expect(api.writes()).toHaveLength(1));
@@ -384,7 +424,7 @@ describe("coordinator and danger zone", () => {
       method === "DELETE" && path === "/projects/p1"
         ? new Response(null, { status: 204 })
         : undefined;
-    const stub = renderGeneral();
+    const stub = await renderGeneral();
     fireEvent.click(screen.getByTestId("settings-delete"));
     await screen.findByText("Delete “Checkout”?");
     expect(api.writes()).toHaveLength(0);

@@ -158,6 +158,44 @@ describe("a project whose roles are on default", () => {
     expect(thread.success && thread.thread.runtime).toEqual(DEFAULT);
   }, 60_000);
 
+  test("each role's first run on default reports the model it ran on, once, and still passes no flag", async () => {
+    const { s, project } = await setup({ coordinator: DEFAULT, thread: DEFAULT });
+    const reported = async () =>
+      (await s.api<{ project: Project }>("GET", `/api/projects/${project.id}`)).body.project
+        .reportedRuntime;
+    const upserts = async () =>
+      (
+        await s.db
+          .selectFrom("event_log")
+          .select("id")
+          .where("type", "=", "project.upserted")
+          .execute()
+      ).length;
+    const nothing = { model: null, effort: null };
+    expect(await reported()).toEqual({ coordinator: nothing, thread: nothing });
+
+    const before = await upserts();
+    await say(s, project, "hello");
+    await say(s, project, "and again");
+    // The fake reports `fake-claude` in its init event when no --model was passed, as Claude Code
+    // names the model it picked; it names no effort, so none is reported.
+    expect(await reported()).toEqual({
+      coordinator: { model: "fake-claude", effort: null },
+      thread: nothing,
+    });
+    // The second turn reported the same, so the stream heard of it once.
+    expect((await upserts()) - before).toBe(1);
+
+    const threadId = await spawn(s, project, "Fix it");
+    expect((await reported()).thread).toEqual({ model: "fake-claude", effort: null });
+    for (const id of [await coordinatorId(s, project), threadId]) {
+      for (const { flags } of await launchesOf(s, id)) {
+        expect(flags).not.toContain("--model");
+        expect(flags).not.toContain("--effort");
+      }
+    }
+  }, 60_000);
+
   test("usage is still attributed, to the model the run's own result names", async () => {
     const { s, project } = await setup({ coordinator: DEFAULT, thread: DEFAULT });
 
@@ -215,6 +253,12 @@ describe("a project that names a model and an effort", () => {
       (await launchesOf(s, threadId)).map((launch) => launch.flags.includes("--resume")),
     ).toEqual([false, true]);
     expect(await modelsUsedBy(s, threadId)).toEqual([THINKER]);
+    // A run given its model says nothing about the default.
+    const reported = await s.api<{ project: Project }>("GET", `/api/projects/${project.id}`);
+    expect(reported.body.project.reportedRuntime).toEqual({
+      coordinator: { model: null, effort: null },
+      thread: { model: null, effort: null },
+    });
   }, 60_000);
 
   test("naming only a model passes only --model, and only an effort passes only --effort", async () => {
