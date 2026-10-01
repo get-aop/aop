@@ -11,6 +11,7 @@ import { PROJECT_KICKOFF_V12_STATEMENTS } from "./project-kickoff-v12.ts";
 import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
 import { REPORTED_RUNTIME_V13_STATEMENTS } from "./reported-runtime-v13.ts";
+import { RUN_CLI_VERSION_V17_STATEMENTS } from "./run-cli-version-v17.ts";
 import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
 import type { Database } from "./schema.ts";
 import { SUGGESTION_ANSWERS_V10_STATEMENTS } from "./suggestion-answers-v10.ts";
@@ -46,6 +47,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 14, name: "auto-continue", statements: AUTO_CONTINUE_V14_STATEMENTS },
   { version: 15, name: "project-appearance", statements: PROJECT_APPEARANCE_V15_STATEMENTS },
   { version: 16, name: "turn-parts", statements: TURN_PARTS_V16_STATEMENTS },
+  { version: 17, name: "run-cli-version", statements: RUN_CLI_VERSION_V17_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

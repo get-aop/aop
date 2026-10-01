@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
+import { CliUpdateDot } from "../agent-clis/AgentCliPanel";
+import { pendingCliUpdates, useAgentClis } from "../agent-clis/agent-cli-store";
 import { getSettings } from "../api/client";
 import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
 import { noteSavedSettings } from "../settings/display-name";
@@ -37,6 +39,7 @@ export const SettingsDialog = () => {
   const current = sections.includes(dialogs.settings.section)
     ? dialogs.settings.section
     : "general";
+  const cliUpdates = pendingCliUpdates(useAgentClis().data).length > 0;
 
   return (
     <Dialog
@@ -61,7 +64,8 @@ export const SettingsDialog = () => {
                   : "text-text-muted hover:bg-hover hover:text-text",
               )}
             >
-              {SECTION_LABELS[section]}
+              <span className="flex-1">{SECTION_LABELS[section]}</span>
+              {section === "runtimes" && cliUpdates ? <CliUpdateDot /> : null}
             </button>
           ))}
         </nav>

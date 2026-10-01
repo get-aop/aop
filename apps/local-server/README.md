@@ -70,6 +70,7 @@ Every route except health, `POST /api/auth/pair`, and `/api/mcp` needs a device 
 | `AOP_DB_PATH` | Override the SQLite file (default `<AOP_HOME>/projects.sqlite`) |
 | `AOP_MCP_URL` | Address the host's own agents use to reach `/api/mcp`, when the server is not bound to loopback |
 | `AOP_PR_POLL_INTERVAL_MS` | Fixed pace for the pull request watcher; see [Threads and git](../../docs/THREADS.md#watching-the-pull-request) |
+| `AOP_AGENT_CLI_REGISTRY` | npm registry the agent CLI version check reads (default `https://registry.npmjs.org`); see [Runtimes](../../docs/RUNTIMES.md#keeping-the-agent-clis-up-to-date) |
 
 Paths: `@aop/infra` `aopPaths` — DB `projects.sqlite`, worktrees under `worktrees/<repo-id>/<thread-id>`, run logs under `logs/chat-sessions/<session-id>`.
 
@@ -85,6 +86,7 @@ src/
   repo/, session-git/ repo registration, git state
   process/            process supervision
   runtime-configuration/  runtime catalog
+  agent-cli/          agent CLI versions, the periodic check and updates (docs/RUNTIMES.md)
   event-log/  the project event stream
   auth/               device tokens, pairing, cookie sessions, request guard
   github-cli/, mcp/

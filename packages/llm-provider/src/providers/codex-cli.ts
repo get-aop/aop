@@ -18,14 +18,14 @@ const SEEDED_HOME_FILES = [".gitconfig"] as const;
 export class CodexCliProvider implements LLMProvider {
   readonly name = "codex-cli";
 
-  buildCommand(options: RunOptions): string[] {
+  buildCommand(options: RunOptions, searchPath?: string): string[] {
     assertNativePlanModeSupported(this.name, options.mode);
 
     // The resume id is replayed as a bare positional to `codex exec resume`;
     // a forged id from a malicious log line must never look like a flag.
     const resumeSessionId = sanitizeSessionId(options.resumeSessionId);
     const cmd = buildCodexExecCommand(
-      resolveRuntimeAlias(options.runtimeAlias, "codex"),
+      resolveRuntimeAlias(options.runtimeAlias, "codex", searchPath),
       resumeSessionId,
     );
     appendCodexModeFlags(cmd, options, resumeSessionId);
@@ -56,7 +56,7 @@ export class CodexCliProvider implements LLMProvider {
     const spawnEnv = buildSpawnEnv(buildCodexEnv(options.env));
 
     const proc = resolveExecHost().spawn({
-      cmd: this.buildCommand(options),
+      cmd: this.buildCommand(options, spawnEnv.PATH),
       stdout: options.logFilePath ? { file: options.logFilePath } : "ignore",
       stderr: options.logFilePath ? { file: `${options.logFilePath}.stderr` } : "ignore",
       stdin: "ignore",

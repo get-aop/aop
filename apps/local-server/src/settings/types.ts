@@ -1,6 +1,9 @@
 import {
+  DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   DEFAULT_MAX_CONCURRENT_RUNS,
+  MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   MAX_CONCURRENT_RUNS_LIMIT,
+  parseAgentCliCheckInterval,
   parseMaxConcurrentRuns,
 } from "@aop/common";
 import type { Setting } from "../db/schema.ts";
@@ -9,6 +12,17 @@ export type { Setting };
 
 /** Only keys that live code reads. A key is added with its first reader, not before. */
 export const SettingKey = {
+  /**
+   * Whether the host installs a newer agent CLI (Claude Code) by itself when a check finds one.
+   * "true" or "false"; off by default. An install method that cannot be replaced under a running
+   * process waits until no run of that CLI is in flight (see agent-cli/).
+   */
+  AGENT_CLI_AUTO_UPDATE: "agent_cli_auto_update",
+  /**
+   * Minutes between the host's checks for newer agent CLI versions, a whole number from 0 to
+   * `MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES`; 0 turns the periodic check off.
+   */
+  AGENT_CLI_CHECK_INTERVAL: "agent_cli_check_interval_minutes",
   /**
    * Optional free-text preferences injected into every chat runtime prompt
    * (not stored in the visible message transcript).
@@ -34,6 +48,8 @@ export const SettingKey = {
 export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
 
 export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
+  [SettingKey.AGENT_CLI_AUTO_UPDATE]: "false",
+  [SettingKey.AGENT_CLI_CHECK_INTERVAL]: String(DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES),
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
   [SettingKey.DISPLAY_NAME]: "",
   [SettingKey.MAX_CONCURRENT_RUNS]: String(DEFAULT_MAX_CONCURRENT_RUNS),
@@ -51,7 +67,11 @@ export const validateSettingValue = (key: SettingKey, value: string): string | n
   if (key === SettingKey.MAX_CONCURRENT_RUNS && parseMaxConcurrentRuns(value) === null) {
     return `${key} must be a whole number from 1 to ${MAX_CONCURRENT_RUNS_LIMIT}`;
   }
-  if (key === SettingKey.UPDATE_CHECK && value !== "true" && value !== "false") {
+  if (key === SettingKey.AGENT_CLI_CHECK_INTERVAL && parseAgentCliCheckInterval(value) === null) {
+    return `${key} must be a whole number of minutes from 0 to ${MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES}`;
+  }
+  const isBoolean = key === SettingKey.UPDATE_CHECK || key === SettingKey.AGENT_CLI_AUTO_UPDATE;
+  if (isBoolean && value !== "true" && value !== "false") {
     return `${key} must be "true" or "false"`;
   }
   return null;

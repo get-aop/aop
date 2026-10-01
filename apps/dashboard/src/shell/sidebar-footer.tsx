@@ -1,5 +1,8 @@
 import { Settings2Icon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { CliUpdateDot } from "../agent-clis/AgentCliPanel";
+import { pendingCliUpdates } from "../agent-clis/agent-cli-store";
+import { useAgentCliStatus } from "../agent-clis/use-agent-clis";
 import { useHostVersion } from "../hooks/useHostVersion";
 import type { HostConnection } from "../projects/selectors";
 import { openSettingsDialog } from "./dialog-store";
@@ -32,6 +35,7 @@ export const SidebarFooterStatus = ({ connection }: { connection: HostConnection
         <span className="flex-1 text-left">Settings</span>
         <kbd className="text-[11px] text-text-subtle">⌘,</kbd>
       </button>
+      <CliUpdateNotice />
       <div
         data-testid="connection-status"
         data-state={connection}
@@ -42,5 +46,30 @@ export const SidebarFooterStatus = ({ connection }: { connection: HostConnection
         {version ? <span>· {version}</span> : null}
       </div>
     </div>
+  );
+};
+
+/**
+ * A line under Settings while an agent CLI has a newer version out: noticeable without a bar
+ * across the screen, since Claude Code ships several times a week. It opens the Runtimes panel.
+ */
+const CliUpdateNotice = () => {
+  const pending = pendingCliUpdates(useAgentCliStatus({ poll: true }).data);
+  const [first] = pending;
+  if (!first) return null;
+  const label =
+    pending.length === 1
+      ? `${first.label} ${first.latest} available`
+      : `${pending.length} CLI updates available`;
+  return (
+    <button
+      type="button"
+      data-testid="sidebar-cli-update"
+      onClick={() => openSettingsDialog("runtimes")}
+      className="flex h-7 items-center gap-2 rounded-row px-2 text-left text-[12px] text-running transition-colors duration-[120ms] hover:bg-hover"
+    >
+      <CliUpdateDot className="mx-[5px]" />
+      <span className="flex-1 truncate">{label}</span>
+    </button>
   );
 };

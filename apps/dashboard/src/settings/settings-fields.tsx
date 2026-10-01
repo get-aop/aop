@@ -35,6 +35,10 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
     label: "Updates",
     keys: ["update_check"],
   },
+  {
+    label: "Agent CLIs",
+    keys: ["agent_cli_check_interval_minutes", "agent_cli_auto_update"],
+  },
 ];
 
 export const SETTING_META: Record<string, SettingMeta> = {
@@ -54,6 +58,19 @@ export const SETTING_META: Record<string, SettingMeta> = {
     label: "Check for updates",
     description:
       "Once a day the host looks for a newer AOP release on GitHub and shows a notice here. It never installs anything without you.",
+    type: "toggle",
+  },
+  agent_cli_check_interval_minutes: {
+    label: "Check for CLI updates every",
+    description:
+      "How often the host looks for a newer Claude Code release (and once shortly after it starts). 0 turns the check off. Updating is under Settings › Runtimes.",
+    type: "number",
+    suffix: "min",
+  },
+  agent_cli_auto_update: {
+    label: "Update CLIs automatically",
+    description:
+      "When a check finds a newer version, the host installs it. A native install updates right away; a package-manager install waits until no turn is running. Running turns are never interrupted.",
     type: "toggle",
   },
   chat_global_instructions: {

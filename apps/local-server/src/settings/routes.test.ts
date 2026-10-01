@@ -37,6 +37,8 @@ describe("settings/routes", () => {
 
       expect(res.status).toBe(200);
       expect(body.settings).toEqual([
+        { key: "agent_cli_auto_update", value: "false" },
+        { key: "agent_cli_check_interval_minutes", value: "60" },
         { key: "chat_global_instructions", value: "" },
         { key: "display_name", value: "" },
         { key: "max_concurrent_runs", value: "4" },

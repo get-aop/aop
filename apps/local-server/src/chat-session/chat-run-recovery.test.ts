@@ -422,6 +422,7 @@ const runningRun = (logFilePath: string, overrides: Partial<ChatRun> = {}): Chat
     error_message: null,
     pid: null,
     blocks_json: "[]",
+    cli_version: null,
     created_at: now,
     updated_at: now,
     ...overrides,

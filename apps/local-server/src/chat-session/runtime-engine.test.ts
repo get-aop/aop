@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { LLMProvider, RunOptions, RunResult } from "@aop/llm-provider";
+import { closeSpawnGate } from "../agent-cli/spawn-gate.ts";
 import type { ChatSession } from "../db/schema.ts";
 import { isProcessAlive } from "../process/liveness.ts";
 import { eventually } from "../project/test-utils.ts";
@@ -307,6 +308,62 @@ describe("runSessionPrompt", () => {
     });
 
     expect(result.runtimeSessionId).toBe("claude-session-1");
+  });
+
+  test("a launch during an update of its CLI waits for the update, then starts", async () => {
+    const open = closeSpawnGate("claude-code");
+    let launched = false;
+    const provider: LLMProvider = {
+      name: "claude-code",
+      run: async () => {
+        launched = true;
+        return { exitCode: 0 };
+      },
+    };
+
+    const run = runSessionPrompt({
+      session: session({ id: "isess_gated" }),
+      repoPath: "/tmp/repo",
+      prompt: "hello",
+      createProviderFn: () => provider,
+    });
+    await Bun.sleep(30);
+    expect(launched).toBe(false);
+
+    open();
+    await run;
+    expect(launched).toBe(true);
+  });
+
+  test("a Stop while a launch waits for an update ends the run without launching", async () => {
+    const open = closeSpawnGate("claude-code");
+    let launched = false;
+    const provider: LLMProvider = {
+      name: "claude-code",
+      run: async () => {
+        launched = true;
+        return { exitCode: 0 };
+      },
+    };
+
+    try {
+      const run = runSessionPrompt({
+        session: session({ id: "isess_gated_stop" }),
+        repoPath: "/tmp/repo",
+        prompt: "hello",
+        createProviderFn: () => provider,
+      });
+      await eventually(
+        () => (isSessionRunActive("isess_gated_stop") ? true : undefined),
+        "the run to register",
+      );
+      expect(interruptSessionRun("isess_gated_stop")).toBe(true);
+      const result = await run;
+      expect(result.interrupted).toBe(true);
+      expect(launched).toBe(false);
+    } finally {
+      open();
+    }
   });
 
   test("recovers a fresh runtime session id before returning an interrupted run", async () => {

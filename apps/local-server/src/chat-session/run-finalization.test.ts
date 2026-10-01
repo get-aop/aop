@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createCommandContext } from "../context.ts";
 import type { ChatRun } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
@@ -12,6 +15,61 @@ afterEach(async () => {
 });
 
 describe("persistFinalizedChatRun", () => {
+  test("records the CLI version the run's init event named", async () => {
+    const logFilePath = join(mkdtempSync(join(tmpdir(), "aop-finalize-")), "run.jsonl");
+    writeFileSync(
+      logFilePath,
+      `${JSON.stringify({ type: "system", subtype: "init", claude_code_version: "2.1.286" })}\n`,
+    );
+    const { db, run } = await setupRun({ runtime: "claude-code", log_file_path: logFilePath });
+
+    await db
+      .transaction()
+      .execute((trx) =>
+        persistFinalizedChatRun(
+          trx,
+          run,
+          "Done.",
+          null,
+          null,
+          { status: "completed", errorMessage: null },
+          null,
+        ),
+      );
+
+    const finalized = await db
+      .selectFrom("chat_runs")
+      .select("cli_version")
+      .where("id", "=", run.id)
+      .executeTakeFirstOrThrow();
+    expect(finalized.cli_version).toBe("2.1.286");
+  });
+
+  test("records no CLI version for a log without an init event", async () => {
+    const { db, run } = await setupRun({ runtime: "claude-code" });
+
+    await db
+      .transaction()
+      .execute((trx) =>
+        persistFinalizedChatRun(
+          trx,
+          run,
+          "Done.",
+          null,
+          null,
+          { status: "completed", errorMessage: null },
+          null,
+        ),
+      );
+
+    const finalized = await db
+      .selectFrom("chat_runs")
+      .select("cli_version")
+      .where("id", "=", run.id)
+      .executeTakeFirstOrThrow();
+    expect(finalized.cli_version).toBeNull();
+  });
+
   test("binds a confirmed runtime id recovered while a run was interrupted", async () => {
     const { db, run } = await setupRun();
 
@@ -205,6 +263,7 @@ const setupRun = async (
     error_message: null,
     pid: null,
     blocks_json: "[]",
+    cli_version: null,
     created_at: now,
     updated_at: now,
     ...overrides,

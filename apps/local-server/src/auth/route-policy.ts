@@ -28,6 +28,8 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
   ["DELETE", /^\/api\/auth\/devices\/[^/]+\/?$/],
   // Replaces the host's own binary and restarts its service.
   ["POST", /^\/api\/updates\/apply\/?$/],
+  // Installs a new version of an agent CLI on the host.
+  ["POST", /^\/api\/agent-clis\/[^/]+\/update\/?$/],
 ];
 
 export const routeAccess = (method: string, pathname: string): RouteAccess => {

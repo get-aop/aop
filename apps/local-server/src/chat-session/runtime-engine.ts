@@ -13,6 +13,7 @@ import {
   type RunImage,
   type RunOptions,
 } from "@aop/llm-provider";
+import { waitForSpawnGate } from "../agent-cli/spawn-gate.ts";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
 import { runAndReap } from "../process/reaper.ts";
 import { detectRateLimit, type RateLimitHit } from "../scheduling/rate-limit.ts";
@@ -428,6 +429,13 @@ const executeProviderRun = async (
   if (handle.owner.interrupted) return interruptedRunResult(handle, capturedSessionId);
 
   try {
+    // An update of this runtime's CLI holds new launches until it has finished installing; a
+    // Stop meanwhile ends the wait.
+    const stoppedWhileHeld = await Promise.race([
+      waitForSpawnGate(session.runtime).then(() => null),
+      interruptPromise,
+    ]);
+    if (stoppedWhileHeld) return stoppedWhileHeld;
     const prepared = await prepareProviderLaunch({
       session,
       createProviderFn,

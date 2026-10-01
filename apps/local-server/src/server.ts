@@ -1,5 +1,6 @@
 import { DESKTOP_APP_ORIGIN } from "@aop/common";
 import { getLogger } from "@aop/infra";
+import { createHostAgentCliService } from "./agent-cli/host-agent-cli-service.ts";
 import { createApp } from "./app.ts";
 import { runStartupCheckpointCleanup } from "./chat-session/checkpoint-cleanup-service.ts";
 import { shutdownChatSessions } from "./chat-session/service.ts";
@@ -59,10 +60,12 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     { timing: pollIntervalMs ? { activeMs: pollIntervalMs, quietMs: pollIntervalMs } : {} },
   );
   const updates = createHostUpdateService(ctx);
+  const agentClis = createHostAgentCliService(ctx);
   const app = createApp({
     ctx,
     projectServices,
     updates,
+    agentClis,
     startTimeMs,
     dashboardStaticPath: options?.dashboardStaticPath ?? getDashboardStaticPath(),
     dashboardDevOrigin: getDashboardDevOrigin(),
@@ -95,6 +98,9 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   const stopWatcher = startPullRequestWatcher(projectServices.pullRequestWatcher, pollIntervalMs);
   // Once a day the host looks for a newer release, unless the person turned that off.
   updates.start();
+  // Shortly after boot and then every `agent_cli_check_interval_minutes`, the agent CLIs are
+  // checked for newer versions (and updated, when the person turned that on).
+  agentClis.start();
   // A project created just before a restart may not have started its survey yet.
   void projectServices.kickoff.resumePending();
 
@@ -103,6 +109,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
       logger.info("Shutting down...");
       stopMaintenance();
       updates.stop();
+      agentClis.stop();
       await stopWatcher();
       server.stop();
       await shutdownChatSessions(ctx);

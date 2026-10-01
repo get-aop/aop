@@ -32,7 +32,11 @@ export const buildClaudeCodeSpawnEnv = (
   return env;
 };
 
-export const resetSpawnEnvCacheForTests = (): void => {
+/**
+ * Reads the login shell's env again on the next spawn. The first spawn caches it, so a PATH the
+ * person changed since (an agent CLI moved to another installer, say) is picked up only after this.
+ */
+export const forgetLoginShellEnv = (): void => {
   loginShellEnvLoaded = false;
   cachedLoginShellEnv = null;
 };

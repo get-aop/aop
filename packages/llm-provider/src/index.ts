@@ -42,6 +42,7 @@ export { createProvider } from "./provider-factory";
 export { ClaudeCodeProvider } from "./providers/claude-code";
 export { CodexCliProvider } from "./providers/codex-cli";
 export { PiProvider } from "./providers/pi";
+export { resolveRuntimeExecutable } from "./runtime-alias";
 export { sanitizeSessionId } from "./session-id";
 export type {
   LLMProvider,

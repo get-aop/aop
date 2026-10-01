@@ -1,3 +1,20 @@
+export type {
+  AgentCliInstallMethod,
+  AgentCliStatus,
+  AgentClisResponse,
+  AgentCliUpdate,
+  AgentCliUpdateState,
+} from "./agent-clis.ts";
+export {
+  AgentCliInstallMethodSchema,
+  AgentCliStatusSchema,
+  AgentClisResponseSchema,
+  AgentCliUpdateSchema,
+  AgentCliUpdateStateSchema,
+  DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
+  MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES,
+  parseAgentCliCheckInterval,
+} from "./agent-clis.ts";
 export { AOP_PORTS, AOP_URLS } from "./env.ts";
 export type { HostHealth } from "./host-api.ts";
 export {

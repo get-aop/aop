@@ -24,6 +24,8 @@ describe("settings/handlers", () => {
       const result = await getAllSettings(ctx);
 
       expect(result.settings).toEqual([
+        { key: "agent_cli_auto_update", value: "false" },
+        { key: "agent_cli_check_interval_minutes", value: "60" },
         { key: "chat_global_instructions", value: "" },
         { key: "display_name", value: "" },
         { key: "max_concurrent_runs", value: "4" },
@@ -152,6 +154,41 @@ describe("settings/handlers", () => {
         },
       });
       expect(await ctx.settingsRepository.get(SettingKey.UPDATE_CHECK)).toBe("false");
+    });
+
+    test("agent CLI checks run hourly by default, 0 turns them off, and the range is checked", async () => {
+      expect(await ctx.settingsRepository.get(SettingKey.AGENT_CLI_CHECK_INTERVAL)).toBe("60");
+
+      expect(await setSetting(ctx, "agent_cli_check_interval_minutes", "0")).toMatchObject({
+        success: true,
+      });
+      expect(await setSetting(ctx, "agent_cli_check_interval_minutes", "1440")).toMatchObject({
+        success: true,
+      });
+      for (const value of ["-5", "1441", "1.5", "hourly", ""]) {
+        expect(await setSetting(ctx, "agent_cli_check_interval_minutes", value)).toEqual({
+          success: false,
+          error: {
+            code: "INVALID_VALUE",
+            key: "agent_cli_check_interval_minutes",
+            message:
+              "agent_cli_check_interval_minutes must be a whole number of minutes from 0 to 1440",
+          },
+        });
+      }
+      expect(await ctx.settingsRepository.get(SettingKey.AGENT_CLI_CHECK_INTERVAL)).toBe("1440");
+    });
+
+    test("agent CLI auto-update is off until the person turns it on, and takes only true or false", async () => {
+      expect(await ctx.settingsRepository.get(SettingKey.AGENT_CLI_AUTO_UPDATE)).toBe("false");
+      expect(await setSetting(ctx, "agent_cli_auto_update", "true")).toMatchObject({
+        success: true,
+      });
+      expect(await setSetting(ctx, "agent_cli_auto_update", "yes")).toMatchObject({
+        success: false,
+        error: { message: 'agent_cli_auto_update must be "true" or "false"' },
+      });
+      expect(await ctx.settingsRepository.get(SettingKey.AGENT_CLI_AUTO_UPDATE)).toBe("true");
     });
 
     test("display_name is empty until the owner sets one, and takes any text", async () => {

@@ -346,6 +346,7 @@ describe("auth routes", () => {
         "GET /api/auth/devices",
         "DELETE /api/auth/devices/:id",
         "POST /api/updates/apply",
+        "POST /api/agent-clis/:provider/update",
       ];
 
       for (const route of hostOnly) {

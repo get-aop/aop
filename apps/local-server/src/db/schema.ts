@@ -155,6 +155,8 @@ export interface ChatRunsTable {
   pid: number | null;
   /** JSON `MessageBlock[]` the run's tools produced, added by migration v4. */
   blocks_json: Generated<string>;
+  /** The agent CLI version the run's init event named, recorded when it ends (migration v17). */
+  cli_version: Generated<string | null>;
   created_at: Generated<string>;
   updated_at: Generated<string>;
 }

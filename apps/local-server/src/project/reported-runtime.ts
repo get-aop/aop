@@ -1,11 +1,10 @@
 import { type ReasoningEffort, ReasoningEffortSchema, type ReportedRuntime } from "@aop/common";
+import { readRunInitEvent } from "../chat-session/init-event.ts";
 import type { ChatRun, ChatSession } from "../db/schema.ts";
 import type { PublisherTransaction } from "../event-log/publisher.ts";
 import { recordProjectUpserted } from "./events.ts";
 import { createProjectRepository } from "./repository.ts";
 
-// The init event opens a run's log. A long tool and MCP list makes it big, never this big.
-const HEAD_BYTES = 256 * 1024;
 // Claude Code writes assistant messages with this model for its own errors.
 const SYNTHETIC_MODEL = "<synthetic>";
 
@@ -52,28 +51,11 @@ const changes = (current: ReportedRuntime, reported: Partial<ReportedRuntime>): 
 export const readInitEvent = async (
   logPath: string,
 ): Promise<{ model: string | null; effort: ReasoningEffort | null }> => {
-  const head = await Bun.file(logPath)
-    .slice(0, HEAD_BYTES)
-    .text()
-    .catch(() => "");
-  for (const line of head.split("\n")) {
-    const event = parseLine(line);
-    if (event?.type !== "system" || event.subtype !== "init") continue;
-    const model =
-      typeof event.model === "string" && event.model !== "" && event.model !== SYNTHETIC_MODEL
-        ? event.model
-        : null;
-    return { model, effort: ReasoningEffortSchema.safeParse(event.effort).data ?? null };
-  }
-  return { model: null, effort: null };
-};
-
-const parseLine = (line: string): Record<string, unknown> | null => {
-  if (!line.trim().startsWith("{")) return null;
-  try {
-    const value: unknown = JSON.parse(line);
-    return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
+  const event = await readRunInitEvent(logPath);
+  if (!event) return { model: null, effort: null };
+  const model =
+    typeof event.model === "string" && event.model !== "" && event.model !== SYNTHETIC_MODEL
+      ? event.model
+      : null;
+  return { model, effort: ReasoningEffortSchema.safeParse(event.effort).data ?? null };
 };

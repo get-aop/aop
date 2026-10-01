@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { buildClaudeCodeSpawnEnv, buildSpawnEnv, resetSpawnEnvCacheForTests } from "./spawn-env.ts";
+import { buildClaudeCodeSpawnEnv, buildSpawnEnv, forgetLoginShellEnv } from "./spawn-env.ts";
 
 let tempDir: string | undefined;
 
@@ -15,7 +15,7 @@ describe("spawn-env", () => {
   const originalPath = process.env.PATH;
 
   beforeEach(() => {
-    resetSpawnEnvCacheForTests();
+    forgetLoginShellEnv();
   });
 
   afterEach(async () => {
@@ -30,7 +30,7 @@ describe("spawn-env", () => {
     restoreEnv("AOP_DISABLE_LOGIN_SHELL_ENV", originalDisableLoginShellEnv);
     restoreEnv("HOME", originalHome);
     restoreEnv("PATH", originalPath);
-    resetSpawnEnvCacheForTests();
+    forgetLoginShellEnv();
   });
 
   test("merges login shell env below process env and explicit spawn env", () => {
@@ -161,7 +161,7 @@ const setupFakeGit = async (): Promise<{ aopHome: string; realGit: string }> => 
   delete process.env.AOP_REAL_GIT;
   process.env.AOP_DISABLE_LOGIN_SHELL_ENV = "1";
   process.env.PATH = binDir;
-  resetSpawnEnvCacheForTests();
+  forgetLoginShellEnv();
 
   return { aopHome, realGit };
 };

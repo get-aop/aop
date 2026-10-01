@@ -146,13 +146,14 @@ const advanceStartupPhase = (input: {
 export class ClaudeCodeProvider implements LLMProvider {
   readonly name = "claude-code";
 
-  buildCommand(options: RunOptions): string[] {
+  /** `searchPath` is the PATH of the spawn env, where the command is looked up (see runtime-alias). */
+  buildCommand(options: RunOptions, searchPath?: string): string[] {
     assertNativePlanModeSupported(this.name, options.mode);
     const { isolationArgs, mcpConfig } = buildClaudeIsolation(options);
 
     const stdinPrompt = takesStdinPrompt(options);
     const cmd = [
-      resolveRuntimeAlias(options.runtimeAlias, "claude"),
+      resolveRuntimeAlias(options.runtimeAlias, "claude", searchPath),
       ...isolationArgs,
       ...(stdinPrompt ? ["--input-format", "stream-json"] : []),
       "--output-format",
@@ -218,7 +219,7 @@ export class ClaudeCodeProvider implements LLMProvider {
 
     const proc = spawnClaude(stdinPrompt, () =>
       resolveExecHost().spawn({
-        cmd: this.buildCommand(options),
+        cmd: this.buildCommand(options, spawnEnv.PATH),
         stdout: { file: logFilePath },
         stderr: "ignore",
         stdin: stdinPrompt ? { file: stdinPrompt.path } : "ignore",
@@ -274,7 +275,7 @@ export class ClaudeCodeProvider implements LLMProvider {
 
     const proc = spawnClaude(stdinPrompt, () =>
       resolveExecHost().spawn({
-        cmd: this.buildCommand(options),
+        cmd: this.buildCommand(options, spawnEnv.PATH),
         stdout: "pipe",
         stderr: "inherit",
         stdin: stdinPrompt ? { file: stdinPrompt.path } : "inherit",

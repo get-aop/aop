@@ -32,6 +32,7 @@ import { Field, FieldDescription, FieldLabel } from "@/ui/field";
 import { Input } from "@/ui/input";
 import { RuntimeProviderIcon } from "@/ui/provider-icon";
 import { Textarea } from "@/ui/textarea";
+import { AgentCliPanel } from "../agent-clis/AgentCliPanel";
 import {
   cloneRuntimeConfigurationProvider,
   createRuntimeConfigurationModel,
@@ -178,8 +179,9 @@ export const SettingsRuntimes = () => {
 
   return (
     <div data-testid="section-runtimes" className="flex flex-col gap-2 p-4">
-      <div className="flex items-center gap-2">
-        <h2 className="flex-1 text-[13px] font-semibold text-text">Runtimes</h2>
+      <AgentCliPanel />
+      <div className="mt-4 flex items-center gap-2">
+        <h2 className="flex-1 text-[13px] font-semibold text-text">Custom runtimes</h2>
         <Button variant="secondary" size="sm" onClick={() => setDraft(emptyDraft())}>
           <PlusIcon className="size-3.5" />
           Add custom runtime

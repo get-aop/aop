@@ -1,5 +1,6 @@
 import type { ChatActionPayload, TurnPart } from "@aop/common";
 import type { Kysely } from "kysely";
+import { findAgentCli } from "../agent-cli/definitions.ts";
 import type {
   ChatMessage,
   ChatRun,
@@ -8,6 +9,7 @@ import type {
   Database,
 } from "../db/schema.ts";
 import type { RateLimitHit } from "../scheduling/rate-limit.ts";
+import { readRunCliVersion } from "./init-event.ts";
 import { encodeMessageContent, type StoredChatArtifact } from "./message-images.ts";
 import { finalizeTurnParts } from "./turn-parts.ts";
 
@@ -47,6 +49,7 @@ export const persistFinalizedChatRun = async (
   if (current?.status !== "running") return null;
 
   const createdAt = new Date().toISOString();
+  const cliVersion = await readCliVersion(current);
   const decision = await resolveBindingDecision(trx, current, outcome, runtimeSessionId, text);
   const userMessage = await trx
     .selectFrom("chat_messages")
@@ -78,6 +81,7 @@ export const persistFinalizedChatRun = async (
       failure_kind: outcome.failureKind ?? null,
       interruption_kind: outcome.interruptionKind ?? null,
       error_message: decision.errorMessage,
+      cli_version: cliVersion,
       updated_at: createdAt,
     })
     .where("id", "=", current.id)
@@ -98,6 +102,11 @@ export const persistFinalizedChatRun = async (
     .selectAll()
     .where("id", "=", current.assistant_message_id)
     .executeTakeFirst();
+};
+
+const readCliVersion = async (run: ChatRun): Promise<string | null> => {
+  const field = findAgentCli(run.runtime)?.initVersionField;
+  return field ? readRunCliVersion(run.log_file_path, field) : null;
 };
 
 // The text the reply ends with is decided here (a reset of the runtime session says so instead of

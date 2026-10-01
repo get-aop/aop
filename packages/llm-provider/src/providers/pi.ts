@@ -67,10 +67,15 @@ export class PiProvider implements LLMProvider {
 }
 
 export class PiCliRuntimeAdapter implements PiRuntimeAdapter {
-  buildCommand(options: RunOptions): string[] {
+  buildCommand(options: RunOptions, searchPath?: string): string[] {
     assertNativePlanModeSupported("pi", options.mode);
 
-    const cmd = [resolveRuntimeAlias(options.runtimeAlias, "pi"), "--mode", "json", "--print"];
+    const cmd = [
+      resolveRuntimeAlias(options.runtimeAlias, "pi", searchPath),
+      "--mode",
+      "json",
+      "--print",
+    ];
 
     const model = options.model ?? options.env?.[PI_MODEL_ENV];
     if (model) {
@@ -100,7 +105,7 @@ export class PiCliRuntimeAdapter implements PiRuntimeAdapter {
     const spawnEnv = buildSpawnEnv(piEnv);
 
     const proc = resolveExecHost().spawn({
-      cmd: this.buildCommand({ ...options, env: piEnv }),
+      cmd: this.buildCommand({ ...options, env: piEnv }, spawnEnv.PATH),
       stdout: options.logFilePath ? { file: options.logFilePath } : "ignore",
       stderr: options.logFilePath ? { file: `${options.logFilePath}.stderr` } : "ignore",
       stdin: "ignore",

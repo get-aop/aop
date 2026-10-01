@@ -2,6 +2,9 @@ import { extname } from "node:path";
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { Hono } from "hono";
+import { createHostAgentCliService } from "./agent-cli/host-agent-cli-service.ts";
+import { createAgentCliRoutes } from "./agent-cli/routes.ts";
+import type { AgentCliService } from "./agent-cli/service.ts";
 import { createAttachmentRoutes } from "./attachment/routes.ts";
 import { createAttachmentService } from "./attachment/service.ts";
 import { type AuthEnv, createApiAuth } from "./auth/api-auth.ts";
@@ -48,6 +51,8 @@ export interface AppDependencies {
   projectServices?: ProjectServices;
   /** The host's own release and its updates; the server passes its own so it can run the daily check. */
   updates?: UpdateService;
+  /** The agent CLIs and their updates; the server passes its own so it can run the periodic check. */
+  agentClis?: AgentCliService;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -127,6 +132,10 @@ export const createApp = (deps: AppDependencies) => {
     createSettingsRoutes(ctx, { runCapChanged: () => projects.chat.dispatchQueuedRuns() }),
   );
   app.route("/api/updates", createUpdateRoutes(deps.updates ?? createHostUpdateService(ctx)));
+  app.route(
+    "/api/agent-clis",
+    createAgentCliRoutes(deps.agentClis ?? createHostAgentCliService(ctx)),
+  );
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
