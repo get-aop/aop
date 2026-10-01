@@ -4,6 +4,8 @@ import {
   NotificationLevelSchema,
   PROJECT_GOAL_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
+  ProjectColorSchema,
+  ProjectIconSchema,
   ProjectPatchSchema,
   ProjectSchema,
   ProjectSettingsSchema,
@@ -124,6 +126,8 @@ describe("CreateProjectInputSchema", () => {
   test("takes just a name and fills in Claude Projects' defaults, with no first-open look around", () => {
     expect(CreateProjectInputSchema.parse({ name: "  checkout  " })).toEqual({
       name: "checkout",
+      icon: null,
+      color: null,
       goal: "",
       instructions: "",
       coordinator: { provider: "claude-code", model: null, effort: "low" },
@@ -201,6 +205,32 @@ describe("autoContinue", () => {
 
   test("can be turned off on its own", () => {
     expect(ProjectPatchSchema.parse({ autoContinue: false })).toEqual({ autoContinue: false });
+  });
+});
+
+describe("icon and color", () => {
+  test("a new project has neither, so it shows its letter tile", () => {
+    expect(CreateProjectInputSchema.parse({ name: "x" })).toMatchObject({
+      icon: null,
+      color: null,
+    });
+  });
+
+  test("take only a value from their small sets", () => {
+    expect(ProjectIconSchema.options).toContain("rocket");
+    expect(ProjectColorSchema.options).toHaveLength(8);
+    expect(ProjectSchema.parse(makeProject({ icon: "rocket", color: "teal" }))).toMatchObject({
+      icon: "rocket",
+      color: "teal",
+    });
+    expect(
+      rejectedPaths(ProjectSchema, makeProject({ icon: "unicorn", color: "#ff00ff" })),
+    ).toEqual(["icon", "color"]);
+  });
+
+  test("a patch can set one, or clear it back to the letter tile with null", () => {
+    expect(ProjectPatchSchema.parse({ color: "pink" })).toEqual({ color: "pink" });
+    expect(ProjectPatchSchema.parse({ icon: null })).toEqual({ icon: null });
   });
 });
 

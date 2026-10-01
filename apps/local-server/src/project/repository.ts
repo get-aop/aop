@@ -149,21 +149,17 @@ const atomically = <T>(
 
 const NOTHING_REPORTED: ReportedRuntime = { model: null, effort: null };
 
+// Only a field left out keeps its value: null is a value of its own (an icon or colour cleared
+// back to the letter tile), so it replaces what was there.
 const applyPatch = (current: ProjectSettings, patch: ProjectPatch): ProjectSettings => ({
-  name: patch.name ?? current.name,
-  goal: patch.goal ?? current.goal,
-  instructions: patch.instructions ?? current.instructions,
-  coordinator: patch.coordinator ?? current.coordinator,
-  thread: patch.thread ?? current.thread,
-  notificationLevel: patch.notificationLevel ?? current.notificationLevel,
-  threadAccess: patch.threadAccess ?? current.threadAccess,
-  autoFixPullRequests: patch.autoFixPullRequests ?? current.autoFixPullRequests,
-  autoContinue: patch.autoContinue ?? current.autoContinue,
-  repoIds: patch.repoIds ?? current.repoIds,
+  ...current,
+  ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)),
 });
 
 const toColumns = (settings: ProjectSettings) => ({
   name: settings.name,
+  icon: settings.icon,
+  color: settings.color,
   goal: settings.goal,
   instructions: settings.instructions,
   coordinator_provider: settings.coordinator.provider,
@@ -211,6 +207,8 @@ const getProject = async (db: Kysely<Database>, id: string): Promise<Project | n
 const toProject = (row: ProjectRow, repoIds: string[]): Project => ({
   id: row.id,
   name: row.name,
+  icon: row.icon,
+  color: row.color,
   goal: row.goal,
   instructions: row.instructions,
   coordinator: {

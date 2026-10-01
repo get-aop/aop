@@ -104,6 +104,8 @@ describe("NewProjectDialog", () => {
     await waitFor(() => expect(created).toHaveLength(1));
     expect(created[0]?.body).toEqual({
       name: "Checkout service",
+      icon: null,
+      color: null,
       goal: "Keep checkout fast",
       instructions: "Never touch the payments schema.",
       repoIds: ["repo_1"],
@@ -131,6 +133,8 @@ describe("NewProjectDialog", () => {
     await waitFor(() => expect(created).toHaveLength(1));
     expect(created[0]?.body).toEqual({
       name: "Scratch",
+      icon: null,
+      color: null,
       goal: "",
       instructions: "",
       repoIds: [],
@@ -154,6 +158,25 @@ describe("NewProjectDialog", () => {
 
     await waitFor(() => expect(created).toHaveLength(1));
     expect(created[0]?.body.lookAround).toBe(false);
+  });
+
+  test("the tile in the name box picks an icon and colour, and the project is created with them", async () => {
+    renderDialog();
+    type("new-project-name", "Rockets");
+    const tile = () => within(screen.getByTestId("new-project-icon")).getByTestId("project-tile");
+    expect(tile().textContent).toBe("R");
+
+    fireEvent.click(screen.getByTestId("new-project-icon"));
+    fireEvent.click(await screen.findByTestId("project-icon-option-rocket"));
+    fireEvent.click(screen.getByTestId("project-color-option-teal"));
+    expect(screen.getByTestId("project-icon-option-rocket").getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect([tile().dataset.icon, tile().dataset.color]).toEqual(["rocket", "teal"]);
+
+    fireEvent.click(screen.getByTestId("new-project-submit"));
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0]?.body).toMatchObject({ name: "Rockets", icon: "rocket", color: "teal" });
   });
 
   test("counts the instructions against the limit", async () => {

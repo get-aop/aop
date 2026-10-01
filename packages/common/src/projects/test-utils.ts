@@ -64,6 +64,8 @@ export const makeThread = (overrides: Overrides = {}) => ({
 export const makeProject = (overrides: Overrides = {}) => ({
   id: "prj_1",
   name: "checkout-service",
+  icon: null,
+  color: null,
   goal: "Keep checkout fast and safe to change",
   instructions: "Never touch the payments schema without asking.",
   coordinator: { provider: "claude-code", model: null, effort: "low" },

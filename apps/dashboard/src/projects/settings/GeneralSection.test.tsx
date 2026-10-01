@@ -87,6 +87,38 @@ describe("GeneralSection form", () => {
     expect(stub.calls.adopted[0]?.name).toBe("Checkout service");
   });
 
+  test("the tile beside the name picks an icon and colour, saved like any other setting", async () => {
+    const stub = await renderGeneral();
+    const tile = () => within(screen.getByTestId("settings-icon")).getByTestId("project-tile");
+    expect(screen.getByText("Name and icon")).toBeTruthy();
+    expect([tile().textContent, tile().dataset.icon, tile().dataset.color]).toEqual([
+      "C",
+      "letter",
+      "auto",
+    ]);
+
+    fireEvent.click(screen.getByTestId("settings-icon"));
+    fireEvent.click(await screen.findByTestId("project-icon-option-book"));
+    fireEvent.click(screen.getByTestId("project-color-option-orange"));
+    expect([tile().dataset.icon, tile().dataset.color]).toEqual(["book", "orange"]);
+    save();
+
+    await waitFor(() => expect(api.writes()).toHaveLength(1));
+    expect(api.writes()[0]?.body).toEqual({ icon: "book", color: "orange" });
+    await waitFor(() => expect(stub.calls.adopted[0]?.icon).toBe("book"));
+  });
+
+  test("Letter and Auto put back the fallback tile", async () => {
+    await renderGeneral({ ...project, icon: "rocket", color: "teal" });
+    fireEvent.click(screen.getByTestId("settings-icon"));
+    fireEvent.click(await screen.findByTestId("project-icon-option-letter"));
+    fireEvent.click(screen.getByTestId("project-color-option-auto"));
+    save();
+
+    await waitFor(() => expect(api.writes()).toHaveLength(1));
+    expect(api.writes()[0]?.body).toEqual({ icon: null, color: null });
+  });
+
   test("the goal counts its characters against the limit", async () => {
     await renderGeneral();
     expect(screen.getByTestId("settings-goal-count").textContent).toBe("18 / 8,000");

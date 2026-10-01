@@ -16,24 +16,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/ui/dialog";
-import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Textarea } from "@/ui/textarea";
 import type { RegisteredRepo } from "../api/client";
 import { closeNewProjectDialog, openAttachRepoDialog, useDialogs } from "../shell/dialog-store";
 import { navigate, projectPath } from "../shell/router";
+import { type AppearanceChoice, NameAndIconInput } from "./NameAndIconInput";
 import { PROJECT_FIELD_LABELS, projectNameProblem } from "./project-fields";
 import { useProjectActions } from "./use-project-actions";
 import { useRegisteredRepos } from "./use-registered-repos";
 
-/** Where a new project starts: a name, what it is for, what to tell every agent, and which repositories it works in. */
+/** Where a new project starts: a name and icon, what it is for, what to tell every agent, and which repositories it works in. */
 export const NewProjectDialog = () => {
   const { newProject } = useDialogs();
   return (
     <Dialog open={newProject} onOpenChange={(open) => !open && closeNewProjectDialog()}>
       <DialogContent
         data-testid="new-project-dialog"
-        className="w-[560px] max-w-[560px] grid-cols-[minmax(0,1fr)] gap-4"
+        className="w-[560px] max-w-[min(560px,calc(100%-2rem))] max-h-[calc(100dvh-2rem)] overflow-y-auto grid-cols-[minmax(0,1fr)] gap-4"
       >
         <DialogHeader>
           <DialogTitle>New project</DialogTitle>
@@ -52,6 +52,7 @@ export const NewProjectDialog = () => {
 const NewProjectForm = () => {
   const actions = useProjectActions();
   const [name, setName] = useState("");
+  const [appearance, setAppearance] = useState<AppearanceChoice>({ icon: null, color: null });
   const [goal, setGoal] = useState("");
   const [instructions, setInstructions] = useState("");
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -64,6 +65,7 @@ const NewProjectForm = () => {
 
   const parsed = CreateProjectInputSchema.safeParse({
     name,
+    ...appearance,
     goal: goal.trim(),
     instructions,
     repoIds: selected,
@@ -87,6 +89,8 @@ const NewProjectForm = () => {
     try {
       const project = await actions.create({
         name: parsed.data.name,
+        icon: parsed.data.icon,
+        color: parsed.data.color,
         goal: parsed.data.goal,
         instructions: parsed.data.instructions,
         repoIds: parsed.data.repoIds,
@@ -103,10 +107,14 @@ const NewProjectForm = () => {
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="new-project-name">Name</Label>
-        <Input
+        <Label htmlFor="new-project-name">Name and icon</Label>
+        <NameAndIconInput
           id="new-project-name"
           data-testid="new-project-name"
+          pickerTestId="new-project-icon"
+          // No id yet, so "Auto" previews one hue here; the project takes its own from its id once created.
+          appearance={{ id: "", name, ...appearance }}
+          onPick={setAppearance}
           autoFocus
           autoComplete="off"
           placeholder="Checkout service"

@@ -1,6 +1,8 @@
 import type {
   CliProvider,
   NotificationLevel,
+  ProjectColor,
+  ProjectIcon,
   ProjectStatus,
   ReasoningEffort,
   ThreadAccess,
@@ -10,6 +12,9 @@ import type { Generated, Selectable } from "kysely";
 export interface ProjectsTable {
   id: string;
   name: string;
+  /** Added by migration v16. Null keeps the letter tile on the id's colour. */
+  icon: Generated<ProjectIcon | null>;
+  color: Generated<ProjectColor | null>;
   goal: Generated<string>;
   instructions: Generated<string>;
   coordinator_provider: CliProvider;

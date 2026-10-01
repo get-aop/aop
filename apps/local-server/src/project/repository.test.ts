@@ -93,6 +93,20 @@ describe("project repository", () => {
     expect((await projects.update("p1", { goal: "Ship" }))?.autoFixPullRequests).toBe(true);
   });
 
+  test("stores the icon and colour, keeps them through other edits, and a null puts the letter back", async () => {
+    const created = await projects.create({ id: "p1", ...projectSettings() });
+    expect([created.icon, created.color]).toEqual([null, null]);
+
+    await projects.update("p1", { icon: "rocket", color: "teal" });
+    expect(await projects.update("p1", { goal: "Ship" })).toMatchObject({
+      icon: "rocket",
+      color: "teal",
+    });
+
+    await projects.update("p1", { icon: null });
+    expect(await projects.getById("p1")).toMatchObject({ icon: null, color: "teal" });
+  });
+
   test("keeps the order of the repos and returns null for an unknown project", async () => {
     await projects.create({ id: "p1", ...projectSettings({ repoIds: ["r3", "r1", "r2"] }) });
 

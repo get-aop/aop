@@ -1,38 +1,35 @@
-import type { Project } from "@aop/common";
 import { cn } from "@/lib/cn";
-
-// Eight muted hues, so neighbouring projects tell apart without any colour shouting.
-const HUES = [212, 152, 32, 282, 348, 178, 62, 246];
-
-const hueOf = (projectId: string): number => {
-  let hash = 0;
-  for (const char of projectId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return HUES[hash % HUES.length] ?? 212;
-};
+import { PROJECT_ICONS, type ProjectAppearance, tileColors, tileHue } from "./project-appearance";
 
 /**
- * A project's icon: its first letter on a hue taken from its id, so the same project looks
- * the same on every device. Picking an icon and colour is a project setting, added with settings.
+ * A project's icon: the one picked in its settings, else its first letter, on the colour picked
+ * or one taken from its id. Both are project settings, so it looks the same on every device.
  */
 export const ProjectTile = ({
   project,
   className,
 }: {
-  project: Pick<Project, "id" | "name">;
+  project: ProjectAppearance;
   className?: string;
 }) => {
-  const hue = hueOf(project.id);
+  const Glyph = project.icon ? PROJECT_ICONS[project.icon].glyph : null;
   return (
     <span
       aria-hidden="true"
       data-testid="project-tile"
-      style={{ background: `hsl(${hue} 32% 24%)`, color: `hsl(${hue} 62% 84%)` }}
+      data-icon={project.icon ?? "letter"}
+      data-color={project.color ?? "auto"}
+      style={tileColors(tileHue(project))}
       className={cn(
         "grid size-6 shrink-0 place-items-center rounded-md text-[12px] font-semibold uppercase",
         className,
       )}
     >
-      {project.name.trim().charAt(0) || "?"}
+      {Glyph ? (
+        <Glyph className="size-[62%]" strokeWidth={2} />
+      ) : (
+        project.name.trim().charAt(0) || "?"
+      )}
     </span>
   );
 };

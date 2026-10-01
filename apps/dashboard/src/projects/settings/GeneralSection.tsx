@@ -1,8 +1,8 @@
 import { type NotificationLevel, PROJECT_GOAL_MAX_LENGTH, type Project } from "@aop/common";
-import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Textarea } from "@/ui/textarea";
 import { requestConfirmation } from "../../components/ConfirmationHost";
+import { NameAndIconInput } from "../NameAndIconInput";
 import { NOTIFICATION_LEVELS } from "../notification-levels";
 import { projectNameProblem } from "../project-fields";
 import { AutoContinueSetting } from "./AutoContinueSetting";
@@ -15,7 +15,7 @@ import { type SettingsDraft, useSettingsDraft } from "./use-settings-draft";
 
 const count = (value: number): string => value.toLocaleString("en-US");
 
-/** Name, goal, models, thread access and notifications in one form, then the actions that are not edits. */
+/** Name and icon, goal, models, thread access and notifications in one form, then the actions that are not edits. */
 export const GeneralSection = ({ project }: { project: Project }) => {
   const draft = useSettingsDraft(project);
   const name = draft.value("name");
@@ -48,16 +48,27 @@ export const GeneralSection = ({ project }: { project: Project }) => {
         className="flex flex-col"
       >
         <SettingRow
-          label="Name"
+          label="Name and icon"
           htmlFor="settings-name"
           control={
-            <Input
+            <NameAndIconInput
               id="settings-name"
               data-testid="settings-name"
+              pickerTestId="settings-icon"
               autoComplete="off"
               value={name}
               aria-invalid={nameProblem !== null}
               onChange={(event) => draft.set("name", event.target.value)}
+              appearance={{
+                id: project.id,
+                name,
+                icon: draft.value("icon"),
+                color: draft.value("color"),
+              }}
+              onPick={({ icon, color }) => {
+                draft.set("icon", icon);
+                draft.set("color", color);
+              }}
               className="w-full sm:w-64"
             />
           }

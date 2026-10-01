@@ -26,9 +26,46 @@ export type NotificationLevel = z.infer<typeof NotificationLevelSchema>;
 export const ThreadAccessSchema = z.enum(["auto-accept-edits", "full-access"]);
 export type ThreadAccess = z.infer<typeof ThreadAccessSchema>;
 
+/**
+ * The icons a project can wear instead of its first letter. A small fixed set, so every client
+ * draws the same picture for the same name; the dashboard maps each to its glyph.
+ */
+export const ProjectIconSchema = z.enum([
+  "box",
+  "folder",
+  "code",
+  "terminal",
+  "rocket",
+  "bug",
+  "book",
+  "flask",
+  "globe",
+  "database",
+  "shield",
+  "sparkles",
+]);
+export type ProjectIcon = z.infer<typeof ProjectIconSchema>;
+
+/** The colours a project's tile can take; each is a muted hue the dashboard draws in both themes. */
+export const ProjectColorSchema = z.enum([
+  "blue",
+  "green",
+  "orange",
+  "purple",
+  "pink",
+  "teal",
+  "yellow",
+  "indigo",
+]);
+export type ProjectColor = z.infer<typeof ProjectColorSchema>;
+
 /** What a person edits in project settings, and what creating a project takes. */
 export const ProjectSettingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
+  /** Null draws the name's first letter: the tile a project has until someone picks an icon. */
+  icon: ProjectIconSchema.nullable(),
+  /** Null takes a colour from the project's id, so projects without one still tell apart. */
+  color: ProjectColorSchema.nullable(),
   goal: z.string().max(PROJECT_GOAL_MAX_LENGTH),
   /** Sent to the coordinator and to every new thread. */
   instructions: z.string().max(PROJECT_INSTRUCTIONS_MAX_LENGTH),
@@ -92,6 +129,8 @@ const { shape } = ProjectSettingsSchema;
  * dialog does by default, and a call that leaves it out gets a project that stays quiet.
  */
 export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
+  icon: shape.icon.default(null),
+  color: shape.color.default(null),
   goal: shape.goal.default(""),
   instructions: shape.instructions.default(""),
   coordinator: shape.coordinator.default({ provider: "claude-code", model: null, effort: "low" }),
