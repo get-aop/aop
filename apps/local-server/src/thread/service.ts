@@ -9,6 +9,7 @@ import type {
 import { generateTypeId } from "@aop/infra";
 import { discardStagedImages } from "../attachment/service.ts";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
+import type { ChatMidRunMode } from "../chat-session/mid-run-mode.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { Repo } from "../db/schema.ts";
 import type { PublisherTransaction } from "../event-log/publisher.ts";
@@ -38,6 +39,8 @@ type SpawnedThread = Pick<Thread, "id" | "projectId" | "title" | "repoId" | "bra
 interface SendOptions {
   onlyIn?: readonly ThreadStatus[];
   images?: readonly string[];
+  /** While the thread works: `steer` (the default) reaches it after its current step, `queue` after its turn. */
+  midRunMode?: ChatMidRunMode;
 }
 
 export interface SpawnThreadInput {
@@ -68,7 +71,9 @@ export interface ThreadService {
   /** The latest page of a thread's transcript, or the one before message `page.before`. */
   listMessages: (threadId: string, page?: MessagePageRequest) => Promise<ThreadResult<MessagePage>>;
   /**
-   * Steers a thread: queued while it works, a new turn while it is idle, a reopen once resolved.
+   * Steers a thread: while it works, written into its running turn, which takes it after the step
+   * it is on (`midRunMode: "queue"` waits for the turn to end instead); a new turn while it is
+   * idle; a reopen once resolved.
    * With `onlyIn`, the message is sent only if the thread is in one of those statuses when it is
    * stored, which nothing that releases its worktree can change meanwhile; otherwise it is
    * refused as busy and nothing is stored or made.
@@ -142,7 +147,7 @@ export const createThreadService = (
     thread: Thread,
     text: string,
     origin: MessageOrigin | null,
-    { onlyIn, images = [] }: SendOptions = {},
+    { onlyIn, images = [], midRunMode }: SendOptions = {},
   ): Promise<ThreadResult<{ thread: Thread }>> => {
     const active = await activeProject(thread.projectId);
     if ("error" in active) return { success: false, error: active.error };
@@ -154,7 +159,13 @@ export const createThreadService = (
     // again between the two, so the message is stored (and the turn started) while it is held.
     const started = await git.holding(
       thread,
-      () => chat.sendMessage(thread.id, { content: text, origin, imageAttachments: input.images }),
+      () =>
+        chat.sendMessage(thread.id, {
+          content: text,
+          origin,
+          imageAttachments: input.images,
+          midRunMode,
+        }),
       allowedIn(thread.id, onlyIn),
     );
     if (!started.success) return started;

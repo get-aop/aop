@@ -8,6 +8,7 @@ import {
   extractAssistantSignalTextFromRawJsonl,
   extractFinalAssistantTextFromRawJsonl,
   extractRuntimeSessionIdFromRawJsonl,
+  type InputChannel,
   type LLMProvider,
   parseRawJsonlContent,
   type RunImage,
@@ -139,6 +140,13 @@ export interface RuntimeRunResult {
   runtimeSessionState?: ChatRuntimeSessionState;
 }
 
+/** A run that takes messages while it works: where it reads them, and who hears of each result. */
+export interface RunInput {
+  channel: InputChannel;
+  /** The run wrote a result: it may have answered everything it was given. */
+  onResult: () => void;
+}
+
 export interface ChatFileArtifact {
   path: string;
   mimeType: "text/markdown";
@@ -164,6 +172,8 @@ export const runSessionPrompt = async (input: {
   onRuntimeSession?: (sessionId: string) => Promise<void> | void;
   /** Receives the spawned CLI's pid (best effort: a failure does not stop the run). */
   onSpawn?: (pid: number) => Promise<void> | void;
+  /** Keeps the run open for messages sent while it works (see run-input.ts). */
+  input?: RunInput;
   /** Test seam; production uses CHAT_MAX_LOG_BYTES. */
   maxLogBytes?: number;
   /** Test seam; production uses CHAT_LOG_SIZE_POLL_MS. */
@@ -197,6 +207,7 @@ export const runSessionPrompt = async (input: {
       input.onRuntimeSession,
       input.onSpawn,
       handle,
+      input.input,
       input.maxLogBytes,
       input.logSizePollMs,
     );
@@ -366,6 +377,7 @@ const executeProviderRun = async (
   onRuntimeSession: ((sessionId: string) => Promise<void> | void) | undefined,
   onSpawn: ((pid: number) => Promise<void> | void) | undefined,
   handle: ActiveRunHandle,
+  runInput: RunInput | undefined,
   maxLogBytes = CHAT_MAX_LOG_BYTES,
   logSizePollMs = CHAT_LOG_SIZE_POLL_MS,
 ): Promise<RuntimeRunResult> => {
@@ -466,8 +478,10 @@ const executeProviderRun = async (
       });
       stopTail = startLogProgressTail({
         logFilePath,
+        promptUuid: runInput?.channel.promptUuid,
         onLine: async (line) => {
           await inspectSessionLine(line);
+          if (runInput && isResultLine(line)) runInput.onResult();
         },
         onProgress,
       });
@@ -485,6 +499,7 @@ const executeProviderRun = async (
       allowedDirectories,
       images,
       appendSystemPrompt,
+      inputChannel: runInput?.channel,
       logFilePath,
       provider,
       handle,
@@ -537,6 +552,7 @@ const raceProviderAgainstInterrupt = async (input: {
   allowedDirectories: string[] | undefined;
   images: RunImage[] | undefined;
   appendSystemPrompt: string | undefined;
+  inputChannel: InputChannel | undefined;
   logFilePath: string;
   provider: LLMProvider;
   handle: ActiveRunHandle;
@@ -564,7 +580,11 @@ const raceProviderAgainstInterrupt = async (input: {
     },
     input.appendSystemPrompt,
   );
-  const options = input.images?.length ? { ...runOptions, images: input.images } : runOptions;
+  const options = {
+    ...runOptions,
+    ...(input.images?.length && { images: input.images }),
+    ...(input.inputChannel && { inputChannel: input.inputChannel }),
+  };
   const providerPromise = completeProviderRun({
     runtime: input.session.runtime,
     provider: input.provider,
@@ -1084,6 +1104,16 @@ export const readAssistantTextFromLog = async (
   return extractAssistantSignalTextFromRawJsonl(content, {
     requireCompleteLine: false,
   }).text.trim();
+};
+
+// Cheap enough for every line: only a line that may be a result is parsed.
+const isResultLine = (line: string): boolean => {
+  if (!line.includes('"result"')) return false;
+  try {
+    return (JSON.parse(line) as { type?: unknown }).type === "result";
+  } catch {
+    return false;
+  }
 };
 
 export const createSessionRunLogPath = async (sessionId: string): Promise<string> => {

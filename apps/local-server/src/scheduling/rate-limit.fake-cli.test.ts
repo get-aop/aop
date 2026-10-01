@@ -234,9 +234,11 @@ describe("a wait on a rate limit", () => {
   test("takes up a message that was already queued instead of writing another", async () => {
     const { s, project } = await setup();
     const thread = await spawnThread(s, project.id, "Fix it [fake: startup=600 ratelimit=3600]");
-    // A steer sent while the turn runs waits behind it, and the limit then holds both.
+    // A message held for after the turn waits behind it, and the limit then holds both.
     await untilStarted(s, thread.id);
-    await s.services.threads.send(thread.id, "Also update the docs");
+    await s.services.threads.send(thread.id, "Also update the docs", undefined, {
+      midRunMode: "queue",
+    });
     await untilStatus(s, thread.id, "rate-limited");
 
     await s.services.threads.resume(thread.id);

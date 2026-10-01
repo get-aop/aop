@@ -1,5 +1,5 @@
 import type { MessageBlock, ThreadCardVariant } from "@aop/common";
-import { memo, useMemo } from "react";
+import { memo, type ReactNode, useMemo } from "react";
 import { PullRequestChip } from "../PullRequestChip";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ChatThreadCard } from "./ChatThreadCard";
@@ -29,6 +29,7 @@ export const MessageBlocks = memo(function MessageBlocks({
   blocks,
   writing = false,
   watched = false,
+  renderSteer,
 }: {
   /** The message the blocks belong to: what a proposal in them is answered against. */
   messageId: string;
@@ -36,6 +37,8 @@ export const MessageBlocks = memo(function MessageBlocks({
   writing?: boolean;
   /** The reply was on screen while it was being written: its prose renders in streaming mode. */
   watched?: boolean;
+  /** Draws the message a `steer` block names, where the turn took it in. */
+  renderSteer?: (messageId: string) => ReactNode;
 }) {
   const groups = useMemo(() => groupBlocks(blocks), [blocks]);
   const carded = useMemo(
@@ -53,6 +56,7 @@ export const MessageBlocks = memo(function MessageBlocks({
           messageId={messageId}
           active={writing && index === groups.length - 1}
           watched={watched}
+          renderSteer={renderSteer}
         />
       ))}
     </div>
@@ -69,12 +73,14 @@ const GroupView = ({
   messageId,
   active,
   watched,
+  renderSteer,
 }: {
   group: BlockGroup;
   carded: ReadonlySet<string>;
   messageId: string;
   active: boolean;
   watched: boolean;
+  renderSteer?: (messageId: string) => ReactNode;
 }) => {
   if (group.kind === "prose") return <Prose run={group.run} watched={watched} animating={active} />;
   if (group.kind === "tools") return <ToolRun tools={group.tools} active={active} />;
@@ -92,6 +98,8 @@ const GroupView = ({
       return <SuggestedThreads messageId={messageId} suggestions={block.suggestions} />;
     case "quote-forwarded":
       return <QuoteForwarded text={block.text} />;
+    case "steer":
+      return renderSteer?.(block.messageId) ?? null;
   }
 };
 

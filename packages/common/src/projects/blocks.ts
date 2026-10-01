@@ -55,17 +55,28 @@ const ToolBlockSchema = z.object({
 const ThinkingBlockSchema = z.object({ type: z.literal("thinking"), text: z.string().min(1) });
 
 /**
+ * A message that reached the turn while it worked, where the agent took it in: the user message
+ * `messageId`, which the reply shows at this point instead of on its own.
+ */
+const SteerBlockSchema = z.object({ type: z.literal("steer"), messageId: IdSchema });
+
+/**
  * One part of what an agent's turn produced, in the order it produced them: prose, a tool call,
- * or reasoning. A reply is its parts followed by the blocks its tools posted (cards, receipts,
- * proposals), and a turn being written is the same parts, growing.
+ * reasoning, or a message the turn took in as it went. A reply is its parts followed by the
+ * blocks its tools posted (cards, receipts, proposals), and a turn being written is the same
+ * parts, growing.
  */
 export const TurnPartSchema = z.discriminatedUnion("type", [
   TextBlockSchema,
   ToolBlockSchema,
   ThinkingBlockSchema,
+  SteerBlockSchema,
 ]);
 export type TurnPart = z.infer<typeof TurnPartSchema>;
 export type ToolPart = Extract<TurnPart, { type: "tool" }>;
+export type SteerPart = Extract<TurnPart, { type: "steer" }>;
+/** A part that is prose the agent wrote: text or reasoning. */
+export type ProsePart = Extract<TurnPart, { type: "text" | "thinking" }>;
 
 /** Inline pill for a thread mentioned in prose; the hover popover reads the thread by id. */
 const ThreadChipBlockSchema = z.object({
@@ -156,6 +167,7 @@ export const MessageBlockSchema = z.discriminatedUnion("type", [
   TextBlockSchema,
   ToolBlockSchema,
   ThinkingBlockSchema,
+  SteerBlockSchema,
   ThreadChipBlockSchema,
   PrChipBlockSchema,
   ThreadCardBlockSchema,

@@ -310,3 +310,42 @@ describe("the compact box", () => {
     await waitFor(() => expect(send).toHaveBeenCalledWith("Postgres"));
   });
 });
+
+describe("while the agent works", () => {
+  test("says where the message lands, and Alt+Enter holds it for after the turn", async () => {
+    const send = renderComposer({ working: true });
+
+    expect(screen.getByTestId("composer-steer-hint").textContent).toContain(
+      "after its current step",
+    );
+    type("use arm64");
+    press("Enter");
+    await waitFor(() => expect(send).toHaveBeenCalledWith("use arm64"));
+
+    type("then write the docs");
+    press("Enter", { altKey: true });
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith("then write the docs", undefined, { afterTurn: true }),
+    );
+  });
+
+  test("Send after this turn does the same with a click", async () => {
+    const send = renderComposer({ working: true });
+
+    type("then write the docs");
+    fireEvent.click(screen.getByTestId("composer-send-after-turn"));
+
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith("then write the docs", undefined, { afterTurn: true }),
+    );
+  });
+
+  test("an idle agent shows no hint, and Alt+Enter sends as Enter does", async () => {
+    const send = renderComposer();
+
+    expect(screen.queryByTestId("composer-steer-hint")).toBeNull();
+    type("hello");
+    press("Enter", { altKey: true });
+    await waitFor(() => expect(send).toHaveBeenCalledWith("hello"));
+  });
+});

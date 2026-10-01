@@ -255,7 +255,31 @@ describe("a message to a thread with images", () => {
     expect(s.runs.at(-1)?.resumeSessionId).toBeDefined();
   });
 
-  test("a message queued while the thread works keeps its images for the turn it starts", async () => {
+  test("a message sent into a working thread's turn takes its images into that turn", async () => {
+    const { s, project } = await setup();
+    const thread = await spawnIdle(s, project, "Do it [fake: steps=3 delay=200]");
+    await eventually(
+      async () =>
+        (await s.ctx.chatSessionRepository.getById(thread.id))?.runtime_session_id ?? undefined,
+      "the first turn's CLI to start",
+    );
+    const jpeg = await upload(s, project.id, fakeJpeg(99));
+
+    const sent = await s.api("POST", `/api/threads/${thread.id}/messages`, {
+      text: "Match this",
+      images: [jpeg.id],
+    });
+    await s.settle();
+
+    expect(sent.status).toBe(201);
+    const threadRuns = s.runs.filter((run) => run.env?.AOP_CHAT_SESSION_ID === thread.id);
+    expect(threadRuns).toHaveLength(1);
+    expect(replyText(await threadMessages(s, thread.id))).toContain(
+      "Then you said: Match this [images: image/jpeg (99 bytes)]",
+    );
+  });
+
+  test("a message held for after the turn keeps its images for the turn it starts", async () => {
     const { s, project } = await setup();
     const thread = await spawnIdle(s, project, "Do it [fake: steps=2 delay=150]");
     await eventually(async () => (s.runs.length > 0 ? true : undefined), "the first turn to start");
@@ -264,6 +288,7 @@ describe("a message to a thread with images", () => {
     const sent = await s.api("POST", `/api/threads/${thread.id}/messages`, {
       text: "",
       images: [jpeg.id],
+      midRunMode: "queue",
     });
     await s.settle();
 

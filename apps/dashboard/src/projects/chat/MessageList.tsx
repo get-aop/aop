@@ -158,7 +158,7 @@ const RowView = ({
         </MarkerSeparator>
       );
     case "message":
-      return <MessageRow message={row.message} writing={row.streaming} />;
+      return <MessageRow message={row.message} writing={row.streaming} steers={row.steers} />;
     case "working":
       return <WorkingRow worker={worker} since={row.since ?? workingSince ?? null} />;
   }
@@ -168,15 +168,17 @@ const RowView = ({
 const MessageRow = memo(function MessageRow({
   message,
   writing,
+  steers,
 }: {
   message: Message;
   writing: boolean;
+  steers?: readonly Message[];
 }) {
   switch (message.role) {
     case "user":
       return <UserRow message={message} />;
     case "assistant":
-      return <AssistantRow message={message} writing={writing} />;
+      return <AssistantRow message={message} writing={writing} steers={steers} />;
     case "thread-report":
       return <ThreadReportRow message={message} />;
   }

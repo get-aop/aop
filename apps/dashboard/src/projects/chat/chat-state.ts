@@ -187,10 +187,19 @@ export const unansweredMessages = (messages: readonly Message[]): readonly Messa
 export const isWorking = (state: Pick<ChatState, "messages" | "live">): boolean =>
   unansweredMessages(state.messages).length > 0 || Object.keys(state.live).length > 0;
 
-export const isReply = (message: Message): boolean => message.role === "assistant";
+export const isReply = (message: Message): boolean =>
+  message.role === "assistant" && steersOf(message) === undefined;
 
 /** A person's message, or a thread's report: the two things that make the coordinator work. */
-export const isUserSide = (message: Message): boolean => message.role !== "assistant";
+export const isUserSide = (message: Message): boolean =>
+  message.role !== "assistant" && steersOf(message) === undefined;
+
+/**
+ * The reply a message was written into while its turn ran. It is part of that reply, drawn
+ * inside it, and needs no reply of its own; it is neither a reply nor something left to answer.
+ */
+export const steersOf = (message: Message): string | undefined =>
+  message.role === "thread-report" ? undefined : message.steers;
 
 /**
  * Where a message that is new to the page goes. A reply sits right after the message it says it

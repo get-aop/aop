@@ -1,6 +1,6 @@
 /** Provider-agnostic JSONL → stream chunks. */
 
-import { formatToolInput } from "@aop/llm-provider";
+import { formatToolInput, replayedUuid } from "@aop/llm-provider";
 
 type StreamedBlock = "text" | "thinking";
 
@@ -37,7 +37,9 @@ export type ProgressChunk =
       itemId?: string;
       detail?: string;
       failed?: boolean;
-    };
+    }
+  /** Claude echoed a user message where the model took it (`--replay-user-messages`). */
+  | { kind: "user-message"; uuid: string };
 
 /**
  * Parse one JSONL line from a chat runtime log into a progressive chunk.
@@ -224,6 +226,8 @@ const extractClaudeMessage = (event: Record<string, unknown>): ProgressChunk[] =
   const type = stringType(event);
   if ((type !== "assistant" && type !== "user") || !isRecord(event.message)) return [];
   if (type === "assistant") return extractContentChunks(event.message.content);
+  const replayed = replayedUuid(event);
+  if (replayed) return [{ kind: "user-message", uuid: replayed }];
   return extractClaudeToolResults(event.message.content);
 };
 

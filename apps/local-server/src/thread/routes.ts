@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { CHAT_MID_RUN_MODES } from "../chat-session/mid-run-mode.ts";
 import { errorResponse, readBody, readOptionalBody, readPageQuery } from "../project/http.ts";
 import type { ProjectServices } from "../project/services.ts";
 
@@ -11,7 +12,11 @@ const SpawnBodySchema = z.object({
 });
 const MessageBodySchema = z.object({ text: z.string() });
 /** `images` are ids of images uploaded to the thread's project, in order. */
-const SteerBodySchema = MessageBodySchema.extend({ images: z.array(z.string()).optional() });
+const SteerBodySchema = MessageBodySchema.extend({
+  images: z.array(z.string()).optional(),
+  /** While the thread works: `steer` (the default) reaches it after its current step, `queue` after its turn. */
+  midRunMode: z.enum(CHAT_MID_RUN_MODES).optional(),
+});
 const OpenPullRequestBodySchema = z.object({
   draft: z.boolean().optional(),
   title: z.string().trim().min(1).max(200).optional(),
@@ -64,8 +69,11 @@ export const createThreadRoutes = ({ threads }: ProjectServices) => {
   routes.post("/threads/:threadId/messages", async (c) => {
     const parsed = await readBody(c, SteerBodySchema);
     if ("response" in parsed) return parsed.response;
-    const { text, images } = parsed.body;
-    const result = await threads.send(c.req.param("threadId"), text, undefined, { images });
+    const { text, images, midRunMode } = parsed.body;
+    const result = await threads.send(c.req.param("threadId"), text, undefined, {
+      images,
+      midRunMode,
+    });
     return result.success ? c.json({ thread: result.thread }, 201) : errorResponse(c, result.error);
   });
 

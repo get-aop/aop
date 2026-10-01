@@ -23,6 +23,8 @@ interface TailState {
  */
 export const startLogProgressTail = (input: {
   logFilePath: string;
+  /** The uuid of the run's own prompt, which Claude echoes and is no steer. */
+  promptUuid?: string;
   onProgress: StreamProgressListener;
   onLine?: (line: string) => Promise<void> | void;
   minEmitIntervalMs?: number;
@@ -30,7 +32,7 @@ export const startLogProgressTail = (input: {
 }): (() => Promise<void>) => {
   const minEmitIntervalMs = input.minEmitIntervalMs ?? 100;
   const pollIntervalMs = input.pollIntervalMs ?? 100;
-  const accumulator = createTurnAccumulator();
+  const accumulator = createTurnAccumulator({ promptUuid: input.promptUuid });
   const state: TailState = {
     stopped: false,
     reader: createLogReader(input.logFilePath),

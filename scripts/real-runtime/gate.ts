@@ -95,7 +95,8 @@ const spawnRun = async (
     cmd: [config.claude, ...args],
     cwd,
     env: env as Record<string, string>,
-    stdin: "ignore",
+    // The prompt, and every message sent while the run works, arrive on stdin.
+    stdin: "inherit",
     stdout: "pipe",
     stderr: stderrFd,
   });

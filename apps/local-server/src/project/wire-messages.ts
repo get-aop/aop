@@ -44,6 +44,8 @@ export interface MessageExtras {
   failed?: boolean;
   /** For a reply: the message its run answered. */
   inReplyTo?: string;
+  /** For a user message written into a running turn: the reply that turn writes. */
+  steers?: string;
 }
 
 /**
@@ -109,6 +111,7 @@ const readPage = async (
       answers: answers.get(row.id),
       failed: isFailedRun(row.run_status, row.run_failure_kind),
       inReplyTo: row.run_user_message_id ?? undefined,
+      steers: row.steered_reply_id ?? undefined,
     });
     return message ? [message] : [];
   });
@@ -146,6 +149,7 @@ export const getWireMessage = async (
     answers: answers.get(row.id),
     failed: isFailedRun(row.run_status, row.run_failure_kind),
     inReplyTo: row.run_user_message_id ?? undefined,
+    steers: row.steered_reply_id ?? undefined,
   });
 };
 
@@ -174,7 +178,8 @@ export const toWireMessage = (
   // The server's nudge to resume after a rate limit is plumbing: the reply that explains the
   // wait is already in the transcript.
   if (origin?.type === "rate-limit-resume") return null;
-  return MessageSchema.parse(userSideMessage(base, text, origin, images));
+  const steers = extras.steers && origin?.type !== "thread-report" ? { steers: extras.steers } : {};
+  return MessageSchema.parse({ ...userSideMessage(base, text, origin, images), ...steers });
 };
 
 // A stored image of a type the wire does not know (none is accepted today) is left out rather
@@ -273,12 +278,14 @@ const messagesWithRunBlocks = (db: Kysely<Database>, session: ChatSession) =>
   db
     .selectFrom("chat_messages")
     .leftJoin("chat_runs", "chat_runs.assistant_message_id", "chat_messages.id")
+    .leftJoin("chat_runs as steered_run", "steered_run.id", "chat_messages.steered_run_id")
     .selectAll("chat_messages")
     .select([
       "chat_runs.blocks_json as run_blocks",
       "chat_runs.status as run_status",
       "chat_runs.failure_kind as run_failure_kind",
       "chat_runs.user_message_id as run_user_message_id",
+      "steered_run.assistant_message_id as steered_reply_id",
     ])
     .where("chat_messages.session_id", "=", session.id);
 

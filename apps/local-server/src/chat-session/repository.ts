@@ -229,6 +229,7 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
         .selectAll()
         .where("session_id", "=", sessionId)
         .where("role", "=", "user")
+        .where("steered_run_id", "is", null)
         .where((eb) =>
           eb.not(
             eb.exists(

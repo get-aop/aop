@@ -7,6 +7,7 @@ import type {
   Thread,
   ThreadUsage,
 } from "@aop/common";
+import { messageBody, type SendOptions } from "./project-chat";
 import { beforeQuery, request } from "./request";
 
 const threadUrl = (threadId: string, suffix = ""): string =>
@@ -23,18 +24,20 @@ export const listThreadMessages = (threadId: string, before?: string): Promise<M
   request<MessagePage>(threadUrl(threadId, `/messages${beforeQuery(before)}`));
 
 /**
- * Steers a thread: it is queued while the thread works, a new turn while it is idle. `images`
+ * Steers a thread: while it works, the message reaches its running turn after the step it is on
+ * (with `afterTurn`, once the turn has ended); while it is idle, it starts a new turn. `images`
  * are ids of images uploaded to the thread's project, in order.
  */
 export const steerThread = async (
   threadId: string,
   text: string,
   images: readonly string[] = [],
+  { afterTurn = false }: SendOptions = {},
 ): Promise<Thread> =>
   (
     await post<{ thread: Thread }>(
       threadUrl(threadId, "/messages"),
-      images.length > 0 ? { text, images } : { text },
+      messageBody(text, images, afterTurn),
     )
   ).thread;
 

@@ -291,3 +291,66 @@ describe("scroll to latest", () => {
     expect(pill.parentElement?.parentElement?.contains(scroller)).toBe(true);
   });
 });
+
+describe("a message sent into a turn while it ran", () => {
+  const steered = (id: string) =>
+    screen
+      .getAllByTestId("steered-message")
+      .find((row) => row.getAttribute("data-message-id") === id) as HTMLElement;
+
+  test("is drawn inside the reply where the agent took it in, after what it said before", () => {
+    renderList({
+      messages: [
+        userMessage("u1", 1),
+        reply(
+          "a1",
+          3,
+          [
+            { type: "text", text: "Building for x86" },
+            { type: "steer", messageId: "u2" },
+            { type: "text", text: "Switched to arm64" },
+          ],
+          { inReplyTo: "u1" },
+        ),
+        userMessage("u2", 2, { text: "use arm64", steers: "a1" }),
+      ],
+    });
+
+    const row = steered("u2");
+    expect(row.getAttribute("data-state")).toBe("taken");
+    expect(within(row).getByText("use arm64")).toBeTruthy();
+    expect(assistantOf("a1").contains(row)).toBe(true);
+    // The person's message is not drawn a second time on its own.
+    expect(screen.getAllByTestId("user-message")).toHaveLength(1);
+    const text = assistantOf("a1").textContent ?? "";
+    expect(text.indexOf("Building for x86")).toBeLessThan(text.indexOf("use arm64"));
+    expect(text.indexOf("use arm64")).toBeLessThan(text.indexOf("Switched to arm64"));
+  });
+
+  test("waits at the end of the reply being written until the agent takes it in", () => {
+    renderList({
+      messages: [userMessage("u1", 1), userMessage("u2", 2, { text: "stop", steers: "a1" })],
+      working: true,
+      live: { a1: liveTurn("Working on it", "u1") },
+    });
+
+    const row = steered("u2");
+    expect(row.getAttribute("data-state")).toBe("pending");
+    expect(within(row).getByTestId("steered-message-caption").textContent).toContain(
+      "after its current step",
+    );
+    expect(assistantOf("a1").contains(row)).toBe(true);
+  });
+
+  test("a stopped turn that never took it in says so", () => {
+    renderList({
+      messages: [
+        userMessage("u1", 1),
+        reply("a1", 3, [{ type: "text", text: "Conversation stopped." }], { inReplyTo: "u1" }),
+        userMessage("u2", 2, { text: "stop", steers: "a1" }),
+      ],
+    });
+
+    expect(steered("u2").getAttribute("data-state")).toBe("missed");
+  });
+});

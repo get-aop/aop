@@ -130,7 +130,7 @@ export type SendChatMessageResult =
       /**
        * Mid-run handling when the assistant was already active:
        * - queued: wait for the current reply, then process this message
-       * - steered: interrupt the current reply, then process this message
+       * - steered: written into the running turn, which takes it after the step it is on
        */
       midRun?: "queued" | "steered";
       /** @deprecated Prefer midRun — kept for older clients. */

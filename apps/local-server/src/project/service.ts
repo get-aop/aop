@@ -10,6 +10,7 @@ import type {
 import { aopPaths, generateTypeId } from "@aop/infra";
 import { discardStagedImages } from "../attachment/service.ts";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
+import type { ChatMidRunMode } from "../chat-session/mid-run-mode.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
 import type { ThreadGit } from "../thread/git.ts";
@@ -80,7 +81,7 @@ export interface ProjectService {
   sendToCoordinator: (
     projectId: string,
     text: string,
-    options?: { origin?: MessageOrigin; images?: readonly string[] },
+    options?: { origin?: MessageOrigin; images?: readonly string[]; midRunMode?: ChatMidRunMode },
   ) => Promise<ProjectResult<{ message: Message }>>;
   /** The latest page of the coordinator chat, or the one before message `page.before`. */
   listMessages: (
@@ -271,7 +272,7 @@ export const createProjectService = (
       return { success: true };
     },
 
-    sendToCoordinator: async (projectId, text, { origin, images = [] } = {}) => {
+    sendToCoordinator: async (projectId, text, { origin, images = [], midRunMode } = {}) => {
       const coordinator = await activeCoordinator(projectId);
       if ("error" in coordinator) return { success: false, error: coordinator.error };
       const input = await readMessageInput(projectId, text, images);
@@ -281,6 +282,7 @@ export const createProjectService = (
         content: text,
         origin,
         imageAttachments: input.images,
+        midRunMode,
       });
       if (!sent.success) {
         return { success: false, error: { code: "SEND_FAILED", reason: sent.error.code } };

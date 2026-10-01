@@ -157,6 +157,19 @@ describe("messages to a thread", () => {
     ]);
   });
 
+  test("a message held for after the turn says so", async () => {
+    host.respondWith(() => json({ thread }, 201));
+
+    await steerThread("thr 1", "then the docs", [], { afterTurn: true });
+    expect(host.requests).toEqual([
+      {
+        method: "POST",
+        url: "/api/threads/thr%201/messages",
+        body: { text: "then the docs", midRunMode: "queue" },
+      },
+    ]);
+  });
+
   test("answering posts the text to the reply route", async () => {
     host.respondWith(() => json({ thread }));
 

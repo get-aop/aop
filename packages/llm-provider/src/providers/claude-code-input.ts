@@ -10,17 +10,22 @@ import type { RunImage, RunOptions } from "../types";
  * then sees the images themselves, whatever tools the run has: a coordinator has no Read tool
  * to open an image by its path. A prompt without images stays an argument.
  */
-export const takesStdinPrompt = (options: Pick<RunOptions, "images">): boolean =>
-  (options.images?.length ?? 0) > 0;
+export const takesStdinPrompt = (options: Pick<RunOptions, "images" | "inputChannel">): boolean =>
+  Boolean(options.inputChannel) || (options.images?.length ?? 0) > 0;
 
-/** The stream-json line Claude Code reads: the images in order, then the prompt's text. */
+/**
+ * The stream-json line Claude Code reads: the images in order, then the prompt's text. A `uuid`
+ * comes back on the line the CLI echoes when it takes the message (`--replay-user-messages`).
+ */
 export const buildClaudeUserMessage = (
   prompt: string,
   images: readonly RunImage[],
   readImage: (path: string) => Buffer = readFileSync,
+  uuid?: string,
 ): string =>
   `${JSON.stringify({
     type: "user",
+    ...(uuid && { uuid }),
     message: {
       role: "user",
       content: [
@@ -43,9 +48,9 @@ export const buildClaudeUserMessage = (
  * handle, so a detached run reads its prompt even after the host restarts.
  */
 export const prepareStdinPrompt = (
-  options: Pick<RunOptions, "prompt" | "images">,
+  options: Pick<RunOptions, "prompt" | "images" | "inputChannel">,
 ): { path: string; remove: () => void } | null => {
-  if (!takesStdinPrompt(options)) return null;
+  if (!takesStdinPrompt(options) || options.inputChannel) return null;
   const path = join(tmpdir(), `aop-claude-prompt-${randomUUID()}.jsonl`);
   writeFileSync(path, buildClaudeUserMessage(options.prompt, options.images ?? []), {
     mode: 0o600,

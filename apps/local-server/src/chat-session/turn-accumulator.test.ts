@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { TurnPart } from "@aop/common";
+import { generateTypeId, typeIdToUuid } from "@aop/infra";
 import type { ProgressChunk } from "./stream-progress-parse.ts";
 import { parseStreamProgressLines } from "./stream-progress-parse.ts";
 import { createTurnAccumulator } from "./turn-accumulator.ts";
@@ -407,5 +408,44 @@ describe("createTurnAccumulator with Claude partial messages", () => {
     expect(apply(stop(0), { type: "result", subtype: "success", result: "Done." })).toEqual([
       { type: "text", text: "Done." },
     ]);
+  });
+});
+
+describe("messages a turn took in while it worked", () => {
+  const replay = (uuid: string) => ({
+    type: "user",
+    isReplay: true,
+    uuid,
+    message: { role: "user", content: [{ type: "text", text: "a message" }] },
+  });
+  const said = (text: string) => ({
+    type: "assistant",
+    message: { content: [{ type: "text", text }] },
+  });
+
+  test("are steer parts where Claude echoed them, and the turn's own prompt is not", () => {
+    const prompt = generateTypeId("smsg");
+    const steer = generateTypeId("smsg");
+    const events = [
+      replay(typeIdToUuid(prompt) ?? ""),
+      said("Building for x86"),
+      replay(typeIdToUuid(steer) ?? ""),
+      said("Switched to arm64"),
+    ];
+
+    const parts = createTurnAccumulator({ promptUuid: typeIdToUuid(prompt) ?? "" }).applyAll(
+      events.flatMap((event) => parseStreamProgressLines(JSON.stringify(event))),
+    );
+
+    expect(parts).toEqual([
+      { type: "text", text: "Building for x86" },
+      { type: "steer", messageId: steer },
+      { type: "text", text: "Switched to arm64" },
+    ]);
+  });
+
+  test("an echo that names no message of ours, or one already shown, adds nothing", () => {
+    const steer = typeIdToUuid(generateTypeId("smsg")) ?? "";
+    expect(turnOfEvents(replay("not-a-uuid"), replay(steer), replay(steer))).toHaveLength(1);
   });
 });

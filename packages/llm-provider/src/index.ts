@@ -40,6 +40,14 @@ export {
 export { terminateProcessTree } from "./process-tree";
 export { createProvider } from "./provider-factory";
 export { ClaudeCodeProvider } from "./providers/claude-code";
+export { buildClaudeUserMessage } from "./providers/claude-code-input";
+export {
+  endInput,
+  type InputChannel,
+  isInputSettled,
+  replayedUuid,
+  writeInputLine,
+} from "./providers/claude-code-input-channel";
 export { CodexCliProvider } from "./providers/codex-cli";
 export { PiProvider } from "./providers/pi";
 export { resolveRuntimeExecutable } from "./runtime-alias";

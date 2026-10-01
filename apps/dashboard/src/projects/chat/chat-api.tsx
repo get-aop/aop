@@ -2,6 +2,7 @@ import type { MessagePage, Thread, UserMessage } from "@aop/common";
 import { createContext, useContext } from "react";
 import {
   listCoordinatorMessages,
+  type SendOptions,
   sendCoordinatorMessage,
   skipSuggestion,
   startSuggestion,
@@ -17,6 +18,7 @@ export interface ChatApi {
     projectId: string,
     text: string,
     images?: readonly string[],
+    options?: SendOptions,
   ) => Promise<UserMessage>;
   /**
    * The answers to a proposal of the coordinator, given by the message and the suggestion. The

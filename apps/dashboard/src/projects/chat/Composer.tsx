@@ -3,6 +3,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Kbd } from "@/ui/kbd";
+import type { SendOptions } from "../../api/project-chat";
 import { AttachImageButton, ComposerImages } from "./ComposerImages";
 import { type UploadImage, useImageAttachments, useImageInput } from "./image-attachments";
 import type { SendResult } from "./project-chat";
@@ -12,6 +13,9 @@ import { useDraft } from "./use-draft";
  * Where the person writes to the coordinator (or, with another `send`, to a thread). Enter
  * sends and Shift+Enter starts a new line; what is typed survives a reload; a send that fails
  * gives the text back with the reason. `chips` sit in the footer, before the send button.
+ * While the agent is `working`, a message reaches its turn after the step it is on, which is how
+ * a correction lands before the work it corrects is done; Alt+Enter, or "Send after this turn",
+ * holds it until the turn has ended instead.
  * With `onStop`, a Stop button sits beside Send and Escape does the same: the agent is at work
  * and the person may want it to end. With `uploadImage`, images can go with the message: pasted,
  * dropped on the box, or picked with the "+" before the chips. Each uploads as it is added, and a
@@ -26,6 +30,7 @@ export const Composer = ({
   focusKey,
   onStop,
   uploadImage,
+  working,
   compact = false,
 }: {
   /** Identifies the conversation the draft belongs to. */
@@ -34,7 +39,9 @@ export const Composer = ({
   /** Why nothing can be sent now; the composer says so instead of taking input. */
   disabledReason: string | null;
   /** `images` are the host's ids of the attached images, passed only when there are some. */
-  send: (text: string, images?: readonly string[]) => Promise<SendResult>;
+  send: (text: string, images?: readonly string[], options?: SendOptions) => Promise<SendResult>;
+  /** The agent is at work: what is sent reaches its turn, unless held for after it. */
+  working?: boolean;
   chips?: ReactNode;
   /** When it is set, the cursor moves into the composer as the conversation opens. */
   focusKey?: string;
@@ -62,17 +69,7 @@ export const Composer = ({
     if (focusKey !== undefined && !disabled) input.current?.focus();
   }, [focusKey, disabled]);
 
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.nativeEvent.isComposing) return;
-    if (event.key === "Escape" && onStop) {
-      event.preventDefault();
-      onStop();
-      return;
-    }
-    if (event.key !== "Enter" || event.shiftKey) return;
-    event.preventDefault();
-    void submit();
-  };
+  const onKeyDown = composerKeys({ submit, onStop, working: working === true });
 
   return (
     <fieldset
@@ -106,6 +103,12 @@ export const Composer = ({
         )}
       />
       <ComposerError error={error} compact={compact} />
+      <SteerHint
+        working={working}
+        compact={compact}
+        canSend={canSend}
+        onSendAfterTurn={() => void submit(AFTER_TURN)}
+      />
       <div
         className={cn("flex flex-wrap items-center gap-1 px-2.5", compact ? "pb-1.5" : "pb-2.5")}
       >
@@ -125,7 +128,7 @@ export const Composer = ({
  */
 const useComposerSend = (
   draftId: string,
-  send: (text: string, images?: readonly string[]) => Promise<SendResult>,
+  send: Send,
   attachments: ReturnType<typeof useImageAttachments>,
   disabled: boolean,
 ) => {
@@ -135,14 +138,14 @@ const useComposerSend = (
   const hasContent = draft.trim() !== "" || attachments.readyIds.length > 0;
   const canSend = hasContent && attachments.settled && !sending && !disabled;
 
-  const submit = async () => {
+  const submit = async (options?: SendOptions) => {
     if (!canSend) return;
     const text = draft.trim();
     const images = attachments.readyIds;
     setSending(true);
     setError(null);
     setDraft("");
-    const result = await (images.length > 0 ? send(text, images) : send(text));
+    const result = await callSend(send, text, images, options);
     setSending(false);
     if (result.ok) {
       attachments.removeSent(images);
@@ -155,6 +158,89 @@ const useComposerSend = (
 
   return { draft, setDraft, error: error ?? attachments.error, canSend, submit };
 };
+
+const AFTER_TURN: SendOptions = { afterTurn: true };
+
+type Send = (
+  text: string,
+  images?: readonly string[],
+  options?: SendOptions,
+) => Promise<SendResult>;
+
+// Images and options only when there are some, so a plain message is sent as `send(text)`.
+const callSend = (
+  send: Send,
+  text: string,
+  images: readonly string[],
+  options: SendOptions | undefined,
+): Promise<SendResult> => {
+  if (options) return send(text, images.length > 0 ? images : undefined, options);
+  return images.length > 0 ? send(text, images) : send(text);
+};
+
+/**
+ * Enter sends (Alt+Enter, while the agent works, for after its turn) and Shift+Enter is a new
+ * line; Escape stops the agent when it can be stopped. Nothing while an input method composes.
+ */
+const composerKeys =
+  ({
+    submit,
+    onStop,
+    working,
+  }: {
+    submit: (options?: SendOptions) => Promise<void>;
+    onStop?: () => void;
+    working: boolean;
+  }) =>
+  (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === "Escape" && onStop) {
+      event.preventDefault();
+      onStop();
+      return;
+    }
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    void submit(sendOptionsOf(event, working));
+  };
+
+// Alt+Enter holds the message for after the turn, which only means something while one runs.
+const sendOptionsOf = (
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  working: boolean,
+): SendOptions | undefined => (working && event.altKey ? AFTER_TURN : undefined);
+
+/** While the agent works: where what is sent lands, and the way to hold it for after the turn. */
+const SteerHint = ({
+  working,
+  compact,
+  canSend,
+  onSendAfterTurn,
+}: {
+  working?: boolean;
+  compact: boolean;
+  canSend: boolean;
+  onSendAfterTurn: () => void;
+}) =>
+  working && !compact ? (
+    <p
+      data-testid="composer-steer-hint"
+      className="flex flex-wrap items-center gap-x-1.5 px-5 pb-1 text-meta text-text-subtle"
+    >
+      <span>Reaches it after its current step.</span>
+      <button
+        type="button"
+        data-testid="composer-send-after-turn"
+        aria-keyshortcuts="Alt+Enter"
+        disabled={!canSend}
+        onClick={onSendAfterTurn}
+        className="inline-flex items-center gap-1 rounded-md px-1 text-text-muted underline-offset-2 enabled:hover:text-text enabled:hover:underline disabled:opacity-50"
+      >
+        Send after this turn
+        <Kbd>⌥ Enter</Kbd>
+      </button>
+    </p>
+  ) : null;
 
 const ComposerError = ({ error, compact }: { error: string | null; compact: boolean }) =>
   error ? (

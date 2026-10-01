@@ -7,19 +7,35 @@ export const listCoordinatorMessages = (projectId: string, before?: string): Pro
 
 /**
  * Says something to the coordinator; the answer is the message as stored, not the coordinator's
- * reply. `images` are ids of images uploaded to the project, in order.
+ * reply. `images` are ids of images uploaded to the project, in order. While the coordinator
+ * works, the message reaches its turn after the step it is on, or with `afterTurn` once the
+ * turn has ended.
  */
 export const sendCoordinatorMessage = async (
   projectId: string,
   text: string,
   images: readonly string[] = [],
+  { afterTurn = false }: SendOptions = {},
 ): Promise<UserMessage> =>
   (
     await request<{ message: UserMessage }>(`/projects/${encodeURIComponent(projectId)}/messages`, {
       method: "POST",
-      body: JSON.stringify(images.length > 0 ? { text, images } : { text }),
+      body: JSON.stringify(messageBody(text, images, afterTurn)),
     })
   ).message;
+
+/** How a message to an agent at work is delivered. */
+export interface SendOptions {
+  /** Held until the agent's current turn ends, instead of reaching it after its current step. */
+  afterTurn?: boolean;
+}
+
+/** The body of a message to the coordinator or a thread. */
+export const messageBody = (text: string, images: readonly string[], afterTurn: boolean) => ({
+  text,
+  ...(images.length > 0 && { images }),
+  ...(afterTurn && { midRunMode: "queue" }),
+});
 
 const suggestionPath = (projectId: string, messageId: string, suggestionId: string): string =>
   `/projects/${encodeURIComponent(projectId)}/messages/${encodeURIComponent(messageId)}/suggestions/${encodeURIComponent(suggestionId)}`;

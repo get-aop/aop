@@ -1,4 +1,4 @@
-import type { ToolPart, TurnPart } from "./blocks.ts";
+import type { ProsePart, ToolPart, TurnPart } from "./blocks.ts";
 import type { LiveOp } from "./stream.ts";
 
 /**
@@ -68,7 +68,7 @@ const applyOp = (parts: TurnPart[], op: LiveOp): TurnPart[] | null => {
       return op.index <= parts.length ? [...parts.slice(0, op.index), op.part] : parts;
     case "append":
       return updateAt(parts, op.index, (part) =>
-        part.type === "tool" ? part : { ...part, text: part.text + op.text },
+        isProse(part) ? { ...part, text: part.text + op.text } : part,
       );
     case "tool":
       return updateAt(parts, op.index, (part) =>
@@ -91,7 +91,10 @@ type Change = LiveOp | null | "reset";
 // What changed in one part: an op, nothing (null), or something no op can say ("reset").
 const partChange = (held: TurnPart, next: TurnPart, index: number): Change => {
   if (held.type === "tool" && next.type === "tool") return toolChange(held, next, index);
-  if (held.type === "tool" || next.type === "tool" || held.type !== next.type) return "reset";
+  if (held.type === "steer" && next.type === "steer") {
+    return held.messageId === next.messageId ? null : "reset";
+  }
+  if (!isProse(held) || !isProse(next) || held.type !== next.type) return "reset";
   if (!next.text.startsWith(held.text)) return "reset";
   const added = next.text.slice(held.text.length);
   return added ? { op: "append", index, text: added } : null;
@@ -102,3 +105,6 @@ const toolChange = (held: ToolPart, next: ToolPart, index: number): Change => {
   const changed = held.status !== next.status || held.detail !== next.detail;
   return changed ? { op: "tool", index, status: next.status, detail: next.detail } : null;
 };
+
+const isProse = (part: TurnPart): part is ProsePart =>
+  part.type === "text" || part.type === "thinking";

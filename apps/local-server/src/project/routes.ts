@@ -1,6 +1,7 @@
 import { CreateProjectInputSchema, MemoryFileInputSchema, ProjectPatchSchema } from "@aop/common";
 import { Hono } from "hono";
 import { z } from "zod";
+import { CHAT_MID_RUN_MODES } from "../chat-session/mid-run-mode.ts";
 import { errorResponse, readBody, readPageQuery } from "./http.ts";
 import type { ProjectAction } from "./service.ts";
 import type { ProjectServices } from "./services.ts";
@@ -9,6 +10,8 @@ const MessageBodySchema = z.object({ text: z.string() });
 /** `images` are ids of images uploaded to the project (POST /:projectId/attachments), in order. */
 const ChatMessageBodySchema = MessageBodySchema.extend({
   images: z.array(z.string()).optional(),
+  /** While the coordinator works: `steer` (the default) reaches it after its current step, `queue` after its turn. */
+  midRunMode: z.enum(CHAT_MID_RUN_MODES).optional(),
 });
 const MemoryBodySchema = MemoryFileInputSchema.omit({ name: true });
 
@@ -71,8 +74,11 @@ export const createProjectRoutes = ({ projects, memory }: ProjectServices) => {
   routes.post("/:projectId/messages", async (c) => {
     const parsed = await readBody(c, ChatMessageBodySchema);
     if ("response" in parsed) return parsed.response;
-    const { text, images } = parsed.body;
-    const result = await projects.sendToCoordinator(c.req.param("projectId"), text, { images });
+    const { text, images, midRunMode } = parsed.body;
+    const result = await projects.sendToCoordinator(c.req.param("projectId"), text, {
+      images,
+      midRunMode,
+    });
     return result.success
       ? c.json({ message: result.message }, 201)
       : errorResponse(c, result.error);

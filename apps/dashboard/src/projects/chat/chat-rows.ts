@@ -1,5 +1,5 @@
 import type { AssistantMessage, Message } from "@aop/common";
-import { type LiveTurn, unansweredMessages } from "./chat-state";
+import { type LiveTurn, steersOf, unansweredMessages } from "./chat-state";
 import { dayMarkerLabel } from "./chat-time";
 
 export type ChatRow =
@@ -7,9 +7,16 @@ export type ChatRow =
   | { kind: "new"; key: string }
   /**
    * A message, or a reply still being written (`streaming`), drawn by the same row under the same
-   * key: when the reply's message arrives, only the data under the row changes.
+   * key: when the reply's message arrives, only the data under the row changes. `steers` are the
+   * messages sent into a reply's turn while it ran, which the reply draws, not rows of their own.
    */
-  | { kind: "message"; key: string; message: Message; streaming: boolean }
+  | {
+      kind: "message";
+      key: string;
+      message: Message;
+      streaming: boolean;
+      steers?: readonly Message[];
+    }
   /** The agent at work, and since when: the message it is answering. */
   | { kind: "working"; key: string; since: string | null };
 
@@ -45,15 +52,23 @@ export const buildRows = ({
   const shown = messages.slice(start);
   const trigger = unansweredMessages(messages)[0] ?? null;
   const replies = liveRepliesByAnchor(shown, live, trigger);
+  const steered = steeredByReply(shown, live);
+  const inside = new Set([...steered.values()].flat().map(({ id }) => id));
+  const withSteers = (row: ChatRow): ChatRow => {
+    if (row.kind !== "message") return row;
+    const steers = steered.get(row.key);
+    return steers ? { ...row, steers } : row;
+  };
   const rows: ChatRow[] = [];
   let previous: Message | null = null;
 
   for (const message of shown) {
-    rows.push(...rowsOf(message, previous, firstNewId, now));
-    rows.push(...(replies.get(message.id) ?? []));
+    if (inside.has(message.id)) continue;
+    rows.push(...rowsOf(message, previous, firstNewId, now).map(withSteers));
+    rows.push(...(replies.get(message.id) ?? []).map(withSteers));
     previous = message;
   }
-  rows.push(...(replies.get(END) ?? []));
+  rows.push(...(replies.get(END) ?? []).map(withSteers));
   if (working) insertWorkingRow(rows, shown, trigger, live);
   return { rows, hidden: start };
 };
@@ -72,6 +87,47 @@ const rowsOf = (
   rows.push({ kind: "message", key: message.id, message, streaming: false });
   return rows;
 };
+
+/**
+ * The messages each reply on screen draws inside it: the ones its turn took in (its `steer`
+ * parts), and the ones sent into it that it has not taken yet (`steers`). A message whose reply
+ * is not on screen is drawn on its own, where it was sent.
+ */
+const steeredByReply = (
+  shown: readonly Message[],
+  live: Readonly<Record<string, LiveTurn>>,
+): Map<string, Message[]> => {
+  const byId = new Map(shown.map((message) => [message.id, message]));
+  const onScreen = new Set([...byId.keys(), ...Object.keys(live)]);
+  const pairs: Array<[replyId: string, messageId: string]> = [
+    ...shown.flatMap((message) =>
+      message.role === "assistant" ? takenIn(message.id, message.blocks) : [],
+    ),
+    ...Object.entries(live).flatMap(([id, turn]) => takenIn(id, turn.parts)),
+    ...shown.flatMap((message): Array<[string, string]> => {
+      const reply = steersOf(message);
+      return reply && onScreen.has(reply) ? [[reply, message.id]] : [];
+    }),
+  ];
+  const replies = new Map<string, Message[]>();
+  for (const [replyId, messageId] of pairs) {
+    const message = byId.get(messageId);
+    const held = replies.get(replyId) ?? [];
+    if (message && !held.includes(message)) replies.set(replyId, [...held, message]);
+  }
+  return replies;
+};
+
+// The messages a reply's turn took in, in the order it took them.
+const takenIn = (
+  replyId: string,
+  blocks: readonly { type: string; messageId?: string }[],
+): Array<[string, string]> =>
+  blocks.flatMap((block) =>
+    block.type === "steer" && block.messageId
+      ? [[replyId, block.messageId] as [string, string]]
+      : [],
+  );
 
 // A reply sits after the message it says it answers; without one, after the oldest message no
 // reply follows yet, which is the one the host answers first (see chat-state.ts). A reply whose

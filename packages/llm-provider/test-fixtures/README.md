@@ -40,6 +40,14 @@ The file needs its executable bit (it is committed with mode 755) and `bun` on `
 
 When the launch passes `--include-partial-messages` (AOP's chat runs do, with `-p`), every content block streams first the way Claude Code 2.1.286 writes it: a `stream_event` `message_start`, a `content_block_start`, `content_block_delta`s (a couple of words per `text_delta` or `thinking_delta`, one `input_json_delta` for a tool's input), the finished block as its `assistant` event, then `content_block_stop`. Without the flag only the `assistant` events are written.
 
+## Messages on stdin
+
+With `--input-format stream-json` the prompt is a stream-json user line on stdin, read a line at a time the way Claude Code 2.1.287 reads it, and the fake goes on reading while it works:
+
+- A line that arrives while a turn works is taken after the step it is on (between tool rounds). With `--replay-user-messages` it is echoed there as a `user` event with `isReplay: true` and the line's own `uuid`, as the prompt is after the init event. The default reply then ends with `Then you said: <its first line>`, and a `say=` in the newest such line replaces the turn's reply, which is how a test shows a message changing the turn it reached.
+- A line that arrives as the turn writes its answer starts another turn of the same process once that answer ends: the session goes on (`(resumed)`, the next turn number) and its result has `result_index` 1, 2, and so on. Each result's `usage` is its turn's own; its `modelUsage` and `total_cost_usd` add up every turn of the process so far, as the real CLI's do.
+- The process exits once its input ends and its turn is done. A turn that does not end well (`fail`, `exit=`, `ratelimit`, `crash`) ends the process as it always did.
+
 ## Scripting a turn
 
 Put `[fake: key=value ...]` anywhere in the prompt. The last marker wins. Without a marker, `FAKE_CLI_SCRIPT` (same syntax, no brackets) applies to every turn of that process.

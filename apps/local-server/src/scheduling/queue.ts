@@ -18,6 +18,7 @@ export const hasQueuedMessage = async (
     .select("id")
     .where("session_id", "=", sessionId)
     .where("role", "=", "user")
+    .where("steered_run_id", "is", null)
     .where((eb) =>
       eb.not(
         eb.exists(
@@ -60,6 +61,7 @@ export const listQueuedThreadTurns = async (db: Kysely<Database>): Promise<Queue
     .where("chat_sessions.resumes_at", "is", null)
     .where("projects.status", "=", "active")
     .where("chat_messages.role", "=", "user")
+    .where("chat_messages.steered_run_id", "is", null)
     .where((eb) =>
       eb.not(
         eb.exists(

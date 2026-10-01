@@ -1,6 +1,7 @@
 import type { TurnPart } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatRun } from "../db/schema.ts";
+import { pollForProcessExit } from "../process/liveness.ts";
 import { waitForChatRunTerminal } from "./chat-run-recovery.ts";
 import { finalizeChatRunAndPublish } from "./finalize-publish.ts";
 import { armStoredResumes, pausedReply } from "./rate-limit-resume.ts";
@@ -11,6 +12,7 @@ import {
   drainQueuedSteers,
 } from "./reply-lifecycle.ts";
 import { pendingSessionReplies, recoveryAbortControllers, recoveryTasks } from "./reply-state.ts";
+import { settleRunInput } from "./run-input.ts";
 import { isChatRunProcessGone } from "./run-process.ts";
 import { isSessionRunActive } from "./runtime-engine.ts";
 import type { ChatSessionServiceDeps } from "./session-types.ts";
@@ -51,6 +53,7 @@ const drainProjectInboxes = async (
           .select("chat_messages.id")
           .whereRef("chat_messages.session_id", "=", "chat_sessions.id")
           .where("chat_messages.role", "=", "user")
+          .where("chat_messages.steered_run_id", "is", null)
           .where((unclaimed) =>
             unclaimed.not(
               unclaimed.exists(
@@ -121,6 +124,7 @@ const recoverChatRun = async (
       run,
       pollIntervalMs: deps.recoveryPollIntervalMs,
       isProcessGone: () => isChatRunProcessGone(run, executable),
+      settleInput: run.input_path ? () => settleRunInput(ctx, run.id) : undefined,
       signal,
       onProgress: (progress) => {
         parts = progress;
@@ -132,6 +136,7 @@ const recoverChatRun = async (
     throw error;
   }
   if (signal.aborted) return;
+  await waitForEndedInputExit(run);
   // A project's session that a limit refused waits for it, as it does when the server stayed up.
   const recovered = {
     ...terminal,
@@ -161,4 +166,14 @@ const recoverChatRun = async (
   // Server restart recovery: also drain steers queued while the recovered run was live.
   void drainQueuedSteers(ctx, run.session_id, run.runtime, deps);
   void applyFollowUp(ctx, followUp, deps);
+};
+
+/** How long a recovered run whose input ended is given to exit before its turn is finalized. */
+const INPUT_EXIT_WAIT_MS = 10_000;
+
+// A run whose input ended exits after its answer. The next turn resumes the same session, so it
+// starts once this one has let go of it.
+const waitForEndedInputExit = async (run: ChatRun): Promise<void> => {
+  if (!run.input_path || run.pid === null) return;
+  await Promise.race([pollForProcessExit(run.pid, 100), Bun.sleep(INPUT_EXIT_WAIT_MS)]);
 };

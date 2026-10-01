@@ -1,6 +1,7 @@
 import type { OutputHandler } from "@aop/infra";
 import type { RunUsage } from "./logs/usage";
 import type { RunMode } from "./plan-mode";
+import type { InputChannel } from "./providers/claude-code-input-channel";
 
 export type { RunMode } from "./plan-mode";
 export {
@@ -86,6 +87,13 @@ export interface RunOptions {
    * events ignore it.
    */
   partialMessages?: boolean;
+  /**
+   * Keeps the run open for more user messages while it works (Claude Code with a log file,
+   * not on Windows): the prompt and every later message reach the CLI as stream-json lines
+   * through the FIFO at `path`, written with `writeInputLine` and ended with `endInput` once
+   * `isInputSettled`. See claude-code-input-channel.ts. Providers without it ignore it.
+   */
+  inputChannel?: InputChannel;
   /**
    * HTTP URL for AOP MCP tools (chat-first orchestration). Providers that
    * support MCP should pass this through their spawn config when set.

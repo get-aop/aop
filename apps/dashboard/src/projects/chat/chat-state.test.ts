@@ -317,6 +317,19 @@ describe("unansweredMessages", () => {
     expect(ids(unansweredMessages([userMessage("u1", 1)]))).toEqual(["u1"]);
     expect(unansweredMessages([userMessage("u1", 1), reply("a1", 2)])).toEqual([]);
   });
+
+  test("leave out a message sent into a running turn: that turn's reply answers it", () => {
+    const messages = [
+      userMessage("u1", 1),
+      reply("a1", 3, undefined, { inReplyTo: "u1" }),
+      userMessage("u2", 2, { steers: "a1" }),
+    ];
+
+    expect(unansweredMessages(messages)).toEqual([]);
+    // A relayed message sent into a thread's turn is no reply either.
+    const relayed = reply("c1", 4, undefined, { steers: "a2" });
+    expect(ids(unansweredMessages([userMessage("u3", 3), relayed]))).toEqual(["u3"]);
+  });
 });
 
 describe("a thread's conversation", () => {

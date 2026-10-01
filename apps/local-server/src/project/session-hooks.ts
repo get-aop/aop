@@ -19,9 +19,15 @@ import { holdCoordinator, releaseCoordinator } from "../scheduling/hold.ts";
 import { createThreadRepository } from "../thread/repository.ts";
 import { statusAfterSchedule, type TurnEnd } from "../thread/state.ts";
 import { settleThreadTurn } from "../thread/turn-outcome.ts";
-import { recordMessageCreated, recordThreadUpserted } from "./events.ts";
+import { recordMessageCreated, recordMessageUpdated, recordThreadUpserted } from "./events.ts";
 import { recordReportedRuntime } from "./reported-runtime.ts";
-import { displayText, isFailedRun, scopeOf, toWireMessage } from "./wire-messages.ts";
+import {
+  displayText,
+  getWireMessage,
+  isFailedRun,
+  scopeOf,
+  toWireMessage,
+} from "./wire-messages.ts";
 
 /**
  * The project domain's side of the engine's session hooks (see chat-session/session-hooks.ts):
@@ -41,6 +47,12 @@ export const createProjectSessionHooks = (publisher: EventPublisher): SessionHoo
       else await releaseCoordinator(tx.db, session.id);
       const wire = toWireMessage(scopeOf(session), message);
       if (wire) await recordMessageCreated(tx, wire);
+    },
+
+    onUserMessageChanged: async (tx, message) => {
+      const session = await loadProjectSession(tx, message.session_id);
+      const wire = session ? await getWireMessage(tx.db, session, message.id) : null;
+      if (wire) await recordMessageUpdated(tx, wire);
     },
 
     onTurnScheduled: async (tx, sessionId, phase) => {

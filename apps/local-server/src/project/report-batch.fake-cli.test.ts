@@ -198,7 +198,7 @@ describe("batched coordinator wakes", () => {
     expect(await waitingReports(s, coordinator.id)).toBe(0);
   }, 60_000);
 
-  test("a message from the person ends a batch: it is read in order and gets its own turn", async () => {
+  test("a message from the person held for after the turn ends a batch: it is read in order and gets its own turn", async () => {
     stack = await createProjectStack(home.path());
     const s = stack;
     const project = await createProject(s);
@@ -216,7 +216,10 @@ describe("batched coordinator wakes", () => {
       async () => ((await reportsIn(s, project.id)).length === 1 ? true : undefined),
       "a report",
     );
-    await s.api("POST", `/api/projects/${project.id}/messages`, { text: "And then this question" });
+    await s.api("POST", `/api/projects/${project.id}/messages`, {
+      text: "And then this question",
+      midRunMode: "queue",
+    });
     await spawnThreads(s, project.id, ["golf"]);
     await eventually(
       async () => ((await reportsIn(s, project.id)).length === 2 ? true : undefined),

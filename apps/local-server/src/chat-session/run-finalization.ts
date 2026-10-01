@@ -56,6 +56,7 @@ export const persistFinalizedChatRun = async (
     .select("turn_index")
     .where("id", "=", current.user_message_id)
     .executeTakeFirstOrThrow();
+  const steered = await steeredInto(trx, current.id);
   await trx
     .insertInto("chat_messages")
     .values({
@@ -64,7 +65,9 @@ export const persistFinalizedChatRun = async (
       role: "assistant",
       content: encodeMessageContent(decision.assistantText, [], [], artifacts),
       action: action ? JSON.stringify(action) : null,
-      parts: parts ? JSON.stringify(endTurn(parts, decision.assistantText, outcome)) : null,
+      parts: parts
+        ? JSON.stringify(endTurn(withKnownSteers(parts, steered), decision.assistantText, outcome))
+        : null,
       turn_index: userMessage.turn_index,
       disposition: "immediate",
       created_at: createdAt,
@@ -103,6 +106,22 @@ export const persistFinalizedChatRun = async (
     .where("id", "=", current.assistant_message_id)
     .executeTakeFirst();
 };
+
+// The messages written into the run while it worked.
+const steeredInto = async (trx: Kysely<Database>, runId: string): Promise<Set<string>> =>
+  new Set(
+    (
+      await trx
+        .selectFrom("chat_messages")
+        .select("id")
+        .where("steered_run_id", "=", runId)
+        .execute()
+    ).map((row) => row.id),
+  );
+
+// A steer part stands for a message written into this run; any other echo the log held is not one.
+const withKnownSteers = (parts: readonly TurnPart[], steered: ReadonlySet<string>): TurnPart[] =>
+  parts.filter((part) => part.type !== "steer" || steered.has(part.messageId));
 
 const readCliVersion = async (run: ChatRun): Promise<string | null> => {
   const field = findAgentCli(run.runtime)?.initVersionField;

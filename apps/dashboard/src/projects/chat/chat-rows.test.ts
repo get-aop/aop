@@ -113,3 +113,53 @@ describe("buildRows", () => {
     expect(rows.at(-1)).toMatchObject({ kind: "working", since: null });
   });
 });
+
+describe("messages sent into a turn while it ran", () => {
+  test("are drawn by the reply that took them in, not as rows of their own", () => {
+    const messages = [
+      userMessage("u1", 1),
+      reply(
+        "a1",
+        3,
+        [
+          { type: "text", text: "Building" },
+          { type: "steer", messageId: "u2" },
+          { type: "text", text: "Built for arm64" },
+        ],
+        { inReplyTo: "u1" },
+      ),
+      userMessage("u2", 2, { steers: "a1" }),
+    ];
+
+    const { rows } = rowsOf({ messages });
+
+    expect(shape(rows)).toEqual(["day", "u1", "a1"]);
+    const replyRow = rows.find((row) => row.kind === "message" && row.key === "a1");
+    expect(replyRow).toMatchObject({ steers: [messages[2]] });
+  });
+
+  test("a reply being written draws the ones it took and the ones still on their way", () => {
+    const taken = userMessage("u2", 2, { steers: "a1" });
+    const waiting = userMessage("u3", 3, { steers: "a1" });
+    const live = {
+      a1: { parts: [{ type: "steer" as const, messageId: "u2" }], inReplyTo: "u1" },
+    };
+
+    const { rows } = rowsOf({
+      messages: [userMessage("u1", 1), taken, waiting],
+      live,
+      working: true,
+    });
+
+    expect(shape(rows)).toEqual(["day", "u1", "a1…", "working"]);
+    expect(rows.find((row) => row.kind === "message" && row.key === "a1")).toMatchObject({
+      steers: [taken, waiting],
+    });
+  });
+
+  test("one whose reply is not on screen is drawn where it was sent", () => {
+    const { rows } = rowsOf({ messages: [userMessage("u2", 2, { steers: "a_gone" })] });
+
+    expect(shape(rows)).toEqual(["day", "u2"]);
+  });
+});

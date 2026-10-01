@@ -92,7 +92,7 @@ export const threadSpawnTool = defineTool({
 export const threadSteerTool = defineTool({
   name: "thread_steer",
   description:
-    "Send a message to an existing thread: new instructions, an answer to what it reported, or a change of direction. Queued if the thread is working, otherwise it starts another turn. Reopens a resolved thread.",
+    'Send a message to an existing thread: new instructions, an answer to what it reported, or a change of direction. If the thread is working, the message reaches its running turn after the tool call it is on, so a correction changes the work in progress; when: "after-turn" holds it until the turn ends instead. If the thread is idle it starts another turn. Reopens a resolved thread.',
   input: z.object({
     threadId: z.string(),
     message: z.string().min(1),
@@ -100,14 +100,22 @@ export const threadSteerTool = defineTool({
       .string()
       .optional()
       .describe("The person's own words, when this forwards what they said."),
+    when: z
+      .enum(["now", "after-turn"])
+      .optional()
+      .describe(
+        "For a working thread: now (the default) reaches its running turn at the next step; after-turn waits until that turn ends.",
+      ),
   }),
   handler: async (args, call) => {
     await ownThread(call, args.threadId);
     const { thread } = unwrap(
-      await call.services.threads.send(args.threadId, args.message, {
-        type: "coordinator-relay",
-        quote: args.quote?.trim() || null,
-      }),
+      await call.services.threads.send(
+        args.threadId,
+        args.message,
+        { type: "coordinator-relay", quote: args.quote?.trim() || null },
+        { midRunMode: args.when === "after-turn" ? "queue" : "steer" },
+      ),
     );
     await createRunBlocks(call.ctx.db).routedTo(call.session.id, thread.id);
     return textResult(summarize(thread));

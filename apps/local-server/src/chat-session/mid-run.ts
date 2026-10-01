@@ -3,6 +3,7 @@ import type { LocalServerContext } from "../context.ts";
 import type { ChatMessage, ChatSession } from "../db/schema.ts";
 import { executeChatCommand } from "./commands.ts";
 import { drainQueuedSteers } from "./reply-lifecycle.ts";
+import { deliverToRunningTurn } from "./run-input.ts";
 import { createSessionRunLogPath } from "./runtime-engine.ts";
 import { sessionDtoFor, toMessageDto } from "./session-dto.ts";
 import type {
@@ -32,16 +33,21 @@ export const acceptMidRunMessage = async (
     stored.userMessage.created_at,
   );
 
+  // Into the running turn, which takes it after the step it is on, unless it should wait.
+  const steered =
+    input.midRunMode === "queue"
+      ? null
+      : await deliverToRunningTurn(ctx, stored.session, stored.userMessage);
   // Drain only if the active run already finished while this message was stored.
-  void drainQueuedSteers(ctx, sessionId, stored.session.runtime, deps);
+  if (!steered) void drainQueuedSteers(ctx, sessionId, stored.session.runtime, deps);
 
   return {
     success: true,
     message: toMessageDto(stored.userMessage),
     session: sessionDto,
-    midRun: "queued",
-    queued: true,
-    steered: false,
+    midRun: steered ? "steered" : "queued",
+    queued: !steered,
+    steered: Boolean(steered),
   };
 };
 

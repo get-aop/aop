@@ -3,6 +3,7 @@ import type { ChatSession } from "../db/schema.ts";
 import type { RuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { resolveCurrentSessionRuntimeConfiguration } from "./prepare-send.ts";
 import { drainQueuedSteers } from "./reply-lifecycle.ts";
+import { deliverToRunningTurn } from "./run-input.ts";
 import { sessionDtoFor, toMessageDto } from "./session-dto.ts";
 import type {
   ChatSessionServiceDeps,
@@ -12,8 +13,10 @@ import type {
 import { storeSteerUserMessage } from "./steer-queue.ts";
 
 /**
- * A message to a thread. Every thread turn waits for a run slot in the same line, so the message
- * is stored as a queued turn first, which is durable, and the dispatcher starts it as soon as the
+ * A message to a thread. It is stored as a queued turn first, which is durable. While the thread
+ * runs a turn that takes messages, it is written into that turn, which takes it after the step it
+ * is on, unless the sender asked for it to wait (`midRunMode: "queue"`). Otherwise every thread
+ * turn waits for a run slot in the same line, and the dispatcher starts this one as soon as the
  * host has room: at once when it has. Whether the turn is running or still queued is the
  * thread's status, not this result.
  */
@@ -34,7 +37,11 @@ export const acceptThreadMessage = async (
   const stored = await storeSteerUserMessage(ctx, session.id, { ...input, action: null }, "queued");
   if (!stored.success) return stored;
 
-  await drainQueuedSteers(ctx, session.id, stored.session.runtime, deps);
+  const steered =
+    input.midRunMode === "queue"
+      ? null
+      : await deliverToRunningTurn(ctx, stored.session, stored.userMessage);
+  if (!steered) await drainQueuedSteers(ctx, session.id, stored.session.runtime, deps);
   return {
     success: true,
     message: toMessageDto(stored.userMessage),
@@ -44,5 +51,6 @@ export const acceptThreadMessage = async (
       stored.displayText || "(image attachment)",
       stored.userMessage.created_at,
     ),
+    ...(steered && { midRun: "steered" as const, steered: true }),
   };
 };

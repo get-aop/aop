@@ -1,4 +1,5 @@
 import type { Message } from "@aop/common";
+import type { SendOptions } from "../../api/project-chat";
 import type { LiveProjects } from "../live-projects";
 import type { ChatApi } from "./chat-api";
 import type { ChatState } from "./chat-state";
@@ -35,7 +36,7 @@ export interface ProjectChat {
   /** Fetches the page of messages before the oldest one held. */
   loadEarlier: () => Promise<void>;
   /** `images` are ids of images uploaded to the project, in order. */
-  send: (text: string, images?: readonly string[]) => Promise<SendResult>;
+  send: (text: string, images?: readonly string[], options?: SendOptions) => Promise<SendResult>;
   /** The person is looking at the chat: everything in it counts as seen. */
   markSeen: () => void;
 }
@@ -99,12 +100,14 @@ export const createProjectChat = (deps: ProjectChatDeps): ProjectChat => {
     stop: conversation.stop,
     reload: conversation.reload,
     loadEarlier: conversation.loadEarlier,
-    send: async (text, images) => {
+    send: async (text, images, options) => {
       try {
         conversation.receive(
-          await (images?.length
-            ? api.sendMessage(projectId, text, images)
-            : api.sendMessage(projectId, text)),
+          await (options?.afterTurn
+            ? api.sendMessage(projectId, text, images ?? [], options)
+            : images?.length
+              ? api.sendMessage(projectId, text, images)
+              : api.sendMessage(projectId, text)),
         );
         return { ok: true };
       } catch (error) {

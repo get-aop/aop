@@ -6,13 +6,15 @@ import { createUsageService } from "../usage/service.ts";
 import type { StoredChatArtifact } from "./message-images.ts";
 import { isDbClosedError } from "./reply-state.ts";
 import { type FinalizeChatRunOutcome, persistFinalizedChatRun } from "./run-finalization.ts";
+import { releaseUntakenSteers } from "./run-input.ts";
 import type { TurnFollowUp } from "./session-hooks.ts";
 
 const logger = getLogger("chat-session", "finalize");
 
 /**
- * Stores the run's terminal state and assistant message, lets the project domain react in the
- * same transaction, then publishes the change. Returns what the turn leaves to do: the sessions
+ * Stores the run's terminal state and assistant message, puts back in line what was sent to the
+ * run as it worked and never reached it, lets the project domain react in the same transaction,
+ * then publishes the change. Returns what the turn leaves to do: the sessions
  * that now have a queued message to start (a coordinator woken by a thread's report) and a
  * session that waits out a rate limit and must be resumed. The caller does both, since only it
  * holds the provider dependencies.
@@ -43,6 +45,10 @@ export const finalizeChatRunAndPublish = async (
         artifacts,
       );
       if (!assistantMessage) return null;
+      await releaseUntakenSteers(tx, ctx, run, {
+        stopped: outcome.status === "cancelled",
+        notify: withHooks,
+      });
       const followUp = withHooks
         ? await ctx.sessionHooks.onRunFinalized(tx, { run, outcome, assistantMessage })
         : NO_FOLLOW_UP;

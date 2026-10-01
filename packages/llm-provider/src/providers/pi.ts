@@ -7,7 +7,7 @@ import { assertNativePlanModeSupported } from "../plan-mode";
 import { resolveRuntimeAlias } from "../runtime-alias";
 import { sanitizeSessionId } from "../session-id";
 import type { LLMProvider, RunOptions, RunResult } from "../types";
-import { createLogOutputTimeoutWatchdog, type Watchdog } from "./claude-code";
+import { createLogOutputTimeoutWatchdog, type Watchdog } from "./log-watchdog";
 
 const PI_MODEL_ENV = "AOP_PI_MODEL";
 const PI_THINKING_ENV = "AOP_PI_THINKING";

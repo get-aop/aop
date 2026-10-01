@@ -14,6 +14,8 @@ import type { FinalizeChatRunOutcome } from "./run-finalization.ts";
 export interface SessionHooks {
   /** A user-side message row was stored: typed, queued mid-run, or written by the server. */
   onUserMessageStored: (tx: PublisherTransaction, message: ChatMessage) => Promise<void>;
+  /** A stored user message changed where it belongs: written into a running turn, or put back in line. */
+  onUserMessageChanged: (tx: PublisherTransaction, message: ChatMessage) => Promise<void>;
   /** A run reached its terminal state and its assistant message was stored. */
   onRunFinalized: (tx: PublisherTransaction, turn: FinalizedTurn) => Promise<TurnFollowUp>;
   /**

@@ -1,9 +1,11 @@
 import {
+  type ProsePart,
   TOOL_DETAIL_MAX_LENGTH,
   TOOL_NAME_MAX_LENGTH,
   type ToolPart,
   type TurnPart,
 } from "@aop/common";
+import { typeIdFromUuid } from "@aop/infra";
 import type { ProgressChunk } from "./stream-progress-parse.ts";
 import { clip } from "./turn-parts.ts";
 
@@ -31,10 +33,12 @@ const SHELL_TOOL_NAME = "Shell";
  * them: a text run, the tool calls made after it, the reasoning before the next run, and so on.
  * Runtimes that re-send a whole message (Pi's lifecycle events, cumulative text) are merged, not
  * repeated. Claude's partial messages grow a part token by token; the finished block that
- * follows settles that part instead of adding another. What it returns is the turn so far,
- * without blank prose, safe to hand out: the accumulator keeps its own copies.
+ * follows settles that part instead of adding another. A user message Claude echoes where the
+ * model took it, other than the turn's own prompt (`promptUuid`), is a steer part there. What it
+ * returns is the turn so far, without blank prose, safe to hand out: the accumulator keeps its
+ * own copies.
  */
-export const createTurnAccumulator = () => {
+export const createTurnAccumulator = ({ promptUuid }: { promptUuid?: string } = {}) => {
   const parts: TurnPart[] = [];
   let toolSeq = 0;
   /** The full text the runtime last sent for the text part being written (cumulative providers). */
@@ -67,6 +71,9 @@ export const createTurnAccumulator = () => {
         break;
       case "tool":
         applyTool(chunk);
+        break;
+      case "user-message":
+        applySteer(chunk.uuid);
         break;
       default:
         applyStream(chunk);
@@ -106,7 +113,15 @@ export const createTurnAccumulator = () => {
   function growStreamed(chunk: StreamDelta): void {
     const at = streaming.get(chunk.index);
     const part = at === undefined ? undefined : parts[at];
-    if (part && part.type !== "tool") part.text += chunk.data;
+    if (part && isProse(part)) part.text += chunk.data;
+  }
+
+  // A message the run was sent as it worked carries its message's id as its uuid.
+  function applySteer(uuid: string): void {
+    const messageId = uuid === promptUuid ? null : typeIdFromUuid("smsg", uuid);
+    if (!messageId) return;
+    if (parts.some((part) => part.type === "steer" && part.messageId === messageId)) return;
+    parts.push({ type: "steer", messageId });
   }
 
   // Claude writes a block's finished copy before it closes the block, so a block that closes
@@ -124,7 +139,7 @@ export const createTurnAccumulator = () => {
     if (!entry) return false;
     unsettled.splice(index, 1);
     const part = parts[entry.at];
-    if (part && part.type !== "tool") part.text = data;
+    if (part && isProse(part)) part.text = data;
     if (block === "text") lastFullText = data;
     return true;
   }
@@ -218,7 +233,10 @@ export const createTurnAccumulator = () => {
  * Whether a run's turn says nothing a person could read yet. Blank prose and reasoning are kept
  * while they grow (a runtime starts a block with a newline), but never shown.
  */
-const isShown = (part: TurnPart): boolean => part.type === "tool" || part.text.trim() !== "";
+const isShown = (part: TurnPart): boolean => !isProse(part) || part.text.trim() !== "";
+
+const isProse = (part: TurnPart): part is ProsePart =>
+  part.type === "text" || part.type === "thinking";
 
 const commandStatus = (exitCode: number | null | undefined): ToolPart["status"] =>
   exitCode != null && exitCode !== 0 ? "failed" : "done";

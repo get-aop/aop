@@ -2,6 +2,7 @@
 // Standalone fake agent CLI for driving the real adapters without a model.
 // See ./README.md for how to point an adapter at it and the scripting syntax.
 import { writeSync } from "node:fs";
+import { linesOf } from "./fake-cli/input-lines";
 import { createMcpConnection } from "./fake-cli/mcp-client";
 import { runFakeCli } from "./fake-cli/run";
 
@@ -10,7 +11,7 @@ const exitCode = await runFakeCli(
     args: process.argv.slice(2),
     env: process.env,
     cwd: process.cwd(),
-    readStdin: () => Bun.stdin.text(),
+    stdin: linesOf(Bun.stdin.stream()),
   },
   {
     write: (text) => void writeSync(1, text),

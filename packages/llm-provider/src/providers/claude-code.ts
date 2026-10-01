@@ -1,147 +1,18 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { buildClaudeCodeSpawnEnv, resolveExecHost } from "@aop/infra";
 import { extractRuntimeSessionIdFromRawJsonl } from "../logs";
 import { assertNativePlanModeSupported } from "../plan-mode";
 import { resolveRuntimeAlias } from "../runtime-alias";
 import type { LLMProvider, RunOptions, RunResult } from "../types";
-import { prepareStdinPrompt, takesStdinPrompt } from "./claude-code-input";
+import { buildClaudeUserMessage, prepareStdinPrompt, takesStdinPrompt } from "./claude-code-input";
+import { openInputChannel, relayCommand } from "./claude-code-input-channel";
+import { createLogOutputTimeoutWatchdog, createWatchdog, type Watchdog } from "./log-watchdog";
 
 interface StreamContext {
   sessionId?: string;
   onOutput?: (data: Record<string, unknown>, rawLine?: string) => void;
   onActivity?: () => void;
 }
-
-export interface Watchdog {
-  stop: () => void;
-}
-
-export type OutputTimeoutKind = "startup" | "inactivity";
-
-export const createWatchdog = (
-  timeoutMs: number,
-  getLastActivity: () => number,
-  onTimeout: () => void,
-  checkIntervalMs = 5000,
-): Watchdog => {
-  const intervalId = setInterval(() => {
-    const elapsed = Date.now() - getLastActivity();
-    if (elapsed > timeoutMs) {
-      clearInterval(intervalId);
-      onTimeout();
-    }
-  }, checkIntervalMs);
-
-  return { stop: () => clearInterval(intervalId) };
-};
-
-export const getFileMtime = (path: string): number => {
-  try {
-    return statSync(path).mtimeMs;
-  } catch {
-    return Number.NaN;
-  }
-};
-
-export const fileHasNonEmptyOutput = (path: string): boolean => {
-  try {
-    return readFileSync(path, "utf-8").trim().length > 0;
-  } catch {
-    return false;
-  }
-};
-
-export const createFileActivityTracker = (
-  path: string,
-  options: {
-    getNow?: () => number;
-    readMtime?: (path: string) => number;
-  } = {},
-): (() => number) => {
-  const getNow = options.getNow ?? Date.now;
-  const readMtime = options.readMtime ?? getFileMtime;
-  let lastActivity = getNow();
-
-  return () => {
-    const mtime = readMtime(path);
-    if (!Number.isNaN(mtime)) {
-      lastActivity = mtime;
-    }
-    return lastActivity;
-  };
-};
-
-/**
- * Dual-phase log watchdog: optional first-output (startup) deadline, then inactivity.
- * Startup stops permanently once non-empty primary log bytes appear.
- */
-export const createLogOutputTimeoutWatchdog = (input: {
-  logFilePath: string;
-  startupTimeoutMs?: number;
-  inactivityTimeoutMs?: number;
-  onTimeout: (kind: OutputTimeoutKind) => void;
-  checkIntervalMs?: number;
-  getNow?: () => number;
-  hasNonEmptyOutput?: (path: string) => boolean;
-  getLastActivity?: () => number;
-}): Watchdog => {
-  const getNow = input.getNow ?? Date.now;
-  const hasNonEmptyOutput = input.hasNonEmptyOutput ?? fileHasNonEmptyOutput;
-  const checkIntervalMs = input.checkIntervalMs ?? 5000;
-  const startedAt = getNow();
-  const getLastActivity =
-    input.getLastActivity ?? createFileActivityTracker(input.logFilePath, { getNow });
-
-  let phase: "startup" | "inactivity" | "done" =
-    input.startupTimeoutMs && input.startupTimeoutMs > 0 ? "startup" : "inactivity";
-  let fired = false;
-
-  const fire = (kind: OutputTimeoutKind): void => {
-    if (fired || phase === "done") return;
-    fired = true;
-    phase = "done";
-    clearInterval(intervalId);
-    input.onTimeout(kind);
-  };
-
-  const tick = (): void => {
-    if (fired || phase === "done") return;
-    const now = getNow();
-    if (phase === "startup") {
-      phase = advanceStartupPhase({
-        hasOutput: hasNonEmptyOutput(input.logFilePath),
-        timedOut: Boolean(input.startupTimeoutMs && now - startedAt > input.startupTimeoutMs),
-        fireStartup: () => fire("startup"),
-      });
-      return;
-    }
-    if (input.inactivityTimeoutMs && now - getLastActivity() > input.inactivityTimeoutMs) {
-      fire("inactivity");
-    }
-  };
-
-  const intervalId = setInterval(tick, checkIntervalMs);
-
-  return {
-    stop: () => {
-      phase = "done";
-      clearInterval(intervalId);
-    },
-  };
-};
-
-const advanceStartupPhase = (input: {
-  hasOutput: boolean;
-  timedOut: boolean;
-  fireStartup: () => void;
-}): "startup" | "inactivity" | "done" => {
-  if (input.hasOutput) return "inactivity";
-  if (input.timedOut) {
-    input.fireStartup();
-    return "done";
-  }
-  return "startup";
-};
 
 export class ClaudeCodeProvider implements LLMProvider {
   readonly name = "claude-code";
@@ -156,12 +27,16 @@ export class ClaudeCodeProvider implements LLMProvider {
       resolveRuntimeAlias(options.runtimeAlias, "claude", searchPath),
       ...isolationArgs,
       ...(stdinPrompt ? ["--input-format", "stream-json"] : []),
+      // Echoes each message where the model took it: how a steer's place in the turn is known.
+      ...(options.inputChannel ? ["--replay-user-messages"] : []),
       "--output-format",
       "stream-json",
       "--verbose",
     ];
-    // Partial messages only work in print mode (`claude --help`), so it is asked for explicitly.
+    // Partial messages and stream-json input only work in print mode (`claude --help`), so it is
+    // asked for explicitly.
     if (options.partialMessages) cmd.push("-p", "--include-partial-messages");
+    else if (options.inputChannel) cmd.push("-p");
 
     appendClaudePermissionFlags(cmd, options);
 
@@ -210,16 +85,32 @@ export class ClaudeCodeProvider implements LLMProvider {
     if (options.logFilePath) {
       return this.runWithFileOutput(options, options.logFilePath);
     }
-    return this.runWithPipeOutput(options);
+    // An input channel belongs to a detached run that writes a log; a piped run has stdin of its own.
+    return this.runWithPipeOutput({ ...options, inputChannel: undefined });
   }
 
   private async runWithFileOutput(options: RunOptions, logFilePath: string): Promise<RunResult> {
     const spawnEnv = buildClaudeCodeSpawnEnv(options.env);
     const stdinPrompt = prepareStdinPrompt(options);
+    const cli = this.buildCommand(options, spawnEnv.PATH);
+    const channel = options.inputChannel
+      ? openInputChannel(
+          options.inputChannel,
+          buildClaudeUserMessage(
+            options.prompt,
+            options.images ?? [],
+            undefined,
+            options.inputChannel.promptUuid,
+          ),
+        )
+      : null;
 
-    const proc = spawnClaude(stdinPrompt, () =>
+    const proc = spawnClaude(stdinPrompt, channel, () =>
       resolveExecHost().spawn({
-        cmd: this.buildCommand(options, spawnEnv.PATH),
+        cmd:
+          options.inputChannel && channel
+            ? relayCommand(options.inputChannel, channel.promptPath, logFilePath, cli)
+            : cli,
         stdout: { file: logFilePath },
         stderr: "ignore",
         stdin: stdinPrompt ? { file: stdinPrompt.path } : "ignore",
@@ -253,6 +144,7 @@ export class ClaudeCodeProvider implements LLMProvider {
     const exitCode = await proc.exited;
     watchdog?.stop();
     stdinPrompt?.remove();
+    channel?.remove();
 
     const logContent = existsSync(logFilePath) ? readFileSync(logFilePath, "utf-8") : "";
     const sessionId = extractRuntimeSessionIdFromRawJsonl(logContent);
@@ -273,7 +165,7 @@ export class ClaudeCodeProvider implements LLMProvider {
     const spawnEnv = buildClaudeCodeSpawnEnv(options.env);
     const stdinPrompt = prepareStdinPrompt(options);
 
-    const proc = spawnClaude(stdinPrompt, () =>
+    const proc = spawnClaude(stdinPrompt, null, () =>
       resolveExecHost().spawn({
         cmd: this.buildCommand(options, spawnEnv.PATH),
         stdout: "pipe",
@@ -348,13 +240,18 @@ export class ClaudeCodeProvider implements LLMProvider {
 }
 
 // The child holds its stdin open from the moment it is spawned, so the prompt file can go at
-// once; a spawn that throws leaves no file behind either.
+// once. The relay reads its input channel's files after it starts, so they stay until the run
+// ends. A spawn that throws leaves no file behind either way.
 const spawnClaude = (
   stdinPrompt: { remove: () => void } | null,
+  channel: { remove: () => void } | null,
   spawn: () => Bun.Subprocess,
 ): Bun.Subprocess => {
   try {
     return spawn();
+  } catch (error) {
+    channel?.remove();
+    throw error;
   } finally {
     stdinPrompt?.remove();
   }

@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { TurnPart } from "@aop/common";
 import { RunUsageSchema, ThreadUsageSchema } from "@aop/common";
-import { aopPaths } from "@aop/infra";
+import { aopPaths, generateTypeId, typeIdToUuid } from "@aop/infra";
 import { ClaudeCodeProvider, type LLMProvider } from "@aop/llm-provider";
 import { FAKE_CLI_PATH } from "@aop/llm-provider/test-fixtures";
 import { Hono } from "hono";
@@ -140,25 +140,58 @@ const eventually = async (predicate: () => boolean | Promise<boolean>): Promise<
 const insertOrphanedRun = async (
   db: Awaited<ReturnType<typeof setup>>["db"],
   sessionId: string,
-  run: { id: string; pid: number; logFilePath: string },
+  run: {
+    id: string;
+    pid: number;
+    logFilePath: string;
+    userMessageId?: string;
+    inputPath?: string;
+  },
 ): Promise<void> => {
+  const userMessageId = run.userMessageId ?? `${run.id}_user`;
   await db
     .insertInto("chat_messages")
-    .values({ id: `${run.id}_user`, session_id: sessionId, role: "user", content: "long job" })
+    .values({ id: userMessageId, session_id: sessionId, role: "user", content: "long job" })
     .execute();
   await db
     .insertInto("chat_runs")
     .values({
       id: run.id,
       session_id: sessionId,
-      user_message_id: `${run.id}_user`,
+      user_message_id: userMessageId,
       assistant_message_id: `${run.id}_reply`,
       runtime: "claude-code",
       log_file_path: run.logFilePath,
       status: "running",
       pid: run.pid,
+      input_path: run.inputPath ?? null,
     })
     .execute();
+};
+
+/**
+ * Starts a run that takes messages while it works the way the adapter does (the relay in front
+ * of the fake, its input FIFO next to the log), outside the engine: what a server that died
+ * mid-turn leaves running. Resolves with the relay's pid once it is spawned.
+ */
+const spawnDetachedRunWithInput = async (
+  prompt: string,
+  logFilePath: string,
+  userMessageId: string,
+): Promise<{ pid: number; inputPath: string }> => {
+  mkdirSync(dirname(logFilePath), { recursive: true });
+  const inputPath = `${logFilePath}.in`;
+  const spawned = Promise.withResolvers<number>();
+  void new ClaudeCodeProvider().run({
+    prompt,
+    runtimeAlias: FAKE_CLI_PATH,
+    logFilePath,
+    partialMessages: true,
+    inputChannel: { path: inputPath, promptUuid: typeIdToUuid(userMessageId) ?? "" },
+    env: { FAKE_CLI_HOME: join(aopHome, "fake-cli") },
+    onSpawn: (pid) => spawned.resolve(pid),
+  });
+  return { pid: await spawned.promise, inputPath };
 };
 
 /** Starts the fake the way the adapter does (detached, stdout to the run log), outside the engine. */
@@ -300,6 +333,60 @@ describe("chat engine against the fake CLI", () => {
     });
     await db.destroy();
   });
+
+  test("a restarted server writes a message into the turn the old one left running, and ends it once answered", async () => {
+    const { db, session, send } = await setup();
+    const logFilePath = join(aopPaths.logs(), "chat-sessions", session.id, "left-running.jsonl");
+    const userMessageId = generateTypeId("smsg");
+    const left = await spawnDetachedRunWithInput(
+      "long job [fake: steps=4 delay=250]",
+      logFilePath,
+      userMessageId,
+    );
+    await insertOrphanedRun(db, session.id, {
+      id: "crun_left_running",
+      pid: left.pid,
+      logFilePath,
+      userMessageId,
+      inputPath: left.inputPath,
+    });
+    await waitForFakeInit(session.id);
+
+    // A new service over the same database is what a restarted server builds; it picks the run up.
+    createChatSessionRoutes(createCommandContext(db), {
+      createProviderFn: () => fakeOnlyClaude,
+      recoveryPollIntervalMs: 20,
+    });
+    await send("use arm64 instead");
+
+    expect(
+      await eventually(async () => (await runRow(db, "crun_left_running")).status !== "running"),
+    ).toBe(true);
+    const steer = await db
+      .selectFrom("chat_messages")
+      .selectAll()
+      .where("content", "=", "use arm64 instead")
+      .executeTakeFirstOrThrow();
+    expect(steer.steered_run_id).toBe("crun_left_running");
+    const reply = await db
+      .selectFrom("chat_messages")
+      .selectAll()
+      .where("id", "=", "crun_left_running_reply")
+      .executeTakeFirstOrThrow();
+    expect((await runRow(db, "crun_left_running")).status).toBe("completed");
+    expect(JSON.parse(reply.parts ?? "[]")).toContainEqual({ type: "steer", messageId: steer.id });
+    expect(reply.content).toContain("Then you said: use arm64 instead");
+    // Its input ended once it had answered: the CLI exited and the FIFO went with the relay.
+    expect(await eventually(() => !isProcessAlive(left.pid))).toBe(true);
+    expect(existsSync(left.inputPath)).toBe(false);
+    // Nothing was left to start a turn of its own.
+    await waitForPendingChatReplies();
+    expect(
+      (await db.selectFrom("chat_runs").select("id").where("session_id", "=", session.id).execute())
+        .length,
+    ).toBe(1);
+    await db.destroy();
+  }, 30_000);
 
   test("a restarted server fails a run whose CLI died mid-turn instead of waiting forever", async () => {
     const { db, session } = await setup();

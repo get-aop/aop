@@ -4,7 +4,7 @@ import { stopDispatching } from "../chat-session/run-dispatch.ts";
 import { createCommandContext } from "../context.ts";
 import { createProjectServices } from "../project/services.ts";
 import { eventually, fakeOnlyClaude } from "../project/test-utils.ts";
-import { useThreadWorld } from "../thread/test-utils.ts";
+import { started, useThreadWorld } from "../thread/test-utils.ts";
 import {
   coordinatorReports,
   runOrder,
@@ -105,18 +105,39 @@ describe("the host's cap on running thread turns", () => {
     await s.settle();
   }, 30_000);
 
-  test("a steer to a running thread waits its turn behind the threads that queued before it", async () => {
+  test("a message held for after a running thread's turn waits behind the threads that queued before it", async () => {
     const { s, project } = await setup();
     await setRunCap(s, 1);
     const first = await spawnThread(s, project.id, "first [fake: startup=900]");
     const second = await spawnThread(s, project.id, "second [fake: startup=100]");
 
-    const sent = await s.services.threads.send(first.id, "and one more thing [fake: startup=100]");
+    const sent = await s.services.threads.send(
+      first.id,
+      "and one more thing [fake: startup=100]",
+      undefined,
+      { midRunMode: "queue" },
+    );
     expect(sent.success).toBe(true);
     await untilStarted(s, first.id, 2);
     await s.settle();
 
     expect(runOrder(s, ids([first, second]))).toEqual([first.id, second.id, first.id]);
+    expect(await statusesOf(s, ids([first, second]))).toEqual(["idle", "idle"]);
+  }, 30_000);
+
+  test("a message to a running thread goes into its turn and takes no run slot", async () => {
+    const { s, project } = await setup();
+    await setRunCap(s, 1);
+    const first = await spawnThread(s, project.id, "first [fake: startup=600 steps=3 delay=150]");
+    const second = await spawnThread(s, project.id, "second [fake: startup=100]");
+    await started(s, first.id);
+
+    const sent = await s.services.threads.send(first.id, "and one more thing");
+    expect(sent.success).toBe(true);
+    await untilStatus(s, second.id, "idle");
+    await s.settle();
+
+    expect(runOrder(s, ids([first, second]))).toEqual([first.id, second.id]);
     expect(await statusesOf(s, ids([first, second]))).toEqual(["idle", "idle"]);
   }, 30_000);
 

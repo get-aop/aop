@@ -76,8 +76,16 @@ export interface TurnContext {
   systemPrompt?: string;
   /** The launch asked for partial messages: text and reasoning also stream as they are written. */
   partialMessages?: boolean;
+  /** The launch passed `--replay-user-messages`: each message the turn takes is echoed. */
+  replayUserMessages?: boolean;
   /** The images the prompt carried; the reply names them. */
   images?: FakeImage[];
+  /** What reached the turn on stdin while it worked, in order; the default reply names them. */
+  steers?: UserLine[];
+  /** Which turn of this process it is, from 0: the result's `result_index`. */
+  resultIndex?: number;
+  /** What every turn of this process consumed, this one included: a result's `modelUsage` and cost. */
+  processUsage?: TokenUsage;
 }
 
 /** An image block of a stream-json prompt: its media type and decoded size. */
@@ -86,9 +94,17 @@ export interface FakeImage {
   bytes: number;
 }
 
-/** What the adapter asked the CLI to do, recovered from argv. */
-export interface Invocation {
+/** One user message: the prompt argument, or a stream-json line read from stdin. */
+export interface UserLine {
   prompt: string;
+  /** With `--input-format stream-json`, the message's image blocks. */
+  images?: FakeImage[];
+  /** The line's `uuid`, which the CLI echoes back with `--replay-user-messages`. */
+  uuid?: string;
+}
+
+/** What the adapter asked the CLI to do, recovered from argv. */
+export interface Invocation extends UserLine {
   resumeId?: string;
   /** `--model`; undefined when the launch passed none, and Claude Code picks its own default. */
   model?: string;
@@ -102,8 +118,6 @@ export interface Invocation {
   recordSystemPrompt: boolean;
   /** HTTP MCP servers from `--mcp-config`, by name. Other transports are not imitated. */
   mcpServers: Record<string, { url: string }>;
-  /** With `--input-format stream-json`, the image blocks of the message read from stdin. */
-  images?: FakeImage[];
 }
 
 /**
@@ -115,10 +129,14 @@ export interface Dialect {
   name: string;
   /** Recognises the argv shape the matching adapter builds. */
   matches(args: string[]): boolean;
-  /** `stdin` is what the CLI read from its input, when its arguments say the prompt is there. */
-  parse(args: string[], stdin?: string): Invocation;
+  /** `firstLine` is the first line of stdin, when the arguments say the prompt is there. */
+  parse(args: string[], firstLine?: string): Invocation;
   /** Whether the prompt comes on stdin rather than as an argument. */
   readsStdin(args: string[]): boolean;
+  /** A later line of stdin: a message sent while the CLI works, or the next turn's prompt. */
+  readLine(line: string): UserLine;
+  /** The echo of a message the turn took, where it took it; empty unless the launch asked for it. */
+  replay(message: UserLine, ctx: TurnContext): JsonLine[];
   start(ctx: TurnContext): JsonLine[];
   beat(beat: Beat, index: number, ctx: TurnContext): JsonLine[];
   end(ending: Ending, ctx: TurnContext): JsonLine[];

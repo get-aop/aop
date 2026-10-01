@@ -7,6 +7,8 @@ export type {
 export { ArtifactSchema, PullRequestChecksSchema, PullRequestRefSchema } from "./artifact.ts";
 export type {
   MessageBlock,
+  ProsePart,
+  SteerPart,
   SuggestedThread,
   SuggestionAnswer,
   ThreadCardVariant,

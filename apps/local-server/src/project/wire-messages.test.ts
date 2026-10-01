@@ -97,6 +97,53 @@ describe("listWireMessages", () => {
     for (const message of messages) expect(MessageSchema.safeParse(message).success).toBe(true);
   });
 
+  test("a message written into a running turn names the reply that turn writes", async () => {
+    await addMessage(coordinator.id, { id: "m1", role: "user", content: "Plan it", turn: 1 });
+    await addMessage(coordinator.id, { id: "m2", role: "user", content: "Skip the beta", turn: 2 });
+    await addMessage(thread.id, { id: "t0", role: "user", content: "Build it", turn: 1 });
+    await addMessage(thread.id, {
+      id: "t1",
+      role: "user",
+      content: "Use arm64",
+      origin: { type: "coordinator-relay", quote: null },
+      turn: 2,
+    });
+    const run = (id: string, sessionId: string, userMessageId: string, reply: string) => ({
+      id,
+      session_id: sessionId,
+      user_message_id: userMessageId,
+      assistant_message_id: reply,
+      runtime: "claude-code",
+      log_file_path: `/tmp/${id}.jsonl`,
+      status: "running" as const,
+    });
+    await db
+      .insertInto("chat_runs")
+      .values([run("crun_c", coordinator.id, "m1", "m3"), run("crun_t", thread.id, "t0", "t9")])
+      .execute();
+    await db
+      .updateTable("chat_messages")
+      .set({ steered_run_id: "crun_c" })
+      .where("id", "=", "m2")
+      .execute();
+    await db
+      .updateTable("chat_messages")
+      .set({ steered_run_id: "crun_t" })
+      .where("id", "=", "t1")
+      .execute();
+
+    expect((await list(coordinator)).messages).toMatchObject([
+      { id: "m1", role: "user" },
+      { id: "m2", role: "user", text: "Skip the beta", steers: "m3" },
+    ]);
+    expect((await list(coordinator)).messages[0]).not.toHaveProperty("steers");
+    // The coordinator's words relayed into a thread keep their shape, and say where they went.
+    expect((await list(thread)).messages).toMatchObject([
+      { id: "t0", role: "user" },
+      { id: "t1", role: "assistant", steers: "t9" },
+    ]);
+  });
+
   test("a brief the coordinator relayed into a thread is an assistant message with the forwarded quote first", async () => {
     await addMessage(thread.id, {
       id: "m1",

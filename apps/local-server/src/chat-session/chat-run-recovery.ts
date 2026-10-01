@@ -4,6 +4,7 @@ import { extractRuntimeSessionIdFromRawJsonl, parseRawJsonlContent } from "@aop/
 import type { ChatRun, ChatRunFailureKind, ChatRuntimeSessionState } from "../db/schema.ts";
 import { detectRateLimit, type RateLimitHit } from "../scheduling/rate-limit.ts";
 import { isProviderFailureEvent, isProviderSuccessEvent } from "./provider-event-classifier.ts";
+import { promptUuidOf } from "./run-input.ts";
 import {
   CHAT_MAX_LOG_BYTES,
   readAssistantTextFromLog,
@@ -47,6 +48,11 @@ export const waitForChatRunTerminal = async (input: {
   onProgress?: StreamProgressListener;
   /** True once the run's recorded CLI process has exited (a log without an ending is final). */
   isProcessGone?: () => boolean;
+  /**
+   * For a run that takes messages while it works: ends its input once it has answered all of
+   * them, and says whether it did. Until then an ending in the log is not the run's end.
+   */
+  settleInput?: () => Promise<boolean>;
   pollIntervalMs?: number;
   startupTimeoutMs?: number;
   getNow?: () => number;
@@ -55,6 +61,7 @@ export const waitForChatRunTerminal = async (input: {
   const stopTail = input.onProgress
     ? startLogProgressTail({
         logFilePath: input.run.log_file_path,
+        promptUuid: input.run.input_path ? promptUuidOf(input.run) : undefined,
         onProgress: input.onProgress,
       })
     : undefined;
@@ -68,6 +75,7 @@ export const waitForChatRunTerminal = async (input: {
 const pollUntilChatRunTerminal = async (input: {
   run: ChatRun;
   isProcessGone?: () => boolean;
+  settleInput?: () => Promise<boolean>;
   pollIntervalMs?: number;
   startupTimeoutMs?: number;
   getNow?: () => number;
@@ -88,6 +96,7 @@ const pollUntilChatRunTerminal = async (input: {
     const processGone = input.isProcessGone?.() ?? false;
     const poll = await pollRecoveryOnce({
       run: input.run,
+      settleInput: input.settleInput,
       lastLogSignature,
       content,
       sawOutput,
@@ -124,6 +133,7 @@ const waitForRecoveryPoll = (delayMs: number, signal?: AbortSignal): Promise<voi
 
 const pollRecoveryOnce = async (input: {
   run: ChatRun;
+  settleInput?: () => Promise<boolean>;
   lastLogSignature: string;
   content: string;
   sawOutput: boolean;
@@ -143,7 +153,7 @@ const pollRecoveryOnce = async (input: {
   if (snapshot) {
     lastLogSignature = snapshot.signature;
     content = snapshot.content;
-    const result = await terminalResult(input.run, content);
+    const result = await terminalResult(input.run, content, input.settleInput);
     if (result) {
       return {
         lastLogSignature,
@@ -228,8 +238,14 @@ const logRecoveryTimeout = (
   );
 };
 
-const terminalResult = async (run: ChatRun, content: string): Promise<RecoveredChatRun | null> => {
+const terminalResult = async (
+  run: ChatRun,
+  content: string,
+  settleInput?: () => Promise<boolean>,
+): Promise<RecoveredChatRun | null> => {
   const terminal = detectChatRunTerminalState(run.runtime, content);
+  // A result that leaves a message the run was sent unanswered is not its end.
+  if (terminal !== "running" && settleInput && !(await settleInput())) return null;
   const runtimeSessionId = resolveRecoveredSessionId(run, content);
   const runtimeSessionState = run.runtime_session_state;
   if (terminal !== "running") {

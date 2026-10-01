@@ -12,7 +12,10 @@ type Fields = Record<string, unknown>;
  *
  * The `result` event closes a run and is authoritative: `modelUsage` splits the run's tokens
  * and cost by model (helper models such as a title generator show up as their own key), and
- * `usage` plus `total_cost_usd` cover the run as a whole. A run that was stopped or crashed
+ * `usage` plus `total_cost_usd` cover the run as a whole. A process that answered a steer with a
+ * turn of its own writes a result per turn (`result_index` 0, 1, ...), and each result's
+ * `modelUsage` and cost add up every turn of the process so far, so only its last one counts.
+ * A run that was stopped or crashed
  * has no `result`; its tokens are then summed from the `usage` of its assistant messages,
  * keeping one entry per message id because the CLI repeats a message once per content block.
  * That path knows no cost.
@@ -21,11 +24,22 @@ export const parseClaudeCodeUsage = (log: string): RunUsageEntry[] => {
   const events = parseRawJsonlContent(log).entries.map((entry) => entry.event);
   const fallbackModel = modelOf(events);
   const fromResults = mergeByModel(
-    events
-      .filter((event) => event.type === "result")
-      .flatMap((result) => resultEntries(result, fallbackModel)),
+    lastResultOfEachProcess(events).flatMap((result) => resultEntries(result, fallbackModel)),
   );
   return fromResults.length > 0 ? fromResults : mergeByModel(assistantEntries(events));
+};
+
+// A result whose `result_index` is above 0 continues the process of the result before it. A log
+// holds several processes when a run was retried on a fresh session.
+const lastResultOfEachProcess = (events: RawProviderEvent[]): RawProviderEvent[] => {
+  const last: RawProviderEvent[] = [];
+  for (const event of events) {
+    if (event.type !== "result") continue;
+    const continues = typeof event.result_index === "number" && event.result_index > 0;
+    if (continues && last.length > 0) last[last.length - 1] = event;
+    else last.push(event);
+  }
+  return last;
 };
 
 const resultEntries = (result: RawProviderEvent, fallbackModel: string): RunUsageEntry[] => {

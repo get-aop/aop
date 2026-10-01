@@ -45,6 +45,46 @@ describe("persistFinalizedChatRun", () => {
     expect(finalized.cli_version).toBe("2.1.286");
   });
 
+  test("keeps the steer parts of messages written into the run, and no other echo", async () => {
+    const { db, run } = await setupRun({ runtime: "claude-code" });
+    await db
+      .insertInto("chat_messages")
+      .values({
+        id: "smsg_finalize_steer",
+        session_id: "isess_finalize",
+        role: "user",
+        content: "use arm64",
+        steered_run_id: run.id,
+      })
+      .execute();
+
+    await db.transaction().execute((trx) =>
+      persistFinalizedChatRun(
+        trx,
+        run,
+        "Done.",
+        null,
+        null,
+        { status: "completed", errorMessage: null },
+        [
+          { type: "steer", messageId: "smsg_finalize_steer" },
+          { type: "steer", messageId: "smsg_not_written_to_the_run" },
+          { type: "text", text: "Done." },
+        ],
+      ),
+    );
+
+    const reply = await db
+      .selectFrom("chat_messages")
+      .select("parts")
+      .where("id", "=", run.assistant_message_id)
+      .executeTakeFirstOrThrow();
+    expect(JSON.parse(reply.parts ?? "[]")).toEqual([
+      { type: "steer", messageId: "smsg_finalize_steer" },
+      { type: "text", text: "Done." },
+    ]);
+  });
+
   test("records no CLI version for a log without an init event", async () => {
     const { db, run } = await setupRun({ runtime: "claude-code" });
 
@@ -264,6 +304,7 @@ const setupRun = async (
     pid: null,
     blocks_json: "[]",
     cli_version: null,
+    input_path: null,
     created_at: now,
     updated_at: now,
     ...overrides,

@@ -1,5 +1,6 @@
 import type { Thread } from "@aop/common";
 import { toast } from "sonner";
+import type { SendOptions } from "../api/project-chat";
 import {
   deleteThread,
   replyToThread,
@@ -25,7 +26,12 @@ export interface ThreadActions {
   resolve: (thread: Thread) => Promise<void>;
   /** Asks first; deletes the thread with its worktree and branch, and leaves it if it is open. */
   remove: (thread: Thread) => Promise<void>;
-  steer: (thread: Thread, text: string, images?: readonly string[]) => Promise<SendResult>;
+  steer: (
+    thread: Thread,
+    text: string,
+    images?: readonly string[],
+    options?: SendOptions,
+  ) => Promise<SendResult>;
   /** Answers the question a thread is waiting on. */
   reply: (thread: Thread, text: string) => Promise<SendResult>;
 }
@@ -51,7 +57,8 @@ export const threadActions: ThreadActions = {
       }
     });
   },
-  steer: (thread, text, images) => send(() => steerThread(thread.id, text, images)),
+  steer: (thread, text, images, options) =>
+    send(() => steerThread(thread.id, text, images, options)),
   reply: (thread, text) => send(() => replyToThread(thread.id, text)),
 };
 

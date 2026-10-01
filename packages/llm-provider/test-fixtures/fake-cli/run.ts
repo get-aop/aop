@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { claudeDialect } from "./claude";
 import { type Directives, parseDirectives } from "./directives";
 import { writeFiles } from "./files";
+import type { InputLines } from "./input-lines";
 import { carryOut } from "./mcp-beats";
 import { beginTurn } from "./session-store";
 import { planTurn } from "./turn";
@@ -10,10 +11,13 @@ import {
   AOP_MCP_SERVER,
   type Dialect,
   type Ending,
+  type Invocation,
   type JsonLine,
   type McpConnection,
   type PlannedBeat,
+  type TokenUsage,
   type TurnContext,
+  type UserLine,
 } from "./types";
 
 const DIALECTS: Dialect[] = [claudeDialect];
@@ -26,8 +30,8 @@ export interface Runtime {
   args: string[];
   env: Record<string, string | undefined>;
   cwd: string;
-  /** Reads the CLI's stdin; only called when the arguments say the prompt is there. */
-  readStdin?: () => Promise<string>;
+  /** The CLI's stdin as lines; only read when the arguments say the prompt is there. */
+  stdin?: InputLines;
 }
 
 export interface Io {
@@ -44,18 +48,66 @@ export interface Io {
 /** One stretch of the turn's events; MCP calls run when their stretch is reached, not up front. */
 type Segment = () => Promise<JsonLine[]>;
 
-/** Plays one CLI turn and returns the exit code. See directives.ts for the scripting syntax. */
+/** How a launch goes on: the turns its stdin asks for, one after another. */
+interface Launch {
+  runtime: Runtime;
+  io: Io;
+  dialect: Dialect;
+  invocation: Invocation;
+  input: InputLines | undefined;
+  /** What the launch's turns so far consumed. */
+  usage: TokenUsage;
+}
+
+/**
+ * Plays the turns of one CLI launch and returns the exit code. See directives.ts for the
+ * scripting syntax. A prompt on stdin (`--input-format stream-json`) is read a line at a time,
+ * as Claude Code reads it: a line that arrives while a turn works reaches it after the step it
+ * is on, and one that arrives as the turn answers starts another turn once it has. The launch
+ * ends with its input, or with a turn that does not end well.
+ */
 export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
   const dialect = DIALECTS.find((candidate) => candidate.matches(runtime.args));
   if (!dialect) return abort(io, "fake-cli: unrecognised arguments", USAGE_EXIT_CODE);
-  const stdin = dialect.readsStdin(runtime.args) ? await runtime.readStdin?.() : undefined;
-  const invocation = dialect.parse(runtime.args, stdin);
+  const input = dialect.readsStdin(runtime.args) ? runtime.stdin : undefined;
+  const firstLine = input ? ((await input.next()) ?? "") : undefined;
+  const invocation = dialect.parse(runtime.args, firstLine);
   if (!invocation.prompt) return abort(io, "fake-cli: no prompt given", FAILURE_EXIT_CODE);
 
-  const directives = parseDirectives(invocation.prompt, runtime.env.FAKE_CLI_SCRIPT);
+  const usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+  return playTurns({ runtime, io, dialect, invocation, input, usage });
+};
+
+const playTurns = async (launch: Launch): Promise<number> => {
+  let message: UserLine = launch.invocation;
+  let resumeId = launch.invocation.resumeId;
+  const waiting: string[] = [];
+  for (let resultIndex = 0; ; resultIndex += 1) {
+    const played = await playTurn(launch, message, resumeId, resultIndex);
+    if (typeof played === "number") return played;
+    if (!launch.input) return 0;
+    waiting.push(...played.waiting);
+    const line = waiting.shift() ?? (await launch.input.next());
+    if (line === null) return 0;
+    message = launch.dialect.readLine(line);
+    resumeId = played.sessionId;
+  }
+};
+
+/** The exit code of a launch that ends here, or how the next turn of a launch that goes on starts. */
+type Played = number | { sessionId: string; waiting: string[] };
+
+const playTurn = async (
+  launch: Launch,
+  message: UserLine,
+  resumeId: string | undefined,
+  resultIndex: number,
+): Promise<Played> => {
+  const { runtime, io, dialect, invocation, input } = launch;
+  const directives = parseDirectives(message.prompt, runtime.env.FAKE_CLI_SCRIPT);
   await io.sleep(directives.startupMs);
 
-  const session = beginTurn(resolveHome(runtime.env), dialect.name, invocation.resumeId, {
+  const session = beginTurn(resolveHome(runtime.env), dialect.name, resumeId, {
     appended: invocation.appendSystemPrompt,
     recording: invocation.recordSystemPrompt,
     flags: invocation.flags,
@@ -63,8 +115,8 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
     effort: invocation.effort,
   });
   if (!session) {
-    const message = `No conversation found with session ID: ${invocation.resumeId}`;
-    return abort(io, message, FAILURE_EXIT_CODE);
+    const text = `No conversation found with session ID: ${resumeId}`;
+    return abort(io, text, FAILURE_EXIT_CODE);
   }
   for (const path of writeFiles(directives.writes ?? [], runtime.cwd)) {
     io.warn(`fake-cli: refusing to write outside the working directory: ${path}`);
@@ -74,25 +126,68 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
     cwd: runtime.cwd,
     model: invocation.model,
     usage: directives.usage,
-    prompt: invocation.prompt,
+    prompt: message.prompt,
     turn: session.turn,
     resumed: session.resumed,
     systemPrompt: session.appendedSystemPrompt,
     usageWarning: directives.usageWarning,
     partialMessages: invocation.flags.includes("--include-partial-messages"),
-    images: invocation.images,
+    replayUserMessages: invocation.flags.includes("--replay-user-messages"),
+    images: message.images,
+    steers: [],
+    resultIndex,
+    processUsage: addUsage(launch.usage, directives.usage),
   };
-  const { beats, ending } = planTurn(directives, ctx);
+  const plan = planTurn(directives, ctx);
   const server = invocation.mcpServers[AOP_MCP_SERVER];
   const aop = server ? io.mcp(server.url) : undefined;
+  // Steers are taken where the CLI takes them: after the step the turn is on.
+  const steered =
+    (segment: Segment): Segment =>
+    async () => [...(await segment()), ...takeSteers(dialect, input, ctx)];
+  let ending = plan.ending;
   const segments: Segment[] = [
-    async () => dialect.start(ctx),
-    ...beats.map((beat, index) => beatSegment(dialect, beat, index, ctx, aop)),
-    async () => dialect.end(ending, ctx),
+    steered(async () => [...dialect.start(ctx), ...dialect.replay(message, ctx)]),
+    ...plan.beats.map((beat, index) => steered(beatSegment(dialect, beat, index, ctx, aop))),
+    async () => {
+      ending = steeredEnding(directives, ctx);
+      return dialect.end(ending, ctx);
+    },
   ];
 
   if (await emit(segments, directives, io)) return CRASHED_EXIT_CODE;
-  return exitCodeFor(ending, directives, io);
+  if (ending.kind !== "success") return exitCodeFor(ending, directives, io);
+  return { sessionId: session.id, waiting: input?.take() ?? [] };
+};
+
+// Adds a turn's tokens to its launch's, which a result reports as the process's.
+const addUsage = (total: TokenUsage, turn: TokenUsage): TokenUsage => {
+  total.input += turn.input;
+  total.output += turn.output;
+  total.cacheWrite += turn.cacheWrite;
+  total.cacheRead += turn.cacheRead;
+  return { ...total };
+};
+
+/** The lines that reached the turn: echoed where it took them, and remembered for its reply. */
+const takeSteers = (
+  dialect: Dialect,
+  input: InputLines | undefined,
+  ctx: TurnContext,
+): JsonLine[] =>
+  (input?.take() ?? []).flatMap((line) => {
+    const steer = dialect.readLine(line);
+    ctx.steers?.push(steer);
+    return dialect.replay(steer, ctx);
+  });
+
+/** The turn's ending once its steers are in: the newest steer's `say` replaces the prompt's. */
+const steeredEnding = (directives: Directives, ctx: TurnContext): Ending => {
+  const steer = (ctx.steers ?? []).findLast(
+    (message) => parseDirectives(message.prompt).say !== undefined,
+  );
+  const say = steer === undefined ? directives.say : parseDirectives(steer.prompt).say;
+  return planTurn({ ...directives, say }, ctx).ending;
 };
 
 const beatSegment =

@@ -18,11 +18,20 @@ export const MessageImageSchema = z.object({
   path: z.string().startsWith("/"),
 });
 
+/**
+ * The reply a message steers: it was written into that reply's turn while the turn ran, so it
+ * needs no reply of its own and is shown inside that reply, where the reply's `steer` part for it
+ * says the agent took it in (at the reply's end until then). Absent on a message that waits for a
+ * turn of its own, or started one.
+ */
+const SteersSchema = IdSchema.optional();
+
 /** Typed by the person; plain text, and the images they attached. A message of images alone has no text. */
 export const UserMessageSchema = MessageBaseSchema.extend({
   role: z.literal("user"),
   text: z.string(),
   images: z.array(MessageImageSchema).min(1).optional(),
+  steers: SteersSchema,
 }).refine((message) => message.text.length > 0 || message.images !== undefined, {
   message: "A message needs text or an image",
   path: ["text"],
@@ -43,6 +52,8 @@ export const AssistantMessageSchema = MessageBaseSchema.extend({
    * no run wrote (the coordinator's brief relayed into a thread).
    */
   inReplyTo: IdSchema.optional(),
+  /** On the coordinator's words relayed into a thread that was working when they arrived. */
+  steers: SteersSchema,
 });
 
 /** What a thread told the coordinator. */

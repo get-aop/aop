@@ -1,11 +1,12 @@
 import type {
   AssistantMessage,
+  Message,
   ThreadReportMessage,
   ThreadReportOutcome,
   UserMessage,
 } from "@aop/common";
 import { CircleAlertIcon, CircleCheckIcon, HandIcon } from "lucide-react";
-import { memo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Bubble } from "@/ui/bubble";
 import { ChatMarkdown } from "./ChatMarkdown";
@@ -55,14 +56,18 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
 export const AssistantRow = memo(function AssistantRow({
   message,
   writing = false,
+  steers,
 }: {
   message: AssistantMessage;
   writing?: boolean;
+  /** Messages sent into this reply's turn while it ran: drawn where it took them in, or at its end. */
+  steers?: readonly Message[];
 }) {
   const { blocks, revealing } = useTurnReveal(message.blocks, writing);
   const settled = !writing && !revealing;
   // Fixed at mount: a reply that finishes in front of the person keeps rendering as it did.
   const watched = useRef(writing).current;
+  const { renderSteer, untaken } = useSteers(message, steers);
   return (
     <div
       className="group pb-5"
@@ -92,7 +97,11 @@ export const AssistantRow = memo(function AssistantRow({
           blocks={blocks}
           writing={!settled}
           watched={watched}
+          renderSteer={renderSteer}
         />
+        {untaken.map((steer) => (
+          <SteeredMessage key={steer.id} message={steer} state={writing ? "pending" : "missed"} />
+        ))}
         {/* The meta's room is kept while the reply is written, so it ends without a jump. */}
         <div className="mt-1.5 min-h-6">
           {settled ? (
@@ -100,6 +109,72 @@ export const AssistantRow = memo(function AssistantRow({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+});
+
+// Which of the messages sent into the turn it took in (drawn by its steer parts), and which not yet.
+const useSteers = (message: AssistantMessage, steers: readonly Message[] | undefined) => {
+  const byId = useMemo(() => new Map((steers ?? []).map((steer) => [steer.id, steer])), [steers]);
+  const renderSteer = useCallback(
+    (messageId: string) => {
+      const steer = byId.get(messageId);
+      return steer ? <SteeredMessage message={steer} state="taken" /> : null;
+    },
+    [byId],
+  );
+  const untaken = useMemo(() => {
+    const taken = new Set(
+      message.blocks.flatMap((block) => (block.type === "steer" ? [block.messageId] : [])),
+    );
+    return (steers ?? []).filter((steer) => !taken.has(steer.id));
+  }, [message.blocks, steers]);
+  return { renderSteer, untaken };
+};
+
+const STEER_CAPTION = {
+  taken: "Sent while it worked",
+  pending: "Sent while it worked · it reads this after its current step",
+  missed: "Sent while it worked · the turn was stopped before reading it",
+} as const;
+
+/**
+ * A message sent into a turn while it ran, drawn inside the reply: where the agent took it in,
+ * or, until it does, at the reply's end. The person's words are a bubble, as anywhere else; the
+ * coordinator's words relayed into a thread keep their quote.
+ */
+const SteeredMessage = memo(function SteeredMessage({
+  message,
+  state,
+}: {
+  message: Message;
+  state: keyof typeof STEER_CAPTION;
+}) {
+  return (
+    <div
+      data-testid="steered-message"
+      data-message-id={message.id}
+      data-state={state}
+      className={cn(
+        "my-3 flex flex-col gap-1",
+        message.role === "user" ? "items-end" : "border-l border-border pl-3",
+      )}
+    >
+      {message.role === "user" ? (
+        <>
+          {message.images ? <MessageImages images={message.images} /> : null}
+          {message.text ? (
+            <Bubble className="relative">
+              <FoldedText text={message.text} />
+            </Bubble>
+          ) : null}
+        </>
+      ) : message.role === "assistant" ? (
+        <MessageBlocks messageId={message.id} blocks={message.blocks} />
+      ) : null}
+      <p data-testid="steered-message-caption" className="text-meta text-text-subtle">
+        {STEER_CAPTION[state]}
+      </p>
     </div>
   );
 });

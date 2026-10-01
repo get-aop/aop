@@ -1,6 +1,7 @@
 import { CLI_PROVIDER_LABELS, type Project, type Thread } from "@aop/common";
 import { useCallback, useMemo, useState } from "react";
 import { uploadChatImage } from "../../api/attachments";
+import type { SendOptions } from "../../api/project-chat";
 import { ChatError, ChatLoading, ChatRefreshNotice, ProjectClosedNotice } from "../chat/ChatStates";
 import { Composer } from "../chat/Composer";
 import { ChatProvider } from "../chat/chat-context";
@@ -49,8 +50,16 @@ export const ThreadTranscript = ({
   // What the person sent shows at once from the stream; fetching too covers a stream that is down.
   const sender = useCallback(
     (action: ThreadActions["steer"]) =>
-      async (text: string, images?: readonly string[]): Promise<SendResult> => {
-        const result = await (images ? action(thread, text, images) : action(thread, text));
+      async (
+        text: string,
+        images?: readonly string[],
+        options?: SendOptions,
+      ): Promise<SendResult> => {
+        const result = await (options
+          ? action(thread, text, images, options)
+          : images
+            ? action(thread, text, images)
+            : action(thread, text));
         if (result.ok) {
           conversation.reload();
           setSentCount((count) => count + 1);
@@ -101,6 +110,7 @@ export const ThreadTranscript = ({
             placeholder="Steer this thread…"
             disabledReason={disabledReason}
             send={steer}
+            working={working}
             uploadImage={uploadImage}
             chips={<ThreadRuntimeChips thread={thread} />}
             onStop={

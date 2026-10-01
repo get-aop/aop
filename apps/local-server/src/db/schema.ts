@@ -128,6 +128,8 @@ export interface ChatMessagesTable {
   origin_json: string | null;
   /** JSON `TurnPart[]` of a reply a run wrote, added by migration v16; null on any other row. */
   parts: Generated<string | null>;
+  /** The running run this user message was written into mid-turn (migration v18), or null. */
+  steered_run_id: Generated<string | null>;
 }
 
 export interface ChatRunsTable {
@@ -157,6 +159,8 @@ export interface ChatRunsTable {
   blocks_json: Generated<string>;
   /** The agent CLI version the run's init event named, recorded when it ends (migration v17). */
   cli_version: Generated<string | null>;
+  /** The FIFO the running CLI reads steers from (migration v18); null on a run that takes none. */
+  input_path: Generated<string | null>;
   created_at: Generated<string>;
   updated_at: Generated<string>;
 }

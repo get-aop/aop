@@ -46,7 +46,39 @@ describe("a thread's status as its turns end", () => {
     );
   });
 
-  test("a message to a working thread is queued and runs after the current turn", async () => {
+  test("a message to a working thread reaches its running turn, which answers it", async () => {
+    const { s, project } = await setup();
+    const spawned = await s.services.threads.spawn(project.id, {
+      title: "Work",
+      prompt: "Do it [fake: steps=3 delay=150]",
+    });
+    if (!spawned.success) throw new Error("thread not spawned");
+    await started(s, spawned.thread.id);
+
+    const sent = await s.services.threads.send(spawned.thread.id, "use arm64 instead");
+    await s.settle();
+
+    expect(sent.success && sent.thread.status).toBe("working");
+    const messages = await s.ctx.chatSessionRepository.listMessages(spawned.thread.id);
+    expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "user"]);
+    const [, reply, steer] = messages;
+    const runs = await s.db
+      .selectFrom("chat_runs")
+      .selectAll()
+      .where("session_id", "=", spawned.thread.id)
+      .execute();
+    expect(runs.map((run) => run.status)).toEqual(["completed"]);
+    expect(steer?.steered_run_id).toBe(runs[0]?.id ?? "");
+    expect(JSON.parse(reply?.parts ?? "[]")).toContainEqual({
+      type: "steer",
+      messageId: steer?.id,
+    });
+    expect(reply?.content).toContain("Then you said: use arm64 instead");
+    const after = await s.services.threads.get(spawned.thread.id);
+    expect(after.success && after.thread).toMatchObject({ status: "idle", repliesCount: 1 });
+  });
+
+  test("a message held for after the turn is queued and runs after the current turn", async () => {
     const { s, project } = await setup();
     const spawned = await s.services.threads.spawn(project.id, {
       title: "Work",
@@ -55,7 +87,9 @@ describe("a thread's status as its turns end", () => {
     if (!spawned.success) throw new Error("thread not spawned");
     await started(s, spawned.thread.id);
 
-    const sent = await s.services.threads.send(spawned.thread.id, "and then this");
+    const sent = await s.services.threads.send(spawned.thread.id, "and then this", undefined, {
+      midRunMode: "queue",
+    });
     await s.settle();
 
     expect(sent.success && sent.thread.status).toBe("working");
@@ -142,6 +176,34 @@ describe("replying to a thread that is waiting on the person", () => {
 });
 
 describe("stopping and deleting a thread", () => {
+  test("Stop drops a message sent into the running turn with it: nothing starts afterwards", async () => {
+    const { s, project } = await setup();
+    const spawned = await s.services.threads.spawn(project.id, {
+      title: "Work",
+      prompt: "Do it [fake: delay=30000]",
+    });
+    if (!spawned.success) throw new Error("thread not spawned");
+    await started(s, spawned.thread.id);
+    await s.services.threads.send(spawned.thread.id, "sent into the long turn");
+
+    const stopped = await s.services.threads.stop(spawned.thread.id);
+    await s.settle();
+
+    expect(stopped.success && stopped.thread.status).toBe("idle");
+    const runs = await s.db
+      .selectFrom("chat_runs")
+      .select(["id", "status"])
+      .where("session_id", "=", spawned.thread.id)
+      .execute();
+    expect(runs.map((run) => run.status)).toEqual(["cancelled"]);
+    const steer = await s.db
+      .selectFrom("chat_messages")
+      .select(["steered_run_id", "disposition"])
+      .where("content", "=", "sent into the long turn")
+      .executeTakeFirstOrThrow();
+    expect(steer).toEqual({ steered_run_id: runs[0]?.id ?? "", disposition: "immediate" });
+  }, 30_000);
+
   test("Stop ends the running turn, drops what was queued, and reports nothing to the coordinator", async () => {
     const { s, project } = await setup();
     const spawned = await s.services.threads.spawn(project.id, {
@@ -150,7 +212,9 @@ describe("stopping and deleting a thread", () => {
     });
     if (!spawned.success) throw new Error("thread not spawned");
     await started(s, spawned.thread.id);
-    await s.services.threads.send(spawned.thread.id, "queued behind the long turn");
+    await s.services.threads.send(spawned.thread.id, "queued behind the long turn", undefined, {
+      midRunMode: "queue",
+    });
 
     const stopped = await s.services.threads.stop(spawned.thread.id);
 

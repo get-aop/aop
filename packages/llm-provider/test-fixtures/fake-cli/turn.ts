@@ -1,5 +1,5 @@
 import { type Directives, stripDirectives } from "./directives";
-import type { Ending, PlannedBeat, TurnContext } from "./types";
+import type { Ending, FakeImage, PlannedBeat, TurnContext } from "./types";
 
 export interface TurnPlan {
   beats: PlannedBeat[];
@@ -75,14 +75,23 @@ export const readEchoedSystemPrompt = (reply: string): string | null | undefined
 // resumed conversation from a fresh one without reading logs.
 const defaultReply = (ctx: TurnContext): string => {
   const resumed = ctx.resumed ? " (resumed)" : "";
-  const firstLine = stripDirectives(ctx.prompt).split("\n")[0] ?? "";
-  const echo = firstLine.trim().slice(0, MAX_ECHO_LENGTH);
-  return `Fake reply for turn ${ctx.turn} of session ${ctx.sessionId}${resumed}. You said: ${echo}${describeImages(ctx)}`;
+  const echo = firstLineOf(ctx.prompt);
+  return `Fake reply for turn ${ctx.turn} of session ${ctx.sessionId}${resumed}. You said: ${echo}${describeImages(ctx.images)}${describeSteers(ctx)}`;
 };
 
+// What a test reads to know a message reached the turn while it worked.
+const describeSteers = (ctx: TurnContext): string => {
+  const steers = (ctx.steers ?? []).map((steer) =>
+    `${firstLineOf(steer.prompt)}${describeImages(steer.images)}`.trim(),
+  );
+  return steers.length === 0 ? "" : ` Then you said: ${steers.join(" / ")}`;
+};
+
+const firstLineOf = (text: string): string =>
+  (stripDirectives(text).split("\n")[0] ?? "").trim().slice(0, MAX_ECHO_LENGTH);
+
 // What a test reads to know the images reached the CLI as images, in order.
-const describeImages = (ctx: TurnContext): string => {
-  const images = ctx.images ?? [];
+const describeImages = (images: readonly FakeImage[] = []): string => {
   if (images.length === 0) return "";
   const list = images.map((image) => `${image.mediaType} (${image.bytes} bytes)`).join(", ");
   return ` [images: ${list}]`;

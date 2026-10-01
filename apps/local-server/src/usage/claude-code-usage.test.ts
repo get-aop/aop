@@ -117,6 +117,32 @@ describe("parseClaudeCodeUsage from the result event", () => {
     ]);
   });
 
+  test("a process that answered a steer with a second turn counts its last result only", () => {
+    // Claude Code 2.1.287: each result's modelUsage and cost add up the process's turns so far.
+    const first = resultEvent({ result_index: 0, modelUsage: { m: modelUsage(1, 2, 3, 4, 0.5) } });
+    const second = resultEvent({
+      result_index: 1,
+      modelUsage: { m: modelUsage(3, 5, 7, 9, 1.25) },
+    });
+    const retried = resultEvent({
+      result_index: 0,
+      modelUsage: { m: modelUsage(1, 1, 1, 1, 0.25) },
+    });
+
+    expect(parseClaudeCodeUsage(claudeLog(first, second))).toEqual([
+      {
+        model: "m",
+        inputTokens: 3,
+        outputTokens: 5,
+        cacheWriteTokens: 7,
+        cacheReadTokens: 9,
+        costUsd: 1.25,
+      },
+    ]);
+    // A second process in the same log (a retry on a fresh session) adds up as before.
+    expect(parseClaudeCodeUsage(claudeLog(first, second, retried))[0]?.costUsd).toBe(1.5);
+  });
+
   test("clamps negative and non-numeric counts to zero instead of storing them", () => {
     const log = claudeLog(
       resultEvent({

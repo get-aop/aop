@@ -19,10 +19,12 @@ import {
   type StoredChatImage,
 } from "./message-images.ts";
 import { shouldSkipAssistantReply } from "./reply-state.ts";
+import { inputChannelFor, recordRunInput, settleRunInput } from "./run-input.ts";
 import { recordChatRunPid } from "./run-process.ts";
 import { persistActiveRuntimeSession, retireStaleRuntimeSession } from "./runtime-binding.ts";
 import {
   type CreateProviderFn,
+  type RunInput,
   type RuntimeRunResult,
   runSessionPrompt,
   type SessionRunRegistration,
@@ -200,6 +202,7 @@ const runMainRuntimeReply = async (
   runtimePrompt: string,
 ): Promise<RuntimeRunResult> => {
   const { ctx, session } = input;
+  const runInput = await openRunInput(ctx, session, input.chatRun);
   const run = await runSessionPrompt({
     session,
     repoPath,
@@ -215,6 +218,7 @@ const runMainRuntimeReply = async (
       ? (sessionId) => persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId)
       : undefined,
     onSpawn: chatRunPidRecorder(ctx, input.chatRun),
+    input: runInput,
   });
   if (!run.staleRuntimeSessionId || !input.chatRun) return run;
 
@@ -240,7 +244,23 @@ const runMainRuntimeReply = async (
     onRuntimeSession: (sessionId) =>
       persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId),
     onSpawn: chatRunPidRecorder(ctx, input.chatRun),
+    input: runInput,
   });
+};
+
+/**
+ * A chat run of a runtime that takes messages while it works gets an input of its own, recorded
+ * before its CLI starts; its input ends once it has answered everything it was given.
+ */
+const openRunInput = async (
+  ctx: LocalServerContext,
+  session: ChatSession,
+  chatRun: ChatRun | undefined,
+): Promise<RunInput | undefined> => {
+  const channel = chatRun ? inputChannelFor(session, chatRun) : null;
+  if (!chatRun || !channel) return undefined;
+  await recordRunInput(ctx, chatRun.id, channel);
+  return { channel, onResult: () => void settleRunInput(ctx, chatRun.id) };
 };
 
 /** The CLI writing the chat run's own log records its pid on the run. */

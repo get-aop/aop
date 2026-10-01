@@ -5,11 +5,11 @@ import {
   type Beat,
   type Dialect,
   type Ending,
-  type FakeImage,
   type Invocation,
   type JsonLine,
   type TokenUsage,
   type TurnContext,
+  type UserLine,
 } from "./types";
 
 const DEFAULT_MODEL = "fake-claude";
@@ -28,6 +28,8 @@ export const claudeDialect: Dialect = {
   matches: (args) => args.includes("--output-format"),
   parse: parseInvocation,
   readsStdin: (args) => parseArgv(args, ARGV_SPEC).values.get("--input-format") === "stream-json",
+  readLine: readStreamJsonLine,
+  replay: (message, ctx) => (ctx.replayUserMessages ? [replayOf(message, ctx)] : []),
   start: (ctx) => [
     {
       type: "system",
@@ -87,13 +89,12 @@ const ARGV_SPEC = {
   variadicFlags: ["--mcp-config", "--disallowedTools", "--add-dir", "--allowedTools", "--tools"],
 };
 
-function parseInvocation(args: string[], stdin?: string): Invocation {
+function parseInvocation(args: string[], firstLine?: string): Invocation {
   const { flags, values, variadicValues, positionals } = parseArgv(args, ARGV_SPEC);
   const streamed =
-    values.get("--input-format") === "stream-json" ? readStreamJsonPrompt(stdin ?? "") : null;
+    values.get("--input-format") === "stream-json" ? readStreamJsonLine(firstLine ?? "") : null;
   return {
-    prompt: streamed ? streamed.prompt : (positionals[0] ?? ""),
-    ...(streamed && { images: streamed.images }),
+    ...(streamed ?? { prompt: positionals[0] ?? "" }),
     resumeId: values.get("--resume"),
     model: values.get("--model"),
     effort: values.get("--effort"),
@@ -104,14 +105,15 @@ function parseInvocation(args: string[], stdin?: string): Invocation {
   };
 }
 
-// The first line of stdin is the user message: its text blocks are the prompt, its image blocks
-// what the reply reports. Anything else on stdin is ignored, as one turn takes one message.
-function readStreamJsonPrompt(stdin: string): { prompt: string; images: FakeImage[] } {
-  const firstLine = stdin.split("\n").find((line) => line.trim()) ?? "";
+// A stream-json user line: its text blocks are the prompt, its image blocks what the reply
+// reports, and its `uuid` what its echo carries.
+function readStreamJsonLine(line: string): UserLine {
   let content: unknown[] = [];
+  let uuid: string | undefined;
   try {
-    const parsed = JSON.parse(firstLine) as { message?: { content?: unknown } } | null;
+    const parsed = JSON.parse(line) as { uuid?: unknown; message?: { content?: unknown } } | null;
     content = Array.isArray(parsed?.message?.content) ? parsed.message.content : [];
+    uuid = typeof parsed?.uuid === "string" ? parsed.uuid : undefined;
   } catch {
     // A line that is not JSON gives no prompt, and the run says so.
   }
@@ -122,6 +124,7 @@ function readStreamJsonPrompt(stdin: string): { prompt: string; images: FakeImag
   }>;
   return {
     prompt: blocks.flatMap((block) => (block.type === "text" ? [block.text ?? ""] : [])).join("\n"),
+    ...(uuid && { uuid }),
     images: blocks.flatMap((block) =>
       block.type === "image" && block.source
         ? [
@@ -155,6 +158,19 @@ function parseMcpServers(config: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+// Claude Code 2.1.287 echoes a line it took as a user message flagged `isReplay`, with the
+// line's own `uuid`, where the model got it: first the prompt, then each message sent meanwhile.
+function replayOf(message: UserLine, ctx: TurnContext): JsonLine {
+  return {
+    type: "user",
+    message: { role: "user", content: [{ type: "text", text: message.prompt }] },
+    session_id: ctx.sessionId,
+    parent_tool_use_id: null,
+    uuid: message.uuid ?? `fake-${ctx.turn}-${(ctx.steers ?? []).length}`,
+    isReplay: true,
+  };
 }
 
 function renderBeat(beat: Beat, index: number, ctx: TurnContext): JsonLine[] {
@@ -273,7 +289,8 @@ function renderEnding(ending: Ending, ctx: TurnContext): JsonLine[] {
 function renderRateLimit(resetsInSeconds: number, ctx: TurnContext): JsonLine[] {
   const resetsAt = Math.round(Date.now() / 1000) + resetsInSeconds;
   const text = `You've hit your session limit · resets ${clockTime(resetsAt)}`;
-  const limited = { ...ctx, usage: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 } };
+  const none = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+  const limited = { ...ctx, usage: none, processUsage: none };
   return [
     {
       type: "rate_limit_event",
@@ -368,22 +385,26 @@ const assistant = (ctx: TurnContext, content: JsonLine[]): JsonLine => ({
   session_id: ctx.sessionId,
 });
 
+// `usage` is the turn's own; `modelUsage` and the cost add up every turn of the process so far,
+// as Claude Code 2.1.287 reports a process that took a message after its first answer.
 const result = (ctx: TurnContext, fields: JsonLine): JsonLine => {
-  const costUsd = costOf(ctx.usage);
+  const processUsage = ctx.processUsage ?? ctx.usage;
+  const costUsd = costOf(processUsage);
   return {
     type: "result",
     duration_ms: 1,
     num_turns: ctx.turn,
     session_id: ctx.sessionId,
+    result_index: ctx.resultIndex ?? 0,
     total_cost_usd: costUsd,
     usage: messageUsage(ctx.usage),
     // Claude Code's breakdown per model, keyed by model id, in camelCase.
     modelUsage: {
       [ctx.model ?? DEFAULT_MODEL]: {
-        inputTokens: ctx.usage.input,
-        outputTokens: ctx.usage.output,
-        cacheReadInputTokens: ctx.usage.cacheRead,
-        cacheCreationInputTokens: ctx.usage.cacheWrite,
+        inputTokens: processUsage.input,
+        outputTokens: processUsage.output,
+        cacheReadInputTokens: processUsage.cacheRead,
+        cacheCreationInputTokens: processUsage.cacheWrite,
         webSearchRequests: 0,
         costUSD: costUsd,
       },
