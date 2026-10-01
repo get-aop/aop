@@ -18,6 +18,11 @@ export interface PanelLayout {
   expanded: boolean;
   /** The chat is out of sight (and its place is the panel's). */
   chatHidden: boolean;
+  /**
+   * The panel runs from the top of the screen beside the chat, its header level with the top
+   * bar, which then spans only the chat. Otherwise the top bar spans the screen above it.
+   */
+  besideTopBar: boolean;
   width: number;
   toggle: () => void;
   close: () => void;
@@ -78,6 +83,8 @@ export const usePanelLayout = ({
     visible,
     expanded: visible && expanded,
     chatHidden: visible && (mode === "single" || (mode === "side" && expanded)),
+    // Expanded or on a phone it covers the chat, and the top bar stays over it for its way back.
+    besideTopBar: visible && !expanded && mode !== "single",
     width: panelWidthFor(mode, prefs.width, containerWidth ?? Number.POSITIVE_INFINITY),
     toggle: visible ? close : open,
     close,

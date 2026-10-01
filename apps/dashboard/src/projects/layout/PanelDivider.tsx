@@ -61,9 +61,10 @@ export const PanelDivider = ({
       data-dragging={dragging}
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
-      // A wide grab area around a one-pixel line: only the content box is painted.
+      // A wide grab area around a one-pixel line: only the content box is painted. It runs the
+      // project grid's full height, beside the top bar too.
       className={cn(
-        "z-10 -mx-1 h-auto w-2 shrink-0 cursor-col-resize touch-none self-stretch border-0 bg-border bg-clip-content px-[3.5px] outline-none transition-colors duration-[120ms] hover:bg-border-bold focus-visible:bg-running",
+        "z-10 col-start-2 row-span-full -mx-1 h-auto w-2 shrink-0 cursor-col-resize touch-none self-stretch border-0 bg-border bg-clip-content px-[3.5px] outline-none transition-colors duration-[120ms] hover:bg-border-bold focus-visible:bg-running",
         dragging && "bg-running",
       )}
     />

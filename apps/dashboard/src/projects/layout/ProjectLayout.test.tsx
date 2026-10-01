@@ -224,6 +224,85 @@ describe("opening a thread", () => {
   });
 });
 
+describe("the panel beside the top bar", () => {
+  const layoutEl = () => screen.getByTestId("project-layout");
+  const topBar = () => screen.getByTestId("project-topbar");
+  const besideTopBar = () => layoutEl().getAttribute("data-panel-beside-top-bar");
+
+  test("runs from the top of the screen, and the top bar spans only the chat", () => {
+    mount();
+    expect(besideTopBar()).toBe("true");
+    expect(topBar().className).toContain("col-start-1");
+    expect(topBar().className).not.toContain("col-span-full");
+    expect(panel()?.className).toContain("row-span-full");
+    expect(screen.getByTestId("panel-divider").className).toContain("row-span-full");
+    expect(layoutEl().style.gridTemplateColumns).toBe(
+      "minmax(0, 1fr) auto min(520px, calc(100% - 340px))",
+    );
+  });
+
+  test("a thread open in the panel keeps it beside the top bar", async () => {
+    mount();
+    act(() => navigate("/projects/p1/threads/busy"));
+    await act(async () => {});
+
+    expect(screen.getByTestId("thread-header")).toBeTruthy();
+    expect(besideTopBar()).toBe("true");
+    expect(panel()?.className).toContain("row-span-full");
+  });
+
+  test("closed, the top bar spans the screen again", () => {
+    mount();
+    fireEvent.click(screen.getByTestId("panel-close"));
+
+    expect(besideTopBar()).toBe("false");
+    expect(topBar().className).toContain("col-span-full");
+    expect(layoutEl().style.gridTemplateColumns).toBe("minmax(0, 1fr) auto auto");
+  });
+
+  test("expanded, the panel sits under a top bar that spans the screen", () => {
+    mount();
+    fireEvent.click(screen.getByTestId("panel-expand"));
+
+    expect(besideTopBar()).toBe("false");
+    expect(topBar().className).toContain("col-span-full");
+    expect(panel()?.className).toContain("row-start-2");
+    expect(panel()?.className).toContain("col-span-full");
+    expect(layoutEl().style.gridTemplateColumns).toBe("minmax(0, 1fr) auto auto");
+  });
+
+  test("laid over the chat it reaches the top too, and expanded it stays under the top bar", () => {
+    const rect = holderWidth(700);
+    try {
+      mount();
+      fireEvent.click(screen.getByTestId("panel-toggle"));
+      expect(besideTopBar()).toBe("true");
+      expect(panel()?.className).toContain("row-span-full");
+
+      fireEvent.click(screen.getByTestId("panel-expand"));
+      expect(besideTopBar()).toBe("false");
+      expect(panel()?.className).toContain("row-start-2");
+      expect(topBar().className).toContain("col-span-full");
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
+  test("on a phone the panel replaces the chat under the top bar", () => {
+    const rect = holderWidth(390);
+    try {
+      mount();
+      fireEvent.click(screen.getByTestId("panel-toggle"));
+
+      expect(besideTopBar()).toBe("false");
+      expect(panel()?.className).toContain("row-start-2");
+      expect(topBar().className).toContain("col-span-full");
+    } finally {
+      rect.mockRestore();
+    }
+  });
+});
+
 describe("expand", () => {
   test("gives the panel the chat's room, keeps the chat alive, and restores it", () => {
     mount();
@@ -260,7 +339,9 @@ describe("the divider", () => {
     fireEvent.keyDown(screen.getByTestId("panel-divider"), { key: "ArrowLeft" });
     const after = Number(screen.getByTestId("panel-divider").getAttribute("aria-valuenow"));
     expect(after).toBeGreaterThan(before);
-    expect((panel() as HTMLElement).style.width).toBe(`${after}px`);
+    expect(screen.getByTestId("project-layout").style.gridTemplateColumns).toContain(
+      `min(${after}px,`,
+    );
 
     cleanup();
     mount();

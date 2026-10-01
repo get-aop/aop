@@ -27,19 +27,27 @@ export const ProjectTopBar = ({
   entry,
   panel,
   settingsOpen,
+  className,
 }: {
   entry: ProjectEntry;
   panel: Panel;
   settingsOpen: boolean;
+  /** Where the project grid puts it: over the chat only, or across the screen. */
+  className?: string;
 }) => {
   const { project, threads, connection } = entry;
   const waiting = attentionOf(threads).waiting > 0;
   const streamLabel = STREAM_LABEL[connection];
 
   return (
+    // Its bottom line is a shadow, not a border, so the row's content centres on the same line as
+    // the panel header beside it. As a container it drops its labels when the chat is narrow.
     <header
       data-testid="project-topbar"
-      className="flex h-pane-header shrink-0 items-center gap-2 border-b border-border px-2"
+      className={cn(
+        "@container flex h-pane-header min-w-0 shrink-0 items-center gap-2 px-2 shadow-[inset_0_-1px_0_var(--color-border)]",
+        className,
+      )}
     >
       <ShellNav />
       <Link
@@ -87,7 +95,7 @@ export const ProjectTopBar = ({
         <span
           data-testid="project-stream-state"
           data-state={connection}
-          className="hidden shrink-0 items-center gap-1.5 text-meta text-text-subtle lg:flex"
+          className="hidden shrink-0 items-center gap-1.5 text-meta text-text-subtle @xl:flex"
         >
           <span
             className={cn("size-1.5 rounded-full", connection === "live" ? "bg-ok" : "bg-waiting")}
@@ -99,7 +107,10 @@ export const ProjectTopBar = ({
   );
 };
 
-/** The threads panel's toggle, labelled "Overview" after the panel's first screen. */
+/**
+ * The threads panel's toggle, labelled "Overview" after the panel's first screen. A narrow bar
+ * shows only its icon (the title still names it).
+ */
 const OverviewToggle = ({ panel, waiting }: { panel: Panel; waiting: boolean }) => (
   <button
     type="button"
@@ -108,12 +119,12 @@ const OverviewToggle = ({ panel, waiting }: { panel: Panel; waiting: boolean }) 
     title={panel.visible ? "Hide the overview" : "Show the overview"}
     onClick={panel.toggle}
     className={cn(
-      "relative flex h-8 shrink-0 items-center gap-1.5 rounded-row pr-3 pl-2 text-meta font-medium text-text-subtle transition-colors duration-[120ms] hover:bg-hover hover:text-text [&_svg]:size-4",
+      "relative flex h-8 shrink-0 items-center gap-1.5 rounded-row px-2 text-meta font-medium text-text-subtle transition-colors duration-[120ms] hover:bg-hover hover:text-text [&_svg]:size-4",
       panel.visible && "bg-active text-text",
     )}
   >
     <ListChecksIcon aria-hidden="true" />
-    Overview
+    <span className="hidden pr-1 @sm:inline">Overview</span>
     {waiting ? (
       <span
         data-testid="panel-toggle-dot"

@@ -219,7 +219,11 @@ const StatusFilter = ({ filters }: { filters: OverviewFilters }) => (
   </DropdownMenu>
 );
 
-/** The frame the panel sits in, by layout mode: a pane, a sheet over the chat, or the whole screen. */
+/**
+ * The frame the panel sits in, by layout mode: a pane, a sheet over the chat, or the whole screen.
+ * Beside the chat it runs from the top of the screen (the project grid gives it its column and
+ * width); covering the chat, it stays under the top bar.
+ */
 export const PanelFrame = ({ layout, children }: { layout: PanelLayout; children: ReactNode }) => {
   const sideBySide = layout.mode === "side";
   return (
@@ -228,11 +232,11 @@ export const PanelFrame = ({ layout, children }: { layout: PanelLayout; children
       data-mode={layout.mode}
       data-expanded={layout.expanded}
       aria-label="Threads"
-      style={layout.expanded || layout.mode === "single" ? undefined : { width: layout.width }}
+      style={layout.mode === "overlay" && !layout.expanded ? { width: layout.width } : undefined}
       className={cn(
         "flex min-h-0 min-w-0 flex-col border-l border-border bg-surface",
-        sideBySide && !layout.expanded && "max-w-[calc(100%-340px)] shrink-0",
-        sideBySide && layout.expanded && "flex-1",
+        layout.besideTopBar ? "row-span-full" : "row-start-2",
+        sideBySide && (layout.expanded ? "col-span-full" : "col-start-3"),
         layout.mode === "overlay" &&
           "absolute inset-y-0 right-0 z-20 shadow-[-12px_0_32px_rgb(0_0_0/0.4)]",
         layout.mode === "overlay" && (layout.expanded ? "w-full" : "max-w-full"),
