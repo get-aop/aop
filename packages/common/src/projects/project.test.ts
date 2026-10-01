@@ -131,6 +131,7 @@ describe("CreateProjectInputSchema", () => {
       notificationLevel: "coordinator",
       threadAccess: "full-access",
       autoFixPullRequests: true,
+      autoContinue: true,
       repoIds: [],
       lookAround: false,
     });
@@ -185,6 +186,21 @@ describe("autoFixPullRequests", () => {
     expect(ProjectPatchSchema.parse({ autoFixPullRequests: false })).toEqual({
       autoFixPullRequests: false,
     });
+  });
+});
+
+describe("autoContinue", () => {
+  test("is a boolean every project states, and a new project starts with it on", () => {
+    const { autoContinue: _autoContinue, ...missing } = makeProject();
+    expect(rejectedPaths(ProjectSchema, missing)).toEqual(["autoContinue"]);
+    expect(rejectedPaths(ProjectSchema, makeProject({ autoContinue: 1 }))).toEqual([
+      "autoContinue",
+    ]);
+    expect(CreateProjectInputSchema.parse({ name: "x" }).autoContinue).toBe(true);
+  });
+
+  test("can be turned off on its own", () => {
+    expect(ProjectPatchSchema.parse({ autoContinue: false })).toEqual({ autoContinue: false });
   });
 });
 

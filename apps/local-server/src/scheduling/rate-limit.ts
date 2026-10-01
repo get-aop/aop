@@ -63,10 +63,22 @@ export const detectRateLimit = (rawJsonl: string, now: Date = new Date()): RateL
   };
 };
 
-/** What the user is told, in the run's reply and the thread's status line. */
-export const describeRateLimit = (hit: RateLimitHit, now: Date = new Date()): string => {
+/**
+ * What the user is told, in the run's reply and the thread's status line. `automatic` is false
+ * for a thread whose project has auto-continue off: it waits for the person past the reset.
+ */
+export const describeRateLimit = (
+  hit: RateLimitHit,
+  now: Date = new Date(),
+  automatic = true,
+): string => {
+  const at = formatTime(new Date(hit.resumesAt), now);
+  if (!automatic) {
+    const when = hit.resetKnown ? `The limit resets at ${at}` : "The reset time is unknown";
+    return `Paused: ${hit.message}. ${when}; auto-continue is off, so resume it when you are ready.`;
+  }
   const verb = hit.resetKnown ? "Resuming automatically" : "Retrying automatically";
-  return `Paused: ${hit.message}. ${verb} at ${formatTime(new Date(hit.resumesAt), now)}.`;
+  return `Paused: ${hit.message}. ${verb} at ${at}.`;
 };
 
 interface Evidence {

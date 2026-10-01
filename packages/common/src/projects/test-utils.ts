@@ -71,6 +71,7 @@ export const makeProject = (overrides: Overrides = {}) => ({
   notificationLevel: "coordinator",
   threadAccess: "full-access",
   autoFixPullRequests: true,
+  autoContinue: true,
   repoIds: ["repo_1"],
   status: "active",
   createdAt: AT,

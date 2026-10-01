@@ -1,5 +1,6 @@
 import { type Kysely, sql } from "kysely";
 import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
+import { AUTO_CONTINUE_V14_STATEMENTS } from "./auto-continue-v14.ts";
 import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { COORDINATOR_V4_STATEMENTS } from "./coordinator-v4.ts";
 import { DEFAULT_RUNTIME_V9_STATEMENTS } from "./default-runtime-v9.ts";
@@ -40,6 +41,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 11, name: "drop-runtime-profiles", statements: DROP_RUNTIME_PROFILES_V11_STATEMENTS },
   { version: 12, name: "project-kickoff", statements: PROJECT_KICKOFF_V12_STATEMENTS },
   { version: 13, name: "reported-runtime", statements: REPORTED_RUNTIME_V13_STATEMENTS },
+  { version: 14, name: "auto-continue", statements: AUTO_CONTINUE_V14_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

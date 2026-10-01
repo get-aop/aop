@@ -32,7 +32,7 @@ When a run ends because Claude Code hit a limit, the session waits and resumes i
 
 A wait ends in one of three ways, and all of them do the same thing:
 
-1. **The reset.** A timer resumes the session at `resumesAt`. The time is stored on the session, so a restart re-arms the timer, and a wait that came due while the server was down resumes at once.
+1. **The reset.** A timer resumes the session at `resumesAt`. The time is stored on the session, so a restart re-arms the timer, and a wait that came due while the server was down resumes at once. A thread does this only while its project's `autoContinue` setting is on (project settings, General, "Auto-continue when usage limits reset"; on by default). Off, the timer finds the setting off when it fires and the thread stays `rate-limited` past the reset, its reply saying the person resumes it; turning the setting on arms the project's waits again, so a reset that already passed resumes at once. The coordinator always resumes at the reset.
 2. **The person resumes it**, with `POST /api/threads/:id/resume`. This answers `409` for a thread that is not `rate-limited`.
 3. **The person sends the thread a message.** That is a retry, so the wait ends and the message runs.
 

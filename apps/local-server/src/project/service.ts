@@ -135,6 +135,19 @@ export const createProjectService = (
       return updated;
     });
 
+  // What a saved change sets going outside the project's row.
+  const followUpdate = async (
+    before: Project,
+    project: Project,
+    patch: ProjectPatch,
+  ): Promise<void> => {
+    if (patch.name !== undefined || patch.coordinator !== undefined) {
+      await syncCoordinatorSession(ctx, project);
+    }
+    // Threads that waited past their reset while it was off resume now, the rest at their reset.
+    if (project.autoContinue && !before.autoContinue) await chat.rearmResumes(project.id);
+  };
+
   return {
     create: async (settings, options = {}) => {
       const unknown = await missingRepo(settings.repoIds);
@@ -177,9 +190,7 @@ export const createProjectService = (
 
       const project = await applyUpdate(projectId, patch);
       if (!project) return notFound;
-      if (patch.name !== undefined || patch.coordinator !== undefined) {
-        await syncCoordinatorSession(ctx, project);
-      }
+      await followUpdate(current, project, patch);
       return { success: true, project };
     },
 

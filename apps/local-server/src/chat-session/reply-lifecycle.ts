@@ -256,7 +256,7 @@ const runAndPublishAssistantReply = async (input: {
     input.run,
     input.registration,
   );
-  const paused = pausedReply(input.session, produced.text, produced.rateLimit);
+  const paused = await pausedReply(input.ctx.db, input.session, produced.text, produced.rateLimit);
   const reply = { ...produced, text: paused.text, rateLimit: paused.rateLimit };
   return finalizeChatRunAndPublish(
     input.ctx,

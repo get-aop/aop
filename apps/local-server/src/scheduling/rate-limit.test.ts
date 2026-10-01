@@ -255,4 +255,19 @@ describe("describeRateLimit", () => {
       "Paused: Rate limited. Retrying automatically at 2:15 PM.",
     );
   });
+
+  test("with auto-continue off, says the person resumes it instead of naming a resume time", () => {
+    const known = {
+      message: "You've hit your limit",
+      resumesAt: new Date(2026, 8, 30, 15, 45).toISOString(),
+      resetKnown: true,
+    };
+
+    expect(describeRateLimit(known, NOW, false)).toBe(
+      "Paused: You've hit your limit. The limit resets at 3:45 PM; auto-continue is off, so resume it when you are ready.",
+    );
+    expect(describeRateLimit({ ...known, resetKnown: false }, NOW, false)).toBe(
+      "Paused: You've hit your limit. The reset time is unknown; auto-continue is off, so resume it when you are ready.",
+    );
+  });
 });

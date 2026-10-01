@@ -155,6 +155,36 @@ describe("a rate-limited thread", () => {
   });
 });
 
+describe("a rate-limited thread whose project has auto-continue off", () => {
+  test("says when the limit resets and that the thread waits for the person", () => {
+    setSystemTime(NOW);
+    render(<ThreadNotice thread={rateLimited(90_000)} autoContinue={false} />);
+
+    const text = screen.getByTestId("thread-notice-rate-limited").textContent ?? "";
+    expect(text).toContain("The limit resets at");
+    expect(text).toContain("Auto-continue is off for this project, so the thread waits for you.");
+    expect(text).not.toContain("resumes by itself");
+    expect(countdown().textContent).toBe("in 1m 30s");
+    expect(screen.getByTestId("thread-resume").textContent).toBe("Resume now");
+  });
+
+  test("past the reset it stays stopped and offers Resume, which ends the wait", async () => {
+    setSystemTime(NOW);
+    host.respondWith(() => json({ thread: rateLimited(0) }));
+    render(<ThreadNotice thread={rateLimited(-60_000)} autoContinue={false} />);
+
+    expect(countdown().textContent).toBe("it has reset");
+    const resume = screen.getByTestId("thread-resume");
+    expect(resume.textContent).toBe("Resume");
+
+    fireEvent.click(resume);
+    await act(async () => {});
+    expect(host.requests).toEqual([
+      { method: "POST", url: "/api/threads/thr_1/resume", body: undefined },
+    ]);
+  });
+});
+
 describe("formatCountdown", () => {
   test.each([
     [0, "0s"],

@@ -297,6 +297,7 @@ export const projectSettingsGetTool = defineTool({
       notificationLevel: project.notificationLevel,
       threadAccess: project.threadAccess,
       autoFixPullRequests: project.autoFixPullRequests,
+      autoContinue: project.autoContinue,
       repos: repos.flatMap((repo) =>
         repo ? [{ id: repo.id, name: repo.name, path: repo.path }] : [],
       ),

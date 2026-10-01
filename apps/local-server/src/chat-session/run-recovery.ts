@@ -136,7 +136,12 @@ const recoverChatRun = async (
   // A project's session that a limit refused waits for it, as it does when the server stayed up.
   const recovered = {
     ...terminal,
-    ...pausedReply(session ?? { project_id: null }, terminal.text, terminal.rateLimit),
+    ...(await pausedReply(
+      ctx.db,
+      session ?? { id: run.session_id, project_id: null },
+      terminal.text,
+      terminal.rateLimit,
+    )),
   };
   const followUp = await finalizeChatRunAndPublish(
     ctx,

@@ -17,15 +17,36 @@ export const RESUME_PROMPT =
 
 /**
  * The reply and the wait a run that a rate limit refused ends with. A project's session waits
- * out the limit and says so; any other chat has nothing to resume it, so its run just fails with
- * what the CLI said.
+ * out the limit and says so, and whether it resumes by itself; any other chat has nothing to
+ * resume it, so its run just fails with what the CLI said.
  */
-export const pausedReply = (
-  session: Pick<ChatSession, "project_id">,
+export const pausedReply = async (
+  db: Kysely<Database>,
+  session: Pick<ChatSession, "id" | "project_id">,
   text: string,
   hit: RateLimitHit | undefined,
-): { text: string; rateLimit?: RateLimitHit } =>
-  hit && session.project_id ? { text: describeRateLimit(hit), rateLimit: hit } : { text };
+): Promise<{ text: string; rateLimit?: RateLimitHit }> => {
+  if (!hit || !session.project_id) return { text };
+  const automatic = await continuesByItself(db, session.id);
+  return { text: describeRateLimit(hit, new Date(), automatic), rateLimit: hit };
+};
+
+/**
+ * Whether a session's wait on a limit ends by itself at the reset. A thread follows its project's
+ * auto-continue setting; a coordinator always does, since nothing else would release its inbox.
+ */
+export const continuesByItself = async (
+  db: Kysely<Database>,
+  sessionId: string,
+): Promise<boolean> => {
+  const row = await db
+    .selectFrom("chat_sessions")
+    .leftJoin("projects", "projects.id", "chat_sessions.project_id")
+    .select(["chat_sessions.kind", "projects.auto_continue"])
+    .where("chat_sessions.id", "=", sessionId)
+    .executeTakeFirst();
+  return row?.kind !== "thread" || row.auto_continue !== 0;
+};
 
 /** Starts a session's next queued turn, the way the engine does after any turn. */
 export type DrainSession = (sessionId: string, runtime: string) => Promise<void>;
@@ -62,7 +83,11 @@ export const resumeRateLimited = async (
   return true;
 };
 
-/** Arms the timer that resumes `sessionId` at `at`, replacing any earlier one. */
+/**
+ * Arms the timer that resumes `sessionId` at `at`, replacing any earlier one. The setting is read
+ * when it fires, not now, so turning auto-continue off during the wait keeps the thread waiting;
+ * turning it on arms the timers again (`rearmProjectResumes`).
+ */
 export const armResume = (
   ctx: LocalServerContext,
   sessionId: string,
@@ -71,6 +96,12 @@ export const armResume = (
 ): void => {
   armResumeTimer(sessionId, at, async () => {
     try {
+      if (!(await continuesByItself(ctx.db, sessionId))) {
+        logger.info("Session {sessionId} waits past its reset: auto-continue is off", {
+          sessionId,
+        });
+        return;
+      }
       await resumeRateLimited(ctx, sessionId, drain);
     } catch (error) {
       // A closed database is the server shutting down; the wait is stored and boot re-arms it.
@@ -94,6 +125,32 @@ export const armStoredResumes = async (
     .where("resumes_at", "is not", null)
     .execute()
     .catch(() => []);
+  armEach(ctx, waiting, drain);
+};
+
+/**
+ * Auto-continue turned on: each of the project's waits is armed again, so a thread whose reset
+ * passed while it was off resumes at once and the others at their reset.
+ */
+export const rearmProjectResumes = async (
+  ctx: LocalServerContext,
+  projectId: string,
+  drain: DrainSession,
+): Promise<void> => {
+  const waiting = await ctx.db
+    .selectFrom("chat_sessions")
+    .select(["id", "resumes_at"])
+    .where("project_id", "=", projectId)
+    .where("resumes_at", "is not", null)
+    .execute();
+  armEach(ctx, waiting, drain);
+};
+
+const armEach = (
+  ctx: LocalServerContext,
+  waiting: { id: string; resumes_at: string | null }[],
+  drain: DrainSession,
+): void => {
   for (const { id, resumes_at } of waiting) {
     if (resumes_at) armResume(ctx, id, resumes_at, drain);
   }

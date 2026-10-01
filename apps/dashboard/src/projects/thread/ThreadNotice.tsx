@@ -12,10 +12,16 @@ type RateLimited = Extract<Thread, { status: "rate-limited" }>;
 
 /**
  * What a thread that is not simply working has to say: it waits for a run slot, it waits out a
- * usage limit (with the time it resumes by itself, and a way to end the wait), a merge is
- * running, or it is closed and a message would reopen it.
+ * usage limit (with the time it resumes by itself, unless the project's auto-continue is off, and
+ * a way to end the wait), a merge is running, or it is closed and a message would reopen it.
  */
-export const ThreadNotice = ({ thread }: { thread: Thread }) => {
+export const ThreadNotice = ({
+  thread,
+  autoContinue = true,
+}: {
+  thread: Thread;
+  autoContinue?: boolean;
+}) => {
   switch (thread.status) {
     case "queued":
       return (
@@ -27,7 +33,7 @@ export const ThreadNotice = ({ thread }: { thread: Thread }) => {
         </Notice>
       );
     case "rate-limited":
-      return <RateLimitedNotice thread={thread} />;
+      return <RateLimitedNotice thread={thread} autoContinue={autoContinue} />;
     case "landing":
       return (
         <Notice testId="thread-notice-landing" icon={<Spinner className="size-3.5" />}>
@@ -63,10 +69,26 @@ const ResolvedNotice = ({ thread }: { thread: Extract<Thread, { status: "resolve
   );
 };
 
-/** The usage limit's wait: when it ends, counted down, and the way to end it now. */
-const RateLimitedNotice = ({ thread }: { thread: RateLimited }) => {
+/**
+ * The usage limit's wait: when it ends, counted down, and the way to end it now. With the
+ * project's auto-continue off the wait does not end by itself: past the reset the thread stays
+ * stopped until the person resumes it.
+ */
+const RateLimitedNotice = ({
+  thread,
+  autoContinue,
+}: {
+  thread: RateLimited;
+  autoContinue: boolean;
+}) => {
   const now = useNow(1_000);
   const remaining = Date.parse(thread.resumesAt) - now;
+  const at = formatShortTimestamp(thread.resumesAt);
+  const countdown = (passed: string) => (
+    <span data-testid="thread-resume-countdown" data-remaining-ms={Math.max(0, remaining)}>
+      {remaining > 0 ? `in ${formatCountdown(remaining)}` : passed}
+    </span>
+  );
   return (
     <Notice
       testId="thread-notice-rate-limited"
@@ -81,19 +103,25 @@ const RateLimitedNotice = ({ thread }: { thread: RateLimited }) => {
           onClick={() => void threadActions.resume(thread)}
         >
           <RotateCcwIcon />
-          Resume now
+          {autoContinue || remaining > 0 ? "Resume now" : "Resume"}
         </Button>
       }
     >
-      <p>
-        <strong className="font-medium text-text">Rate limited.</strong> It resumes by itself at{" "}
-        {formatShortTimestamp(thread.resumesAt)}
-        {" · "}
-        <span data-testid="thread-resume-countdown" data-remaining-ms={Math.max(0, remaining)}>
-          {remaining > 0 ? `in ${formatCountdown(remaining)}` : "resuming now"}
-        </span>
-        .
-      </p>
+      {autoContinue ? (
+        <p>
+          <strong className="font-medium text-text">Rate limited.</strong> It resumes by itself at{" "}
+          {at}
+          {" · "}
+          {countdown("resuming now")}.
+        </p>
+      ) : (
+        <p data-auto-continue="off">
+          <strong className="font-medium text-text">Rate limited.</strong> The limit resets at {at}
+          {" · "}
+          {countdown("it has reset")}. Auto-continue is off for this project, so the thread waits
+          for you.
+        </p>
+      )}
     </Notice>
   );
 };

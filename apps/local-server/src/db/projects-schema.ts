@@ -23,6 +23,8 @@ export interface ProjectsTable {
   thread_access: Generated<ThreadAccess>;
   /** Added by migration v7. SQLite has no boolean: 0 or 1. */
   auto_fix_pull_requests: Generated<0 | 1>;
+  /** Added by migration v14: a rate-limited thread resumes at the reset (1) or waits for the person (0). */
+  auto_continue: Generated<0 | 1>;
   /** Added by migration v13: what a role's last run on "Use default" reported. Null until one does. */
   coordinator_reported_model: Generated<string | null>;
   coordinator_reported_effort: Generated<ReasoningEffort | null>;

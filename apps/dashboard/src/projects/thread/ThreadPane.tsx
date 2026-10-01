@@ -113,7 +113,7 @@ const ThreadView = ({
         close={headerClose}
         onShowPullRequestBar={bringBack}
       />
-      <ThreadNotice thread={thread} />
+      <ThreadNotice thread={thread} autoContinue={project.autoContinue} />
       {showChanges ? (
         <>
           <ThreadChanges

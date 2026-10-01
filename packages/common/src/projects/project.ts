@@ -41,6 +41,12 @@ export const ProjectSettingsSchema = z.object({
    * checks, a review that requests changes, or merge conflicts. Off leaves those to the person.
    */
   autoFixPullRequests: z.boolean(),
+  /**
+   * Whether a thread a usage limit stopped takes up its work by itself when the limit resets.
+   * Off leaves it waiting past the reset until the person resumes it. The coordinator always
+   * resumes, since it has no Resume of its own and its inbox waits on it.
+   */
+  autoContinue: z.boolean(),
   repoIds: z.array(IdSchema).refine((ids) => new Set(ids).size === ids.length, {
     error: "A repo can be attached to a project once",
   }),
@@ -93,6 +99,7 @@ export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
   notificationLevel: shape.notificationLevel.default("coordinator"),
   threadAccess: shape.threadAccess.default("full-access"),
   autoFixPullRequests: shape.autoFixPullRequests.default(true),
+  autoContinue: shape.autoContinue.default(true),
   repoIds: shape.repoIds.default([]),
   lookAround: z.boolean().default(false),
 });

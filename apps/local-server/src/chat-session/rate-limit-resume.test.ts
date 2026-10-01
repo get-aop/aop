@@ -5,7 +5,12 @@ import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import { insertProjectRow, insertProjectSession } from "../project/test-utils.ts";
 import type { RateLimitHit } from "../scheduling/rate-limit.ts";
-import { pausedReply, RESUME_PROMPT, resumeRateLimited } from "./rate-limit-resume.ts";
+import {
+  continuesByItself,
+  pausedReply,
+  RESUME_PROMPT,
+  resumeRateLimited,
+} from "./rate-limit-resume.ts";
 import { cancelAllResumeTimers } from "./resume-timers.ts";
 
 const HIT: RateLimitHit = {
@@ -14,9 +19,27 @@ const HIT: RateLimitHit = {
   resetKnown: true,
 };
 
+let db: Kysely<Database>;
+
+const turnAutoContinueOff = (projectId: string) =>
+  db.updateTable("projects").set({ auto_continue: 0 }).where("id", "=", projectId).execute();
+
 describe("pausedReply", () => {
-  test("a project's session waits out the limit and says so", () => {
-    const paused = pausedReply({ project_id: "p1" }, `Runtime error: ${HIT.message}`, HIT);
+  beforeEach(async () => {
+    db = await createTestDb();
+    await insertProjectRow(db, "p1");
+    await insertProjectSession(db, { id: "t1", projectId: "p1", kind: "thread" });
+    await insertProjectSession(db, { id: "c1", projectId: "p1", kind: "coordinator" });
+  });
+
+  afterEach(async () => {
+    await db.destroy();
+  });
+
+  const thread = { id: "t1", project_id: "p1" };
+
+  test("a project's session waits out the limit and says so", async () => {
+    const paused = await pausedReply(db, thread, `Runtime error: ${HIT.message}`, HIT);
 
     expect(paused.rateLimit).toBe(HIT);
     expect(paused.text).toMatch(
@@ -24,21 +47,61 @@ describe("pausedReply", () => {
     );
   });
 
-  test("a chat outside any project just fails with what the CLI said", () => {
-    const paused = pausedReply({ project_id: null }, `Runtime error: ${HIT.message}`, HIT);
+  test("a thread whose project has auto-continue off is told the person resumes it", async () => {
+    await turnAutoContinueOff("p1");
+
+    const paused = await pausedReply(db, thread, HIT.message, HIT);
+    const coordinator = await pausedReply(db, { id: "c1", project_id: "p1" }, HIT.message, HIT);
+
+    expect(paused.rateLimit).toBe(HIT);
+    expect(paused.text).toMatch(/The limit resets at .*; auto-continue is off/);
+    // The coordinator has no Resume of its own, so it keeps resuming by itself.
+    expect(coordinator.text).toMatch(/Resuming automatically at/);
+  });
+
+  test("a chat outside any project just fails with what the CLI said", async () => {
+    const paused = await pausedReply(
+      db,
+      { id: "chat", project_id: null },
+      `Runtime error: ${HIT.message}`,
+      HIT,
+    );
 
     expect(paused).toEqual({ text: `Runtime error: ${HIT.message}` });
   });
 
-  test("a run no limit refused is left as it is", () => {
-    expect(pausedReply({ project_id: "p1" }, "All done.", undefined)).toEqual({
+  test("a run no limit refused is left as it is", async () => {
+    expect(await pausedReply(db, thread, "All done.", undefined)).toEqual({
       text: "All done.",
     });
   });
 });
 
+describe("continuesByItself", () => {
+  beforeEach(async () => {
+    db = await createTestDb();
+    await insertProjectRow(db, "p1");
+    await insertProjectSession(db, { id: "t1", projectId: "p1", kind: "thread" });
+    await insertProjectSession(db, { id: "c1", projectId: "p1", kind: "coordinator" });
+  });
+
+  afterEach(async () => {
+    await db.destroy();
+  });
+
+  test("follows the project's setting for a thread, and is always true for a coordinator", async () => {
+    expect(await continuesByItself(db, "t1")).toBe(true);
+    expect(await continuesByItself(db, "c1")).toBe(true);
+
+    await turnAutoContinueOff("p1");
+
+    expect(await continuesByItself(db, "t1")).toBe(false);
+    expect(await continuesByItself(db, "c1")).toBe(true);
+    expect(await continuesByItself(db, "missing")).toBe(true);
+  });
+});
+
 describe("resumeRateLimited", () => {
-  let db: Kysely<Database>;
   let ctx: LocalServerContext;
   const drained: string[] = [];
   const drain = async (sessionId: string): Promise<void> => {

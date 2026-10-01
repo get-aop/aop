@@ -353,6 +353,33 @@ describe("pull requests", () => {
   });
 });
 
+describe("auto-continue when usage limits reset", () => {
+  test("is on for a project by default, and saves turning it off", async () => {
+    await renderGeneral();
+    const toggle = screen.getByTestId("settings-auto-continue");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText("Auto-continue when usage limits reset")).toBeTruthy();
+
+    fireEvent.click(toggle);
+    save();
+
+    await waitFor(() => expect(api.writes()).toHaveLength(1));
+    expect(api.writes()[0]?.body).toEqual({ autoContinue: false });
+  });
+
+  test("a project that has it off shows it off, and saves turning it back on", async () => {
+    await renderGeneral(makeProject({ id: "p1", name: "Checkout", autoContinue: false }));
+    const toggle = screen.getByTestId("settings-auto-continue");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+    fireEvent.click(toggle);
+    save();
+
+    await waitFor(() => expect(api.writes()).toHaveLength(1));
+    expect(api.writes()[0]?.body).toEqual({ autoContinue: true });
+  });
+});
+
 describe("notifications", () => {
   test("saves the level the person picks", async () => {
     await renderGeneral();

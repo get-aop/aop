@@ -393,11 +393,13 @@ describe("the coordinator's tools", () => {
       repos: { id: string }[];
       threadAccess: string;
       autoFixPullRequests: boolean;
+      autoContinue: boolean;
     };
     expect(before.goal).toBe("Ship the new checkout");
     expect(before.instructions).toBe("Keep pull requests small.");
     expect(before.repos.map((repo) => repo.id)).toEqual(s.repos.map((repo) => repo.id));
     expect(before.autoFixPullRequests).toBe(true);
+    expect(before.autoContinue).toBe(true);
 
     const set = await s.callTool(coordinator.id, "project_settings_set", {
       threadModel: "fake-model",
@@ -437,6 +439,7 @@ describe("the coordinator's tools", () => {
       { instructions: "i".repeat(16_001) },
       { threadAccess: "auto-accept-edits" },
       { autoFixPullRequests: false },
+      { autoContinue: false },
       { repoIds: [] },
       { name: "Renamed" },
       { threadEffort: "low", instructions: "Small PRs only." },

@@ -1,7 +1,7 @@
 import type { UpdateChatSessionInput } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
-import { resumeRateLimited } from "./rate-limit-resume.ts";
+import { rearmProjectResumes, resumeRateLimited } from "./rate-limit-resume.ts";
 import { applyFollowUp, dispatchQueuedRuns, drainAfterResume } from "./reply-lifecycle.ts";
 import { ensureAllChatRunRecoveries } from "./run-recovery.ts";
 import { retryFreshChatRun, sendChatMessage } from "./send-message.ts";
@@ -73,6 +73,10 @@ export const createChatSessionService = (
     /** Ends a session's wait on a rate limit now, instead of at its reset. False when it was not waiting. */
     resumeRateLimited: (sessionId: string) =>
       resumeRateLimited(ctx, sessionId, drainAfterResume(ctx, deps)),
+
+    /** A project's auto-continue turned on: its waits on a limit end by themselves again. */
+    rearmResumes: (projectId: string) =>
+      rearmProjectResumes(ctx, projectId, drainAfterResume(ctx, deps)),
 
     abort: (sessionId: string) => abortChatSession(ctx, sessionId, deps),
 

@@ -5,6 +5,7 @@ import { Textarea } from "@/ui/textarea";
 import { requestConfirmation } from "../../components/ConfirmationHost";
 import { NOTIFICATION_LEVELS } from "../notification-levels";
 import { projectNameProblem } from "../project-fields";
+import { AutoContinueSetting } from "./AutoContinueSetting";
 import { AutoFixSetting } from "./AutoFixSetting";
 import { ROW_SELECT_CLASS, SaveBar, SettingRow, SettingsHeading } from "./blocks";
 import { ModelSettings } from "./ModelSettings";
@@ -109,6 +110,7 @@ export const GeneralSection = ({ project }: { project: Project }) => {
         <ThreadAccessSetting draft={draft} />
         <AutoFixSetting draft={draft} />
         <NotificationSetting draft={draft} />
+        <AutoContinueSetting draft={draft} />
 
         <SaveBar draft={draft} blocked={nameProblem !== null} />
       </form>

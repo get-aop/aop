@@ -158,6 +158,7 @@ const applyPatch = (current: ProjectSettings, patch: ProjectPatch): ProjectSetti
   notificationLevel: patch.notificationLevel ?? current.notificationLevel,
   threadAccess: patch.threadAccess ?? current.threadAccess,
   autoFixPullRequests: patch.autoFixPullRequests ?? current.autoFixPullRequests,
+  autoContinue: patch.autoContinue ?? current.autoContinue,
   repoIds: patch.repoIds ?? current.repoIds,
 });
 
@@ -174,6 +175,7 @@ const toColumns = (settings: ProjectSettings) => ({
   notification_level: settings.notificationLevel,
   thread_access: settings.threadAccess,
   auto_fix_pull_requests: settings.autoFixPullRequests ? (1 as const) : (0 as const),
+  auto_continue: settings.autoContinue ? (1 as const) : (0 as const),
 });
 
 const replaceRepos = async (
@@ -224,6 +226,7 @@ const toProject = (row: ProjectRow, repoIds: string[]): Project => ({
   notificationLevel: row.notification_level,
   threadAccess: row.thread_access,
   autoFixPullRequests: row.auto_fix_pull_requests === 1,
+  autoContinue: row.auto_continue === 1,
   repoIds,
   status: row.status,
   reportedRuntime: {
