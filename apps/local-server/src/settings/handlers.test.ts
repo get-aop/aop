@@ -25,6 +25,7 @@ describe("settings/handlers", () => {
 
       expect(result.settings).toEqual([
         { key: "chat_global_instructions", value: "" },
+        { key: "display_name", value: "" },
         { key: "max_concurrent_runs", value: "4" },
         { key: "update_check", value: "true" },
       ]);
@@ -151,6 +152,19 @@ describe("settings/handlers", () => {
         },
       });
       expect(await ctx.settingsRepository.get(SettingKey.UPDATE_CHECK)).toBe("false");
+    });
+
+    test("display_name is empty until the owner sets one, and takes any text", async () => {
+      expect(await ctx.settingsRepository.get(SettingKey.DISPLAY_NAME)).toBe("");
+
+      expect(await setSetting(ctx, "display_name", "Marcelo Ribeiro Mendes")).toEqual({
+        success: true,
+        key: "display_name",
+        value: "Marcelo Ribeiro Mendes",
+      });
+      expect(await ctx.settingsRepository.get(SettingKey.DISPLAY_NAME)).toBe(
+        "Marcelo Ribeiro Mendes",
+      );
     });
 
     test("a batch with one bad value saves none of it", async () => {

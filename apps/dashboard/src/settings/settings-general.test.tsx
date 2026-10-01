@@ -22,7 +22,7 @@ const saved = {
 
 /** The dialog's own wiring: edits live in state, and a save folds back into what is saved. */
 const Harness = () => {
-  const initial = { ...saved, max_concurrent_runs: "4", update_check: "true" };
+  const initial = { ...saved, display_name: "", max_concurrent_runs: "4", update_check: "true" };
   const [savedValues, setSavedValues] = useState<Record<string, string>>(initial);
   const [editedValues, setEditedValues] = useState<Record<string, string>>(initial);
   return (
@@ -125,6 +125,25 @@ describe("SettingsGeneral", () => {
     expect(capInput().value).toBe("4");
     expect(capInput().getAttribute("aria-invalid")).toBeNull();
     expect(screen.queryByTestId("setting-error-max_concurrent_runs")).toBeNull();
+  });
+
+  test("takes your name in Profile, first of the groups, and saves it as display_name", async () => {
+    render(<Harness />);
+
+    expect(screen.getAllByText(/^(Profile|Chat|Runs|Updates)$/).map((h) => h.textContent)).toEqual([
+      "Profile",
+      "Chat",
+      "Runs",
+      "Updates",
+    ]);
+    fireEvent.change(screen.getByLabelText("Your name"), {
+      target: { value: "Marcelo Ribeiro Mendes" },
+    });
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
+    expect(mockUpdateSettings).toHaveBeenCalledWith([
+      { key: "display_name", value: "Marcelo Ribeiro Mendes" },
+    ]);
   });
 
   test("turns the daily update check off from a switch and saves it as 'false'", async () => {

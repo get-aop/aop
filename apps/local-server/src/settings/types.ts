@@ -15,6 +15,11 @@ export const SettingKey = {
    */
   CHAT_GLOBAL_INSTRUCTIONS: "chat_global_instructions",
   /**
+   * What the host owner is called, for the dashboard to greet them by. Free text; empty (the
+   * default) greets no one by name.
+   */
+  DISPLAY_NAME: "display_name",
+  /**
    * How many thread turns this host runs at once, a whole number from 1 to
    * `MAX_CONCURRENT_RUNS_LIMIT`. Turns beyond it wait in order (see scheduling/).
    */
@@ -30,6 +35,7 @@ export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
 
 export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
+  [SettingKey.DISPLAY_NAME]: "",
   [SettingKey.MAX_CONCURRENT_RUNS]: String(DEFAULT_MAX_CONCURRENT_RUNS),
   [SettingKey.UPDATE_CHECK]: "true",
 };

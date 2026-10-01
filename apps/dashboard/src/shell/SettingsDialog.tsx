@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { getSettings } from "../api/client";
 import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
+import { noteSavedSettings } from "../settings/display-name";
 import { SettingsAbout } from "../settings/settings-about";
 import { SettingsDevices } from "../settings/settings-devices";
 import { mergeSavedSettings, SettingsGeneral } from "../settings/settings-general";
@@ -107,6 +108,7 @@ const SettingsSectionHost = ({ section }: { section: SettingsSection }) => {
       editedValues={editedValues}
       onChange={(key, value) => setEditedValues((current) => ({ ...current, [key]: value }))}
       onSaved={(settings) => {
+        noteSavedSettings(settings);
         setSavedValues((prev) => mergeSavedSettings(prev, settings));
         setEditedValues((prev) => mergeSavedSettings(prev, settings));
       }}

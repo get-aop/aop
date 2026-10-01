@@ -15,6 +15,7 @@ import { ChatProvider } from "./chat-context";
 import { earlierOf, isWorking } from "./chat-state";
 import { MessageList } from "./MessageList";
 import type { ChatModel, ProjectChat } from "./project-chat";
+import { UsageTip } from "./UsageTip";
 
 /**
  * The conversation with a project's coordinator: what was said, what it is writing now, the
@@ -96,7 +97,7 @@ export const CoordinatorChatPane = ({
           {model.phase === "ready" && model.loadError ? (
             <ChatRefreshNotice message={model.loadError} />
           ) : null}
-          {projectActive ? null : <ProjectClosedNotice project={project} />}
+          {projectActive ? <UsageTip /> : <ProjectClosedNotice project={project} />}
           <Composer
             key={project.id}
             draftId={project.id}

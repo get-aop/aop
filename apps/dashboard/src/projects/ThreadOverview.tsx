@@ -3,6 +3,8 @@ import { ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Input } from "@/ui/input";
+import { useDisplayName } from "../settings/display-name";
+import { greetingOf } from "./greeting";
 import type { OverviewFilters } from "./layout/use-overview-filters";
 import type { ProjectEntry } from "./projects-state";
 import {
@@ -69,6 +71,7 @@ const OverviewBody = ({
   filters: OverviewFilters;
 }) => {
   const { query, hidden } = filters;
+  const greeting = greetingOf(useDisplayName(), threads);
   const visible = useMemo(
     () =>
       threads.filter((thread) => !hidden.has(thread.status) && matchesThreadSearch(thread, query)),
@@ -77,7 +80,7 @@ const OverviewBody = ({
 
   return (
     <div data-testid="thread-overview" className="flex flex-col gap-5 px-5 pb-6 pt-4">
-      <Greeting waiting={attentionOf(threads).waiting} />
+      <Greeting greeting={greeting} waiting={attentionOf(threads).waiting} />
       {filters.searchOpen ? <SearchBox query={query} onChange={filters.setQuery} /> : null}
       <ResultCount shown={visible.length} total={threads.length} filters={filters} />
       {visible.length === 0 && threads.length > 0 ? (
@@ -188,14 +191,14 @@ const SearchBox = ({ query, onChange }: { query: string; onChange: (query: strin
   );
 };
 
-/** "Welcome back." and, under it, how many threads wait on the person; the groups below carry the rest of the counts. */
-const Greeting = ({ waiting }: { waiting: number }) => (
+/** "Welcome back." (see `greetingOf`) and, under it, how many threads wait on the person; the groups below carry the rest of the counts. */
+const Greeting = ({ greeting, waiting }: { greeting: string; waiting: number }) => (
   <div className="flex flex-col gap-1.5 px-1">
     <h2
       data-testid="overview-greeting"
-      className="font-display text-greeting font-normal tracking-[-0.01em] text-text"
+      className="font-display text-greeting font-normal tracking-[-0.01em] break-words text-text"
     >
-      Welcome back.
+      {greeting}
     </h2>
     <p
       data-testid="project-attention"

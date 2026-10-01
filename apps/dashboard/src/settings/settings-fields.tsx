@@ -20,6 +20,10 @@ export interface SettingMeta {
  */
 export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
   {
+    label: "Profile",
+    keys: ["display_name"],
+  },
+  {
     label: "Chat",
     keys: ["chat_global_instructions"],
   },
@@ -34,6 +38,12 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
 ];
 
 export const SETTING_META: Record<string, SettingMeta> = {
+  display_name: {
+    label: "Your name",
+    description:
+      "What a project's overview greets you by, using the first word. Leave it empty for a plain “Welcome back.”",
+    type: "text",
+  },
   max_concurrent_runs: {
     label: "Concurrent thread runs",
     description:
