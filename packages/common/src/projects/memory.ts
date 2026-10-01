@@ -6,6 +6,8 @@ export const MEMORY_INDEX_NAME = "MEMORY.md";
 
 export const MEMORY_DESCRIPTION_MAX_LENGTH = 300;
 export const MEMORY_BODY_MAX_LENGTH = 50_000;
+/** The longest request Memory settings send the coordinator; its frame stays well inside a message's limit. */
+export const MEMORY_REQUEST_MAX_LENGTH = 4_000;
 
 /** Letters, digits, `.`, `_` and `-`, ending in `.md`, so a name is safe as a key and as a path. */
 export const MEMORY_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}\.md$/;

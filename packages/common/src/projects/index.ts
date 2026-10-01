@@ -58,6 +58,7 @@ export {
   MEMORY_DESCRIPTION_MAX_LENGTH,
   MEMORY_INDEX_NAME,
   MEMORY_NAME_PATTERN,
+  MEMORY_REQUEST_MAX_LENGTH,
   MemoryFileInputSchema,
   MemoryFileSchema,
 } from "./memory.ts";
@@ -132,6 +133,7 @@ export {
   ThreadTargetSchema,
 } from "./thread.ts";
 export type {
+  CodeChanges,
   ModelUsage,
   ProjectUsage,
   ProjectUsageThread,

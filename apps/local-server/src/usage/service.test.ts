@@ -2,12 +2,23 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SessionDiffFile } from "@aop/common";
 import type { Kysely } from "kysely";
 import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import { createUsageRepository } from "./repository.ts";
 import { createUsageService, type UsageService } from "./service.ts";
 import { claudeLog, entry, initEvent, resultEvent, seedUsageWorld } from "./test-utils.ts";
+
+const diffFile = (path: string, additions: number, deletions: number): SessionDiffFile => ({
+  path,
+  oldPath: null,
+  status: "modified",
+  additions,
+  deletions,
+  truncated: false,
+  hunks: [],
+});
 
 const OPEN = { since: null, until: null };
 const FINISHED_AT = new Date("2026-09-30T10:30:00.000Z");
@@ -55,7 +66,7 @@ describe("usage service", () => {
 
   beforeEach(async () => {
     db = await createTestDb();
-    service = createUsageService(db, () => FINISHED_AT);
+    service = createUsageService(db, { now: () => FINISHED_AT });
     await seedUsageWorld(db, {
       crd_1: ["run_c"],
       thr_1: ["run_a", "run_b"],
@@ -178,7 +189,58 @@ describe("usage service", () => {
         ["crd_1", "coordinator", 1],
       ]);
       expect(usage?.threads[0]?.models).toEqual(["opus", "haiku"]);
+      expect(usage?.threads.map((thread) => thread.lastRunAt)).toEqual([
+        "2026-09-30T11:00:00.000Z",
+        "2026-09-30T12:00:00.000Z",
+      ]);
       expect(await service.getProjectUsage("nope", OPEN)).toBeNull();
+    });
+
+    test("a project's code changes sum the worktree changes of the threads with runs in the window", async () => {
+      await createUsageRepository(db).record(
+        "run_d",
+        "claude-code",
+        [entry()],
+        "2026-09-30T10:00:00.000Z",
+      );
+      const asked: string[] = [];
+      const withChanges = createUsageService(db, {
+        threadChanges: {
+          changes: async (threadId) => {
+            asked.push(threadId);
+            // thr_2's worktree is gone, as after it was resolved.
+            if (threadId !== "thr_1") return { success: false, error: { code: "NO_WORKTREE" } };
+            return {
+              success: true,
+              diff: {
+                defaultBranch: "main",
+                perFileLineCap: 0,
+                files: [diffFile("a.ts", 7, 2), diffFile("b.ts", 1, 4)],
+              },
+            };
+          },
+        },
+      });
+
+      expect((await withChanges.getProjectUsage("prj_1", OPEN))?.codeChanges).toEqual({
+        additions: 8,
+        deletions: 6,
+      });
+      // The coordinator has no worktree of its own and is not asked.
+      expect(asked.sort()).toEqual(["thr_1", "thr_2"]);
+
+      asked.length = 0;
+      const late = await withChanges.getProjectUsage("prj_1", {
+        since: "2026-09-30T11:30:00.000Z",
+        until: null,
+      });
+      expect(late?.codeChanges).toEqual({ additions: 0, deletions: 0 });
+      expect(asked).toEqual([]);
+      // A service built only to record usage reads no worktree.
+      expect((await service.getProjectUsage("prj_1", OPEN))?.codeChanges).toEqual({
+        additions: 0,
+        deletions: 0,
+      });
     });
 
     test("a window narrows every total and is echoed back in UTC", async () => {

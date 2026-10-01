@@ -5,15 +5,28 @@ import { Label } from "@/ui/label";
 import { Textarea } from "@/ui/textarea";
 import { AutoMemory } from "./AutoMemory";
 import { SettingsBlock } from "./blocks";
+import { MemoryRequestBar } from "./MemoryRequestBar";
+import { useMemoryFiles } from "./use-memory-files";
+import { useMemoryRequest } from "./use-memory-request";
 import { useSettingsDraft } from "./use-settings-draft";
 
-/** What every session is told: the instructions the person writes, and the memory agents keep. */
-export const MemorySection = ({ project }: { project: Project }) => (
-  <div data-testid="settings-memory" className="flex flex-col">
-    <InstructionsBlock project={project} />
-    <AutoMemory projectId={project.id} />
-  </div>
-);
+/**
+ * What every session is told: the instructions the person writes, and the memory agents keep.
+ * The request field is the screen's last child so it stays pinned to the bottom of the pane.
+ */
+export const MemorySection = ({ project }: { project: Project }) => {
+  const memory = useMemoryFiles(project.id);
+  // The coordinator has changed the files by the time it answers.
+  const request = useMemoryRequest(project.id, memory.refresh);
+
+  return (
+    <div data-testid="settings-memory" className="flex flex-col">
+      <InstructionsBlock project={project} />
+      <AutoMemory memory={memory} />
+      <MemoryRequestBar request={request} />
+    </div>
+  );
+};
 
 const NEAR_LIMIT = 0.9;
 

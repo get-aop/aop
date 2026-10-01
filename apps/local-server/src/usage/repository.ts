@@ -11,6 +11,8 @@ export interface UsageRecord extends RunUsageEntry {
   sessionTitle: string;
   /** Null for a session outside any project. */
   sessionKind: ChatSessionKind | null;
+  /** When the run finished, as `Date.toISOString()`. */
+  recordedAt: string;
 }
 
 /** What to sum: one run, every run of a session (a thread or a coordinator), or of a project. */
@@ -74,10 +76,7 @@ export const createUsageRepository = (db: Kysely<Database>): UsageRepository => 
     }),
 
   list: async (scope, bounds) => {
-    let query = db
-      .selectFrom("run_usage")
-      .innerJoin("chat_runs", "chat_runs.id", "run_usage.run_id")
-      .innerJoin("chat_sessions", "chat_sessions.id", "chat_runs.session_id")
+    const rows = await scopedUsage(db, scope, bounds)
       .select([
         "run_usage.run_id",
         "run_usage.provider",
@@ -87,14 +86,11 @@ export const createUsageRepository = (db: Kysely<Database>): UsageRepository => 
         "run_usage.cache_write_tokens",
         "run_usage.cache_read_tokens",
         "run_usage.cost_usd",
+        "run_usage.recorded_at",
         "chat_sessions.id as session_id",
         "chat_sessions.title as session_title",
         "chat_sessions.kind as session_kind",
       ])
-      .where(SCOPE_COLUMN[scope.kind], "=", scope.id);
-    if (bounds.since !== null) query = query.where("run_usage.recorded_at", ">=", bounds.since);
-    if (bounds.until !== null) query = query.where("run_usage.recorded_at", "<", bounds.until);
-    const rows = await query
       .orderBy("run_usage.recorded_at")
       .orderBy("run_usage.run_id")
       .orderBy("run_usage.model")
@@ -111,6 +107,7 @@ export const createUsageRepository = (db: Kysely<Database>): UsageRepository => 
       sessionId: row.session_id,
       sessionTitle: row.session_title,
       sessionKind: row.session_kind,
+      recordedAt: row.recorded_at,
     }));
   },
 
@@ -132,3 +129,15 @@ export const createUsageRepository = (db: Kysely<Database>): UsageRepository => 
     return row?.session_id ?? null;
   },
 });
+
+// The usage rows of a scope inside the bounds, joined to the session that owns each run.
+const scopedUsage = (db: Kysely<Database>, scope: UsageScope, bounds: UsageBounds) => {
+  let query = db
+    .selectFrom("run_usage")
+    .innerJoin("chat_runs", "chat_runs.id", "run_usage.run_id")
+    .innerJoin("chat_sessions", "chat_sessions.id", "chat_runs.session_id")
+    .where(SCOPE_COLUMN[scope.kind], "=", scope.id);
+  if (bounds.since !== null) query = query.where("run_usage.recorded_at", ">=", bounds.since);
+  if (bounds.until !== null) query = query.where("run_usage.recorded_at", "<", bounds.until);
+  return query;
+};

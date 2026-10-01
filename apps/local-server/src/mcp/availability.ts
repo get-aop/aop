@@ -28,6 +28,8 @@ export const COORDINATOR_TOOL_NAMES = [
   "project_settings_get",
   "project_settings_set",
   ...MEMORY_TOOL_NAMES,
+  // The coordinator's alone: it keeps memory tidy, and Memory settings ask it to remove things.
+  "memory_delete",
 ] as const;
 
 export const THREAD_TOOL_NAMES = [

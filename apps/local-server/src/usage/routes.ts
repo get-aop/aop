@@ -1,6 +1,7 @@
 import { UsageWindowSchema } from "@aop/common";
 import { Hono } from "hono";
 import type { LocalServerContext } from "../context.ts";
+import { createThreadChanges } from "../thread/changes.ts";
 import { createUsageService } from "./service.ts";
 
 /**
@@ -9,7 +10,7 @@ import { createUsageService } from "./service.ts";
  * ISO-8601 instants that bound when the runs finished; both are optional.
  */
 export const createUsageRoutes = (ctx: LocalServerContext) => {
-  const usage = createUsageService(ctx.db);
+  const usage = createUsageService(ctx.db, { threadChanges: createThreadChanges(ctx) });
   const routes = new Hono();
 
   routes.get("/runs/:runId", async (c) => {

@@ -230,9 +230,13 @@ const userSideMessage = (
         ],
       };
     default:
-      return { ...base, role: "user", text };
+      return { ...base, role: "user", text: shownUserText(text, origin) };
   }
 };
+
+/** What the chat shows for a person's message: their own words, not the frame the server put around them. */
+export const shownUserText = (content: string, origin?: MessageOrigin | null): string =>
+  origin?.type === "memory-request" ? origin.request : content;
 
 /** What a stored message says, as a person reads it: attachments' markers and pasted text expanded. */
 export const displayText = (row: Pick<ChatMessage, "content" | "session_id">): string => {

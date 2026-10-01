@@ -57,6 +57,7 @@ describe("usage repository", () => {
       sessionKind: "thread",
       cacheWriteTokens: 200,
       cacheReadTokens: 4000,
+      recordedAt: T1,
     });
   });
 

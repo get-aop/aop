@@ -78,6 +78,15 @@ export const createProjectRoutes = ({ projects, memory }: ProjectServices) => {
     return result.success ? c.json({ files: result.files }) : errorResponse(c, result.error);
   });
 
+  routes.post("/:projectId/memory/requests", async (c) => {
+    const parsed = await readBody(c, MessageBodySchema);
+    if ("response" in parsed) return parsed.response;
+    const result = await memory.requestChange(c.req.param("projectId"), parsed.body.text);
+    return result.success
+      ? c.json({ message: result.message }, 201)
+      : errorResponse(c, result.error);
+  });
+
   routes.get("/:projectId/memory/:name", async (c) => {
     const result = await memory.read(c.req.param("projectId"), c.req.param("name"));
     return result.success ? c.json({ file: result.file }) : errorResponse(c, result.error);

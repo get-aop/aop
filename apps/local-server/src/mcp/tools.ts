@@ -20,7 +20,7 @@ import {
   threadSteerTool,
   threadStopTool,
 } from "./tools-coordinator.ts";
-import { memoryReadTool, memoryWriteTool } from "./tools-memory.ts";
+import { memoryDeleteTool, memoryReadTool, memoryWriteTool } from "./tools-memory.ts";
 import { listReposTool, setChatWorkspaceTool } from "./tools-platform.ts";
 import { askUserTool, openPullRequestTool, reportStatusTool } from "./tools-thread.ts";
 
@@ -45,6 +45,7 @@ const TOOLS: readonly McpTool[] = [
   openPullRequestTool,
   memoryReadTool,
   memoryWriteTool,
+  memoryDeleteTool,
 ];
 
 export interface McpToolDefinition {

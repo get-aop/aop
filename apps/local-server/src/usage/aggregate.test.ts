@@ -14,6 +14,7 @@ const record = (overrides: Partial<UsageRecord> = {}): UsageRecord => ({
   sessionId: "thr_1",
   sessionTitle: "Fix cold start",
   sessionKind: "thread",
+  recordedAt: "2026-09-30T10:00:00.000Z",
   ...overrides,
 });
 
@@ -104,6 +105,15 @@ describe("byThread", () => {
       runs: 1,
     });
     expect(rows[1]).toMatchObject({ kind: "coordinator", models: ["opus"] });
+  });
+
+  test("a row's last run is its latest finish, whatever order the records came in", () => {
+    const rows = byThread([
+      record({ runId: "b", recordedAt: "2026-09-30T12:00:00.000Z" }),
+      record({ runId: "a", recordedAt: "2026-09-30T09:00:00.000Z" }),
+    ]);
+
+    expect(rows[0]?.lastRunAt).toBe("2026-09-30T12:00:00.000Z");
   });
 
   test("leaves out a session that belongs to no project", () => {

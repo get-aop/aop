@@ -47,6 +47,7 @@ export const byThread = (records: readonly UsageRecord[]): ProjectUsageThread[] 
               kind: head.sessionKind,
               title: head.sessionTitle,
               models: byModel(items).map((entry) => entry.model),
+              lastRunAt: latestOf(items.map((item) => item.recordedAt)),
               ...totalsOf(items),
             },
           ],
@@ -57,6 +58,10 @@ export const byThread = (records: readonly UsageRecord[]): ProjectUsageThread[] 
 // Adding floats leaves noise (0.22875 + 0.00825 is 0.23700000000000002); providers report costs
 // to a few decimals, so a millionth of a dollar keeps every real digit.
 const roundToMicroDollars = (usd: number): number => Math.round(usd * 1_000_000) / 1_000_000;
+
+// ISO instants in UTC sort as strings.
+const latestOf = (instants: readonly string[]): string =>
+  instants.reduce((latest, instant) => (instant > latest ? instant : latest));
 
 interface Group<T> {
   head: T;

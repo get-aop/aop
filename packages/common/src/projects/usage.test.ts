@@ -87,15 +87,24 @@ describe("the usage responses", () => {
       totals: totals({ runs: 3 }),
       byModel: [modelUsage({ runs: 3 })],
       threads: [
-        { ...totals(), threadId: "thr_1", kind: "thread", title: "Fix cold start", models: ["a"] },
+        {
+          ...totals(),
+          threadId: "thr_1",
+          kind: "thread",
+          title: "Fix cold start",
+          models: ["a"],
+          lastRunAt: "2026-09-30T10:00:00.000Z",
+        },
         {
           ...totals({ runs: 1 }),
           threadId: "crd_1",
           kind: "coordinator",
           title: "Coordinator",
           models: ["a", "b"],
+          lastRunAt: "2026-09-30T11:00:00.000Z",
         },
       ],
+      codeChanges: { additions: 12, deletions: 3 },
     };
 
     expect(parsed(ProjectUsageSchema, project)).toEqual(project);
@@ -103,7 +112,8 @@ describe("the usage responses", () => {
       rejectedPaths(ProjectUsageSchema, {
         ...project,
         threads: [{ ...project.threads[0], kind: "session" }],
+        codeChanges: { additions: -1, deletions: 0 },
       }),
-    ).toEqual(["threads.0.kind"]);
+    ).toEqual(["threads.0.kind", "codeChanges.additions"]);
   });
 });

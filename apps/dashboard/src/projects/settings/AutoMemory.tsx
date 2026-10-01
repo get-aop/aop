@@ -1,206 +1,192 @@
 import { MEMORY_INDEX_NAME, type MemoryFile } from "@aop/common";
-import { PlusIcon } from "lucide-react";
+import { ArrowLeftIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
-import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
+import { formatAgo } from "../selectors";
+import { useNow } from "../use-now";
 import { SettingsBlock } from "./blocks";
 import { formatUpdated } from "./format";
 import { MemoryFileEditor } from "./MemoryFileEditor";
-import { QuickNote } from "./QuickNote";
-import { type MemoryFiles, useMemoryFiles } from "./use-memory-files";
+import type { MemoryFiles } from "./use-memory-files";
 
 /** "new" is the editor for a topic file that does not exist yet. */
-type Selection = string | "new" | null;
+type Opened = string | "new" | null;
 
 /**
- * The notes agents write themselves and the person can edit: the MEMORY.md index that every
- * thread reads, and topic files read when a thread needs them.
+ * The notes agents write themselves: the MEMORY.md index that every thread reads, then topic files
+ * read when a thread needs them. The list comes first; a file opens in an editor in its place.
  */
-export const AutoMemory = ({ projectId }: { projectId: string }) => {
-  const memory = useMemoryFiles(projectId);
+export const AutoMemory = ({ memory }: { memory: MemoryFiles }) => {
+  const [opened, setOpened] = useState<Opened>(null);
+  const files = memory.files;
+  // A file the coordinator deleted while it was open has nothing left to show.
+  const file = files?.find((candidate) => candidate.name === opened) ?? null;
+  const editing = files !== null && (opened === "new" || file !== null);
 
   return (
     <SettingsBlock
       title="Auto memory"
-      description="Notes Claude writes itself as the project goes. Edit them, add your own, or delete what has gone stale: stale memory misleads every thread."
+      description="Notes Claude writes itself as it works in this project. Stale memory misleads every thread, so ask below for what to change or remove, or open a file to edit it."
       testId="settings-auto-memory"
     >
-      <QuickNote files={memory.files ?? []} onSave={memory.save} />
       {memory.error ? (
         <p role="alert" data-testid="memory-load-error" className="text-[12.5px] text-blocked">
           {memory.error}
         </p>
       ) : null}
-      {memory.files === null ? (
+      {files === null ? (
         <p data-testid="memory-loading" className="text-[12.5px] text-text-subtle">
           Loading memory…
         </p>
-      ) : (
-        <MemoryBrowser files={memory.files} memory={memory} />
-      )}
+      ) : null}
+      {editing ? (
+        <div className="flex flex-col gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="memory-back"
+            onClick={() => setOpened(null)}
+            className="-ml-2 self-start"
+          >
+            <ArrowLeftIcon />
+            All memory
+          </Button>
+          <MemoryFileEditor
+            key={file?.name ?? "new"}
+            file={file}
+            existingNames={(files ?? []).map((candidate) => candidate.name)}
+            memory={memory}
+            onCreated={setOpened}
+            onClose={() => setOpened(null)}
+          />
+        </div>
+      ) : null}
+      {files !== null && !editing ? (
+        <MemoryList files={files} onOpen={setOpened} onNew={() => setOpened("new")} />
+      ) : null}
     </SettingsBlock>
-  );
-};
-
-const MemoryBrowser = ({
-  files,
-  memory,
-}: {
-  files: readonly MemoryFile[];
-  memory: MemoryFiles;
-}) => {
-  const [picked, setPicked] = useState<Selection>(null);
-  // Until the person picks one, the index is open: it is the file every thread reads.
-  const selection = picked ?? files.find(isIndex)?.name ?? null;
-
-  return (
-    <div className="flex flex-col gap-4 md:flex-row">
-      <MemoryFileList
-        files={files}
-        selection={selection}
-        onSelect={setPicked}
-        onNew={() => setPicked("new")}
-      />
-      <EditorPane
-        files={files}
-        selection={selection}
-        memory={memory}
-        onCreated={setPicked}
-        onClose={() => setPicked(null)}
-      />
-    </div>
-  );
-};
-
-const EditorPane = ({
-  files,
-  selection,
-  memory,
-  onCreated,
-  onClose,
-}: {
-  files: readonly MemoryFile[];
-  selection: Selection;
-  memory: MemoryFiles;
-  onCreated: (name: string) => void;
-  onClose: () => void;
-}) => {
-  const file = files.find((candidate) => candidate.name === selection) ?? null;
-  if (selection !== "new" && !file) return <MemoryEmpty hasFiles={files.length > 0} />;
-  return (
-    <MemoryFileEditor
-      key={file?.name ?? "new"}
-      file={file}
-      existingNames={files.map((candidate) => candidate.name)}
-      memory={memory}
-      onCreated={onCreated}
-      onClose={onClose}
-    />
   );
 };
 
 const isIndex = (file: MemoryFile): boolean => file.name === MEMORY_INDEX_NAME;
 
-const MemoryFileList = ({
+const MemoryList = ({
   files,
-  selection,
-  onSelect,
+  onOpen,
   onNew,
 }: {
   files: readonly MemoryFile[];
-  selection: Selection;
-  onSelect: (name: string) => void;
+  onOpen: (name: string) => void;
   onNew: () => void;
+}) => {
+  const now = useNow();
+  const index = files.find(isIndex);
+  const topics = files.filter((file) => !isIndex(file));
+
+  return (
+    <div data-testid="memory-files" className="flex flex-col gap-5">
+      <MemoryGroup testId="memory-index-group" title="Read every thread">
+        {index ? (
+          <MemoryRow file={index} now={now} onOpen={() => onOpen(index.name)} />
+        ) : (
+          <MemoryNone testId="memory-index-empty">
+            No {MEMORY_INDEX_NAME} yet. Claude starts it once it learns something every thread
+            should know.
+          </MemoryNone>
+        )}
+      </MemoryGroup>
+      <MemoryGroup
+        testId="memory-topic-group"
+        title="Memory files"
+        action={
+          <Button type="button" variant="ghost" size="xs" data-testid="memory-new" onClick={onNew}>
+            <PlusIcon />
+            New topic file
+          </Button>
+        }
+      >
+        {topics.length > 0 ? (
+          topics.map((file) => (
+            <MemoryRow key={file.name} file={file} now={now} onOpen={() => onOpen(file.name)} />
+          ))
+        ) : (
+          <MemoryNone testId="memory-topics-empty">
+            No topic files yet. Threads read these only when their subject comes up.
+          </MemoryNone>
+        )}
+      </MemoryGroup>
+    </div>
+  );
+};
+
+const MemoryGroup = ({
+  testId,
+  title,
+  action,
+  children,
+}: {
+  testId: string;
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
 }) => (
-  <div className="flex w-full shrink-0 flex-col gap-2 md:w-64">
-    <ul data-testid="memory-files" className="flex flex-col gap-1">
-      {files.map((file) => (
-        <li key={file.name}>
-          <MemoryFileRow
-            file={file}
-            selected={selection === file.name}
-            onSelect={() => onSelect(file.name)}
-          />
-        </li>
-      ))}
-    </ul>
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      data-testid="memory-new"
-      onClick={onNew}
-      className="self-start"
-    >
-      <PlusIcon />
-      New topic file
-    </Button>
-  </div>
+  <section data-testid={testId} className="flex flex-col">
+    <div className="flex min-h-7 items-center gap-2 pb-2">
+      <h3 className="flex-1 text-[13.5px] font-medium text-text">{title}</h3>
+      {action}
+    </div>
+    <ul className="flex flex-col border-t border-border">{children}</ul>
+  </section>
 );
 
-const MemoryFileRow = ({
+/** One file: its name (the way in), what it is about, and how long ago it changed. */
+const MemoryRow = ({
   file,
-  selected,
-  onSelect,
+  now,
+  onOpen,
 }: {
   file: MemoryFile;
-  selected: boolean;
-  onSelect: () => void;
+  now: number;
+  onOpen: () => void;
 }) => (
-  <button
-    type="button"
-    data-testid="memory-file"
-    data-name={file.name}
-    aria-current={selected ? "true" : undefined}
-    onClick={onSelect}
-    className={cn(
-      "flex w-full flex-col gap-0.5 rounded-row border px-3 py-2 text-left transition-colors duration-[120ms]",
-      selected ? "border-border-bold bg-raised" : "border-border hover:bg-hover",
-    )}
-  >
-    <span className="flex items-center gap-2">
-      <span data-testid="memory-file-name" className="truncate text-[13px] text-text">
+  <li className="border-b border-border">
+    <button
+      type="button"
+      data-testid="memory-file"
+      data-name={file.name}
+      onClick={onOpen}
+      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-6 gap-y-0.5 px-1 py-3 text-left transition-colors duration-[120ms] hover:bg-hover sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto]"
+    >
+      <span
+        data-testid="memory-file-name"
+        className="col-start-1 row-start-1 truncate text-[13.5px] text-text underline decoration-border-bold underline-offset-4"
+      >
         {file.name}
       </span>
-      {isIndex(file) ? (
-        <span
-          data-testid="memory-index-label"
-          className="shrink-0 rounded-md border border-border-strong px-1.5 text-[11px] text-text-muted"
-        >
-          read every thread
-        </span>
-      ) : null}
-    </span>
-    {file.description ? (
       <span
         data-testid="memory-file-description"
-        className="line-clamp-2 text-[12px] text-text-muted"
+        className="col-span-2 col-start-1 row-start-2 truncate text-[13px] text-text-muted sm:col-span-1 sm:col-start-2 sm:row-start-1"
       >
-        {file.description}
+        {file.description || (isIndex(file) ? "The index every thread reads first" : "")}
       </span>
-    ) : null}
-    <time
-      data-testid="memory-file-updated"
-      dateTime={file.updatedAt}
-      className="text-[11.5px] text-text-subtle"
-    >
-      Updated {formatUpdated(file.updatedAt)}
-    </time>
-  </button>
+      <time
+        data-testid="memory-file-updated"
+        dateTime={file.updatedAt}
+        title={formatUpdated(file.updatedAt)}
+        className="col-start-2 row-start-1 shrink-0 text-right text-[12.5px] whitespace-nowrap text-text-subtle sm:col-start-3"
+      >
+        Updated {formatAgo(file.updatedAt, now)}
+      </time>
+    </button>
+  </li>
 );
 
-const MemoryEmpty = ({ hasFiles }: { hasFiles: boolean }) => (
-  <div
-    data-testid="memory-empty"
-    className="flex min-h-40 flex-1 flex-col items-center justify-center gap-1 rounded-row border border-dashed border-border px-6 py-8 text-center"
+const MemoryNone = ({ testId, children }: { testId: string; children: React.ReactNode }) => (
+  <li
+    data-testid={testId}
+    className="border-b border-border px-1 py-3 text-[12.5px] text-text-subtle"
   >
-    <h3 className="text-[13px] font-medium text-text">
-      {hasFiles ? "Pick a file to edit" : "No memory yet"}
-    </h3>
-    <p className="max-w-sm text-[12.5px] text-text-subtle">
-      {hasFiles
-        ? "Choose a file on the left, or add a topic file."
-        : "The coordinator and threads save what later work will need, such as decisions and where things live. Add a note above to start it yourself."}
-    </p>
-  </div>
+    {children}
+  </li>
 );

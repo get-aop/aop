@@ -52,6 +52,7 @@ export const makeUsage = (): ProjectUsage => ({
       kind: "thread",
       title: "Fix the login redirect",
       models: ["claude-opus-5"],
+      lastRunAt: "2026-09-30T09:00:00.000Z",
       ...totals({
         inputTokens: 1000,
         outputTokens: 200,
@@ -66,6 +67,7 @@ export const makeUsage = (): ProjectUsage => ({
       kind: "coordinator",
       title: "checkout-service",
       models: ["claude-opus-5"],
+      lastRunAt: AT,
       ...totals({
         inputTokens: 10,
         outputTokens: 5,
@@ -76,6 +78,7 @@ export const makeUsage = (): ProjectUsage => ({
       }),
     },
   ],
+  codeChanges: { additions: 1234, deletions: 56 },
 });
 
 export const EMPTY_USAGE: ProjectUsage = {
@@ -84,4 +87,5 @@ export const EMPTY_USAGE: ProjectUsage = {
   totals: totals(),
   byModel: [],
   threads: [],
+  codeChanges: { additions: 0, deletions: 0 },
 };

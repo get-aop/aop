@@ -65,8 +65,17 @@ export const ProjectUsageThreadSchema = UsageTotalsSchema.extend({
   title: z.string(),
   /** Models the session used, the one with the most tokens first. */
   models: z.array(z.string().min(1)),
+  /** When the session's latest run in the window finished. */
+  lastRunAt: TimestampSchema,
 });
 export type ProjectUsageThread = z.infer<typeof ProjectUsageThreadSchema>;
+
+/**
+ * Lines added and removed, as a thread's changes panel counts them: its worktree against where
+ * its branch left the default branch. Binary files add nothing.
+ */
+const CodeChangesSchema = z.object({ additions: CountSchema, deletions: CountSchema });
+export type CodeChanges = z.infer<typeof CodeChangesSchema>;
 
 /**
  * A project's usage inside the window: the coordinator and every thread, largest consumer
@@ -78,5 +87,10 @@ export const ProjectUsageSchema = z.object({
   totals: UsageTotalsSchema,
   byModel: z.array(ModelUsageSchema),
   threads: z.array(ProjectUsageThreadSchema),
+  /**
+   * What the threads with runs in the window have changed, read from their worktrees when asked;
+   * a thread whose worktree is gone (resolved, merged) adds nothing.
+   */
+  codeChanges: CodeChangesSchema,
 });
 export type ProjectUsage = z.infer<typeof ProjectUsageSchema>;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { MemoryFile, Project } from "@aop/common";
+import type { MemoryFile, Message, Project } from "@aop/common";
 import { mockApi } from "../../test/mock-api";
 import { setupDashboardDom } from "../../test/setup-dom";
 import type { ProjectStreamEvent } from "../live-projects";
@@ -80,7 +80,13 @@ const renderMemory = (current: Project = project) => {
 };
 
 const fileRow = (name: string) =>
-  screen.getAllByTestId("memory-file").find((row) => row.getAttribute("data-name") === name);
+  screen.queryAllByTestId("memory-file").find((row) => row.getAttribute("data-name") === name);
+
+const openFile = async (name: string) => {
+  await waitFor(() => expect(fileRow(name)).toBeTruthy());
+  fireEvent.click(fileRow(name) as HTMLElement);
+  return screen.getByTestId("memory-editor");
+};
 
 const type = (testId: string, value: string) =>
   fireEvent.change(screen.getByTestId(testId), { target: { value } });
@@ -88,22 +94,35 @@ const type = (testId: string, value: string) =>
 const memoryWrites = () =>
   api.writes().filter((call) => call.path.startsWith("/projects/p1/memory"));
 
+const announce = (message: Message) =>
+  act(async () => {
+    for (const listener of listeners) {
+      listener({
+        kind: "entry",
+        entry: { id: 1, projectId: "p1", type: "message.created", payload: { message } },
+      });
+    }
+    // The list is reloaded a moment after a message arrives; wait that moment inside act.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  });
+
+const userMessage: Message = {
+  id: "msg_1",
+  projectId: "p1",
+  threadId: null,
+  role: "user",
+  text: "hello",
+  createdAt: AT,
+};
+
 describe("instructions", () => {
   test("count characters against the limit as the person types", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
+    await screen.findAllByTestId("memory-file");
     expect(screen.getByTestId("settings-instructions-count").textContent).toBe("21 / 16000");
 
     type("settings-instructions", "twelve chars");
     expect(screen.getByTestId("settings-instructions-count").textContent).toBe("12 / 16000");
-    expect(screen.getByTestId("settings-instructions-count").getAttribute("data-near-limit")).toBe(
-      "false",
-    );
-  });
-
-  test("the counter turns to a warning near the limit", async () => {
-    renderMemory();
-    await screen.findByTestId("memory-editor");
     type("settings-instructions", "x".repeat(14_500));
     expect(screen.getByTestId("settings-instructions-count").getAttribute("data-near-limit")).toBe(
       "true",
@@ -116,12 +135,11 @@ describe("instructions", () => {
         ? Response.json({ project: { ...project, ...(body as object) } })
         : undefined;
     const stub = renderMemory();
-    await screen.findByTestId("memory-editor");
+    await screen.findAllByTestId("memory-file");
     const saveButton = screen.getByTestId("settings-instructions-save") as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
 
     type("settings-instructions", "Never touch payments.\nAsk before migrations.");
-    expect(saveButton.disabled).toBe(false);
     fireEvent.click(saveButton);
 
     await waitFor(() =>
@@ -137,50 +155,50 @@ describe("instructions", () => {
   });
 });
 
-describe("memory files", () => {
-  test("lists the index first, labelled, then topic files with description and updated date", async () => {
+describe("the memory list", () => {
+  test("puts the index under Read every thread and topic files under Memory files", async () => {
     renderMemory();
     await screen.findAllByTestId("memory-file");
 
-    const names = screen.getAllByTestId("memory-file").map((row) => row.getAttribute("data-name"));
-    expect(names).toEqual(["MEMORY.md", "testing.md"]);
-    expect(
-      within(fileRow("MEMORY.md") as HTMLElement).getByTestId("memory-index-label").textContent,
-    ).toBe("read every thread");
+    const names = (group: string) =>
+      within(screen.getByTestId(group))
+        .getAllByTestId("memory-file")
+        .map((row) => row.getAttribute("data-name"));
+    expect(names("memory-index-group")).toEqual(["MEMORY.md"]);
+    expect(names("memory-topic-group")).toEqual(["testing.md"]);
     const topic = within(fileRow("testing.md") as HTMLElement);
     expect(topic.getByTestId("memory-file-description").textContent).toBe("How to run the tests");
-    expect(topic.getByTestId("memory-file-updated").getAttribute("datetime")).toBe(
-      testing.updatedAt,
-    );
-    expect(topic.getByTestId("memory-file-updated").textContent).toContain("Updated");
-    expect(topic.queryByTestId("memory-index-label")).toBeNull();
+    expect(topic.getByTestId("memory-file-updated").getAttribute("datetime")).toBe(AT);
+    expect(topic.getByTestId("memory-file-updated").textContent).toMatch(/^Updated /);
+    // Read first: no editor until a file is opened.
+    expect(screen.queryByTestId("memory-editor")).toBeNull();
   });
 
-  test("opens the index first, and a topic file when it is picked", async () => {
+  test("a row opens its file in an editor in place of the list, and All memory goes back", async () => {
     renderMemory();
-    const editor = await screen.findByTestId("memory-editor");
-    expect(editor.getAttribute("data-name")).toBe("MEMORY.md");
-    expect((screen.getByTestId("memory-body") as HTMLTextAreaElement).value).toBe(
-      "- testing.md: how to test",
-    );
-    expect(screen.queryByTestId("memory-description")).toBeNull();
-    expect(screen.queryByTestId("memory-delete")).toBeNull();
-
-    fireEvent.click(fileRow("testing.md") as HTMLElement);
-    expect(screen.getByTestId("memory-editor").getAttribute("data-name")).toBe("testing.md");
+    const editor = await openFile("testing.md");
+    expect(editor.getAttribute("data-name")).toBe("testing.md");
     expect((screen.getByTestId("memory-description") as HTMLInputElement).value).toBe(
       "How to run the tests",
     );
     expect((screen.getByTestId("memory-body") as HTMLTextAreaElement).value).toBe("Run bun test.");
-    expect(screen.getByTestId("memory-editor-updated").getAttribute("datetime")).toBe(
-      testing.updatedAt,
+    expect(screen.queryByTestId("memory-files")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("memory-back"));
+    expect(screen.queryByTestId("memory-editor")).toBeNull();
+
+    await openFile("MEMORY.md");
+    expect((screen.getByTestId("memory-body") as HTMLTextAreaElement).value).toBe(
+      "- testing.md: how to test",
     );
+    // The index has no description to edit and cannot be deleted.
+    expect(screen.queryByTestId("memory-description")).toBeNull();
+    expect(screen.queryByTestId("memory-delete")).toBeNull();
   });
 
   test("editing a topic file saves its description and body, and the list shows the new date", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
-    fireEvent.click(fileRow("testing.md") as HTMLElement);
+    await openFile("testing.md");
     expect((screen.getByTestId("memory-save") as HTMLButtonElement).disabled).toBe(true);
 
     type("memory-description", "How to run and debug the tests");
@@ -197,18 +215,19 @@ describe("memory files", () => {
       },
     });
     await waitFor(() =>
-      expect(
-        within(fileRow("testing.md") as HTMLElement)
-          .getByTestId("memory-file-updated")
-          .getAttribute("datetime"),
-      ).toBe("2026-09-30T12:00:00.000Z"),
+      expect((screen.getByTestId("memory-save") as HTMLButtonElement).disabled).toBe(true),
     );
-    expect((screen.getByTestId("memory-save") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByTestId("memory-back"));
+    expect(
+      within(fileRow("testing.md") as HTMLElement)
+        .getByTestId("memory-file-updated")
+        .getAttribute("datetime"),
+    ).toBe("2026-09-30T12:00:00.000Z");
   });
 
-  test("a new topic file gets .md if the name lacks it, and opens once created", async () => {
+  test("a new topic file gets .md if the name lacks it, and stays open once created", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
+    await screen.findAllByTestId("memory-file");
     fireEvent.click(screen.getByTestId("memory-new"));
     expect(screen.getByTestId("memory-editor").getAttribute("data-mode")).toBe("create");
 
@@ -226,12 +245,13 @@ describe("memory files", () => {
     await waitFor(() =>
       expect(screen.getByTestId("memory-editor").getAttribute("data-name")).toBe("deploys.md"),
     );
+    fireEvent.click(screen.getByTestId("memory-back"));
     expect(fileRow("deploys.md")).toBeTruthy();
   });
 
   test("a new file cannot take the name of one that exists, or an unsafe name", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
+    await screen.findAllByTestId("memory-file");
     fireEvent.click(screen.getByTestId("memory-new"));
 
     type("memory-new-name", "testing");
@@ -251,20 +271,20 @@ describe("memory files", () => {
     expect(memoryWrites()).toHaveLength(0);
   });
 
-  test("Cancel leaves a new file unwritten and goes back to the index", async () => {
+  test("Cancel leaves a new file unwritten and goes back to the list", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
+    await screen.findAllByTestId("memory-file");
     fireEvent.click(screen.getByTestId("memory-new"));
     fireEvent.click(screen.getByTestId("memory-discard"));
 
-    expect(screen.getByTestId("memory-editor").getAttribute("data-name")).toBe("MEMORY.md");
+    expect(screen.queryByTestId("memory-editor")).toBeNull();
+    expect(screen.getByTestId("memory-files")).toBeTruthy();
     expect(memoryWrites()).toHaveLength(0);
   });
 
-  test("deleting a topic file asks first, then removes it", async () => {
+  test("deleting a topic file asks first, then removes it and goes back to the list", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
-    fireEvent.click(fileRow("testing.md") as HTMLElement);
+    await openFile("testing.md");
 
     fireEvent.click(screen.getByTestId("memory-delete"));
     await screen.findByText("Delete testing.md?");
@@ -277,19 +297,20 @@ describe("memory files", () => {
       path: "/projects/p1/memory/testing.md",
       body: undefined,
     });
-    await waitFor(() => expect(fileRow("testing.md")).toBeUndefined());
-    expect(screen.getByTestId("memory-editor").getAttribute("data-name")).toBe("MEMORY.md");
+    await waitFor(() => expect(screen.queryByTestId("memory-editor")).toBeNull());
+    expect(fileRow("testing.md")).toBeUndefined();
+    expect(fileRow("MEMORY.md")).toBeTruthy();
   });
 
-  test("a project with no memory says so and still takes a note", async () => {
+  test("a project with no memory says so in both groups", async () => {
     files = [];
     renderMemory();
-    expect((await screen.findByTestId("memory-empty")).textContent).toContain("No memory yet");
+    await screen.findByTestId("memory-index-empty");
+    expect(screen.getByTestId("memory-topics-empty")).toBeTruthy();
     expect(screen.queryAllByTestId("memory-file")).toHaveLength(0);
   });
 
   test("a memory list that cannot be loaded says why", async () => {
-    respond = () => undefined;
     api.restore();
     api = mockApi(() => Response.json({ error: "Database is locked" }, { status: 500 }));
     renderMemory();
@@ -297,95 +318,110 @@ describe("memory files", () => {
   });
 });
 
-describe("quick note", () => {
-  test("adds the note as a line at the end of the index", async () => {
+describe("telling Claude what to change or remove", () => {
+  const request = (text: string) => {
+    type("memory-request-input", text);
+    fireEvent.click(screen.getByTestId("memory-request-send"));
+  };
+  const status = () => screen.getByTestId("memory-request-status").textContent;
+  const reply = (text: string, extra: Partial<Message> = {}): Message =>
+    ({
+      id: "msg_reply",
+      projectId: "p1",
+      threadId: null,
+      role: "assistant",
+      blocks: [{ type: "text", text }],
+      inReplyTo: "msg_req",
+      createdAt: AT,
+      ...extra,
+    }) as Message;
+
+  beforeEach(() => {
+    respond = (method, path, body) =>
+      method === "POST" && path === "/projects/p1/memory/requests"
+        ? Response.json(
+            { message: { ...userMessage, id: "msg_req", text: (body as { text: string }).text } },
+            { status: 201 },
+          )
+        : undefined;
+  });
+
+  test("sends the words to the coordinator, waits for its reply, then shows it and reloads the list", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
+    await screen.findAllByTestId("memory-file");
+    expect((screen.getByTestId("memory-request-send") as HTMLButtonElement).disabled).toBe(true);
 
-    type("memory-quick-note-input", "  Deploys freeze on Fridays  ");
-    fireEvent.click(screen.getByTestId("memory-quick-note-add"));
+    request("Forget the Friday freeze");
 
-    await waitFor(() => expect(memoryWrites()).toHaveLength(1));
-    expect(memoryWrites()[0]).toEqual({
-      method: "PUT",
-      path: "/projects/p1/memory/MEMORY.md",
-      body: {
-        description: "The index",
-        body: "- testing.md: how to test\n- Deploys freeze on Fridays\n",
-      },
-    });
-    expect((await screen.findByTestId("memory-quick-note-message")).textContent).toBe(
-      "Added to MEMORY.md.",
-    );
-    expect((screen.getByTestId("memory-quick-note-input") as HTMLInputElement).value).toBe("");
     await waitFor(() =>
-      expect((screen.getByTestId("memory-body") as HTMLTextAreaElement).value).toBe(
-        "- testing.md: how to test\n- Deploys freeze on Fridays\n",
-      ),
+      expect(screen.getByTestId("memory-request").getAttribute("data-phase")).toBe("working"),
     );
-  });
-
-  test("creates the index when the project has none", async () => {
-    files = [];
-    renderMemory();
-    await screen.findByTestId("memory-empty");
-
-    type("memory-quick-note-input", "Use pnpm");
-    fireEvent.click(screen.getByTestId("memory-quick-note-add"));
-
-    await waitFor(() => expect(memoryWrites()).toHaveLength(1));
-    expect(memoryWrites()[0]).toEqual({
-      method: "PUT",
-      path: "/projects/p1/memory/MEMORY.md",
-      body: {
-        description: "What the project's sessions need to know first.",
-        body: "- Use pnpm\n",
+    expect(memoryWrites()).toEqual([
+      {
+        method: "POST",
+        path: "/projects/p1/memory/requests",
+        body: { text: "Forget the Friday freeze" },
       },
-    });
+    ]);
+    expect((screen.getByTestId("memory-request-input") as HTMLInputElement).value).toBe("");
+    expect(status()).toContain("Claude is updating memory");
+    expect((screen.getByTestId("memory-request-send") as HTMLButtonElement).disabled).toBe(true);
+
+    // Another message on the stream is not the answer.
+    await announce(reply("Something else", { id: "msg_other", inReplyTo: "msg_elsewhere" }));
+    expect(screen.getByTestId("memory-request").getAttribute("data-phase")).toBe("working");
+
+    files = [{ ...index, body: "- Deploys go out on Tuesdays", updatedAt: AT }];
+    await announce(reply("Updated MEMORY.md and deleted testing.md."));
+
+    expect(screen.getByTestId("memory-request").getAttribute("data-phase")).toBe("answered");
+    expect(status()).toBe("Updated MEMORY.md and deleted testing.md.");
+    await waitFor(() => expect(fileRow("testing.md")).toBeUndefined());
+    expect(
+      within(fileRow("MEMORY.md") as HTMLElement)
+        .getByTestId("memory-file-updated")
+        .getAttribute("datetime"),
+    ).toBe(AT);
   });
 
-  test("Add stays disabled for an empty note", async () => {
+  test("a failed turn says so in the reply's words", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
-    expect((screen.getByTestId("memory-quick-note-add") as HTMLButtonElement).disabled).toBe(true);
+    await screen.findAllByTestId("memory-file");
+    request("Drop the stale notes");
+    await waitFor(() =>
+      expect(screen.getByTestId("memory-request").getAttribute("data-phase")).toBe("working"),
+    );
+
+    await announce(reply("The model is overloaded.", { failed: true }));
+
+    expect(status()).toBe("The model is overloaded.");
+  });
+
+  test("a refused request keeps the words and says why", async () => {
+    respond = () => Response.json({ error: "The project is paused" }, { status: 409 });
+    renderMemory();
+    await screen.findAllByTestId("memory-file");
+
+    request("Forget the freeze");
+
+    await waitFor(() => expect(status()).toBe("The project is paused"));
+    expect(screen.getByTestId("memory-request-status").getAttribute("role")).toBe("alert");
+    expect((screen.getByTestId("memory-request-input") as HTMLInputElement).value).toBe(
+      "Forget the freeze",
+    );
   });
 });
 
 describe("a file that changes on the host", () => {
-  const messageCreated: ProjectStreamEvent = {
-    kind: "entry",
-    entry: {
-      id: 1,
-      projectId: "p1",
-      type: "message.created",
-      payload: {
-        message: {
-          id: "msg_1",
-          projectId: "p1",
-          threadId: null,
-          role: "user",
-          text: "hello",
-          createdAt: AT,
-        },
-      },
-    },
-  };
-  // The list is reloaded a moment after a message arrives; wait that moment inside act.
-  const announceMessage = () =>
-    act(async () => {
-      for (const listener of listeners) listener(messageCreated);
-      await new Promise((resolve) => setTimeout(resolve, 700));
-    });
-
-  test("shows the newer copy when the person has no edits", async () => {
+  test("an open file shows the newer copy when the person has no edits", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
+    await openFile("MEMORY.md");
     files = [
       { ...index, body: "- written by the coordinator", updatedAt: "2026-09-30T11:00:00.000Z" },
       testing,
     ];
 
-    await announceMessage();
+    await announce(userMessage);
 
     await waitFor(() =>
       expect((screen.getByTestId("memory-body") as HTMLTextAreaElement).value).toBe(
@@ -397,14 +433,14 @@ describe("a file that changes on the host", () => {
 
   test("keeps the person's edits and offers the newer copy instead", async () => {
     renderMemory();
-    await screen.findByTestId("memory-editor");
+    await openFile("MEMORY.md");
     type("memory-body", "my edit");
     files = [
       { ...index, body: "- written by the coordinator", updatedAt: "2026-09-30T11:00:00.000Z" },
       testing,
     ];
 
-    await announceMessage();
+    await announce(userMessage);
 
     await screen.findByTestId("memory-changed-notice");
     expect((screen.getByTestId("memory-body") as HTMLTextAreaElement).value).toBe("my edit");

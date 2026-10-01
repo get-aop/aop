@@ -26,6 +26,7 @@ The coordinator is hermetic: it runs with the AOP tools only, with no Claude set
 | `project_settings_get` | Reads goal, instructions, models and effort, notification level, thread access, whether pull requests are fixed automatically, and repositories. |
 | `project_settings_set` | Changes the thread model and effort, or the notification level. The goal and instructions (which go into every session's system prompt), thread access, automatic pull request fixes, repositories and the coordinator's own runtime stay with the person: a call that names any of them fails with an error and changes nothing, also when it names a valid setting too. |
 | `memory_read`, `memory_write` | Read and write the project's memory files. |
+| `memory_delete` | Deletes a topic file from the project's memory. `MEMORY.md`, the index, cannot be deleted; it is rewritten with `memory_write`. Threads do not hold this tool. |
 
 A thread's report reaches the coordinator as a `Thread report:` message that wakes it, so it does not poll. The wake waits until the coordinator's inbox has been quiet for 2 seconds (up to 10 after the first report), and a run takes every report waiting, in order, as one turn that says how many arrived. Threads that end together, or while the coordinator is busy, are answered by one reply. A report is a stored message, so none is lost if the server stops before the coordinator reads it: boot starts what is waiting. A message from the person ends a batch and gets its own turn.
 
@@ -36,7 +37,7 @@ A thread's report reaches the coordinator as a `Thread report:` message that wak
 | `aop_ask_user` | Puts the thread on "waiting on you" with a question and up to eight options (at most one recommended). The thread ends its turn; the person's reply resumes the same runtime session as the next turn. |
 | `aop_report_status` | Sets the thread's checklist (`pending`, `active`, `done` steps) and its one-line status. |
 | `aop_open_pr` | Opens the thread's pull request from its own branch, with the title and description the thread gives or ones written from its conversation. Called again, it pushes what the thread did since and returns the same pull request; a merged or closed one is refused. |
-| `memory_read`, `memory_write` | Same project memory as the coordinator. |
+| `memory_read`, `memory_write` | Same project memory as the coordinator (no `memory_delete`). |
 
 Claude's own `AskUserQuestion` is withheld from threads: it cannot be answered without a terminal. So are the built-ins that schedule or wake a session (`ScheduleWakeup`, `CronCreate`, `CronDelete`, `CronList`, `Monitor`, `RemoteTrigger`): AOP decides when a thread's next turn starts, and a timer the thread armed would fire into a session AOP is not running.
 

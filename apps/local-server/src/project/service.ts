@@ -9,6 +9,7 @@ import {
   UserMessageSchema,
 } from "@aop/common";
 import { aopPaths, generateTypeId } from "@aop/infra";
+import type { MessageOrigin } from "../chat-session/message-origin.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ThreadGit } from "../thread/git.ts";
 import { createThreadRepository } from "../thread/repository.ts";
@@ -25,7 +26,12 @@ import { recordProjectRemoved, recordProjectUpserted } from "./events.ts";
 import { type ProjectKickoff, recordKickoff } from "./kickoff.ts";
 import { createProjectRepository } from "./repository.ts";
 import { createProjectTeardown } from "./teardown.ts";
-import { listWireMessages, type MessagePageRequest, UNKNOWN_PAGE_ANCHOR } from "./wire-messages.ts";
+import {
+  listWireMessages,
+  type MessagePageRequest,
+  shownUserText,
+  UNKNOWN_PAGE_ANCHOR,
+} from "./wire-messages.ts";
 
 export type ProjectAction = "pause" | "resume" | "archive" | "restore";
 
@@ -65,9 +71,14 @@ export interface ProjectService {
   /** Recycles the coordinator's runtime session; threads are not touched. */
   restartCoordinator: (projectId: string) => Promise<ProjectResult<{ project: Project }>>;
   remove: (projectId: string) => Promise<ProjectResult<Record<never, never>>>;
+  /**
+   * `origin` marks a message the person did not type as such, as when Memory settings frame
+   * their request for the coordinator; the message returned shows what the chat will show.
+   */
   sendToCoordinator: (
     projectId: string,
     text: string,
+    origin?: MessageOrigin,
   ) => Promise<ProjectResult<{ message: Message }>>;
   /** The latest page of the coordinator chat, or the one before message `page.before`. */
   listMessages: (
@@ -246,7 +257,7 @@ export const createProjectService = (
       return { success: true };
     },
 
-    sendToCoordinator: async (projectId, text) => {
+    sendToCoordinator: async (projectId, text, origin) => {
       const project = await ctx.projectRepository.getById(projectId);
       if (!project) return notFound;
       if (project.status !== "active") {
@@ -260,7 +271,7 @@ export const createProjectService = (
       const coordinator = await ctx.chatSessionRepository.getCoordinator(projectId);
       if (!coordinator) return notFound;
 
-      const sent = await chat.sendMessage(coordinator.id, { content: text });
+      const sent = await chat.sendMessage(coordinator.id, { content: text, origin });
       if (!sent.success) {
         return { success: false, error: { code: "SEND_FAILED", reason: sent.error.code } };
       }
@@ -269,7 +280,7 @@ export const createProjectService = (
         projectId,
         threadId: null,
         role: "user",
-        text: sent.message.content,
+        text: shownUserText(sent.message.content, origin),
         createdAt: sent.message.createdAt,
       });
       return { success: true, message };

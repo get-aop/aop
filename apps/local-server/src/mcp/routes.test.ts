@@ -116,6 +116,7 @@ describe("MCP HTTP routes", () => {
     await s.settle();
 
     expect(await toolNames(s, coordinator.id)).toEqual([
+      "memory_delete",
       "memory_read",
       "memory_write",
       "project_settings_get",

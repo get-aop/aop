@@ -52,3 +52,23 @@ export const memoryWriteTool = defineTool({
     return textResult(`Saved ${written.file.name}.`);
   },
 });
+
+/** The coordinator's alone: a thread that finds a stale note says so in its report instead. */
+export const memoryDeleteTool = defineTool({
+  name: "memory_delete",
+  description: `Delete a topic file from the project's memory, when the person asks for it gone or it is wrong or stale. ${MEMORY_INDEX_NAME} cannot be deleted: rewrite it with memory_write instead, and drop the line that pointed to the deleted file.`,
+  input: z.object({ name: z.string().describe("The topic file to delete, such as testing.md.") }),
+  handler: async (args, call) => {
+    if (args.name === MEMORY_INDEX_NAME) {
+      throw new McpToolError(
+        `${MEMORY_INDEX_NAME} is the index and cannot be deleted; rewrite it with memory_write`,
+        "MEMORY_INDEX_REQUIRED",
+      );
+    }
+    const removed = await call.services.memory.remove(projectIdOf(call), args.name);
+    if (!removed.success) {
+      throw new McpToolError(describeServiceError(removed.error), removed.error.code);
+    }
+    return textResult(`Deleted ${args.name}.`);
+  },
+});

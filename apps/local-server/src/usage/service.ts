@@ -12,8 +12,10 @@ import {
 import { getLogger } from "@aop/infra";
 import type { Kysely } from "kysely";
 import type { ChatRun, Database } from "../db/schema.ts";
+import type { ThreadChanges } from "../thread/changes.ts";
 import { byModel, byThread, totalsOf } from "./aggregate.ts";
 import { parseClaudeCodeUsage } from "./claude-code-usage.ts";
+import { sumThreadChanges } from "./code-changes.ts";
 import { createUsageRepository, type UsageBounds } from "./repository.ts";
 import type { RunUsageEntry, UsageParser } from "./types.ts";
 
@@ -37,13 +39,22 @@ export interface UsageService {
   getRunUsage: (runId: string) => Promise<RunUsage | null>;
   /** Null when there is no such session. A thread is a chat session, so `threadId` is its id. */
   getThreadUsage: (threadId: string, window: UsageWindow) => Promise<ThreadUsage | null>;
-  /** Null when there is no such project. */
+  /**
+   * Null when there is no such project. Its code changes are what the threads with runs in the
+   * window have changed in their worktrees, read now.
+   */
   getProjectUsage: (projectId: string, window: UsageWindow) => Promise<ProjectUsage | null>;
+}
+
+export interface UsageServiceDeps {
+  now?: () => Date;
+  /** Reads a thread's worktree change; without it a project's code changes read as none. */
+  threadChanges?: Pick<ThreadChanges, "changes">;
 }
 
 export const createUsageService = (
   db: Kysely<Database>,
-  now: () => Date = () => new Date(),
+  { now = () => new Date(), threadChanges }: UsageServiceDeps = {},
 ): UsageService => {
   const repository = createUsageRepository(db);
 
@@ -92,12 +103,17 @@ export const createUsageService = (
       if (!(await repository.exists({ kind: "project", id: projectId }))) return null;
       const bounded = toUtc(window);
       const records = await repository.list({ kind: "project", id: projectId }, bounded);
+      const threads = byThread(records);
+      const threadIds = threads.flatMap((row) => (row.kind === "thread" ? [row.threadId] : []));
       return ProjectUsageSchema.parse({
         projectId,
         window: bounded,
         totals: totalsOf(records),
         byModel: byModel(records),
-        threads: byThread(records),
+        threads,
+        codeChanges: threadChanges
+          ? await sumThreadChanges(threadChanges, threadIds)
+          : { additions: 0, deletions: 0 },
       });
     },
   };

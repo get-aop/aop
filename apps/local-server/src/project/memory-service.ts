@@ -1,7 +1,15 @@
-import { MEMORY_INDEX_NAME, type MemoryFile, type MemoryFileInputSchema } from "@aop/common";
+import {
+  MEMORY_INDEX_NAME,
+  MEMORY_REQUEST_MAX_LENGTH,
+  type MemoryFile,
+  type MemoryFileInputSchema,
+  type Message,
+} from "@aop/common";
 import type { z } from "zod";
 import type { MemoryRepository } from "./memory-repository.ts";
+import { memoryRequestPrompt } from "./memory-request.ts";
 import type { ProjectRepository } from "./repository.ts";
+import type { ProjectResult, ProjectService } from "./service.ts";
 
 export type MemoryResult<T> =
   | ({ success: true } & T)
@@ -16,11 +24,20 @@ export interface MemoryService {
     input: z.output<typeof MemoryFileInputSchema>,
   ) => Promise<MemoryResult<{ file: MemoryFile }>>;
   remove: (projectId: string, name: string) => Promise<MemoryResult<Record<never, never>>>;
+  /**
+   * Hands the person's words to the coordinator, which changes the files with its memory tools.
+   * The message is the request as the chat shows it; the coordinator's reply answers it.
+   */
+  requestChange: (
+    projectId: string,
+    request: string,
+  ) => Promise<ProjectResult<{ message: Message }>>;
 }
 
 export const createMemoryService = (deps: {
   projects: ProjectRepository;
   memory: MemoryRepository;
+  coordinator: Pick<ProjectService, "sendToCoordinator">;
 }): MemoryService => {
   const withProject = async <T>(
     projectId: string,
@@ -57,6 +74,20 @@ export const createMemoryService = (deps: {
           ? { success: true }
           : { success: false, error: { code: "MEMORY_FILE_NOT_FOUND" } },
       ),
+
+    requestChange: async (projectId, request) => {
+      const words = request.trim();
+      if (!words || words.length > MEMORY_REQUEST_MAX_LENGTH) {
+        const message = words
+          ? `A memory request is at most ${MEMORY_REQUEST_MAX_LENGTH} characters`
+          : "Say what to change or remove";
+        return { success: false, error: { code: "INVALID_MESSAGE", message } };
+      }
+      return deps.coordinator.sendToCoordinator(projectId, memoryRequestPrompt(words), {
+        type: "memory-request",
+        request: words,
+      });
+    },
   };
 };
 

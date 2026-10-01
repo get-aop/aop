@@ -11,6 +11,8 @@ export interface MemoryFiles {
   /** Rejects with the host's message. */
   save: (input: MemoryFileInput) => Promise<MemoryFile>;
   remove: (name: string) => Promise<void>;
+  /** Loads the list again, as when the coordinator has just changed it. */
+  refresh: () => void;
 }
 
 /** A project's memory files. Agents write them too, so the list is reloaded as the project stirs. */
@@ -59,7 +61,7 @@ export const useMemoryFiles = (projectId: string): MemoryFiles => {
     [projectId],
   );
 
-  return { files, error, save, remove };
+  return { files, error, save, remove, refresh };
 };
 
 const withFile = (files: MemoryFile[], saved: MemoryFile): MemoryFile[] =>

@@ -41,13 +41,18 @@ export const createProjectServices = (
   const git = createThreadGit(ctx, { createProviderFn: deps.createProviderFn, ...gitDeps });
   const threads = createThreadService(ctx, chat, git);
   const kickoff = createProjectKickoff(ctx, threads);
+  const projects = createProjectService(ctx, chat, git, kickoff);
   return {
     chat,
-    projects: createProjectService(ctx, chat, git, kickoff),
+    projects,
     threads,
     kickoff,
     suggestions: createSuggestionService(ctx, threads),
-    memory: createMemoryService({ projects: ctx.projectRepository, memory: ctx.memoryRepository }),
+    memory: createMemoryService({
+      projects: ctx.projectRepository,
+      memory: ctx.memoryRepository,
+      coordinator: projects,
+    }),
     git,
     // The watcher reads GitHub through the same `gh` seam the threads' pull requests use.
     pullRequestWatcher: createPullRequestWatcher(

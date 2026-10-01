@@ -31,6 +31,11 @@ export const MessageOriginSchema = z.discriminatedUnion("type", [
    * around, shown as a card under the welcome; null when the project has no repository.
    */
   z.object({ type: z.literal("kickoff-welcome"), surveyThreadId: z.string().min(1).nullable() }),
+  /**
+   * The person asking, from the project's Memory settings, for a change to memory. The stored
+   * content frames `request` for the coordinator; the chat shows the person's own words.
+   */
+  z.object({ type: z.literal("memory-request"), request: z.string().min(1) }),
   /** The server telling a session its wait on a rate limit is over; it is never shown as a message. */
   z.object({ type: z.literal("rate-limit-resume") }),
 ]);

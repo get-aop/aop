@@ -1,162 +1,137 @@
 import type { Project, ProjectUsage } from "@aop/common";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { getProjectUsage } from "../../api/usage";
-import { SettingsBlock } from "./blocks";
-import { formatCost, formatShare } from "./format";
-import { TokenCount, UsageByModel, UsageByThread } from "./UsageTables";
+import { useNow } from "../use-now";
+import { CopyUsageButton, UsageOverview } from "./UsageOverview";
+import { UsageByModel } from "./UsageTables";
+import { UsageThreads } from "./UsageThreads";
 import {
-  cacheReadShare,
   rangeOf,
+  sortThreadRows,
+  type ThreadRow,
+  type ThreadSort,
+  threadRows,
   totalTokens,
   USAGE_WINDOWS,
   type UsageWindowId,
 } from "./usage-math";
+import { usageSummary } from "./usage-summary";
 import { useRefreshOnActivity } from "./use-refresh-on-activity";
 
-/** What the project's runs consumed in a window: totals, then by model and by thread. */
+/**
+ * What the project's runs consumed in a window: the headline figures and where the tokens went,
+ * then every session's share. The copy button puts the same on the clipboard as text.
+ */
 export const UsageSection = ({ project }: { project: Project }) => {
   const [windowId, setWindowId] = useState<UsageWindowId>("all");
+  const [sort, setSort] = useState<ThreadSort>("share");
   const usage = useProjectUsage(project.id, windowId);
+  const now = useNow();
+  const data = usage.data;
+  const rows = useMemo(
+    () => (data ? sortThreadRows(threadRows(data.threads, totalTokens(data.totals)), sort) : []),
+    [data, sort],
+  );
+  const summary =
+    data && rows.length > 0
+      ? usageSummary({
+          projectName: project.name,
+          windowLabel: USAGE_WINDOWS.find((window) => window.id === windowId)?.label ?? "",
+          usage: data,
+          rows,
+          sort,
+          now,
+        })
+      : null;
 
   return (
-    <div data-testid="settings-usage" data-window={windowId} className="flex flex-col">
-      <SettingsBlock
-        title="This project"
-        description="Tokens the coordinator and threads used. A run counts in the window it finished in."
-      >
-        <WindowPicker value={windowId} onChange={setWindowId} />
-        {usage.error ? (
-          <p role="alert" data-testid="usage-error" className="text-[12.5px] text-blocked">
-            {usage.error}{" "}
-            <Button
-              type="button"
-              variant="link"
-              size="xs"
-              data-testid="usage-retry"
-              onClick={usage.refresh}
-            >
-              Try again
-            </Button>
+    <div data-testid="settings-usage" data-window={windowId} className="flex flex-col gap-4">
+      <div className="flex items-start gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <h3 className="text-[14px] font-medium text-text">This project</h3>
+          <p className="text-[12.5px] text-text-subtle">
+            Tokens the coordinator and threads used. A run counts in the window it finished in.
           </p>
-        ) : null}
-        {usage.data === null && !usage.error ? (
-          <p data-testid="usage-loading" className="text-[12.5px] text-text-subtle">
-            Loading usage…
-          </p>
-        ) : null}
-      </SettingsBlock>
-      {usage.data ? <UsageBody projectId={project.id} usage={usage.data} /> : null}
+        </div>
+        <CopyUsageButton text={summary} />
+      </div>
+      <WindowPicker value={windowId} onChange={setWindowId} />
+      <UsageState usage={usage} />
+      {data ? (
+        <UsageResults
+          projectId={project.id}
+          usage={data}
+          rows={rows}
+          sort={sort}
+          onSort={setSort}
+          now={now}
+        />
+      ) : null}
     </div>
   );
 };
 
-const UsageBody = ({ projectId, usage }: { projectId: string; usage: ProjectUsage }) => {
-  if (usage.threads.length === 0) {
-    return (
-      <div
-        data-testid="usage-empty"
-        className="flex flex-col items-center gap-1 rounded-row border border-dashed border-border px-6 py-10 text-center"
-      >
-        <h3 className="text-[13px] font-medium text-text">No usage in this window</h3>
-        <p className="max-w-sm text-[12.5px] text-text-subtle">
-          Usage appears here once the coordinator or a thread finishes a turn.
-        </p>
-      </div>
-    );
-  }
-  const total = totalTokens(usage.totals);
-  return (
+const UsageResults = ({
+  projectId,
+  usage,
+  rows,
+  sort,
+  onSort,
+  now,
+}: {
+  projectId: string;
+  usage: ProjectUsage;
+  rows: readonly ThreadRow[];
+  sort: ThreadSort;
+  onSort: (sort: ThreadSort) => void;
+  now: number;
+}) =>
+  rows.length === 0 ? (
+    <UsageEmpty />
+  ) : (
     <>
-      <Summary usage={usage} total={total} />
-      <UsageByModel models={usage.byModel} />
-      <UsageByThread projectId={projectId} threads={usage.threads} total={total} />
+      <UsageOverview usage={usage} rows={rows} />
+      <UsageThreads projectId={projectId} rows={rows} sort={sort} onSort={onSort} now={now} />
+      {/* One model is already named over the breakdown; several get a row each, with cost. */}
+      {usage.byModel.length > 1 ? <UsageByModel models={usage.byModel} /> : null}
     </>
   );
+
+const UsageState = ({ usage }: { usage: ProjectUsageState }) => {
+  if (usage.error) {
+    return (
+      <p role="alert" data-testid="usage-error" className="text-[12.5px] text-blocked">
+        {usage.error}{" "}
+        <Button
+          type="button"
+          variant="link"
+          size="xs"
+          data-testid="usage-retry"
+          onClick={usage.refresh}
+        >
+          Try again
+        </Button>
+      </p>
+    );
+  }
+  return usage.data === null ? (
+    <p data-testid="usage-loading" className="text-[12.5px] text-text-subtle">
+      Loading usage…
+    </p>
+  ) : null;
 };
 
-const Summary = ({ usage, total }: { usage: ProjectUsage; total: number }) => {
-  const { totals } = usage;
-  const cache = cacheReadShare(totals);
-  const coordinator = usage.threads
-    .filter((thread) => thread.kind === "coordinator")
-    .reduce((sum, thread) => sum + totalTokens(thread), 0);
-  const threadCount = usage.threads.filter((thread) => thread.kind === "thread").length;
-
-  return (
-    <SettingsBlock title="Totals" testId="usage-summary">
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat testId="usage-stat-threads" label="Threads" value={String(threadCount)} />
-        <Stat
-          testId="usage-stat-tokens"
-          label="Tokens"
-          value={<TokenCount value={total} />}
-          detail={`${totals.runs} ${totals.runs === 1 ? "run" : "runs"}`}
-        />
-        <Stat
-          testId="usage-stat-cache-hit"
-          label="Cache hit"
-          value={cache.whole === 0 ? "–" : formatShare(cache.part, cache.whole)}
-          detail="of input from cache"
-        />
-        <Stat
-          testId="usage-stat-coordinator"
-          label="Coordinator"
-          value={formatShare(coordinator, total)}
-          detail="of all tokens"
-        />
-        <Stat
-          testId="usage-stat-cost"
-          label="Cost"
-          value={totals.costUsd === null ? "Not reported" : formatCost(totals.costUsd)}
-          detail={totals.costUsd === null ? "no run reported one" : "as the CLI reported"}
-        />
-      </dl>
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat
-          testId="usage-stat-input"
-          label="Input"
-          value={<TokenCount value={totals.inputTokens} />}
-        />
-        <Stat
-          testId="usage-stat-output"
-          label="Output"
-          value={<TokenCount value={totals.outputTokens} />}
-        />
-        <Stat
-          testId="usage-stat-cache-write"
-          label="Cache write"
-          value={<TokenCount value={totals.cacheWriteTokens} />}
-        />
-        <Stat
-          testId="usage-stat-cache-read"
-          label="Cache read"
-          value={<TokenCount value={totals.cacheReadTokens} />}
-        />
-      </dl>
-    </SettingsBlock>
-  );
-};
-
-const Stat = ({
-  testId,
-  label,
-  value,
-  detail,
-}: {
-  testId: string;
-  label: string;
-  value: React.ReactNode;
-  detail?: string;
-}) => (
+const UsageEmpty = () => (
   <div
-    data-testid={testId}
-    className="flex flex-col gap-0.5 rounded-row border border-border bg-raised px-3 py-2.5"
+    data-testid="usage-empty"
+    className="mt-2 flex flex-col items-center gap-1 rounded-row border border-dashed border-border px-6 py-10 text-center"
   >
-    <dt className="text-[12px] text-text-subtle">{label}</dt>
-    <dd className="text-[18px] font-semibold tabular-nums text-text">{value}</dd>
-    {detail ? <p className="text-[11.5px] text-text-subtle">{detail}</p> : null}
+    <h3 className="text-[13px] font-medium text-text">No usage in this window</h3>
+    <p className="max-w-sm text-[12.5px] text-text-subtle">
+      Usage appears here once the coordinator or a thread finishes a turn.
+    </p>
   </div>
 );
 

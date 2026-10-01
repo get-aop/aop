@@ -299,6 +299,7 @@ describe("runtime checks", () => {
         },
       ],
       threads: [],
+      codeChanges: { additions: 0, deletions: 0 },
     };
 
     expect(usageShapes(o).status).toBe("pass");
