@@ -62,6 +62,11 @@ const { shape } = ProjectSettingsSchema;
  * What a client sends to create a project: only the name is required. The rest starts at Claude
  * Projects' own defaults: a quiet coordinator (low effort), thinking threads (high effort), the
  * provider's default model, and threads with full access (any command on the host).
+ *
+ * `lookAround` is not a setting but what happens once, on creation: the coordinator welcomes the
+ * person and, with a repository, one read-only thread looks at the project so the coordinator
+ * can propose threads. It spends usage, so a client asks for it: the dashboard's New project
+ * dialog does by default, and a call that leaves it out gets a project that stays quiet.
  */
 export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
   goal: shape.goal.default(""),
@@ -72,6 +77,7 @@ export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
   threadAccess: shape.threadAccess.default("full-access"),
   autoFixPullRequests: shape.autoFixPullRequests.default(true),
   repoIds: shape.repoIds.default([]),
+  lookAround: z.boolean().default(false),
 });
 export type CreateProjectInput = z.input<typeof CreateProjectInputSchema>;
 

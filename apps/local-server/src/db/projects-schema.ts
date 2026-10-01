@@ -79,6 +79,15 @@ export interface SuggestionAnswersTable {
   thread_id: string | null;
 }
 
+export type ProjectKickoffState = "pending" | "surveying" | "reported";
+
+export interface ProjectKickoffsTable {
+  project_id: string;
+  state: ProjectKickoffState;
+  /** The survey thread; present exactly when `state` is not `pending`. */
+  survey_thread_id: string | null;
+}
+
 export interface ProjectsDatabase {
   projects: ProjectsTable;
   project_repos: ProjectReposTable;
@@ -87,6 +96,7 @@ export interface ProjectsDatabase {
   event_log: EventLogTable;
   pull_request_watch: PullRequestWatchTable;
   suggestion_answers: SuggestionAnswersTable;
+  project_kickoffs: ProjectKickoffsTable;
 }
 
 export type ProjectRow = Selectable<ProjectsTable>;

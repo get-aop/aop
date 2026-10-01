@@ -22,7 +22,7 @@ The coordinator is hermetic: it runs with the AOP tools only, with no Claude set
 | `thread_open_pr` | Opens a thread's pull request: its changes are committed, its branch pushed, the pull request opened. A thread has one, so asking again pushes what the thread did since and returns the same one; a merged or closed one is refused. |
 | `thread_merge_pr` | Merges a thread's pull request when the person asks. The thread is then resolved and its branch removed. Refused while the thread holds work the pull request lacks, and when GitHub will not merge it; the error says why. |
 | `thread_resolve` | Marks a thread resolved: its worktree is removed, its branch kept, and a later `thread_steer` reopens it. Refused while the thread is working. |
-| `propose_threads` | Attaches a "Suggested threads" block to the reply; nothing runs until the person starts one. |
+| `propose_threads` | Attaches a "Suggested threads" block to the reply: each thread's title, brief, repository and a one-line `reason` (at most 140 characters) the person reads. Nothing runs until the person starts one. |
 | `project_settings_get` | Reads goal, instructions, models and effort, notification level, thread access, whether pull requests are fixed automatically, and repositories. |
 | `project_settings_set` | Changes the thread model and effort, or the notification level. The goal and instructions (which go into every session's system prompt), thread access, automatic pull request fixes, repositories and the coordinator's own runtime stay with the person: a call that names any of them fails with an error and changes nothing, also when it names a valid setting too. |
 | `memory_read`, `memory_write` | Read and write the project's memory files. |

@@ -349,15 +349,39 @@ describe("the coordinator's tools", () => {
     const { s, coordinator } = await setup();
 
     const outsideAReply = await s.callTool(coordinator.id, "propose_threads", {
-      threads: [{ title: "Sketch", prompt: "Sketch it" }],
+      threads: [{ title: "Sketch", prompt: "Sketch it", reason: "Nobody has sketched it." }],
     });
     const foreignRepo = await s.callTool(coordinator.id, "propose_threads", {
-      threads: [{ title: "Sketch", prompt: "Sketch it", repoId: "repo_elsewhere" }],
+      threads: [
+        {
+          title: "Sketch",
+          prompt: "Sketch it",
+          reason: "Nobody has sketched it.",
+          repoId: "repo_elsewhere",
+        },
+      ],
     });
 
     expect(outsideAReply.isError).toBe(true);
     expect(outsideAReply.content[0]?.text).toContain("No reply is being written");
     expect(foreignRepo.isError).toBe(true);
+    expect(foreignRepo.content[0]?.text).toContain("is not one of this project's repositories");
+  });
+
+  test("propose_threads wants a reason for each thread, short enough for one line", async () => {
+    const { s, coordinator } = await setup();
+
+    const missing = await s.callTool(coordinator.id, "propose_threads", {
+      threads: [{ title: "Sketch", prompt: "Sketch it" }],
+    });
+    const long = await s.callTool(coordinator.id, "propose_threads", {
+      threads: [{ title: "Sketch", prompt: "Sketch it", reason: "x".repeat(141) }],
+    });
+
+    expect(missing.isError).toBe(true);
+    expect(missing.content[0]?.text).toContain("reason");
+    expect(long.isError).toBe(true);
+    expect(long.content[0]?.text).toContain("reason");
   });
 
   test("project_settings_get shows the settings and repos; project_settings_set changes only what it may", async () => {

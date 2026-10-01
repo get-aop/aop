@@ -55,6 +55,7 @@ const NewProjectForm = () => {
   const [goal, setGoal] = useState("");
   const [instructions, setInstructions] = useState("");
   const [selected, setSelected] = useState<readonly string[]>([]);
+  const [lookAround, setLookAround] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const repos = useRegisteredRepos((repoId) =>
@@ -89,6 +90,7 @@ const NewProjectForm = () => {
         goal: parsed.data.goal,
         instructions: parsed.data.instructions,
         repoIds: parsed.data.repoIds,
+        lookAround,
       });
       closeNewProjectDialog();
       navigate(projectPath(project.id));
@@ -170,6 +172,8 @@ const NewProjectForm = () => {
         }
       />
 
+      <LookAroundOption checked={lookAround} onChange={setLookAround} />
+
       <p
         data-testid="new-project-full-access-notice"
         className="flex items-start gap-2 rounded-row border border-blocked/30 bg-blocked/10 px-3 py-2 text-[12.5px] leading-relaxed text-text"
@@ -203,6 +207,37 @@ const NewProjectForm = () => {
     </form>
   );
 };
+
+// On by default: the coordinator's first look is what makes a new project useful at once. It
+// spends usage, so it can be turned off before anything runs.
+const LookAroundOption = ({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) => (
+  <label
+    htmlFor="new-project-look-around"
+    data-testid="new-project-look-around-option"
+    className="flex cursor-pointer items-start gap-2.5 text-[13px]"
+  >
+    <Checkbox
+      id="new-project-look-around"
+      data-testid="new-project-look-around"
+      className="mt-0.5"
+      checked={checked}
+      onCheckedChange={(value) => onChange(value === true)}
+    />
+    <span className="flex min-w-0 flex-col gap-0.5">
+      <span className="text-text">Let the coordinator look around first</span>
+      <span className="text-[12px] leading-relaxed text-text-subtle">
+        It welcomes you, starts one read-only thread to learn what the project does and what's in
+        flight, then suggests threads to start. The look around uses your Claude usage.
+      </span>
+    </span>
+  </label>
+);
 
 const RepoPicker = ({
   repos,

@@ -68,6 +68,8 @@ const QuoteForwardedBlockSchema = z.object({
 });
 
 export const SUGGESTED_THREADS_MAX = 8;
+/** A reason is one line under the title, so it is kept to what one line holds. */
+export const SUGGESTION_REASON_MAX = 140;
 
 /**
  * What the person did with a proposal, as the host recorded it: started as this thread, or
@@ -86,6 +88,11 @@ export const SuggestedThreadSchema = z.object({
   title: z.string().trim().min(1).max(200),
   /** Sent to the thread as its first message when the suggestion is started. */
   prompt: z.string().trim().min(1).max(8000),
+  /**
+   * The one line the person reads under the title: why this thread is worth starting. Absent on
+   * proposals stored before reasons existed, which show their title alone.
+   */
+  reason: z.string().trim().min(1).max(SUGGESTION_REASON_MAX).optional(),
   /** The repo the thread would work in; null for a thread that needs none. */
   repoId: IdSchema.nullable(),
   /**
@@ -96,7 +103,7 @@ export const SuggestedThreadSchema = z.object({
 });
 export type SuggestedThread = z.infer<typeof SuggestedThreadSchema>;
 
-/** "Suggested threads": proposals with Start, Skip and Start all buttons. Nothing runs until one is started. */
+/** "Suggested threads": proposals to start one by one or all at once, or skip. Nothing runs until one is started. */
 const SuggestedThreadsBlockSchema = z.object({
   type: z.literal("suggested-threads"),
   suggestions: z

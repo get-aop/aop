@@ -100,7 +100,7 @@ describe("ProjectSettingsSchema", () => {
 });
 
 describe("CreateProjectInputSchema", () => {
-  test("takes just a name and fills in Claude Projects' defaults", () => {
+  test("takes just a name and fills in Claude Projects' defaults, with no first-open look around", () => {
     expect(CreateProjectInputSchema.parse({ name: "  checkout  " })).toEqual({
       name: "checkout",
       goal: "",
@@ -111,6 +111,7 @@ describe("CreateProjectInputSchema", () => {
       threadAccess: "full-access",
       autoFixPullRequests: true,
       repoIds: [],
+      lookAround: false,
     });
   });
 

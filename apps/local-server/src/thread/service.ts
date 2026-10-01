@@ -45,6 +45,11 @@ export interface SpawnThreadInput {
   /** The person's own words, shown as a forwarded quote above the brief. */
   quote?: string | null;
   /**
+   * Runs the thread read-only whatever access the project gives its threads: file edits and
+   * commands that change things are denied, for good (a new project's survey).
+   */
+  readOnly?: boolean;
+  /**
    * Runs in the transaction that stores the thread, once its session exists. What it writes
    * commits with the thread or not at all, and a throw keeps the thread from being made.
    */
@@ -255,6 +260,7 @@ export const createThreadService = (
         workspace: plan.workspace,
         branch: thread.branch,
         runtime,
+        readOnly: input.readOnly ?? false,
       });
       await recordThreadUpserted(tx, thread.id);
       await input.inTransaction?.(tx, thread.id);

@@ -5,6 +5,7 @@ import {
   type ProjectPatch,
   ReasoningEffortSchema,
   SUGGESTED_THREADS_MAX,
+  SUGGESTION_REASON_MAX,
   THREAD_STATUSES,
   type Thread,
 } from "@aop/common";
@@ -227,13 +228,21 @@ const readable = (message: Message) => {
 export const proposeThreadsTool = defineTool({
   name: "propose_threads",
   description:
-    "Suggest threads instead of starting them: the person sees them as cards with Start and Start all. Use it when the work could go several ways or the person should choose. Nothing runs until they start one.",
+    "Suggest threads instead of starting them: the person sees each as its title and one line of reason, and starts one, several or all of them. Use it when the work could go several ways or the person should choose. Nothing runs until they start one.",
   input: z.object({
     threads: z
       .array(
         z.object({
           title: z.string().min(1).max(200),
           prompt: z.string().min(1).max(8000).describe("The complete brief the thread would get."),
+          reason: z
+            .string()
+            .trim()
+            .min(1)
+            .max(SUGGESTION_REASON_MAX)
+            .describe(
+              "One short sentence the person reads under the title: why this thread is worth starting now. Not the brief.",
+            ),
           repoId: z.string().optional(),
         }),
       )
@@ -256,6 +265,7 @@ export const proposeThreadsTool = defineTool({
         id: crypto.randomUUID(),
         title: thread.title,
         prompt: thread.prompt,
+        reason: thread.reason,
         repoId: thread.repoId ?? null,
       })),
     });

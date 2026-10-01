@@ -170,8 +170,17 @@ describe("coordinator and threads against the fake CLI", () => {
           name: "propose_threads",
           arguments: {
             threads: [
-              { title: "Add retry metrics", prompt: "Add metrics to every retry" },
-              { title: "Load test", prompt: "Load test checkout", repoId: s.repos[0]?.id },
+              {
+                title: "Add retry metrics",
+                prompt: "Add metrics to every retry",
+                reason: "Nobody can tell how often a retry fires.",
+              },
+              {
+                title: "Load test",
+                prompt: "Load test checkout",
+                reason: "Checkout has never run under load.",
+                repoId: s.repos[0]?.id,
+              },
             ],
           },
         },
@@ -193,9 +202,9 @@ describe("coordinator and threads against the fake CLI", () => {
     const blocks = reply?.role === "assistant" ? reply.blocks : [];
     expect(blocks[1]).toEqual({ type: "routing-receipt", threadIds: [spawned.thread.id] });
     const suggestions = blocks[2]?.type === "suggested-threads" ? blocks[2].suggestions : [];
-    expect(suggestions.map((suggestion) => suggestion.title)).toEqual([
-      "Add retry metrics",
-      "Load test",
+    expect(suggestions.map(({ title, reason }) => [title, reason])).toEqual([
+      ["Add retry metrics", "Nobody can tell how often a retry fires."],
+      ["Load test", "Checkout has never run under load."],
     ]);
     expect(new Set(suggestions.map((suggestion) => suggestion.id)).size).toBe(2);
 

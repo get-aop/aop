@@ -156,11 +156,12 @@ export const toWireMessage = (
     createdAt: row.created_at,
   };
   const text = displayText(row);
+  const origin = parseMessageOrigin(row.origin_json);
   if (row.role === "assistant") {
-    return assistantMessage(base, scope, text, withAnswers(runBlocks, extras.answers), extras);
+    const blocks = [...withAnswers(runBlocks, extras.answers), ...welcomeCard(origin)];
+    return assistantMessage(base, scope, text, blocks, extras);
   }
   if (!text) return null;
-  const origin = parseMessageOrigin(row.origin_json);
   // The server's nudge to resume after a rate limit is plumbing: the reply that explains the
   // wait is already in the transcript.
   if (origin?.type === "rate-limit-resume") return null;
@@ -188,6 +189,12 @@ const assistantMessage = (
         ...(inReplyTo && { inReplyTo }),
       });
 };
+
+// The host's welcome on a new project has no run to carry blocks: the survey it started is its card.
+const welcomeCard = (origin: MessageOrigin | null): MessageBlock[] =>
+  origin?.type === "kickoff-welcome" && origin.surveyThreadId
+    ? [{ type: "thread-card", threadId: origin.surveyThreadId, variant: "live" }]
+    : [];
 
 export const scopeOf = (session: ChatSession): MessageScope => {
   if (!session.project_id) throw new Error(`Session ${session.id} belongs to no project`);

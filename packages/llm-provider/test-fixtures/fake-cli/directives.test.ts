@@ -14,8 +14,14 @@ describe("parseDirectives", () => {
       crashAfter: undefined,
       usage: { input: 10, output: 5, cacheWrite: 200, cacheRead: 4000 },
       echoSystemPrompt: false,
+      mentionLinks: false,
       usageWarning: false,
     });
+  });
+
+  test("a bare `links` asks the reply to end with the prompt's thread links", () => {
+    expect(parseDirectives('hi [fake: say="See" links]').mentionLinks).toBe(true);
+    expect(parseDirectives("hi [fake: steps=1]").mentionLinks).toBe(false);
   });
 
   test("a bare `usagewarn` asks for the warning event a real run writes", () => {

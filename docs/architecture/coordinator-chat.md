@@ -43,7 +43,7 @@ An assistant message is a list of blocks (`MessageBlocks.tsx`):
 | `text`, `thread-chip`, `pr-chip` | One paragraph of prose with the chips inside the sentence. A chip is a link to a reserved address in the markdown that `inline-run.ts` builds, which the renderer swaps for the chip. |
 | `routing-receipt` | "Sent to one thread" or "Sent to 3 threads", above the reply, with a chip for each thread that has no card of its own in the same message. |
 | `thread-card` | A card that follows its thread: `needs-call` with the question and View thread while the thread waits on the person, `live` with the status line and steps while it works, `done` with the pull request chip. The variant in the block is only what the card shows until the thread has loaded. |
-| `suggested-threads` | Proposals with Start, Skip and Start all. |
+| `suggested-threads` | Proposals, each its title and one line of reason with a start button (↵); Skip shows on hover, and "Start N threads" starts the ones still waiting. |
 | `quote-forwarded` | The person's words as the coordinator relayed them to a thread. |
 
 The coordinator writes a thread into a reply as `[its title](thread:<id>)`; the host stores it as a `thread-chip` block, and the chip shows the thread's own title, state and, on hover, how many replies and how long ago. `thread_spawn` and `thread_steer` add the thread to the reply's routing receipt.
@@ -54,7 +54,7 @@ Reports that arrive close together are answered by one coordinator turn (see [th
 
 ## Suggested threads
 
-The coordinator's `propose_threads` tool attaches a `suggested-threads` block to its reply: proposals with a title, a brief and a repository, each with an id of its own. Nothing runs until the person answers one, and the host records the answer, so every device sees the same one.
+The coordinator's `propose_threads` tool attaches a `suggested-threads` block to its reply: proposals with a title, a brief, a repository and a reason (one line of at most 140 characters that the person reads instead of the brief), each with an id of its own. Proposals stored before reasons existed have none and show their title alone. Nothing runs until the person answers one, and the host records the answer, so every device sees the same one.
 
 **The record.** The `suggestion_answers` table (migration v10) has one row per answered suggestion, keyed by the id of the message that holds the block and the suggestion's id. `started` names the thread it made; `skipped` names none. A suggestion nobody answered has no row. The row goes with its message, and with its thread: deleting the thread, or a start that fails after the thread was stored, leaves the proposal open again.
 
@@ -70,7 +70,17 @@ The coordinator's `propose_threads` tool attaches a `suggested-threads` block to
 
 **How a client learns it.** The answer is part of the message: every message the host sends, whether from the list or the stream, carries it on its suggestion (`answer`, `started` with the thread id or `skipped`; absent while the suggestion waits). The run's stored blocks never hold it. When an answer changes, the host appends a `message.updated` entry with the whole message, in the same transaction, after the `thread.upserted` entry of the thread a start made. A page that loads later reads the answers from the list, so a reload, a second computer and a restarted host all show the same proposal state.
 
-**What the page does.** `SuggestedThreads` draws each row from its suggestion's `answer` and keeps nothing of its own: a click asks the host, and the row changes when the entry arrives, like the thread actions do. While a start is running the row says "Starting…". "Start all" starts the waiting proposals one after the other. Nothing is kept in local storage; a proposal answered by an earlier build's browser-local answer shows as waiting.
+**What the page does.** `SuggestedThreads` draws each row from its suggestion's `answer` and keeps nothing of its own: a click asks the host, and the row changes when the entry arrives, like the thread actions do. While a start is running the row shows a spinner in place of its ↵ button. "Start N threads" starts the waiting proposals one after the other and goes away once none is waiting. Nothing is kept in local storage; a proposal answered by an earlier build's browser-local answer shows as waiting.
+
+## First open
+
+The New project dialog has "Let the coordinator look around first", on by default; it sends `lookAround: true` with `POST /api/projects` (an API call that leaves it out gets `false`, a project that stays quiet). With it on, a new project's chat fills in with no message from the person (`project/kickoff.ts`):
+
+1. **The welcome.** The host posts it in the coordinator's name: an assistant message with no run, its origin `kickoff-welcome`. It says what the coordinator does and, with a repository, that it will look at what the project does and what is in flight. A project with no repository gets the welcome only, which says to attach one.
+2. **The survey.** One thread titled "What <name> does and what's in flight", in the project's first repository, with a brief to look around. Its card sits under the welcome and it shows in the threads panel like any thread. It runs read-only whatever the project's thread access: its session is `approval-required`, so a headless run denies file edits and commands except `git log`, `git show`, `git branch`, `git status`, `gh pr list`, `gh pr view`, `gh issue list` and `gh run list` (`READ_ONLY_COMMANDS` in `chat-session/run-profile.ts`), and changing the project's thread access leaves it as it is.
+3. **The summary and proposals.** The survey's first finished report reaches the coordinator with an ask: two or three sentences on the project and what is in flight, pointing to the survey as `[title](thread:<id>)`, then `propose_threads` with two to four threads and their reasons, weighed against the goal. The reply shows the survey as a chip, not a card (the report's origin carries `kickoff: true`), followed by the Suggested threads block.
+
+**Once only.** Table `project_kickoffs` (migration v12) holds one row per project with a survey to run: `pending` until the survey starts, `surveying` with the thread once it is stored, `reported` once its report carried the ask. Each step is a compare-and-set in the transaction that does it, so the survey starts at most once and the ask is made at most once. A host that restarts before a pending survey started starts it after it listens (`resumePending` in `server.ts`); a start that races it finds the row claimed and stores no thread.
 
 ## What this device has seen
 

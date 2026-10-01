@@ -5,6 +5,7 @@ import {
   type Project,
   ProjectSchema,
   type ProjectSettings,
+  ProjectSettingsSchema,
 } from "./project.ts";
 
 type Overrides = Record<string, unknown>;
@@ -83,7 +84,9 @@ export const makeProject = (overrides: Overrides = {}) => ({
  * `CreateProjectInputSchema` and no fixture built here has to change.
  */
 export const buildProjectSettings = (overrides: Partial<ProjectSettings> = {}): ProjectSettings =>
-  CreateProjectInputSchema.parse({ name: "checkout-service", ...overrides });
+  ProjectSettingsSchema.parse(
+    CreateProjectInputSchema.parse({ name: "checkout-service", ...overrides }),
+  );
 
 /** A complete, parsed `Project`; see `buildProjectSettings` for how the defaults are kept current. */
 export const buildProject = (overrides: Partial<Project> = {}): Project =>

@@ -29,6 +29,8 @@ export interface Directives {
   usage: TokenUsage;
   /** Adds the appended system prompt the turn ran with to its reply, so a test or a screenshot can read it. */
   echoSystemPrompt: boolean;
+  /** Ends the reply with the thread links the prompt holds, as a coordinator names the threads it was told about. */
+  mentionLinks: boolean;
   /** Adds the `allowed_warning` rate_limit_event a real run writes once a plan window passes a threshold. */
   usageWarning: boolean;
 }
@@ -65,6 +67,7 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
     crashAfter: readCrashAfter(tokens),
     usage: readUsage(tokens.get("usage")),
     echoSystemPrompt: tokens.has("system"),
+    mentionLinks: tokens.has("links"),
     usageWarning: tokens.has("usagewarn"),
   };
 };

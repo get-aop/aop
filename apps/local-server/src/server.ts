@@ -95,6 +95,8 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   const stopWatcher = startPullRequestWatcher(projectServices.pullRequestWatcher, pollIntervalMs);
   // Once a day the host looks for a newer release, unless the person turned that off.
   updates.start();
+  // A project created just before a restart may not have started its survey yet.
+  void projectServices.kickoff.resumePending();
 
   return {
     shutdown: async () => {

@@ -31,6 +31,7 @@ export type {
 export {
   MessageBlockSchema,
   SUGGESTED_THREADS_MAX,
+  SUGGESTION_REASON_MAX,
   SuggestedThreadSchema,
   SuggestionAnswerSchema,
   threadCardVariant,

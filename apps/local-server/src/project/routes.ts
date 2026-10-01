@@ -17,7 +17,8 @@ export const createProjectRoutes = ({ projects, memory }: ProjectServices) => {
   routes.post("/", async (c) => {
     const parsed = await readBody(c, CreateProjectInputSchema);
     if ("response" in parsed) return parsed.response;
-    const result = await projects.create(parsed.body);
+    const { lookAround, ...settings } = parsed.body;
+    const result = await projects.create(settings, { lookAround });
     return result.success
       ? c.json({ project: result.project }, 201)
       : errorResponse(c, result.error);

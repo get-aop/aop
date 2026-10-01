@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { PullRequestRef } from "@aop/common";
 import type { Kysely } from "kysely";
+import { READ_ONLY_ACCESS } from "../chat-session/run-profile.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import { insertProjectRow, insertProjectSession } from "../project/test-utils.ts";
@@ -267,6 +268,27 @@ describe("thread repository", () => {
       .where("id", "=", "coordinator-1")
       .executeTakeFirstOrThrow();
     expect(row).toEqual({ unread: 0, updated_at: CREATED });
+  });
+
+  test("a project's new thread access reaches its threads, but a thread started read-only stays read-only", async () => {
+    await addThread("t1", "p1", { runtime_access_mode: "full-access" });
+    await addThread("survey", "p1", { runtime_access_mode: READ_ONLY_ACCESS });
+    await addThread("elsewhere", "p2", { runtime_access_mode: "full-access" });
+
+    await threads.setAccessForProject("p1", "auto-accept-edits");
+    await threads.setAccessForProject("p1", "full-access");
+    await threads.setAccessForProject("p1", "auto-accept-edits");
+
+    const rows = await db
+      .selectFrom("chat_sessions")
+      .select(["id", "runtime_access_mode"])
+      .orderBy("id")
+      .execute();
+    expect(rows).toEqual([
+      { id: "elsewhere", runtime_access_mode: "full-access" },
+      { id: "survey", runtime_access_mode: READ_ONLY_ACCESS },
+      { id: "t1", runtime_access_mode: "auto-accept-edits" },
+    ]);
   });
 
   test("a stored checklist that no longer matches the schema fails loudly when read", async () => {

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { MessageBlockSchema, SUGGESTED_THREADS_MAX, threadCardVariant } from "./blocks.ts";
+import {
+  MessageBlockSchema,
+  SUGGESTED_THREADS_MAX,
+  SUGGESTION_REASON_MAX,
+  threadCardVariant,
+} from "./blocks.ts";
 import { makePrArtifact, parsed, rejectedPaths } from "./test-utils.ts";
 import { THREAD_STATUSES } from "./thread.ts";
 
@@ -48,6 +53,22 @@ describe("MessageBlockSchema", () => {
     expect(
       rejectedPaths(MessageBlockSchema, { type: "suggested-threads", suggestions: blank }),
     ).toEqual(["suggestions.0.title", "suggestions.0.prompt"]);
+  });
+
+  test("a suggestion may carry one short line of reason, and an old one without it still reads", () => {
+    const suggestion = { id: "s1", title: "Sketch the API", prompt: "Draft it.", repoId: null };
+    const block = (reason?: string) => ({
+      type: "suggested-threads",
+      suggestions: [{ ...suggestion, ...(reason !== undefined && { reason }) }],
+    });
+    expect(parsed(MessageBlockSchema, block("Every client waits on it."))).toEqual(
+      block("Every client waits on it."),
+    );
+    expect(parsed(MessageBlockSchema, block())).toEqual(block());
+    expect(rejectedPaths(MessageBlockSchema, block(" "))).toEqual(["suggestions.0.reason"]);
+    expect(rejectedPaths(MessageBlockSchema, block("x".repeat(SUGGESTION_REASON_MAX + 1)))).toEqual(
+      ["suggestions.0.reason"],
+    );
   });
 
   test("a suggestion carries the answer the host recorded: started as a thread, or skipped", () => {

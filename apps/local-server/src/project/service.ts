@@ -22,6 +22,7 @@ import {
 } from "./coordinator.ts";
 import type { ChatEngine } from "./engine.ts";
 import { recordProjectRemoved, recordProjectUpserted } from "./events.ts";
+import { type ProjectKickoff, recordKickoff } from "./kickoff.ts";
 import { createProjectRepository } from "./repository.ts";
 import { createProjectTeardown } from "./teardown.ts";
 import { listWireMessages, type MessagePageRequest, UNKNOWN_PAGE_ANCHOR } from "./wire-messages.ts";
@@ -42,7 +43,14 @@ export type ProjectError =
 export type ProjectResult<T> = ({ success: true } & T) | { success: false; error: ProjectError };
 
 export interface ProjectService {
-  create: (settings: ProjectSettings) => Promise<ProjectResult<{ project: Project }>>;
+  /**
+   * With `lookAround`, the project's first open runs by itself: a welcome, and with a repository
+   * a read-only survey thread whose report makes the coordinator propose threads (kickoff.ts).
+   */
+  create: (
+    settings: ProjectSettings,
+    options?: { lookAround?: boolean },
+  ) => Promise<ProjectResult<{ project: Project }>>;
   list: () => Promise<Project[]>;
   get: (projectId: string) => Promise<ProjectResult<{ project: Project }>>;
   update: (projectId: string, patch: ProjectPatch) => Promise<ProjectResult<{ project: Project }>>;
@@ -79,6 +87,7 @@ export const createProjectService = (
   ctx: LocalServerContext,
   chat: ChatEngine,
   git: ThreadGit,
+  kickoff: ProjectKickoff,
 ): ProjectService => {
   const notFound = { success: false, error: { code: "PROJECT_NOT_FOUND" } } as const;
 
@@ -127,14 +136,14 @@ export const createProjectService = (
     });
 
   return {
-    create: async (settings) => {
+    create: async (settings, options = {}) => {
       const unknown = await missingRepo(settings.repoIds);
       if (unknown) return { success: false, error: { code: "REPO_NOT_FOUND", repoId: unknown } };
 
       const projectId = generateTypeId("proj");
       const workspace = await prepareCoordinatorWorkspace(projectId);
       const runtime = await resolveCoordinatorRuntime(ctx, settings.coordinator);
-      const project = await ctx.eventPublisher.transaction(async (tx) => {
+      const { project, surveying } = await ctx.eventPublisher.transaction(async (tx) => {
         const created = await createProjectRepository(tx.db).create({ id: projectId, ...settings });
         await insertCoordinatorSession(tx.db, {
           projectId,
@@ -143,8 +152,13 @@ export const createProjectService = (
           workspace,
         });
         await recordProjectUpserted(tx, created);
-        return created;
+        return {
+          project: created,
+          surveying: options.lookAround ? await recordKickoff(tx, created) : false,
+        };
       });
+      // The survey needs a worktree, which takes a while: the project is answered without it.
+      if (surveying) void kickoff.start(projectId);
       return { success: true, project };
     },
 

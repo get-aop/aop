@@ -54,9 +54,33 @@ const THREAD_PROFILE: RunProfile = {
   env: {},
 };
 
-export const runProfileFor = (session: Pick<ChatSession, "kind">): RunProfile => {
+/**
+ * The access of a read-only thread (a new project's survey). No project gives its threads this
+ * access, so a thread that has it was started read-only; see thread/thread-session.ts.
+ */
+export const READ_ONLY_ACCESS = "approval-required";
+
+// A read-only thread asks for no permission-skipping flag, so a headless run denies what is not
+// pre-approved: file edits and commands. Reading files needs no approval; these commands read the
+// history and the open work a survey reports on, and change nothing.
+export const READ_ONLY_COMMANDS = [
+  "Bash(git log:*)",
+  "Bash(git show:*)",
+  "Bash(git branch:*)",
+  "Bash(git status:*)",
+  "Bash(gh pr list:*)",
+  "Bash(gh pr view:*)",
+  "Bash(gh issue list:*)",
+  "Bash(gh run list:*)",
+];
+
+export const runProfileFor = (
+  session: Pick<ChatSession, "kind" | "runtime_access_mode">,
+): RunProfile => {
   const role = sessionRole(session);
   if (role === "plain") return { isolation: "open", env: {} };
   const profile = role === "coordinator" ? COORDINATOR_PROFILE : THREAD_PROFILE;
-  return { ...profile, allowedTools: toolNamesFor(role).map(claudeMcpToolName) };
+  const tools = toolNamesFor(role).map(claudeMcpToolName);
+  const readOnly = role === "thread" && session.runtime_access_mode === READ_ONLY_ACCESS;
+  return { ...profile, allowedTools: readOnly ? [...tools, ...READ_ONLY_COMMANDS] : tools };
 };

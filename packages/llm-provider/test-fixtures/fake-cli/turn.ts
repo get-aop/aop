@@ -39,11 +39,21 @@ const chooseEnding = (directives: Directives, ctx: TurnContext): Ending => {
   }
   if (directives.exitCode !== undefined) return { kind: "silent" };
   const fallback = directives.ask ? ASK_WAIT_TEXT : defaultReply(ctx);
-  const reply = directives.say ?? fallback;
+  const said = directives.say ?? fallback;
+  const reply = directives.mentionLinks ? withThreadLinks(said, ctx) : said;
   return {
     kind: "success",
     text: directives.echoSystemPrompt ? withSystemPrompt(reply, ctx) : reply,
   };
+};
+
+// How AOP writes a thread into text: `[its title](thread:<id>)`.
+const THREAD_LINK = /\[[^\]\n]*\]\(thread:[A-Za-z0-9_-]+\)/g;
+
+/** What `[fake: links]` does: the reply ends with each thread link of the prompt, once, in order. */
+const withThreadLinks = (reply: string, ctx: TurnContext): string => {
+  const links = [...new Set(stripDirectives(ctx.prompt).match(THREAD_LINK) ?? [])];
+  return links.length === 0 ? reply : `${reply} ${links.join(" ")}`;
 };
 
 /** What `[fake: system]` appends to a reply: the appended system prompt the turn ran with, between two marker lines. */

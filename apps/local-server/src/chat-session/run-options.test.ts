@@ -8,6 +8,7 @@ import {
   THREAD_TOOL_NAMES,
 } from "../mcp/availability.ts";
 import { buildRunOptions, resolveAopMcpUrl } from "./run-options.ts";
+import { READ_ONLY_ACCESS, READ_ONLY_COMMANDS } from "./run-profile.ts";
 import { NO_PROJECT_COLUMNS } from "./test-utils.ts";
 
 /** Claude's own question tool (AOP asks through `aop_ask_user`) and the built-ins that wake or schedule a session. */
@@ -227,6 +228,28 @@ describe("buildRunOptions for project sessions", () => {
       THREAD_TOOL_NAMES.map(claudeMcpToolName),
     );
     expect(flagValues(accepting, "--disallowedTools")).toEqual(THREAD_DISALLOWED_TOOLS);
+  });
+
+  test("a read-only thread skips no permissions and pre-approves only its tools and commands that read history and open work", () => {
+    const command = new ClaudeCodeProvider().buildCommand(
+      build({
+        kind: "thread",
+        project_id: "proj_1",
+        state: "working",
+        runtime_access_mode: READ_ONLY_ACCESS,
+      }),
+    );
+
+    expect(command).not.toContain("--dangerously-skip-permissions");
+    expect(command).not.toContain("--permission-mode");
+    expect(flagValues(command, "--allowedTools")).toEqual([
+      ...THREAD_TOOL_NAMES.map(claudeMcpToolName),
+      ...READ_ONLY_COMMANDS,
+    ]);
+    expect(READ_ONLY_COMMANDS.every((rule) => /^Bash\((git|gh) [a-z ]+:\*\)$/.test(rule))).toBe(
+      true,
+    );
+    expect(flagValues(command, "--disallowedTools")).toEqual(THREAD_DISALLOWED_TOOLS);
   });
 
   test("a thread runs like the person's own Claude Code plus the thread tools, with the access its project chose", () => {

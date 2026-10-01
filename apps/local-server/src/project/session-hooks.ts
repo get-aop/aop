@@ -228,7 +228,8 @@ const reportedThreadIds = async (
     .execute();
   const ids = answered.flatMap(({ origin_json }) => {
     const origin = parseMessageOrigin(origin_json);
-    return origin?.type === "thread-report" ? [origin.threadId] : [];
+    // The survey's first report asks for a summary that links the thread: it gets no card.
+    return origin?.type === "thread-report" && !origin.kickoff ? [origin.threadId] : [];
   });
   return [...new Set(ids)];
 };

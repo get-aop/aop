@@ -5,6 +5,7 @@ import { COORDINATOR_V4_STATEMENTS } from "./coordinator-v4.ts";
 import { DEFAULT_RUNTIME_V9_STATEMENTS } from "./default-runtime-v9.ts";
 import { DROP_RUNTIME_PROFILES_V11_STATEMENTS } from "./drop-runtime-profiles-v11.ts";
 import { EXEC_HOSTS_V8_STATEMENTS } from "./exec-hosts-v8.ts";
+import { PROJECT_KICKOFF_V12_STATEMENTS } from "./project-kickoff-v12.ts";
 import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
 import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
@@ -36,6 +37,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 9, name: "default-runtime", statements: DEFAULT_RUNTIME_V9_STATEMENTS },
   { version: 10, name: "suggestion-answers", statements: SUGGESTION_ANSWERS_V10_STATEMENTS },
   { version: 11, name: "drop-runtime-profiles", statements: DROP_RUNTIME_PROFILES_V11_STATEMENTS },
+  { version: 12, name: "project-kickoff", statements: PROJECT_KICKOFF_V12_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

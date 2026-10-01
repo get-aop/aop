@@ -5,6 +5,7 @@ import { nextChatTurnIndex } from "../chat-session/turn-order.ts";
 import type { ChatSession } from "../db/schema.ts";
 import type { PublisherTransaction } from "../event-log/publisher.ts";
 import { recordMessageCreated, recordThreadUpserted } from "../project/events.ts";
+import { takeSurveyAsk } from "../project/kickoff.ts";
 import { toWireMessage } from "../project/wire-messages.ts";
 import { hasQueuedMessage } from "../scheduling/queue.ts";
 import { createThreadRepository, type ThreadPatch } from "./repository.ts";
@@ -78,7 +79,12 @@ const reportToCoordinator = async (
 ): Promise<string[]> => {
   const outcome = reportOutcome(thread, turn.end);
   if (!outcome) return [];
-  return postThreadReport(tx, thread, outcome, reportText(thread, outcome, turn.text));
+  const text = reportText(thread, outcome, turn.text);
+  // A new project's survey that finished asks the coordinator for its summary and proposals.
+  const ask = outcome === "finished" ? await takeSurveyAsk(tx, thread) : null;
+  return ask
+    ? postThreadReport(tx, thread, outcome, `${text}\n\n${ask}`, { kickoff: true })
+    : postThreadReport(tx, thread, outcome, text);
 };
 
 /**
@@ -91,6 +97,7 @@ export const postThreadReport = async (
   thread: Pick<Thread, "id" | "projectId">,
   outcome: ThreadReportOutcome,
   text: string,
+  options: { kickoff?: true } = {},
 ): Promise<string[]> => {
   const coordinator = await tx.db
     .selectFrom("chat_sessions")
@@ -117,6 +124,7 @@ export const postThreadReport = async (
         type: "thread-report",
         threadId: thread.id,
         outcome,
+        ...options,
       }),
     })
     .returningAll()

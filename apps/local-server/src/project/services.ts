@@ -10,6 +10,7 @@ import { createSuggestionService, type SuggestionService } from "../suggestion/s
 import { createThreadGit, type ThreadGit, type ThreadGitDeps } from "../thread/git.ts";
 import { createThreadService, type ThreadService } from "../thread/service.ts";
 import type { ChatEngine } from "./engine.ts";
+import { createProjectKickoff, type ProjectKickoff } from "./kickoff.ts";
 import { createMemoryService, type MemoryService } from "./memory-service.ts";
 import { createProjectService, type ProjectService } from "./service.ts";
 
@@ -21,6 +22,8 @@ export interface ProjectServices {
   /** The answers to the threads the coordinator proposes. */
   suggestions: SuggestionService;
   memory: MemoryService;
+  /** A new project's first open; the server resumes kickoffs a restart left pending (see server.ts). */
+  kickoff: ProjectKickoff;
   /** The git side of threads, for housekeeping that runs without a request. */
   git: ThreadGit;
   /** Watches the open pull requests of threads; the server starts it (see server.ts). */
@@ -37,10 +40,12 @@ export const createProjectServices = (
   // Pull request drafts run on the runtime the chat engine runs on, so one seam covers both.
   const git = createThreadGit(ctx, { createProviderFn: deps.createProviderFn, ...gitDeps });
   const threads = createThreadService(ctx, chat, git);
+  const kickoff = createProjectKickoff(ctx, threads);
   return {
     chat,
-    projects: createProjectService(ctx, chat, git),
+    projects: createProjectService(ctx, chat, git, kickoff),
     threads,
+    kickoff,
     suggestions: createSuggestionService(ctx, threads),
     memory: createMemoryService({ projects: ctx.projectRepository, memory: ctx.memoryRepository }),
     git,

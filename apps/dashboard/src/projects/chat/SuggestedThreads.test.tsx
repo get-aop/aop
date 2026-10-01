@@ -17,7 +17,13 @@ const { SuggestedThreads } = await import("./SuggestedThreads");
 afterEach(cleanup);
 
 const proposals: SuggestedThread[] = [
-  { id: "s1", title: "Add retry metrics", prompt: "Add metrics to every retry", repoId: null },
+  {
+    id: "s1",
+    title: "Add retry metrics",
+    prompt: "Add metrics to every retry",
+    reason: "Nobody can tell how often a retry fires.",
+    repoId: null,
+  },
   { id: "s2", title: "Load test", prompt: "Load test checkout", repoId: "repo_1" },
 ];
 
@@ -96,15 +102,47 @@ const row = (id: string) =>
 const stateOf = (id: string) => row(id).getAttribute("data-state");
 
 describe("SuggestedThreads", () => {
-  test("lists each proposal with its title and brief, waiting for an answer, and asks the host for nothing by itself", () => {
+  test("lists each proposal with its title and its reason, never the brief, waiting for an answer, and asks the host for nothing by itself", () => {
     const { calls } = setup();
 
     expect(screen.getAllByTestId("suggestion-title").map((title) => title.textContent)).toEqual([
       "Add retry metrics",
       "Load test",
     ]);
+    expect(within(row("s1")).getByTestId("suggestion-reason").textContent).toBe(
+      "Nobody can tell how often a retry fires.",
+    );
+    // A proposal stored before reasons existed shows its title alone.
+    expect(within(row("s2")).queryByTestId("suggestion-reason")).toBeNull();
+    expect(screen.queryByText("Add metrics to every retry")).toBeNull();
     expect(stateOf("s1")).toBe("pending");
     expect(calls).toEqual([]);
+  });
+
+  test("each row starts with an icon button named for it, and one button starts the rows still waiting, counting them", () => {
+    const { answers } = setup();
+
+    expect(within(row("s1")).getByTestId("suggestion-start").getAttribute("aria-label")).toBe(
+      "Start Add retry metrics",
+    );
+    expect(within(row("s1")).getByTestId("suggestion-start").textContent).toBe("");
+    expect(screen.getByTestId("suggestions-start-all").textContent).toBe("Start 2 threads");
+
+    answers({ s1: { state: "skipped" } });
+    expect(screen.getByTestId("suggestions-start-all").textContent).toBe("Start 1 thread");
+
+    answers({ s1: { state: "skipped" }, s2: { state: "started", threadId: "thr_s2" } });
+    expect(screen.queryByTestId("suggestions-start-all")).toBeNull();
+  });
+
+  test("Skip is a quiet control: hidden until the row is hovered or focused, except on a touch screen", () => {
+    setup();
+
+    const skip = within(row("s1")).getByTestId("suggestion-skip");
+    expect(skip.className).toContain("opacity-0");
+    expect(skip.className).toContain("group-hover/suggestion:opacity-100");
+    expect(skip.className).toContain("group-focus-within/suggestion:opacity-100");
+    expect(skip.className).toContain("pointer-coarse:opacity-100");
   });
 
   test("Start asks the host to start that suggestion of that message, and the row names the thread once the host says so", async () => {
@@ -128,7 +166,9 @@ describe("SuggestedThreads", () => {
     fireEvent.click(within(row("s1")).getByTestId("suggestion-start"));
 
     await waitFor(() => expect(stateOf("s1")).toBe("starting"));
-    expect(within(row("s1")).getByTestId("suggestion-start").textContent).toBe("Starting…");
+    const busy = within(row("s1")).getByTestId("suggestion-start");
+    expect(busy.getAttribute("aria-label")).toBe("Starting Add retry metrics");
+    expect(busy.getAttribute("aria-busy")).toBe("true");
     await act(async () => release());
     await waitFor(() => expect(stateOf("s1")).toBe("pending"));
   });
@@ -171,9 +211,9 @@ describe("SuggestedThreads", () => {
     expect(stateOf("s1")).toBe("pending");
   });
 
-  test("Start all starts what is still waiting, one after the other, in the order proposed", async () => {
+  test("Start N threads starts what is still waiting, one after the other, in the order proposed", async () => {
     const { calls, answers } = setup({ answers: { s1: { state: "skipped" } } });
-    expect(screen.queryByTestId("suggestions-start-all")).toBeNull();
+    expect(screen.getByTestId("suggestions-start-all").textContent).toBe("Start 1 thread");
     answers({});
 
     fireEvent.click(screen.getByTestId("suggestions-start-all"));

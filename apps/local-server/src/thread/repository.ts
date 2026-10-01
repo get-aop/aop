@@ -10,6 +10,7 @@ import {
   type ThreadTarget,
 } from "@aop/common";
 import { type Kysely, sql } from "kysely";
+import { READ_ONLY_ACCESS } from "../chat-session/run-profile.ts";
 import type { ChatSession, ChatSessionUpdate, Database } from "../db/schema.ts";
 
 /**
@@ -94,6 +95,8 @@ export const createThreadRepository = (
       .set({ runtime_access_mode: access })
       .where("project_id", "=", projectId)
       .where("kind", "=", "thread")
+      // A thread started read-only stays read-only: the project's access is what it could do.
+      .where("runtime_access_mode", "!=", READ_ONLY_ACCESS)
       .execute();
   },
 });

@@ -42,7 +42,7 @@ describe("migration v11 on a database that ran versions 1 to 10", () => {
       .execute();
     const before = (await tableNames(db)).filter((name) => name !== "runtime_profiles");
 
-    await runMigrations(db);
+    await applyMigrations(db, migrationsThrough(11));
 
     expect(await tableNames(db)).toEqual(before);
     expect(

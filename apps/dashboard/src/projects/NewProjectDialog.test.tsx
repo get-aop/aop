@@ -107,6 +107,7 @@ describe("NewProjectDialog", () => {
       goal: "Keep checkout fast",
       instructions: "Never touch the payments schema.",
       repoIds: ["repo_1"],
+      lookAround: true,
     });
     await waitFor(() => expect(getDialogs().newProject).toBe(false));
     expect(stub.calls.adopted.map((project) => project.id)).toEqual(["new"]);
@@ -128,7 +129,31 @@ describe("NewProjectDialog", () => {
     fireEvent.click(screen.getByTestId("new-project-submit"));
 
     await waitFor(() => expect(created).toHaveLength(1));
-    expect(created[0]?.body).toEqual({ name: "Scratch", goal: "", instructions: "", repoIds: [] });
+    expect(created[0]?.body).toEqual({
+      name: "Scratch",
+      goal: "",
+      instructions: "",
+      repoIds: [],
+      lookAround: true,
+    });
+  });
+
+  test("the coordinator looks around first unless the box is cleared, and the dialog says it spends usage", async () => {
+    renderDialog();
+    const box = await screen.findByTestId("new-project-look-around");
+    expect(box.getAttribute("aria-checked")).toBe("true");
+    const option = screen.getByTestId("new-project-look-around-option");
+    expect(option.textContent).toContain("Let the coordinator look around first");
+    expect(option.textContent).toContain("read-only thread");
+    expect(option.textContent).toContain("uses your Claude usage");
+
+    fireEvent.click(box);
+    expect(box.getAttribute("aria-checked")).toBe("false");
+    type("new-project-name", "Quiet");
+    fireEvent.click(screen.getByTestId("new-project-submit"));
+
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0]?.body.lookAround).toBe(false);
   });
 
   test("counts the instructions against the limit", async () => {
@@ -163,7 +188,7 @@ describe("NewProjectDialog", () => {
     act(() => announceRepoAttached("repo_2"));
 
     await waitFor(() => expect(screen.getAllByTestId("new-project-repo")).toHaveLength(2));
-    const checked = screen
+    const checked = within(screen.getByTestId("new-project-repos"))
       .getAllByRole("checkbox")
       .filter((box) => box.getAttribute("aria-checked") === "true");
     expect(checked).toHaveLength(1);

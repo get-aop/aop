@@ -84,6 +84,25 @@ describe("planTurn", () => {
     expect(readEchoedSystemPrompt((without as { text: string }).text)).toBeNull();
   });
 
+  test("links ends the reply with each thread link the prompt holds, once, and none from the marker", () => {
+    const prompt = [
+      "Thread report: see [Survey](thread:isess_1) and [Fix it](thread:isess_2).",
+      "Again: [Survey](thread:isess_1).",
+      '[fake: say="Details are in" links calls=\'[{"name":"x","arguments":{"t":"[No](thread:isess_9)"}}]\']',
+    ].join("\n");
+
+    const { ending } = planTurn(parseDirectives(prompt), { ...ctx, prompt });
+
+    expect(ending).toEqual({
+      kind: "success",
+      text: "Details are in [Survey](thread:isess_1) [Fix it](thread:isess_2)",
+    });
+    expect(plan('say="Nothing to link" links').ending).toEqual({
+      kind: "success",
+      text: "Nothing to link",
+    });
+  });
+
   test("a reply without the directive echoes nothing", () => {
     const { ending } = planTurn(parseDirectives("x"), { ...ctx, systemPrompt: "secret brief" });
 
