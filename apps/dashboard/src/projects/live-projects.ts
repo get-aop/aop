@@ -206,7 +206,9 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
 
   const refresh = async () => {
     try {
-      setState(setProjectList(state, await api.listProjects()));
+      const projects = await api.listProjects();
+      // Read `state` only once the list is here: a snapshot that landed meanwhile must survive.
+      setState(setProjectList(state, projects));
     } catch (error) {
       // A device that is not paired is the pairing screen's business, not an error to show.
       if (!isUnauthenticated(error)) setState(setListError(state, describe(error)));

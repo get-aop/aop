@@ -95,6 +95,27 @@ describe("startup", () => {
     expect(h.live.getState().byId.a?.connection).toBe("live");
   });
 
+  test("a project list that answers after the threads loaded keeps them loaded", async () => {
+    const a = makeProject({ id: "a" });
+    const h = await started([a], { a: [makeThread({ id: "t1", projectId: "a" })] });
+    // A busy browser holds the poll's list request back until after the snapshot has landed.
+    let releaseList: (projects: Project[]) => void = () => {};
+    h.api.listProjects.mockImplementationOnce(
+      () => new Promise<Project[]>((resolve) => (releaseList = resolve)),
+    );
+    await h.poll();
+
+    h.sourceOf("a").emit("resync", { cursor: 4, reason: "start" }, "4");
+    await flush();
+    expect(h.live.getState().byId.a?.threadsLoaded).toBe(true);
+
+    releaseList([a]);
+    await flush();
+
+    expect(h.live.getState().byId.a?.threadsLoaded).toBe(true);
+    expect(h.live.getState().byId.a?.threads.map((t) => t.id)).toEqual(["t1"]);
+  });
+
   test("an unreachable host is an error to show, not a silent empty list", async () => {
     const h = harness([]);
     h.api.listProjects.mockImplementationOnce(async () => {
