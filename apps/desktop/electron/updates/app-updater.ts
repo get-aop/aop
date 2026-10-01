@@ -20,11 +20,11 @@ export interface AppUpdaterDeps {
   mode: UpdateMode;
   appVersion: string;
   arch: string;
-  /** `AOP_GITHUB_API_URL`. */
-  apiBase?: string;
+  /** `AOP_RELEASE_FEED_URL`. */
+  feedOrigin?: string;
   fetch: FetchLike;
   /** Builds electron-updater's adapter. Called only in `auto` mode, so `notice` never loads it. */
-  createAutoUpdater: () => AutoUpdaterPort;
+  createAutoUpdater: (feedOrigin?: string) => AutoUpdaterPort;
   /** Runs `run` after `delayMs` and returns what cancels it. */
   schedule: (run: () => void, delayMs: number) => () => void;
   onChange: (state: AppUpdateState) => void;
@@ -73,7 +73,7 @@ export const createAppUpdater = (deps: AppUpdaterDeps): AppUpdater => {
       fetch: deps.fetch,
       appVersion: deps.appVersion,
       arch: deps.arch,
-      apiBase: deps.apiBase,
+      feedOrigin: deps.feedOrigin,
     });
     download = newer?.downloadUrl ?? newer?.releaseUrl ?? null;
     set(
@@ -112,7 +112,7 @@ export const createAppUpdater = (deps: AppUpdaterDeps): AppUpdater => {
     start: () => {
       if (deps.mode === "off") return;
       if (deps.mode === "auto") {
-        autoUpdater = deps.createAutoUpdater();
+        autoUpdater = deps.createAutoUpdater(deps.feedOrigin);
         listen(autoUpdater);
       }
       void look();

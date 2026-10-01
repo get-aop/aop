@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { RELEASE_REPO } from "@aop/common";
 import { createElectronBuilderConfig } from "../desktop/electron-builder-config";
 import { RELEASE_CHECKSUM_ARTIFACTS, RELEASE_UPDATER_FILES } from "./checksums";
 import { resolveWindowsInstallerArtifacts } from "./windows-installer";
@@ -44,11 +43,14 @@ describe("Windows app updater wiring", () => {
     expect(packager).toContain('"--publish",\n      "never"');
   });
 
-  test("electron-builder writes the update feed for the same GitHub Releases the host reads", () => {
+  test("electron-builder points the installed app at getaop.com/latest/, where deploy-r2 puts latest.yml", async () => {
     const config = createElectronBuilderConfig({ version: "0.10.0", notarize: false });
-    const [owner = "", repo = ""] = RELEASE_REPO.split("/");
+    const r2 = await readFile(join(ROOT, "scripts/release/deploy-r2.sh"), "utf8");
 
-    expect(config.publish).toEqual([{ provider: "github", owner, repo }]);
+    // The repository is private, so GitHub Releases cannot be the feed of an installed app.
+    expect(config.publish).toEqual([{ provider: "generic", url: "https://getaop.com/latest/" }]);
+    expect(r2).toMatch(/^ {2}upload_feed_document "latest\/latest\.yml"/m);
+    expect(r2).toMatch(/^upload_optional_artifact "aop-windows-x64-setup\.exe\.blockmap"/m);
     expect(config.nsis).toMatchObject({ oneClick: true, perMachine: false });
   });
 

@@ -11,9 +11,11 @@ describe("local-publish release planning", () => {
       "Build release binaries",
       "Package signed macOS DMGs",
       "Generate checksums",
+      "Write release notes",
       "Create GitHub Release",
       "Deploy release assets to R2",
       "Verify the published install script",
+      "Verify the published release feed",
     ]);
     expect(plan.steps[0]?.command).toEqual(["bun", "run", "build:release"]);
     expect(plan.steps[1]?.command).toEqual([
@@ -24,8 +26,16 @@ describe("local-publish release planning", () => {
       "--version",
       "0.2.20",
     ]);
-    expect(plan.steps[3]?.command).toContain("v0.2.20");
-    expect(plan.steps[4]?.command).toEqual(["bash", "scripts/release/deploy-r2.sh", "0.2.20"]);
+    expect(plan.steps[3]?.command).toEqual([
+      "bun",
+      "run",
+      "./scripts/release/release-notes.ts",
+      "v0.2.20",
+      "get-aop/aop-mono",
+      "dist/release-notes.md",
+    ]);
+    expect(plan.steps[4]?.command).toContain("v0.2.20");
+    expect(plan.steps[5]?.command).toEqual(["bash", "scripts/release/deploy-r2.sh", "0.2.20"]);
   });
 
   test("builds the Windows desktop installer on a Windows host", () => {
@@ -55,12 +65,14 @@ describe("local-publish release planning", () => {
     expect(plan.steps.map((step) => step.label)).not.toContain("Package Windows desktop installer");
   });
 
-  test("never waits on a latest/version feed", () => {
+  test("waits for the install script and the release feed, never a latest/version file", () => {
     const plan = buildLocalReleasePlan({ version: "0.2.20", platform: "darwin" });
 
-    const verify = plan.steps.at(-1);
-    expect(verify?.command.join(" ")).not.toContain("latest/version");
-    expect(verify?.command.join(" ")).toContain('^DEFAULT_VERSION="0.2.20"');
+    const [install, feed] = plan.steps.slice(-2).map((step) => step.command.join(" "));
+    expect(`${install} ${feed}`).not.toContain("latest/version");
+    expect(install).toContain('^DEFAULT_VERSION="0.2.20"');
+    expect(feed).toContain("https://getaop.com/releases/latest.json");
+    expect(feed).toContain('"version": "0.2.20"');
   });
 
   test("skips the R2 deploy and its verification together", () => {
@@ -70,6 +82,7 @@ describe("local-publish release planning", () => {
     expect(plan.steps.map((step) => step.label)).not.toContain(
       "Verify the published install script",
     );
+    expect(plan.steps.map((step) => step.label)).not.toContain("Verify the published release feed");
   });
 
   test("can skip expensive build phases when artifacts already exist", () => {
@@ -82,9 +95,11 @@ describe("local-publish release planning", () => {
 
     expect(plan.steps.map((step) => step.label)).toEqual([
       "Generate checksums",
+      "Write release notes",
       "Create GitHub Release",
       "Deploy release assets to R2",
       "Verify the published install script",
+      "Verify the published release feed",
     ]);
   });
 });

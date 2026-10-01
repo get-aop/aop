@@ -542,6 +542,10 @@ Environment=AOP_LOCAL_SERVER_URL=${LOCAL_SERVER_URL}
 Environment=AOP_DASHBOARD_URL=${DASHBOARD_URL}
 Environment=NODE_ENV=production
 Environment=PATH=${env_path}
+# Agent runs are detached processes that outlive the server: a restart (an update, a crash)
+# stops only the server, and the next one picks the runs up. Without this, systemd would stop
+# every process the server started.
+KillMode=process
 Restart=on-failure
 RestartSec=5
 

@@ -41,6 +41,16 @@ describe("buildGhReleaseArgs", () => {
   });
 });
 
+describe("buildGhReleaseArgs with written notes", () => {
+  test("uses the notes file instead of GitHub's guess", () => {
+    const args = buildGhReleaseArgs("v0.2.20", "get-aop/aop-mono", [], "dist/release-notes.md");
+
+    expect(args).toContain("--notes-file");
+    expect(args).toContain("dist/release-notes.md");
+    expect(args).not.toContain("--generate-notes");
+  });
+});
+
 describe("buildGhUploadArgs", () => {
   test("attaches artifacts to an existing release, clobbering same-named assets", () => {
     const args = buildGhUploadArgs("v0.2.20", "get-aop/aop-mono", [

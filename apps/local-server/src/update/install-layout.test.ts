@@ -21,7 +21,13 @@ describe("install layout", () => {
       "aop-linux-x64",
     );
     expect(detectPlatform("win32", "x64")).toBeNull();
+    expect(detectPlatform("linux", "x64", true)).toEqual({ os: "linux", arch: "x64" });
     expect(detectPlatform("linux", "ia32")).toBeNull();
+  });
+
+  test("an x64 host running under Rosetta updates to the arm64 build", () => {
+    expect(detectPlatform("darwin", "x64", true)).toEqual({ os: "darwin", arch: "arm64" });
+    expect(detectPlatform("darwin", "x64", false)).toEqual({ os: "darwin", arch: "x64" });
   });
 
   test("reads the port the way aop run does", () => {

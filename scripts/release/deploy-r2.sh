@@ -67,6 +67,9 @@ upload_artifact "aop-macos-arm64.dmg" "application/x-apple-diskimage" "public, m
 upload_optional_artifact "aop-windows-x64-setup.exe" "application/octet-stream" "public, max-age=31536000, immutable"
 upload_artifact "runtime-assets.tar.gz" "application/gzip" "public, max-age=31536000, immutable"
 upload_artifact "checksums.sha256" "text/plain; charset=utf-8" "public, max-age=31536000, immutable"
+# electron-updater fetches the blockmaps of the new and the installed version beside their
+# installers to download only what changed (it falls back to the whole installer without them).
+upload_optional_artifact "aop-windows-x64-setup.exe.blockmap" "application/octet-stream" "public, max-age=31536000, immutable"
 
 upload_object() {
   local key="$1"
@@ -83,8 +86,11 @@ upload_object() {
 }
 
 verify_artifact_available() {
-  local name="$1"
-  local url="${PUBLIC_BASE}/v${VERSION}/${name}"
+  verify_url_available "${PUBLIC_BASE}/v${VERSION}/$1"
+}
+
+verify_url_available() {
+  local url="$1"
   local attempt
 
   for ((attempt = 1; attempt <= VERIFY_ATTEMPTS; attempt++)); do
@@ -98,7 +104,7 @@ verify_artifact_available() {
     fi
   done
 
-  echo "Release artifact never became publicly available: ${url}" >&2
+  echo "Release file never became publicly available: ${url}" >&2
   return 1
 }
 
@@ -124,11 +130,43 @@ upload_latest_alias "aop-macos-arm64.dmg" "application/x-apple-diskimage"
 upload_latest_alias "aop-macos-x64.dmg" "application/x-apple-diskimage"
 upload_latest_alias "aop-windows-x64-setup.exe" "application/octet-stream"
 
+# The release feed (scripts/release/release-feed.ts): every updater reads it, because the GitHub
+# repository is private. The versioned documents go up and are probed first; then the pointers
+# flip: releases/latest.json (the host, `aop update` and the macOS app), its GitHub-shaped copy
+# (what AOP 0.10.0 to 0.10.4 read when pointed here) and latest/latest.yml (the Windows app).
+FEED_DIR="$(mktemp -d)"
+INSTALL_SCRIPT="$(mktemp)"
+trap 'rm -rf "$FEED_DIR" "$INSTALL_SCRIPT"' EXIT
+NOTES_FILE="${AOP_RELEASE_NOTES_FILE:-dist/release-notes.md}"
+bun "$SCRIPT_DIR/release-feed.ts" --dir "$RELEASE_DIR" --version "$VERSION" \
+  --notes-file "$NOTES_FILE" --published-at "${AOP_RELEASE_PUBLISHED_AT:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
+  --origin "$PUBLIC_BASE" --out "$FEED_DIR"
+
+upload_feed_document() {
+  local key="$1"
+  local content_type="$2"
+  upload_object "$key" "${FEED_DIR}/${key}" "$content_type" "public, max-age=300, must-revalidate"
+}
+
+upload_feed_document "releases/v${VERSION}.json" "application/json"
+upload_feed_document "releases/v${VERSION}.md" "text/plain; charset=utf-8"
+verify_url_available "${PUBLIC_BASE}/releases/v${VERSION}.json"
+verify_url_available "${PUBLIC_BASE}/releases/v${VERSION}.md"
+
+if [ -f "${FEED_DIR}/latest/latest.yml" ]; then
+  upload_feed_document "latest/latest.yml" "text/yaml; charset=utf-8"
+fi
+upload_feed_document "repos/get-aop/aop-mono/releases/latest" "application/json"
+upload_feed_document "releases/latest.json" "application/json"
+
+# AOP 0.9 read this file and nothing has written it since; a stale version there misleads
+# whoever reads it, so it goes. Deleting a key that is already gone is not an error.
+echo "Removing the retired latest/version pointer"
+npx --yes wrangler@4 r2 object delete "${BUCKET}/latest/version" --remote || true
+
 # The host install script is this release's commit point. It carries the release's own version, so
 # `curl .../install.sh | sh` installs exactly this release and no "latest version" file is needed.
 # Publish it last so nobody is pointed at a release whose assets have not propagated yet.
-INSTALL_SCRIPT="$(mktemp)"
-trap 'rm -f "$INSTALL_SCRIPT"' EXIT
 sed "s/^DEFAULT_VERSION=\"__AOP_VERSION__\"/DEFAULT_VERSION=\"${VERSION}\"/" "$SCRIPT_DIR/../installer/install.sh" > "$INSTALL_SCRIPT"
 if ! grep -q "^DEFAULT_VERSION=\"${VERSION}\"" "$INSTALL_SCRIPT"; then
   echo "install.sh does not carry a DEFAULT_VERSION placeholder to stamp" >&2

@@ -2,21 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { ReleaseInfo } from "@aop/common";
+import { fetchLatestRelease } from "./release-feed.ts";
 import { stageRelease } from "./stage.ts";
 import { swapIn } from "./swap.ts";
-import { createInstall, localStageTools, PLATFORM, startFakeRelease } from "./test-utils.ts";
+import {
+  BINARY_ASSET,
+  createInstall,
+  FAKE_TOKEN,
+  localStageTools,
+  PLATFORM,
+  startFakeRelease,
+} from "./test-utils.ts";
 
 const releaseOf = async (options: Parameters<typeof startFakeRelease>[0]) => {
   const fake = await startFakeRelease(options);
-  const body = (await (await fetch(`${fake.apiUrl}/repos/x/y/releases/latest`)).json()) as {
-    assets: { name: string; browser_download_url: string }[];
-  };
-  const release: ReleaseInfo = {
-    version: options.version,
-    url: `${fake.apiUrl}/notes`,
-    assets: Object.fromEntries(body.assets.map((a) => [a.name, a.browser_download_url])),
-  };
+  const release = await fetchLatestRelease({ origin: fake.url, github: null });
   return { fake, release };
 };
 
@@ -33,6 +33,43 @@ describe("stageRelease", () => {
     expect(await readFile(join(layout.dashboardDir, "index.html"), "utf8")).toBe(
       "dashboard 0.9.51",
     );
+    fake.stop();
+  });
+
+  test("checks the files against the feed's digests, without fetching checksums.sha256", async () => {
+    const layout = await createInstall("0.9.51");
+    const { fake, release } = await releaseOf({ version: "0.10.0" });
+
+    await stageRelease(release, PLATFORM, layout, localStageTools());
+
+    expect(fake.requests.some((line) => line.includes("checksums.sha256"))).toBe(false);
+    fake.stop();
+  });
+
+  test("a binary that does not match the feed's digest is refused and the install is untouched", async () => {
+    const layout = await createInstall("0.9.51");
+    const { fake, release } = await releaseOf({ version: "0.10.0", corruptBinary: true });
+
+    await expect(stageRelease(release, PLATFORM, layout, localStageTools())).rejects.toThrow(
+      `Checksum verification failed for ${BINARY_ASSET}`,
+    );
+
+    expect((await readdir(layout.installDir)).sort()).toEqual(["aop", "dashboard"]);
+    expect(await readFile(layout.binaryPath, "utf8")).toContain("0.9.51");
+    fake.stop();
+  });
+
+  test("a GitHub release, which lists no digests, is checked against its checksums.sha256", async () => {
+    const layout = await createInstall("0.9.51");
+    const fake = await startFakeRelease({ version: "0.10.0", feedDown: true, corruptBinary: true });
+    const github = { apiUrl: fake.url, repo: "get-aop/aop-mono", token: FAKE_TOKEN };
+    const release = await fetchLatestRelease({ origin: fake.url, github });
+
+    await expect(stageRelease(release, PLATFORM, layout, localStageTools())).rejects.toThrow(
+      `Checksum verification failed for ${BINARY_ASSET}`,
+    );
+
+    expect(fake.requests).toContain(`/api/assets/checksums.sha256 Bearer ${FAKE_TOKEN}`);
     fake.stop();
   });
 

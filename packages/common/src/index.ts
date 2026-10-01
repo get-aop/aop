@@ -27,6 +27,17 @@ export {
 export type { FieldLabels, ValidationIssue } from "./issues.ts";
 export { describeFirstIssue, describeIssue, describeIssuesByField } from "./issues.ts";
 export * from "./projects/index.ts";
+export type { ReleaseFeed, ReleaseFeedFile } from "./release-feed.ts";
+export {
+  describeReleaseFile,
+  desktopUpdaterFeedUrl,
+  latestReleaseFeedUrl,
+  parseReleaseFeed,
+  RELEASE_FEED_ORIGIN,
+  ReleaseFeedSchema,
+  releaseFeedUrl,
+  releaseNotesUrl,
+} from "./release-feed.ts";
 export { suggestSessionBranchName } from "./session-branch.ts";
 export type { SseMessage } from "./sse.ts";
 export { readSseBody } from "./sse.ts";
@@ -113,7 +124,7 @@ export type {
   SwitchSessionGitBranchResult,
 } from "./types/session-git.ts";
 export type { SSEServerStatus } from "./types/sse-events.ts";
-export type { ReleaseInfo, UpdateStatus } from "./updates.ts";
+export type { ReleaseAsset, ReleaseInfo, UpdateStatus } from "./updates.ts";
 export {
   GITHUB_API_URL,
   GithubReleaseSchema,

@@ -68,8 +68,8 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// `AOP_GITHUB_API_URL` points the app at a fake release feed; it is how the updater is tested.
-const feedOverride = process.env.AOP_GITHUB_API_URL?.trim() || undefined;
+// `AOP_RELEASE_FEED_URL` points the app at a fake release feed; it is how the updater is tested.
+const feedOverride = process.env.AOP_RELEASE_FEED_URL?.trim() || undefined;
 
 let mainWindow: BrowserWindow | null = null;
 let finishingQuit = false;
@@ -175,7 +175,7 @@ async function start(): Promise<void> {
     }),
     appVersion: packageInfo.version,
     arch: process.arch,
-    apiBase: feedOverride,
+    feedOrigin: feedOverride,
     fetch: fetchImpl,
     createAutoUpdater: createElectronUpdaterPort,
     schedule: timer,

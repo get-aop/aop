@@ -119,6 +119,11 @@ cli
       process.env.AOP_BUILD_VERSION = BUILD_VERSION;
     }
 
+    // No SIGTERM handler, on purpose: launchd, systemd and `aop update` stop the host with
+    // SIGTERM, and the default action ends it at once, like a crash. The agent runs are detached
+    // processes, so they keep working and the next host picks them up (chat-session recovery).
+    // The graceful shutdown in local-server/src/run.ts stops every run, which a restart for an
+    // update must not do.
     await startServer({
       port,
       dashboardStaticPath: dashboardPath,
@@ -140,8 +145,8 @@ cli
 
 cli.command("stop", "Stop the local server").action(async () => {
   // `aop run` under the systemd unit never writes a PID file, so the PID-file stop
-  // below would silently do nothing. Stop the unit when it manages this server; the
-  // unit teardown also reaps server child processes.
+  // below would silently do nothing. Stop the unit when it manages this server; its detached
+  // agent runs keep going (KillMode=process), as they do under launchd.
   if (process.platform === "linux") {
     try {
       if (isSystemdUserServiceActive(spawnSystemctl)) {

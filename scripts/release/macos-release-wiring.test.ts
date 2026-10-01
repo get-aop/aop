@@ -168,7 +168,10 @@ describe("release wiring", () => {
     );
     expect(r2).toMatch(/^upload_latest_alias "aop-windows-x64-setup\.exe"/m);
     expect(r2).toMatch(/^upload_object "install\.sh"/m);
-    expect(r2).not.toContain("latest/version");
+    expect(r2).toMatch(/^upload_feed_document "releases\/latest\.json" "application\/json"/m);
+    // The retired 0.9 pointer is only ever deleted, never written again.
+    expect(r2).not.toMatch(/^upload_\w+ "latest\/version"/m);
+    expect(r2).toMatch(/wrangler@4 r2 object delete "\$\{BUCKET\}\/latest\/version"/);
     expect(r2).not.toContain("install.ps1");
     expect(r2).not.toContain("aop-windows-x64.exe");
   });

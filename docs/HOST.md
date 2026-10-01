@@ -76,7 +76,7 @@ The desktop app is a client of one host. It bundles the dashboard and serves it 
 - **Where the token lives.** In the operating system's keychain, through Electron's `safeStorage`: Keychain on macOS, DPAPI on Windows. The app writes the encrypted value to `device-tokens.json` in its data folder, mode `0600`, and refuses to pair on a machine where the keychain is unavailable. The dashboard receives the token in memory when it starts and never writes it to local storage.
 - **Connection state.** The window title, the Host menu and the app's own status screen say whether the host is connected, unreachable, refusing this device (`unauthorized`, for example after it was revoked on the host) or on another API version. The app checks every fifteen seconds, faster while the host is away. It brings its status screen forward when the host turns the device away, and returns to the dashboard on its own when the host comes back. **Change Host** in the menu, or on that screen, pairs with another host; **Disconnect** removes the device from the host and forgets the token.
 - **Notifications.** The app's main process, not the dashboard, follows every active project's event stream with the token and raises an operating system notification when a coordinator posts, a thread needs the person, a thread fails, or a pull request merges or closes without merging. It runs in the main process because a notification is about any project, not the one on screen, must reach the person with the window closed, and needs the token that only the main process holds. Each project's notification level decides: `coordinator` (the default) is those events, `every-turn` adds each finished thread turn, and `off` is silence. It stays quiet while the app is in front, and it does not announce what happened more than two minutes earlier, so a laptop that wakes up does not bury the person in old news.
-- **Updates.** The apps update from the published GitHub Releases of get-aop/aop-mono. The Windows app downloads new versions in the background and installs them when you restart it. The macOS app shows "Update available (x.y.z)" in its window title and a menu with a link to the new DMG until it is signed ([Releasing](./RELEASE.md#desktop-app-updates)). Set `AOP_DESKTOP_DISABLE_UPDATES=1` in the app's environment to turn the check off.
+- **Updates.** The apps update from the release feed on getaop.com (the repository is private, so its GitHub Releases cannot be read). The Windows app downloads new versions in the background and installs them when you restart it. The macOS app shows "Update available (x.y.z)" in its window title and a menu with a link to the new DMG until it is signed ([Releasing](./RELEASE.md#desktop-app-updates)). Set `AOP_DESKTOP_DISABLE_UPDATES=1` in the app's environment to turn the check off.
 - **Host and app on different releases.** The status screen, the Host menu and the window title say when the host is newer than the app (update the app) or older (run `aop update` on the host). It is a notice only; the API version handshake still decides whether they can talk.
 - **Windows.** Windows is a client only. It bundles no server and has no host mode, and there is no Windows host, CLI or server build at all.
 - **First launch, unsigned builds.** The builds are not signed yet, so the operating system warns once. On macOS, Gatekeeper says the app cannot be verified: right-click `AOP.app`, choose **Open**, or allow it under System Settings, Privacy & Security, **Open Anyway** (`xattr -dr com.apple.quarantine /Applications/AOP.app` clears the download flag). On Windows, SmartScreen says "Windows protected your PC": choose **More info**, then **Run anyway**. [Releasing](./RELEASE.md#signing-is-off) says how signing gets turned on.
@@ -100,14 +100,14 @@ Revoking takes effect on the device's next request, and the host closes any even
 
 ## Updating the host
 
-An installed host (the `aop` binary from `install.sh`) updates itself from the newest published GitHub Release of get-aop/aop-mono. The first release that can do this is 0.10.0; an older host has no `aop update` and updates once by running the installer again.
+An installed host (the `aop` binary from `install.sh`) updates itself from the release feed on getaop.com, `https://getaop.com/releases/latest.json`, which the release workflow publishes with every release ([Releasing](./RELEASE.md#the-release-feed)). The first release that can do this is 0.10.0; an older host has no `aop update` and updates once by running the installer again. AOP 0.10.0 to 0.10.4 read the repository's GitHub Releases instead, which answer 404 because the repository is private; see [Updating from 0.10.0 to 0.10.4](#updating-from-0100-to-0104).
 
 ```bash
 aop update --check    # only report whether a newer release is published
 aop update            # download, verify, install and restart
 ```
 
-`aop update` downloads the binary for this machine and `runtime-assets.tar.gz`, and checks both against the release's `checksums.sha256`, the way `install.sh` does. It then runs the new binary once (`--version`) to see that it starts and is the release it claims to be. Only then does it replace the binary and the `dashboard` folder next to it, keeping the old ones aside, and restart the host the way it runs:
+`aop update` downloads the binary for this machine (an x64 host that runs through Rosetta on Apple silicon gets the arm64 build) and `runtime-assets.tar.gz`, and checks both against the sha256 the feed lists for them, the same digests as the release's `checksums.sha256` that `install.sh` checks. A file that does not match is deleted and the update stops with nothing changed. It then runs the new binary once (`--version`) to see that it starts and is the release it claims to be. Only then does it replace the binary and the `dashboard` folder next to it, keeping the old ones aside, and restart the host the way it runs:
 
 | How the host runs | Restart |
 | --- | --- |
@@ -116,13 +116,26 @@ aop update            # download, verify, install and restart
 | `aop run --background` | stop the recorded process, then `aop run --background` again on the same port |
 | `aop run` in a terminal, or installed with `--no-service` and not running | nothing can restart it: the files are replaced and `aop update` says to restart it yourself |
 
+A restart does not stop the agents at work. Chat and thread runs are detached processes: the old host ends at once on the restart's SIGTERM (the installed `aop run` has no graceful shutdown that would stop them, and the systemd unit has `KillMode=process`), the runs keep going, and the new host picks each one up where it is, as after a crash. A unit written by `install.sh` before 0.10.5 lacks `KillMode=process`, so on Linux run the installer once more to get it.
+
 If the new host does not report the new version within a minute, or cannot be started, the old binary and dashboard are put back and started again, and the update reports why. The data folder (`~/.aop`) is never touched; database migrations run when the new host starts, as on any start. Only an `aop` that is the installed binary can update: one running from a source checkout says so and does nothing.
 
 ### The notice in the dashboard
 
 The host looks for a newer release once a day, about half a minute after it starts and then whenever the last look is a day old, and keeps the result in `~/.aop/update-check.json`, so restarts do not ask again. The dashboard shows a quiet "Update available (x.y.z)" bar with a link to the release notes to every signed-in client. On the host itself, the owner also gets **Update now**: it starts `aop update` in a separate process, the page shows that it is updating, and it reloads on its own once the host answers on the new version. A paired device sees the notice but no button, and `POST /api/updates/apply` answers `403` to it. If an update fails, the bar says why and offers Retry; the log of the run is `~/.aop/logs/update.log`.
 
-To turn the check off, switch off **Check for updates** in Settings (the `update_check` setting, `"true"` by default). The host then never contacts GitHub by itself; `aop update` still works when you run it.
+To turn the check off, switch off **Check for updates** in Settings (the `update_check` setting, `"true"` by default). The host then never contacts the feed by itself; `aop update` still works when you run it. Nothing installs an update on its own: the setting only looks, and **Update now** or `aop update` installs.
+
+### Where the host looks
+
+The feed comes first. When it cannot be read and the host's environment holds a GitHub token (`AOP_GITHUB_TOKEN`, then `GH_TOKEN`, then `GITHUB_TOKEN`) that can read the private repository, the host reads the newest GitHub Release instead and downloads its files with the token, checking them against that release's `checksums.sha256`. The token goes to the GitHub API only, never to the storage GitHub redirects the download to. Without a token there is no fallback, and the check reports why the feed failed.
+
+### Updating from 0.10.0 to 0.10.4
+
+These releases read `https://api.github.com/repos/get-aop/aop-mono/releases/latest`, which answers 404, so they never see a newer release. Either:
+
+- run the installer once more (`curl -fsSL https://getaop.com/install.sh | sh`); every release after that updates in the app; or
+- point the running host at getaop.com, which also publishes the feed in the GitHub shape those releases read (at `/repos/get-aop/aop-mono/releases/latest`): add `AOP_GITHUB_API_URL=https://getaop.com` to the service's environment (the `EnvironmentVariables` dictionary of `~/Library/LaunchAgents/com.aop.local-server.plist`, then `launchctl unload` and `launchctl load -w` it; on Linux an `Environment=` line in `~/.config/systemd/user/aop-local-server.service`, then `systemctl --user daemon-reload` and a restart). **Update now** then works. Remove the line after the update; newer releases do not need it.
 
 The API:
 
@@ -183,8 +196,10 @@ A proxy that rewrites `Host` to `127.0.0.1` and adds no forwarding header passes
 | `AOP_LOCAL_SERVER_PORT` | none, required | Port the server listens on. |
 | `AOP_BIND_HOST` | `127.0.0.1` | Address the server listens on. Set `0.0.0.0` to serve the network directly over plain HTTP. |
 | `AOP_ALLOWED_ORIGINS` | none | Comma-separated browser origins, besides the API's own and the desktop app's `app://aop`, that may call the API. |
-| `AOP_GITHUB_API_URL` | `https://api.github.com` | Where the update check and `aop update` look for the newest release. Tests and trials point it at a fake feed. |
-| `AOP_GITHUB_REPO` | `get-aop/aop-mono` | The repository whose releases are the feed. |
+| `AOP_RELEASE_FEED_URL` | `https://getaop.com` | The origin of the release feed the update check and `aop update` read (`/releases/latest.json`). Tests and trials point it at a fake feed. The desktop app reads the same variable. |
+| `AOP_GITHUB_TOKEN` | none (`GH_TOKEN`, `GITHUB_TOKEN` also work) | A token that reads the private repository turns on the GitHub fallback when the feed cannot be read. |
+| `AOP_GITHUB_API_URL` | `https://api.github.com` | The GitHub API the fallback reads. |
+| `AOP_GITHUB_REPO` | `get-aop/aop-mono` | The repository whose releases the fallback reads. |
 | `AOP_PR_POLL_INTERVAL_MS` | none (adaptive) | Milliseconds between looks at an open pull request, for a fixed pace instead of the adaptive one. See [Threads and git](./THREADS.md#watching-the-pull-request). |
 
 Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over plain HTTP, so use it only on a network you trust, and the browser will not treat the page as a secure context. If you bind one specific non-loopback address, the host's own agents can no longer reach the MCP endpoint at `127.0.0.1`; set `AOP_MCP_URL` to an address they can reach.

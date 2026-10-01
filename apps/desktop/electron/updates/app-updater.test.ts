@@ -3,9 +3,20 @@ import type { AppUpdateState } from "../../src/backend/types";
 import { type AppUpdaterDeps, type AutoUpdaterPort, createAppUpdater } from "./app-updater";
 
 const release = (tag: string) => ({
-  tag_name: tag,
-  html_url: `https://github.com/get-aop/aop-mono/releases/tag/${tag}`,
-  assets: [{ name: "aop-macos-arm64.dmg", browser_download_url: "https://dl/aop-macos-arm64.dmg" }],
+  schemaVersion: 1,
+  version: tag.replace(/^v/, ""),
+  publishedAt: "2026-10-02T00:00:00Z",
+  notes: "",
+  notesUrl: `https://getaop.com/releases/${tag}.md`,
+  files: [
+    {
+      name: "aop-macos-arm64.dmg",
+      kind: "desktop",
+      url: "https://dl.test/aop-macos-arm64.dmg",
+      sha256: "c".repeat(64),
+      size: 1,
+    },
+  ],
 });
 
 const fakePort = () => {
@@ -30,7 +41,7 @@ const setup = (overrides: Partial<AppUpdaterDeps> = {}) => {
   const states: AppUpdateState[] = [];
   const scheduled: { run: () => void; delayMs: number; cancelled: boolean }[] = [];
   const fake = fakePort();
-  const createAutoUpdater = mock(() => fake.port);
+  const createAutoUpdater = mock((_feedOrigin?: string) => fake.port);
   const updater = createAppUpdater({
     mode: "notice",
     appVersion: "0.9.51",
@@ -64,10 +75,10 @@ describe("notice mode (the macOS app until it is signed)", () => {
       {
         status: "available",
         version: "0.10.0",
-        releaseUrl: "https://github.com/get-aop/aop-mono/releases/tag/v0.10.0",
+        releaseUrl: "https://getaop.com/releases/v0.10.0.md",
       },
     ]);
-    expect(updater.downloadUrl()).toBe("https://dl/aop-macos-arm64.dmg");
+    expect(updater.downloadUrl()).toBe("https://dl.test/aop-macos-arm64.dmg");
     expect(createAutoUpdater).not.toHaveBeenCalled();
   });
 
@@ -129,6 +140,18 @@ describe("auto mode (Windows, and macOS once signed)", () => {
       { status: "ready", version: "0.10.0" },
     ]);
     expect(updater.downloadUrl()).toBeNull();
+  });
+
+  test("hands electron-updater the feed override, so a test feed serves latest.yml too", async () => {
+    const { updater, createAutoUpdater } = setup({
+      mode: "auto",
+      feedOrigin: "http://127.0.0.1:9",
+    });
+
+    updater.start();
+    await settle();
+
+    expect(createAutoUpdater).toHaveBeenCalledWith("http://127.0.0.1:9");
   });
 
   test("restarts into the update only once it is downloaded", async () => {

@@ -46,7 +46,7 @@ const createHarness = async (
     isEnabled: async () => enabled,
     supported: options.supported ?? true,
     current: options.current ?? "0.9.51",
-    feed: { apiUrl: release.apiUrl, repo: "get-aop/aop-mono" },
+    feed: { origin: release.url, github: null },
     startUpdater:
       options.startUpdater ??
       (async () => {
@@ -84,7 +84,7 @@ describe("update service status", () => {
     expect(status).toMatchObject({
       latest: "0.10.0",
       available: true,
-      releaseUrl: `${h.release.apiUrl}/releases/tag/v0.10.0`,
+      releaseUrl: `${h.release.url}/releases/v0.10.0.md`,
       checkError: null,
     });
     expect((await readCheckRecord(h.home))?.latest).toBe("0.10.0");
@@ -105,7 +105,7 @@ describe("update service status", () => {
 
   test("an unreachable feed is an error message, not a failure of the host", async () => {
     const h = await createHarness();
-    h.deps.feed = { apiUrl: "http://127.0.0.1:1", repo: "get-aop/aop-mono" };
+    h.deps.feed = { origin: "http://127.0.0.1:1", github: null };
 
     const status = await createUpdateService(h.deps).check();
 
@@ -122,7 +122,9 @@ describe("update service status", () => {
     h.clock.now += 31_000;
     await service.check();
 
-    expect(h.release.requests.filter((path) => path.endsWith("/releases/latest"))).toHaveLength(2);
+    expect(
+      h.release.requests.filter((line) => line.startsWith("/releases/latest.json ")),
+    ).toHaveLength(2);
   });
 
   test("follows the setting", async () => {
@@ -243,7 +245,7 @@ describe("the daily check", () => {
     const h = await createHarness();
     const service = createUpdateService(h.deps);
     const asks = () =>
-      h.release.requests.filter((path) => path.endsWith("/releases/latest")).length;
+      h.release.requests.filter((line) => line.startsWith("/releases/latest.json ")).length;
 
     await service.runDueCheck();
     await service.runDueCheck();

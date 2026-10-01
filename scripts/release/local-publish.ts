@@ -4,6 +4,7 @@
 import { join } from "node:path";
 import cac from "cac";
 import { readRootVersion } from "./bump-version.ts";
+import { RELEASE_NOTES_PATH } from "./release-notes.ts";
 import { normalizeReleaseVersion } from "./versioning.ts";
 
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
@@ -85,6 +86,11 @@ export const buildLocalReleasePlan = ({
   });
 
   if (!skipGitHubRelease) {
+    // The same notes go on the GitHub Release and, through deploy-r2.sh, into the feed.
+    steps.push({
+      label: "Write release notes",
+      command: ["bun", "run", "./scripts/release/release-notes.ts", tag, repo, RELEASE_NOTES_PATH],
+    });
     // Resolves present artifacts at execution time so a host that cannot build the
     // Windows installer (e.g. macOS local-publish) still publishes the rest cleanly.
     steps.push({
@@ -104,6 +110,14 @@ export const buildLocalReleasePlan = ({
         "sh",
         "-c",
         `for i in $(seq 1 12); do curl -fsSL https://getaop.com/install.sh | grep -q '^DEFAULT_VERSION="${normalized}"' && exit 0; sleep 10; done; exit 1`,
+      ],
+    });
+    steps.push({
+      label: "Verify the published release feed",
+      command: [
+        "sh",
+        "-c",
+        `for i in $(seq 1 12); do curl -fsSL https://getaop.com/releases/latest.json | grep -q '"version": "${normalized}"' && exit 0; sleep 10; done; exit 1`,
       ],
     });
   }

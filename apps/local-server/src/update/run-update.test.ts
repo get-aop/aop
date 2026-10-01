@@ -15,7 +15,14 @@ const run = async (input: Partial<Parameters<typeof runUpdate>[0]> & { feedUrl?:
     execPath: "/irrelevant/aop",
     checkOnly: false,
     print: (line) => lines.push(line),
-    env: { ...process.env, AOP_GITHUB_API_URL: input.feedUrl ?? "http://127.0.0.1:1" },
+    // No token from the shell running the tests: GitHub must never be asked.
+    env: {
+      ...process.env,
+      AOP_GITHUB_TOKEN: "",
+      GH_TOKEN: "",
+      GITHUB_TOKEN: "",
+      AOP_RELEASE_FEED_URL: input.feedUrl ?? "http://127.0.0.1:1",
+    },
     ...input,
   });
   return { code, output: lines.join("\n") };
@@ -26,19 +33,19 @@ describe("runUpdate", () => {
     const release = await startFakeRelease({ version: "0.10.0" });
     stopAfter.push(release.stop);
 
-    const { code, output } = await run({ checkOnly: true, feedUrl: release.apiUrl });
+    const { code, output } = await run({ checkOnly: true, feedUrl: release.url });
 
     expect(code).toBe(0);
     expect(output).toContain("AOP 0.10.0 is available (you have 0.9.51)");
-    expect(output).toContain(`Release notes: ${release.apiUrl}/releases/tag/v0.10.0`);
-    expect(release.requests.filter((path) => path.startsWith("/download"))).toEqual([]);
+    expect(output).toContain(`Release notes: ${release.url}/releases/v0.10.0.md`);
+    expect(release.requests.filter((line) => line.startsWith("/v0.10.0/"))).toEqual([]);
   });
 
   test("--check says so when there is nothing newer", async () => {
     const release = await startFakeRelease({ version: "0.9.51" });
     stopAfter.push(release.stop);
 
-    const { code, output } = await run({ checkOnly: true, feedUrl: release.apiUrl });
+    const { code, output } = await run({ checkOnly: true, feedUrl: release.url });
 
     expect(code).toBe(0);
     expect(output).toBe("AOP 0.9.51 is up to date.");
@@ -75,7 +82,7 @@ describe("runUpdate", () => {
     process.env.AOP_HOME = home;
     let result: Awaited<ReturnType<typeof run>>;
     try {
-      result = await run({ execPath: layout.binaryPath, feedUrl: release.apiUrl });
+      result = await run({ execPath: layout.binaryPath, feedUrl: release.url });
     } finally {
       process.env.AOP_HOME = previousHome;
     }

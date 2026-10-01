@@ -57,10 +57,10 @@ describe("Electron Builder configuration", () => {
     expect(config.nsis).toMatchObject({ oneClick: true, perMachine: false });
   });
 
-  test("publishes to the GitHub Releases the host updates from, so the Windows build writes latest.yml", () => {
+  test("publishes a generic feed on getaop.com, so the Windows build writes latest.yml", () => {
     const config = createElectronBuilderConfig({ version: "0.9.49", notarize: false });
 
-    expect(config.publish).toEqual([{ provider: "github", owner: "get-aop", repo: "aop-mono" }]);
+    expect(config.publish).toEqual([{ provider: "generic", url: "https://getaop.com/latest/" }]);
     expect(config.win.artifactName).toMatch(/^aop-windows-.+-setup\./);
   });
 });

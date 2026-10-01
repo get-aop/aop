@@ -28,14 +28,20 @@ export const detectInstall = (
 ): InstallLayout | null =>
   buildVersion?.trim() && basename(execPath) === "aop" ? layoutOf(execPath) : null;
 
-/** The platform this host runs on, or null for one the releases do not ship a host for. */
+/**
+ * The platform this host runs on, or null for one the releases do not ship a host for. An x64
+ * host that macOS runs through Rosetta (`translated`) is on Apple silicon, so the update brings
+ * it the arm64 build, which runs natively.
+ */
 export const detectPlatform = (
   platform: string = process.platform,
   arch: string = process.arch,
+  translated = false,
 ): HostPlatform | null => {
   const os = platform === "darwin" || platform === "linux" ? platform : null;
   const cpu = arch === "x64" || arch === "arm64" ? arch : null;
-  return os && cpu ? { os, arch: cpu } : null;
+  if (!os || !cpu) return null;
+  return { os, arch: os === "darwin" && translated ? "arm64" : cpu };
 };
 
 /** The release asset holding the host binary for `platform`, named as install.sh names it. */

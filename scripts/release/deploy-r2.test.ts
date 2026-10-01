@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { appendFile, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseReleaseFeed } from "@aop/common";
+import { generateReleaseChecksums } from "./checksums.ts";
 
 const SCRIPT = join(import.meta.dir, "deploy-r2.sh");
 const VERSION = "9.9.9";
@@ -18,7 +20,12 @@ const REQUIRED_ARTIFACTS = [
   "runtime-assets.tar.gz",
   "checksums.sha256",
 ];
-const OPTIONAL_ARTIFACTS = ["aop-windows-x64-setup.exe"];
+const OPTIONAL_ARTIFACTS = ["aop-windows-x64-setup.exe", "aop-windows-x64-setup.exe.blockmap"];
+const FEED_POINTERS = [
+  "latest/latest.yml",
+  "repos/get-aop/aop-mono/releases/latest",
+  "releases/latest.json",
+];
 
 describe("deploy-r2.sh release commit point", () => {
   test("publishes the stamped install script last, after verifying every artifact on the public CDN", async () => {
@@ -68,13 +75,62 @@ describe("deploy-r2.sh release commit point", () => {
     expect(uploadedScript).toContain('[ "$DEFAULT_VERSION" = "__AOP_VERSION__" ]');
   });
 
-  test("publishes no version feed, Windows host binary or PowerShell installer", async () => {
+  test("publishes the release feed after the artifacts are public and before install.sh", async () => {
+    const harness = await createHarness();
+
+    const result = await harness.run();
+
+    expect(result.exitCode).toBe(0);
+    const lines = await harness.readCallLog();
+    const lastArtifactProbe = Math.max(
+      ...REQUIRED_ARTIFACTS.map((name) => verifyIndex(lines, name)),
+    );
+    const versioned = ["releases/v9.9.9.json", "releases/v9.9.9.md"].map((key) =>
+      uploadIndex(lines, key),
+    );
+    const feedProbes = ["releases/v9.9.9.json", "releases/v9.9.9.md"].map((key) =>
+      lines.indexOf(`curl -fsSIL -o /dev/null ${PUBLIC_BASE}/${key}`),
+    );
+    const pointers = FEED_POINTERS.map((key) => uploadIndex(lines, key));
+    for (const index of [...versioned, ...feedProbes, ...pointers]) {
+      expect(index).toBeGreaterThan(lastArtifactProbe);
+    }
+    expect(Math.min(...feedProbes)).toBeGreaterThan(Math.max(...versioned));
+    expect(Math.min(...pointers)).toBeGreaterThan(Math.max(...feedProbes));
+    expect(uploadIndex(lines, "releases/latest.json")).toBe(Math.max(...pointers));
+    expect(Math.max(...pointers)).toBeLessThan(uploadIndex(lines, "install.sh"));
+    expect(lines[uploadIndex(lines, "releases/latest.json")]).toContain(
+      "--content-type application/json",
+    );
+  });
+
+  test("the published feed describes this release with the notes and public URLs", async () => {
+    const harness = await createHarness();
+    await harness.writeNotes("## What's Changed\n* The feed");
+
+    await harness.run();
+
+    const release = parseReleaseFeed(
+      JSON.parse(await harness.readUploadedFile("releases/latest.json")),
+    );
+    expect(release?.version).toBe(VERSION);
+    expect(release?.notes).toBe("## What's Changed\n* The feed");
+    expect(release?.url).toBe(`${PUBLIC_BASE}/releases/v${VERSION}.md`);
+    expect(release?.assets["aop-darwin-arm64"]?.url).toBe(artifactUrl("aop-darwin-arm64"));
+    expect(await harness.readUploadedFile("latest/latest.yml")).toContain(
+      `url: ${artifactUrl("aop-windows-x64-setup.exe")}`,
+    );
+  });
+
+  test("retires latest/version and publishes no Windows host binary or PowerShell installer", async () => {
     const harness = await createHarness();
 
     await harness.run();
 
     const lines = await harness.readCallLog();
-    expect(lines.some((line) => line.includes("latest/version"))).toBe(false);
+    expect(lines.filter((line) => line.includes("latest/version"))).toEqual([
+      `npx --yes wrangler@4 r2 object delete ${BUCKET}/latest/version --remote`,
+    ]);
     expect(lines.some((line) => line.includes("install.ps1"))).toBe(false);
     expect(lines.some((line) => line.includes("aop-windows-x64.exe"))).toBe(false);
   });
@@ -99,12 +155,13 @@ describe("deploy-r2.sh release commit point", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain(
-      `Release artifact never became publicly available: ${artifactUrl("aop-darwin-arm64")}`,
+      `Release file never became publicly available: ${artifactUrl("aop-darwin-arm64")}`,
     );
     const lines = await harness.readCallLog();
     // Nobody is pointed at a release with missing assets.
     expect(uploadIndex(lines, "install.sh")).toBe(-1);
     expect(uploadIndex(lines, "latest/aop-macos-arm64.dmg")).toBe(-1);
+    expect(uploadIndex(lines, "releases/latest.json")).toBe(-1);
     expect(countProbes(lines, "aop-darwin-arm64")).toBe(2);
   });
 
@@ -136,6 +193,7 @@ type Harness = {
   markUnavailable: (name: string) => Promise<void>;
   markUnavailableOnce: (name: string) => Promise<void>;
   readUploadedFile: (key: string) => Promise<string>;
+  writeNotes: (notes: string) => Promise<void>;
 };
 
 type RunResult = { exitCode: number; stdout: string; stderr: string };
@@ -149,7 +207,15 @@ const createHarness = async ({ withOptionalArtifacts = true } = {}): Promise<Har
   const artifacts = withOptionalArtifacts
     ? [...REQUIRED_ARTIFACTS, ...OPTIONAL_ARTIFACTS]
     : REQUIRED_ARTIFACTS;
-  await Promise.all(artifacts.map((name) => writeFile(join(releaseDir, name), `stub ${name}`)));
+  const stubs = artifacts.filter((name) => name !== "checksums.sha256");
+  await Promise.all(stubs.map((name) => writeFile(join(releaseDir, name), `stub ${name}`)));
+  if (withOptionalArtifacts) {
+    await writeFile(
+      join(releaseDir, "latest.yml"),
+      "version: 9.9.9\nfiles:\n  - url: aop-windows-x64-setup.exe\npath: aop-windows-x64-setup.exe\n",
+    );
+  }
+  await generateReleaseChecksums(releaseDir);
 
   const binDir = join(workDir, "bin");
   await mkdir(binDir);
@@ -181,6 +247,7 @@ const createHarness = async ({ withOptionalArtifacts = true } = {}): Promise<Har
     markUnavailable: (name) => appendFile(unavailablePath, `${artifactUrl(name)}\n`),
     markUnavailableOnce: (name) => appendFile(unavailableOncePath, `${artifactUrl(name)}\n`),
     readUploadedFile: (key) => readFile(join(uploadsDir, key.replaceAll("/", "__")), "utf8"),
+    writeNotes: (notes) => writeFile(join(workDir, "notes.md"), notes),
   };
 };
 
@@ -212,6 +279,7 @@ const runScript = async (options: RunScriptOptions): Promise<RunResult> => {
       AOP_RELEASES_PUBLIC_BASE_URL: PUBLIC_BASE,
       AOP_RELEASES_VERIFY_ATTEMPTS: "3",
       AOP_RELEASES_VERIFY_DELAY_SECONDS: "0",
+      AOP_RELEASE_NOTES_FILE: join(options.workDir, "notes.md"),
       AOP_TEST_CALL_LOG: options.callLogPath,
       AOP_TEST_UPLOADS_DIR: options.uploadsDir,
       AOP_TEST_CURL_UNAVAILABLE: options.unavailablePath,

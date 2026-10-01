@@ -3,6 +3,7 @@
 
 import { join } from "node:path";
 import { resolvePresentReleaseArtifacts, resolvePresentUpdaterFiles } from "./checksums.ts";
+import { RELEASE_NOTES_PATH } from "./release-notes.ts";
 
 const RELEASE_DIR = process.env.RELEASE_DIR ?? "dist/release";
 const CHECKSUMS_FILE = "checksums.sha256";
@@ -31,7 +32,12 @@ export const resolveReleaseAssets = async (releaseDir: string): Promise<string[]
  * partial local build (e.g. macOS host with no Windows installer) still publishes
  * cleanly instead of failing on a missing file.
  */
-export const buildGhReleaseArgs = (tag: string, repo: string, artifacts: string[]): string[] => [
+export const buildGhReleaseArgs = (
+  tag: string,
+  repo: string,
+  artifacts: string[],
+  notesFile: string | null = null,
+): string[] => [
   "release",
   "create",
   tag,
@@ -39,7 +45,7 @@ export const buildGhReleaseArgs = (tag: string, repo: string, artifacts: string[
   repo,
   "--title",
   `AOP ${tag}`,
-  "--generate-notes",
+  ...(notesFile ? ["--notes-file", notesFile] : ["--generate-notes"]),
   ...artifacts,
 ];
 
@@ -92,7 +98,8 @@ const main = async (): Promise<void> => {
     await run(buildGhUploadArgs(tag, repo, artifacts));
   } else {
     console.log(`Creating GitHub release ${tag} with ${artifacts.length} artifact(s)`);
-    await run(buildGhReleaseArgs(tag, repo, artifacts));
+    const notes = (await Bun.file(RELEASE_NOTES_PATH).exists()) ? RELEASE_NOTES_PATH : null;
+    await run(buildGhReleaseArgs(tag, repo, artifacts, notes));
   }
 };
 

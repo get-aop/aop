@@ -2,8 +2,9 @@ import { z } from "zod";
 import { normalizeReleaseVersion } from "./version.ts";
 
 /**
- * The repository whose published GitHub Releases are the update feed for every AOP piece: the
- * host (`aop update`), the Windows app (electron-updater) and the macOS app's notice.
+ * The repository whose GitHub Releases the release workflow creates. It is private, so the
+ * updaters read the public feed on getaop.com (release-feed.ts) and fall back to these releases
+ * only with a token.
  */
 export const RELEASE_REPO = "get-aop/aop-mono";
 
@@ -22,22 +23,46 @@ export const GithubReleaseSchema = z.object({
   html_url: z.string().min(1),
   draft: z.boolean().optional(),
   prerelease: z.boolean().optional(),
+  body: z.string().nullish(),
   assets: z
-    .array(z.object({ name: z.string().min(1), browser_download_url: z.string().min(1) }))
+    .array(
+      z.object({
+        name: z.string().min(1),
+        browser_download_url: z.string().min(1),
+        /** The API address of the asset, which a token can download from a private repository. */
+        url: z.string().optional(),
+      }),
+    )
     .default([]),
 });
+
+/** One file of a release and, when the source says it, the sha256 it must have. */
+export interface ReleaseAsset {
+  url: string;
+  sha256: string | null;
+  /** Sent with the download: the token a private repository's asset needs. */
+  headers?: Record<string, string>;
+}
 
 export interface ReleaseInfo {
   /** `x.y.z`, without the tag's `v`. */
   version: string;
-  /** The release page, which holds the notes. */
+  /** The release notes page. */
   url: string;
-  /** Asset name to download URL. */
-  assets: Record<string, string>;
+  /** The notes themselves (markdown), when the source carries them. */
+  notes: string | null;
+  /** Asset name to where it downloads from. */
+  assets: Record<string, ReleaseAsset>;
 }
 
-/** Reads GitHub's release JSON into what an updater needs, or null when it is not a usable release. */
-export const parseGithubRelease = (json: unknown): ReleaseInfo | null => {
+/**
+ * Reads GitHub's release JSON into what an updater needs, or null when it is not a usable
+ * release. `assetUrls: "api"` takes each asset's API address, the one a token can download.
+ */
+export const parseGithubRelease = (
+  json: unknown,
+  { assetUrls = "browser" }: { assetUrls?: "browser" | "api" } = {},
+): ReleaseInfo | null => {
   const parsed = GithubReleaseSchema.safeParse(json);
   if (!parsed.success || parsed.data.draft || parsed.data.prerelease) return null;
   const version = normalizeReleaseVersion(parsed.data.tag_name);
@@ -45,7 +70,13 @@ export const parseGithubRelease = (json: unknown): ReleaseInfo | null => {
   return {
     version,
     url: parsed.data.html_url,
-    assets: Object.fromEntries(parsed.data.assets.map((a) => [a.name, a.browser_download_url])),
+    notes: parsed.data.body ?? null,
+    assets: Object.fromEntries(
+      parsed.data.assets.map((a) => [
+        a.name,
+        { url: assetUrls === "api" && a.url ? a.url : a.browser_download_url, sha256: null },
+      ]),
+    ),
   };
 };
 

@@ -1,7 +1,7 @@
 import { chmod, mkdtemp, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { normalizeReleaseVersion, type ReleaseInfo } from "@aop/common";
-import { downloadAsset, verifyChecksum } from "./download.ts";
+import { digestInChecksums, downloadAsset, verifyDigest } from "./download.ts";
 import { type HostPlatform, hostAssetName, type InstallLayout } from "./install-layout.ts";
 import { CHECKSUMS_NAME, type FetchFn, messageOf, RUNTIME_ASSETS_NAME } from "./release-feed.ts";
 
@@ -24,8 +24,9 @@ export interface StageTools {
 }
 
 /**
- * Downloads the host binary and the dashboard for `release`, checks both against the release's
- * `checksums.sha256`, and proves the binary runs and is the release it claims to be. It stages
+ * Downloads the host binary and the dashboard for `release`, checks both against the sha256 the
+ * feed lists for them (or, for a source that lists none, the release's `checksums.sha256`), and
+ * proves the binary runs and is the release it claims to be. It stages
  * next to the install (same filesystem, so the swap is a rename); nothing in the install
  * changes here, and the staging folder is removed when this throws.
  */
@@ -61,16 +62,14 @@ const fill = async (
   tools: StageTools,
 ): Promise<StagedRelease> => {
   const binaryName = hostAssetName(platform);
-  const checksumsFile = join(dir, CHECKSUMS_NAME);
-  await downloadNamed(release, CHECKSUMS_NAME, checksumsFile, tools.fetch);
-  const checksums = await Bun.file(checksumsFile).text();
+  const expected = await expectedDigests(release, [binaryName, RUNTIME_ASSETS_NAME], dir, tools);
 
   const binary = join(dir, binaryName);
   const archive = join(dir, RUNTIME_ASSETS_NAME);
   await downloadNamed(release, binaryName, binary, tools.fetch);
-  await verifyChecksum(checksums, binaryName, binary);
+  await verifyDigest(binaryName, binary, expected.get(binaryName) ?? null);
   await downloadNamed(release, RUNTIME_ASSETS_NAME, archive, tools.fetch);
-  await verifyChecksum(checksums, RUNTIME_ASSETS_NAME, archive);
+  await verifyDigest(RUNTIME_ASSETS_NAME, archive, expected.get(RUNTIME_ASSETS_NAME) ?? null);
 
   const unpacked = join(dir, "unpacked");
   await tools.extract(archive, unpacked);
@@ -86,15 +85,33 @@ const fill = async (
   return { dir, binary, dashboard };
 };
 
+// The feed lists every file's sha256; GitHub does not, so that source needs checksums.sha256.
+const expectedDigests = async (
+  release: ReleaseInfo,
+  names: string[],
+  dir: string,
+  tools: StageTools,
+): Promise<Map<string, string | null>> => {
+  const listed = new Map(names.map((name) => [name, release.assets[name]?.sha256 ?? null]));
+  if ([...listed.values()].every(Boolean)) return listed;
+  const checksumsFile = join(dir, CHECKSUMS_NAME);
+  await downloadNamed(release, CHECKSUMS_NAME, checksumsFile, tools.fetch);
+  const checksums = await Bun.file(checksumsFile).text();
+  for (const [name, digest] of listed) {
+    listed.set(name, digest ?? digestInChecksums(checksums, name));
+  }
+  return listed;
+};
+
 const downloadNamed = async (
   release: ReleaseInfo,
   name: string,
   path: string,
   fetchFn: FetchFn,
 ): Promise<void> => {
-  const url = release.assets[name];
-  if (!url) throw new Error(`Release ${release.version} has no ${name}`);
-  await downloadAsset(name, url, path, fetchFn);
+  const asset = release.assets[name];
+  if (!asset) throw new Error(`Release ${release.version} has no ${name}`);
+  await downloadAsset(name, asset, path, fetchFn);
 };
 
 const requireFile = async (path: string, label: string): Promise<void> => {

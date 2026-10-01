@@ -37,12 +37,11 @@ describe("createSystemUpdateDeps", () => {
     const layout = await createInstall("0.9.51");
 
     const deps = createSystemUpdateDeps(layout, "0.9.51", () => {}, {
-      AOP_GITHUB_API_URL: "http://127.0.0.1:1",
-      AOP_GITHUB_REPO: "someone/fork",
+      AOP_RELEASE_FEED_URL: "http://127.0.0.1:1",
       AOP_LOCAL_SERVER_PORT: "26001",
     });
 
-    expect(deps.feed).toEqual({ apiUrl: "http://127.0.0.1:1", repo: "someone/fork" });
+    expect(deps.feed).toEqual({ origin: "http://127.0.0.1:1", github: null });
     expect(deps.planInput.port).toBe(26001);
   });
 

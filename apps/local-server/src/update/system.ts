@@ -19,7 +19,7 @@ export const createSystemUpdateDeps = (
   log: (line: string) => void,
   env: NodeJS.ProcessEnv = process.env,
 ): UpdateDeps => {
-  const platform = detectPlatform();
+  const platform = detectPlatform(process.platform, process.arch, runsUnderRosetta());
   if (!platform)
     throw new Error(`No AOP host is published for ${process.platform}-${process.arch}`);
   const port = hostPort(env);
@@ -95,6 +95,16 @@ const runCommand = async (
 ): Promise<number> => {
   const proc = Bun.spawn(command, { stdout: "ignore", stderr: "ignore", env });
   return proc.exited;
+};
+
+/** macOS says `1` for `sysctl.proc_translated` when this x64 process runs through Rosetta. */
+export const runsUnderRosetta = (): boolean => {
+  if (process.platform !== "darwin" || process.arch !== "x64") return false;
+  const result = Bun.spawnSync(["sysctl", "-in", "sysctl.proc_translated"], {
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  return result.exitCode === 0 && result.stdout.toString().trim() === "1";
 };
 
 export const runsBinary = (pid: number, binaryPath: string): boolean => {

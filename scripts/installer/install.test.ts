@@ -46,6 +46,17 @@ describe("install.sh preflight", () => {
 clear_local_server_port()`);
   });
 
+  test("a service restart (an update) stops the host but leaves its detached agent runs running", async () => {
+    const script = await readFile(INSTALLER, "utf8");
+    const entrypoint = await readFile(join(import.meta.dir, "entrypoint.ts"), "utf8");
+
+    // systemd would otherwise stop every process in the unit's control group.
+    expect(script).toMatch(/^KillMode=process$/m);
+    // launchd's SIGTERM must end the installed host like a crash, not run the graceful shutdown
+    // that stops every chat run.
+    expect(entrypoint).not.toMatch(/process\.(on|once)\(\s*"SIG/);
+  });
+
   test("blocks before install when Git is missing", async () => {
     const binDir = await createBinDir({
       uname: unameStub(),

@@ -3,6 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type InstallLayout, layoutOf } from "./install-layout.ts";
+import { downloadFetch } from "./release-feed.ts";
 import type { StageTools } from "./stage.ts";
 
 export const PLATFORM = { os: "darwin", arch: "arm64" } as const;
@@ -29,10 +30,11 @@ export const createInstall = async (version: string): Promise<InstallLayout> => 
 };
 
 export interface FakeRelease {
-  /** Base URL standing in for api.github.com. */
-  apiUrl: string;
+  /** The origin standing in for getaop.com (and for api.github.com, for the fallback). */
+  url: string;
   /** Files served, so a test can damage one before the download. */
   files: Map<string, Uint8Array>;
+  /** Each request as `<path> <authorization or "-">`. */
   requests: string[];
   stop: () => void;
 }
@@ -41,51 +43,117 @@ export interface FakeReleaseOptions {
   version: string;
   /** The binary prints nothing useful and exits 1. */
   brokenBinary?: boolean;
-  /** The binary differs from what `checksums.sha256` promised. */
+  /** The binary differs from what the feed and `checksums.sha256` promised. */
   corruptBinary?: boolean;
   /** Leaves the binary's line out of `checksums.sha256`. */
   omitBinaryChecksum?: boolean;
+  /** `releases/latest.json` answers 404, as before the first release that publishes it. */
+  feedDown?: boolean;
 }
 
-/** Serves a release of the repo the way GitHub does, for the updater to read and download. */
+export const FAKE_TOKEN = "ghp_test";
+
+/**
+ * Serves a release the way getaop.com does (`releases/latest.json` and the files), and the way
+ * GitHub serves a private repository's release to a token: the API asset address redirects to
+ * signed storage, which refuses a request that still carries the token.
+ */
 export const startFakeRelease = async (options: FakeReleaseOptions): Promise<FakeRelease> => {
   const files = await buildReleaseFiles(options);
+  const digests = new Map([...files].map(([name, data]) => [name, sha256(data)]));
+  if (options.corruptBinary) digests.set(BINARY_ASSET, sha256(PROMISED));
   const requests: string[] = [];
   const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     hostname: "127.0.0.1",
     fetch: (request): Response => {
       const { pathname } = new URL(request.url);
-      requests.push(pathname);
-      const base: string = `http://127.0.0.1:${server.port}`;
-      if (pathname.endsWith("/releases/latest")) {
-        return Response.json({
-          tag_name: `v${options.version}`,
-          html_url: `${base}/releases/tag/v${options.version}`,
-          assets: [...files.keys()].map((name) => ({
-            name,
-            browser_download_url: `${base}/download/${name}`,
-          })),
-        });
-      }
-      const file = files.get(decodeURIComponent(pathname.replace("/download/", "")));
-      return file ? new Response(file) : new Response("missing", { status: 404 });
+      const authorization = request.headers.get("authorization");
+      requests.push(`${pathname} ${authorization ?? "-"}`);
+      const base = `http://127.0.0.1:${server.port}`;
+      return routeFakeRelease({ pathname, authorization, base, options, files, digests });
     },
   });
   return {
-    apiUrl: `http://127.0.0.1:${server.port}`,
+    url: `http://127.0.0.1:${server.port}`,
     files,
     requests,
     stop: () => server.stop(true),
   };
 };
 
+const PROMISED = new TextEncoder().encode("what was promised");
+
+interface FakeRequest {
+  pathname: string;
+  authorization: string | null;
+  base: string;
+  options: FakeReleaseOptions;
+  files: Map<string, Uint8Array>;
+  digests: Map<string, string>;
+}
+
+const routeFakeRelease = (req: FakeRequest): Response => {
+  const { pathname, base, options, files } = req;
+  const name = decodeURIComponent(pathname.split("/").at(-1) ?? "");
+  if (pathname === "/releases/latest.json") {
+    return options.feedDown
+      ? new Response("missing", { status: 404 })
+      : Response.json(feedOf(options.version, base, files, req.digests));
+  }
+  if (pathname.endsWith("/releases/latest")) {
+    return withToken(req, () => Response.json(githubReleaseOf(options.version, base, files)));
+  }
+  if (pathname.startsWith("/api/assets/")) {
+    return withToken(req, () => Response.redirect(`${base}/signed/${name}`, 302));
+  }
+  if (pathname.startsWith("/signed/") && req.authorization) {
+    return new Response("only one auth mechanism allowed", { status: 400 });
+  }
+  const file = files.get(name);
+  return file ? new Response(file) : new Response("missing", { status: 404 });
+};
+
+// A private repository answers 404, not 401, to a request without its token.
+const withToken = (req: FakeRequest, respond: () => Response): Response =>
+  req.authorization === `Bearer ${FAKE_TOKEN}` ? respond() : new Response("", { status: 404 });
+
+const feedOf = (
+  version: string,
+  base: string,
+  files: Map<string, Uint8Array>,
+  digests: Map<string, string>,
+) => ({
+  schemaVersion: 1,
+  version,
+  publishedAt: "2026-10-02T00:00:00Z",
+  notes: `Notes of ${version}`,
+  notesUrl: `${base}/releases/v${version}.md`,
+  files: [...files].map(([name, data]) => ({
+    name,
+    kind: name === BINARY_ASSET ? "host" : "other",
+    url: `${base}/v${version}/${name}`,
+    sha256: digests.get(name),
+    size: data.byteLength,
+  })),
+});
+
+const githubReleaseOf = (version: string, base: string, files: Map<string, Uint8Array>) => ({
+  tag_name: `v${version}`,
+  html_url: `${base}/releases/tag/v${version}`,
+  assets: [...files.keys()].map((name) => ({
+    name,
+    url: `${base}/api/assets/${name}`,
+    browser_download_url: `${base}/download/${name}`,
+  })),
+});
+
 const buildReleaseFiles = async (options: FakeReleaseOptions): Promise<Map<string, Uint8Array>> => {
   const binary = new TextEncoder().encode(
     fakeBinary(options.version, { broken: options.brokenBinary }),
   );
   const archive = await buildRuntimeAssets(`dashboard ${options.version}`);
-  const listed = options.corruptBinary ? new TextEncoder().encode("what was promised") : binary;
+  const listed = options.corruptBinary ? PROMISED : binary;
   const lines = [`${sha256(archive)}  runtime-assets.tar.gz`];
   if (!options.omitBinaryChecksum) lines.push(`${sha256(listed)}  ${BINARY_ASSET}`);
   return new Map<string, Uint8Array>([
@@ -108,7 +176,7 @@ const sha256 = (data: Uint8Array): string => createHash("sha256").update(data).d
 
 /** Staging tools that do the real work on the machine, minus the OS signature. */
 export const localStageTools = (): StageTools => ({
-  fetch: (url) => fetch(url),
+  fetch: downloadFetch,
   extract: async (archive, into) => {
     await mkdir(into, { recursive: true });
     await Bun.spawn(["tar", "-xzf", archive, "-C", into]).exited;

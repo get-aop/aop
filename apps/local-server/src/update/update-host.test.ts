@@ -6,6 +6,7 @@ import type { InstallLayout } from "./install-layout.ts";
 import { LAUNCHD_LABEL } from "./restart.ts";
 import {
   createInstall,
+  FAKE_TOKEN,
   type FakeRelease,
   type FakeReleaseOptions,
   localStageTools,
@@ -53,8 +54,12 @@ const createHarness = async (
     layout,
     platform: PLATFORM,
     currentVersion: current,
-    feed: { apiUrl: fake.apiUrl, repo: "get-aop/aop-mono" },
-    fetch: (url) => fetch(url),
+    // GitHub is only asked when the feed is down, which a test asks for with `feedDown`.
+    feed: {
+      origin: fake.url,
+      github: { apiUrl: fake.url, repo: "get-aop/aop-mono", token: FAKE_TOKEN },
+    },
+    fetch: (url, init) => fetch(url, init),
     stageTools: localStageTools(),
     restartTools: {
       run: async (command) => {
@@ -148,8 +153,8 @@ describe("updateHost", () => {
     expect((await readdir(h.layout.installDir)).sort()).toEqual(["aop", "dashboard"]);
   });
 
-  test("refuses a file the checksums do not list", async () => {
-    const h = await createHarness({ version: "0.10.0", omitBinaryChecksum: true });
+  test("refuses a file the checksums do not list (the GitHub fallback, which lists no digests)", async () => {
+    const h = await createHarness({ version: "0.10.0", omitBinaryChecksum: true, feedDown: true });
 
     await expect(updateHost(h.deps)).rejects.toThrow("No checksum for aop-darwin-arm64");
 

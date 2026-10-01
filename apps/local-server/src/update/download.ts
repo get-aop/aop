@@ -1,18 +1,19 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { rm } from "node:fs/promises";
+import type { ReleaseAsset } from "@aop/common";
 import { CHECKSUMS_NAME, type FetchFn, messageOf } from "./release-feed.ts";
 
-/** Saves `url` to `path`. Assets are large, so the body is streamed to disk, not held in memory. */
+/** Saves `asset` to `path`. Assets are large, so the body is streamed to disk, not held in memory. */
 export const downloadAsset = async (
   name: string,
-  url: string,
+  asset: Pick<ReleaseAsset, "url" | "headers">,
   path: string,
   fetchFn: FetchFn,
 ): Promise<void> => {
   let response: Response;
   try {
-    response = await fetchFn(url);
+    response = await fetchFn(asset.url, asset.headers ? { headers: asset.headers } : undefined);
   } catch (error) {
     throw new Error(`Could not download ${name}: ${messageOf(error)}`);
   }
@@ -28,36 +29,36 @@ export const downloadAsset = async (
   }
 };
 
-/**
- * Checks `file` against its line in `checksums.sha256` (`<hex>  <name>`, what install.sh reads).
- * A missing line fails as firmly as a wrong digest: an unlisted file is an unverified one. The
- * file is deleted on failure so it can never be installed by mistake.
- */
-export const verifyChecksum = async (
-  checksums: string,
-  name: string,
-  file: string,
-): Promise<void> => {
-  const expected = expectedDigest(checksums, name);
-  if (!expected) {
-    await rm(file, { force: true });
-    throw new Error(`No checksum for ${name} in ${CHECKSUMS_NAME}`);
-  }
-  const actual = await sha256OfFile(file);
-  if (actual !== expected) {
-    await rm(file, { force: true });
-    throw new Error(
-      `Checksum verification failed for ${name} (expected ${expected}, got ${actual})`,
-    );
-  }
-};
-
-const expectedDigest = (checksums: string, name: string): string | null => {
+/** The digest `checksums.sha256` lists for `name` (`<hex>  <name>`, what install.sh reads). */
+export const digestInChecksums = (checksums: string, name: string): string | null => {
   for (const line of checksums.split("\n")) {
     const [digest, listed] = line.trim().split(/\s+/);
     if (listed === name && digest) return digest.toLowerCase();
   }
   return null;
+};
+
+/**
+ * Checks `file` against the sha256 the release promised for it. A missing digest fails as
+ * firmly as a wrong one: an unlisted file is an unverified one. The file is deleted on failure
+ * so it can never be installed by mistake.
+ */
+export const verifyDigest = async (
+  name: string,
+  file: string,
+  expected: string | null,
+): Promise<void> => {
+  if (!expected) {
+    await rm(file, { force: true });
+    throw new Error(`No checksum for ${name} in the release feed or ${CHECKSUMS_NAME}`);
+  }
+  const actual = await sha256OfFile(file);
+  if (actual !== expected.toLowerCase()) {
+    await rm(file, { force: true });
+    throw new Error(
+      `Checksum verification failed for ${name} (expected ${expected}, got ${actual})`,
+    );
+  }
 };
 
 const sha256OfFile = (file: string): Promise<string> =>

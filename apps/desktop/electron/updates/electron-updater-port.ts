@@ -1,16 +1,15 @@
-import { RELEASE_REPO } from "@aop/common";
+import { desktopUpdaterFeedUrl } from "@aop/common";
 import { autoUpdater } from "electron-updater";
 import type { AutoUpdaterPort } from "./app-updater";
 
 /**
  * electron-updater behind the app's port. The only file that imports it, and only a packaged app
- * builds it: the package reads `app-update.yml`, which electron-builder writes into the app's
- * resources from the `publish` entry of the builder config. That entry names the same GitHub
- * Releases the host updates from, so `latest.yml` and the blockmap on a release are the feed.
+ * builds it. The feed is `latest.yml` under getaop.com/latest/, which names the versioned
+ * installer and its blockmap (deploy-r2.sh); it is set here as well as in `app-update.yml`, so
+ * an app built before the repository's GitHub Releases stopped being the feed still finds it.
  */
-export const createElectronUpdaterPort = (): AutoUpdaterPort => {
-  const [owner, repo] = RELEASE_REPO.split("/");
-  autoUpdater.setFeedURL({ provider: "github", owner, repo });
+export const createElectronUpdaterPort = (feedOrigin?: string): AutoUpdaterPort => {
+  autoUpdater.setFeedURL({ provider: "generic", url: desktopUpdaterFeedUrl(feedOrigin) });
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   // The feed is a stable release channel; a pre-release never reaches an installed app.

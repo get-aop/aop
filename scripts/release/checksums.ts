@@ -23,8 +23,9 @@ export const RELEASE_CHECKSUM_ARTIFACTS = [
 /**
  * Published with the release but not in checksums.sha256: electron-updater reads them from the
  * release to update the installed Windows app. `latest.yml` carries the installer's own sha512,
- * which the updater checks, and install.sh never looks at either file. The R2 deploy skips them
- * too, because the update feed is the release on GitHub.
+ * which the updater checks, and install.sh never looks at either file. deploy-r2.sh publishes
+ * the blockmap beside the installer and a copy of latest.yml under `latest/`, which names the
+ * versioned installer (release-feed.ts).
  */
 export const RELEASE_UPDATER_FILES = ["latest.yml", "aop-windows-x64-setup.exe.blockmap"];
 

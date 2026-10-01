@@ -12,8 +12,27 @@ describe("parseGithubRelease", () => {
     ).toEqual({
       version: "0.10.0",
       url: "https://github.com/get-aop/aop-mono/releases/tag/v0.10.0",
-      assets: { "aop-darwin-arm64": "https://x/aop-darwin-arm64" },
+      notes: null,
+      assets: { "aop-darwin-arm64": { url: "https://x/aop-darwin-arm64", sha256: null } },
     });
+  });
+
+  test("takes the API address of each asset when asked, the one a token downloads", () => {
+    const release = parseGithubRelease(
+      {
+        tag_name: "v0.10.0",
+        html_url: "https://x",
+        body: "notes",
+        assets: [
+          { name: "a", browser_download_url: "https://x/a", url: "https://api/assets/1" },
+          { name: "b", browser_download_url: "https://x/b" },
+        ],
+      },
+      { assetUrls: "api" },
+    );
+    expect(release?.notes).toBe("notes");
+    expect(release?.assets.a?.url).toBe("https://api/assets/1");
+    expect(release?.assets.b?.url).toBe("https://x/b");
   });
 
   test("refuses drafts, pre-releases and tags that are not versions", () => {
