@@ -4,7 +4,7 @@ import { MessageScroller } from "./message-scroller";
 
 setupDashboardDom();
 
-const { cleanup, render, screen } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, screen } = await import("@testing-library/react");
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
 
@@ -43,5 +43,56 @@ describe("MessageScroller", () => {
     expect(scroller.style.overflowAnchor).toBe("none");
     expect(scrollCalls).toContainEqual({ top: 240, behavior: "smooth" });
     expect(scroller.scrollTop).toBe(120);
+  });
+});
+
+describe("MessageScroller focus ring", () => {
+  const mount = () => {
+    render(
+      <>
+        <MessageScroller data-testid="scroller" tabIndex={0}>
+          <button type="button">Copy</button>
+        </MessageScroller>
+        <button type="button">Outside</button>
+      </>,
+    );
+    return screen.getByTestId("scroller");
+  };
+  const marked = (el: HTMLElement) => el.hasAttribute("data-mouse-focus");
+
+  const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test("is dropped when a mouse press focuses the scroller, and back when Tab reaches it", async () => {
+    const scroller = mount();
+    expect(marked(scroller)).toBe(false);
+
+    fireEvent.pointerDown(scroller);
+    scroller.focus();
+    expect(marked(scroller)).toBe(true);
+
+    screen.getByText("Outside").focus();
+    await nextTask();
+    scroller.focus();
+    expect(marked(scroller)).toBe(false);
+  });
+
+  test("a press that did not focus the scroller leaves no mark for a later Tab", async () => {
+    const scroller = mount();
+    fireEvent.pointerDown(screen.getByText("Copy"));
+    await nextTask();
+
+    scroller.focus();
+
+    expect(marked(scroller)).toBe(false);
+  });
+
+  test("is dropped once the wheel scrolls the scroller", () => {
+    const scroller = mount();
+    scroller.focus();
+    expect(marked(scroller)).toBe(false);
+
+    fireEvent.wheel(scroller);
+
+    expect(marked(scroller)).toBe(true);
   });
 });

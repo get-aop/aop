@@ -171,6 +171,14 @@ export const formatAge = (iso: string, now: number = Date.now()): string => {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
+/** "just now", "5m ago", "3h ago", "2d ago", then a date: formatAge's ages in words. Empty for a time it cannot read. */
+export const formatAgo = (iso: string, now: number = Date.now()): string => {
+  if (Number.isNaN(Date.parse(iso))) return "";
+  const age = formatAge(iso, now);
+  if (age === "now") return "just now";
+  return /^\d+[mhd]$/.test(age) ? `${age} ago` : age;
+};
+
 export type HostConnection = "connected" | "reconnecting" | "offline";
 
 /**

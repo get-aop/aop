@@ -5,6 +5,7 @@ import {
   attentionOf,
   attentionSentence,
   formatAge,
+  formatAgo,
   groupProjects,
   groupThreads,
   hostConnection,
@@ -161,6 +162,23 @@ describe("formatAge", () => {
 
   test("a time in the future reads as now", () => {
     expect(formatAge(ago(-60_000), now)).toBe("now");
+  });
+});
+
+describe("formatAgo", () => {
+  const now = Date.parse("2026-09-29T12:00:00.000Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+
+  test("puts the ages in words, and a date once it is a month old", () => {
+    expect(formatAgo(ago(10_000), now)).toBe("just now");
+    expect(formatAgo(ago(2 * 60_000), now)).toBe("2m ago");
+    expect(formatAgo(ago(3 * 3_600_000), now)).toBe("3h ago");
+    expect(formatAgo(ago(2 * 86_400_000), now)).toBe("2d ago");
+    expect(formatAgo(ago(45 * 86_400_000), now)).toBe(formatAge(ago(45 * 86_400_000), now));
+  });
+
+  test("says nothing for a time it cannot read", () => {
+    expect(formatAgo("not a time", now)).toBe("");
   });
 });
 

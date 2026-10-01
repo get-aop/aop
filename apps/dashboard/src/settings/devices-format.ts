@@ -1,4 +1,4 @@
-import { formatAge } from "../projects/selectors";
+import { formatAgo } from "../projects/selectors";
 
 /** "9:41": what is left before a pairing code stops working. Zero once it has. */
 export const secondsLeft = (expiresAt: string, now: number): number =>
@@ -10,9 +10,7 @@ export const formatCountdown = (seconds: number): string =>
 /** "Last seen 5m ago", "Last seen Aug 30", or that the device has not connected since it paired. */
 export const describeLastSeen = (lastSeenAt: string | null, now: number): string => {
   if (lastSeenAt === null) return "Not seen since it was paired";
-  const age = formatAge(lastSeenAt, now);
-  if (age === "now") return "Last seen just now";
-  return /^\d+[mhd]$/.test(age) ? `Last seen ${age} ago` : `Last seen ${age}`;
+  return `Last seen ${formatAgo(lastSeenAt, now)}`;
 };
 
 export const formatPaired = (iso: string): string =>

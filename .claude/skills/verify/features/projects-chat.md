@@ -31,7 +31,7 @@ Open a project (`/projects/:id`; the chat is the middle pane), type in the box a
 | `chat-loading`, `chat-error`, `chat-retry`, `chat-refresh-error`, `chat-empty`, `chat-starter` | Loading, a first fetch that failed, the notice for one that cannot refresh, the empty conversation and its starters |
 | `chat-closed-notice` (`data-status` = `paused` or `archived`), `chat-closed-action` | The notice for a project that is not active, and Resume or Restore |
 | `chat-scroll`, `chat-show-earlier`, `chat-scroll-to-end`, `day-separator`, `new-messages-marker` | The list, older messages, the jump to the newest, the day lines and the New line |
-| `user-message` (`data-message-id`), `user-message-text`, `user-message-fold`, `assistant-message`, `message-meta`, `message-copy` | A message, its text, the fold of a long one, and the hover meta |
+| `user-message` (`data-message-id`), `user-message-text`, `user-message-fold`, `assistant-message`, `message-meta`, `message-time` (relative, "2m ago"; the exact time in its tooltip), `message-copy` | A message, its text, the fold of a long one, and the hover meta |
 | `thread-report` (`data-outcome`), `thread-report-toggle`, `thread-report-text` | A thread's report to the coordinator |
 | `coordinator-activity`, `coordinator-live-text`, `coordinator-working` | The coordinator at work, what it has written so far, and how long |
 | `message-blocks`, `routing-receipt` (`data-thread-count`), `quote-forwarded`, `quote-forwarded-text` | The blocks of a reply |

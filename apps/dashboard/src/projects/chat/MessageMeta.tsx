@@ -3,9 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
-import { formatShortTimestamp, formatTimestampTooltip } from "./chat-time";
+import { formatAgo } from "../selectors";
+import { useSharedNow } from "../use-now";
+import { formatTimestampTooltip } from "./chat-time";
 
-/** The time under a message and a copy button, shown while the pointer or focus is on the message (its row has `group`). */
+/**
+ * How long ago a message was sent ("2m ago", the exact time in its tooltip) and a copy button,
+ * shown while the pointer or focus is on the message (its row has `group`).
+ */
 export const MessageMeta = ({
   timestamp,
   copyText,
@@ -23,17 +28,29 @@ export const MessageMeta = ({
     )}
   >
     {align === "start" && copyText ? <CopyMessageButton text={copyText} /> : null}
+    <MessageTime timestamp={timestamp} />
+    {align === "end" && copyText ? <CopyMessageButton text={copyText} /> : null}
+  </div>
+);
+
+// Its own component so the clock's tick redraws only the time, not the memoised message row.
+const MessageTime = ({ timestamp }: { timestamp: string }) => {
+  const now = useSharedNow();
+  return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <time dateTime={timestamp} className="text-meta tabular-nums text-text-subtle">
-          {formatShortTimestamp(timestamp)}
+        <time
+          dateTime={timestamp}
+          data-testid="message-time"
+          className="text-meta tabular-nums text-text-subtle"
+        >
+          {formatAgo(timestamp, now)}
         </time>
       </TooltipTrigger>
       <TooltipContent>{formatTimestampTooltip(timestamp)}</TooltipContent>
     </Tooltip>
-    {align === "end" && copyText ? <CopyMessageButton text={copyText} /> : null}
-  </div>
-);
+  );
+};
 
 const CopyMessageButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);

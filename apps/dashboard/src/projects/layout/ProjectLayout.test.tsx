@@ -74,18 +74,18 @@ const panel = () => screen.queryByTestId("threads-panel");
 const chatColumn = () => screen.getByTestId("chat-column");
 
 describe("the panel toggle", () => {
-  test("sits beside the project name, before the settings link", () => {
+  test("is labelled Overview and leads the settings link and menu, right beside the project name", () => {
     mount();
-    const order = (testId: string) => {
-      const all = Array.from(screen.getByTestId("project-topbar").querySelectorAll("*"));
-      return all.indexOf(screen.getByTestId(testId));
-    };
+    const toggle = screen.getByTestId("panel-toggle");
+    const group = screen.getByTestId("project-topbar-actions");
 
-    expect(order("panel-toggle")).toBeGreaterThan(order("project-title"));
-    expect(order("panel-toggle")).toBeLessThan(order("project-settings-link"));
-    expect(screen.getByTestId("panel-toggle").previousElementSibling).toBe(
-      screen.getByTestId("project-home-link"),
-    );
+    expect(toggle.textContent).toBe("Overview");
+    expect(Array.from(group.children).map((child) => child.getAttribute("data-testid"))).toEqual([
+      "panel-toggle",
+      "project-settings-link",
+      "project-header-menu",
+    ]);
+    expect(group.previousElementSibling).toBe(screen.getByTestId("project-home-link"));
   });
 
   test("closes the panel and opens it again, and this browser remembers which", async () => {

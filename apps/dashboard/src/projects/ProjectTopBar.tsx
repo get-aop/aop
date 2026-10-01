@@ -1,6 +1,6 @@
-import { EllipsisIcon, PanelRightIcon, SettingsIcon } from "lucide-react";
+import { EllipsisIcon, ListChecksIcon, SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { IconButton, iconButtonClass } from "../components/IconButton";
+import { iconButtonClass } from "../components/IconButton";
 import { Link, projectPath, projectSettingsPath } from "../shell/router";
 import { ShellNav } from "../shell/ShellNav";
 import { ProjectMenu } from "./ProjectMenu";
@@ -15,10 +15,13 @@ const STREAM_LABEL: Record<StreamConnection, string | null> = {
   reconnecting: "Reconnecting…",
 };
 
+type Panel = { visible: boolean; toggle: () => void };
+
 /**
  * The top of a project's screens: the sidebar toggle and back/forward, who the project is,
- * then the panel toggle right beside the name (with a dot when a thread waits on the person),
- * the stream's state, and at the far end the project's settings (marked while their dialog is open) and its menu.
+ * then right beside the name its controls as one group: the labelled Overview toggle for the
+ * threads panel (with a dot when a thread waits on the person), the project's settings and its
+ * menu (the gear is marked while the settings dialog is open). The stream's state comes last.
  */
 export const ProjectTopBar = ({
   entry,
@@ -26,11 +29,11 @@ export const ProjectTopBar = ({
   settingsOpen,
 }: {
   entry: ProjectEntry;
-  panel: { visible: boolean; toggle: () => void };
+  panel: Panel;
   settingsOpen: boolean;
 }) => {
   const { project, threads, connection } = entry;
-  const waiting = attentionOf(threads).waiting;
+  const waiting = attentionOf(threads).waiting > 0;
   const streamLabel = STREAM_LABEL[connection];
 
   return (
@@ -49,17 +52,6 @@ export const ProjectTopBar = ({
           {project.name}
         </h1>
       </Link>
-      <IconButton
-        testId="panel-toggle"
-        label={panel.visible ? "Hide threads panel" : "Show threads panel"}
-        pressed={panel.visible}
-        active={panel.visible}
-        dot={waiting > 0}
-        dotTestId="panel-toggle-dot"
-        onClick={panel.toggle}
-      >
-        <PanelRightIcon />
-      </IconButton>
       {project.status !== "active" ? (
         <span
           data-testid="project-status-tag"
@@ -68,6 +60,29 @@ export const ProjectTopBar = ({
           {project.status}
         </span>
       ) : null}
+      <div data-testid="project-topbar-actions" className="flex shrink-0 items-center gap-0.5">
+        <OverviewToggle panel={panel} waiting={waiting} />
+        <Link
+          to={projectSettingsPath(project.id)}
+          data-testid="project-settings-link"
+          aria-label="Project settings"
+          title="Project settings"
+          aria-current={settingsOpen ? "page" : undefined}
+          className={iconButtonClass(settingsOpen)}
+        >
+          <SettingsIcon />
+        </Link>
+        <ProjectMenu project={project}>
+          <button
+            type="button"
+            data-testid="project-header-menu"
+            aria-label="Project actions"
+            className={iconButtonClass()}
+          >
+            <EllipsisIcon />
+          </button>
+        </ProjectMenu>
+      </div>
       {streamLabel ? (
         <span
           data-testid="project-stream-state"
@@ -80,28 +95,31 @@ export const ProjectTopBar = ({
           {streamLabel}
         </span>
       ) : null}
-      <span className="flex-1" />
-      <span className="flex-1" />
-      <Link
-        to={projectSettingsPath(project.id)}
-        data-testid="project-settings-link"
-        aria-label="Project settings"
-        title="Project settings"
-        aria-current={settingsOpen ? "page" : undefined}
-        className={iconButtonClass(settingsOpen)}
-      >
-        <SettingsIcon />
-      </Link>
-      <ProjectMenu project={project}>
-        <button
-          type="button"
-          data-testid="project-header-menu"
-          aria-label="Project actions"
-          className={iconButtonClass()}
-        >
-          <EllipsisIcon />
-        </button>
-      </ProjectMenu>
     </header>
   );
 };
+
+/** The threads panel's toggle, labelled "Overview" after the panel's first screen. */
+const OverviewToggle = ({ panel, waiting }: { panel: Panel; waiting: boolean }) => (
+  <button
+    type="button"
+    data-testid="panel-toggle"
+    aria-pressed={panel.visible}
+    title={panel.visible ? "Hide the overview" : "Show the overview"}
+    onClick={panel.toggle}
+    className={cn(
+      "relative flex h-8 shrink-0 items-center gap-1.5 rounded-row pr-3 pl-2 text-meta font-medium text-text-subtle transition-colors duration-[120ms] hover:bg-hover hover:text-text [&_svg]:size-4",
+      panel.visible && "bg-active text-text",
+    )}
+  >
+    <ListChecksIcon aria-hidden="true" />
+    Overview
+    {waiting ? (
+      <span
+        data-testid="panel-toggle-dot"
+        aria-hidden="true"
+        className="absolute top-1 right-1 size-1.5 rounded-full bg-running"
+      />
+    ) : null}
+  </button>
+);

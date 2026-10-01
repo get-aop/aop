@@ -98,6 +98,8 @@ function MessageScroller({
     if (stickToEdgeRef.current) requestAnimationFrame(() => scrollToEdge());
   }, [anchorKey, scrollToEdge]);
 
+  useMouseFocusMark(ref);
+
   // Preserve position on history load: when content prepends (scrollHeight
   // grows while scrolled at the very top), keep the same anchor message.
   useEffect(() => {
@@ -123,6 +125,40 @@ function MessageScroller({
       {children}
     </div>
   );
+}
+
+/**
+ * Marks the scroller `data-mouse-focus` once the mouse presses or wheels in it, so CSS can drop
+ * its focus ring; focus that reaches it any other way (Tab) clears the mark. Chrome can focus a
+ * scroller and then count a scrolling key (Page Down, arrows) as keyboard use, which drew a ring
+ * round the whole transcript after a click.
+ */
+function useMouseFocusMark(ref: React.RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // A press focuses in the same task, so the flag only has to last until the next one.
+    let pressing = false;
+    const mark = () => el.setAttribute("data-mouse-focus", "");
+    const onPress = () => {
+      pressing = true;
+      mark();
+      setTimeout(() => {
+        pressing = false;
+      }, 0);
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      if (event.target === el && !pressing) el.removeAttribute("data-mouse-focus");
+    };
+    el.addEventListener("pointerdown", onPress);
+    el.addEventListener("wheel", mark, { passive: true });
+    el.addEventListener("focusin", onFocusIn);
+    return () => {
+      el.removeEventListener("pointerdown", onPress);
+      el.removeEventListener("wheel", mark);
+      el.removeEventListener("focusin", onFocusIn);
+    };
+  }, [ref]);
 }
 
 export { MessageScroller };

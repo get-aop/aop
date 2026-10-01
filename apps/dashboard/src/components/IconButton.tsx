@@ -25,7 +25,7 @@ export const IconButton = ({
 }: Omit<React.ComponentProps<"button">, "aria-label" | "aria-pressed" | "title"> & {
   testId: string;
   label: string;
-  /** Drawn as the current choice (the panel toggle while the panel is open). */
+  /** Drawn as the current choice (the panel search while it is open). */
   active?: boolean;
   dot?: boolean;
   dotTestId?: string;
