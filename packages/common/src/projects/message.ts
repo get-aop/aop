@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHAT_IMAGE_LIMITS } from "../types/chat-image.ts";
 import { MessageBlockSchema } from "./blocks.ts";
 import { IdSchema, TimestampSchema } from "./primitives.ts";
 
@@ -10,10 +11,21 @@ const MessageBaseSchema = z.object({
   createdAt: TimestampSchema,
 });
 
-/** Typed by the person; plain text. */
+/** An image the person attached to a message. `path` is where the host serves it, under `/api`. */
+export const MessageImageSchema = z.object({
+  id: IdSchema,
+  mimeType: z.enum(CHAT_IMAGE_LIMITS.allowedMimeTypes),
+  path: z.string().startsWith("/"),
+});
+
+/** Typed by the person; plain text, and the images they attached. A message of images alone has no text. */
 export const UserMessageSchema = MessageBaseSchema.extend({
   role: z.literal("user"),
-  text: z.string().min(1),
+  text: z.string(),
+  images: z.array(MessageImageSchema).min(1).optional(),
+}).refine((message) => message.text.length > 0 || message.images !== undefined, {
+  message: "A message needs text or an image",
+  path: ["text"],
 });
 
 /**
@@ -56,6 +68,7 @@ export const MessageSchema = z.discriminatedUnion("role", [
   ThreadReportMessageSchema,
 ]);
 export type UserMessage = z.infer<typeof UserMessageSchema>;
+export type MessageImage = z.infer<typeof MessageImageSchema>;
 export type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
 export type ThreadReportMessage = z.infer<typeof ThreadReportMessageSchema>;
 export type Message = z.infer<typeof MessageSchema>;

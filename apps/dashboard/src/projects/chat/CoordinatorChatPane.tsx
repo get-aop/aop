@@ -1,6 +1,7 @@
 import type { Message, Project, Thread } from "@aop/common";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { uploadChatImage } from "../../api/attachments";
 import {
   ChatEmpty,
   ChatError,
@@ -54,13 +55,14 @@ export const CoordinatorChatPane = ({
   // Saying something takes the person to the bottom, where the answer will be.
   const [sentCount, setSentCount] = useState(0);
   const send = useCallback(
-    async (text: string) => {
-      const result = await chat.send(text);
+    async (text: string, images?: readonly string[]) => {
+      const result = await (images ? chat.send(text, images) : chat.send(text));
       if (result.ok) setSentCount((count) => count + 1);
       return result;
     },
     [chat],
   );
+  const uploadImage = useCallback((file: File) => uploadChatImage(project.id, file), [project.id]);
   const startWith = useCallback(
     async (text: string) => {
       const result = await send(text);
@@ -105,6 +107,7 @@ export const CoordinatorChatPane = ({
             placeholder="Ask the coordinator a question or start a task…"
             disabledReason={disabledReasonOf(project)}
             send={send}
+            uploadImage={uploadImage}
             chips={<CoordinatorChips project={project} />}
           />
         </footer>

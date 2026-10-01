@@ -65,6 +65,7 @@ export {
 export type {
   AssistantMessage,
   Message,
+  MessageImage,
   MessagePage,
   ThreadReportMessage,
   ThreadReportOutcome,
@@ -72,6 +73,7 @@ export type {
 } from "./message.ts";
 export {
   AssistantMessageSchema,
+  MessageImageSchema,
   MessageSchema,
   ThreadReportMessageSchema,
   ThreadReportOutcomeSchema,

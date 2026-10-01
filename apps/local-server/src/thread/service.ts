@@ -8,6 +8,7 @@ import type {
   ThreadStep,
 } from "@aop/common";
 import { generateTypeId } from "@aop/infra";
+import { discardStagedImages } from "../attachment/service.ts";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { Repo } from "../db/schema.ts";
@@ -28,12 +29,18 @@ import { readThreadActivity } from "./activity.ts";
 import { changeThread as applyPatch } from "./change.ts";
 import type { ThreadGit } from "./git.ts";
 import { createThreadRepository, type ThreadPatch } from "./repository.ts";
-import { invalidMessage, planTarget, threadTitle } from "./spawn-target.ts";
+import { invalidMessage, planTarget, readMessageInput, threadTitle } from "./spawn-target.ts";
 import { insertThreadSession } from "./thread-session.ts";
 import type { ThreadError, ThreadResult } from "./types.ts";
 
 /** What a thread is known by before it has been read back from the database. */
 type SpawnedThread = Pick<Thread, "id" | "projectId" | "title" | "repoId" | "branch">;
+
+/** `images` are the ids of images uploaded to the thread's project for this message, in order. */
+interface SendOptions {
+  onlyIn?: readonly ThreadStatus[];
+  images?: readonly string[];
+}
 
 export interface SpawnThreadInput {
   /** Defaults to the first line of the prompt. */
@@ -72,7 +79,7 @@ export interface ThreadService {
     threadId: string,
     text: string,
     origin?: MessageOrigin,
-    options?: { onlyIn?: readonly ThreadStatus[] },
+    options?: SendOptions,
   ) => Promise<ThreadResult<{ thread: Thread }>>;
   /** Answers the question a thread is waiting on; the answer resumes its runtime session. */
   reply: (threadId: string, text: string) => Promise<ThreadResult<{ thread: Thread }>>;
@@ -139,25 +146,27 @@ export const createThreadService = (
     thread: Thread,
     text: string,
     origin: MessageOrigin | null,
-    onlyIn?: readonly ThreadStatus[],
+    { onlyIn, images = [] }: SendOptions = {},
   ): Promise<ThreadResult<{ thread: Thread }>> => {
     const active = await activeProject(thread.projectId);
     if ("error" in active) return { success: false, error: active.error };
-    const invalid = invalidMessage(text);
-    if (invalid) return { success: false, error: invalid };
+    const input = await readMessageInput(thread.projectId, text, images);
+    if ("error" in input) return { success: false, error: input.error };
     // A merge that finishes would take the worktree from under the turn this message starts.
     if (thread.status === "landing") return { success: false, error: { code: "THREAD_BUSY" } };
     // A resolved thread's worktree is gone; a turn needs it back, and nothing may take it away
     // again between the two, so the message is stored (and the turn started) while it is held.
     const started = await git.holding(
       thread,
-      () => chat.sendMessage(thread.id, { content: text, origin }),
+      () => chat.sendMessage(thread.id, { content: text, origin, imageAttachments: input.images }),
       allowedIn(thread.id, onlyIn),
     );
     if (!started.success) return started;
-    return started.value.success
-      ? reload(thread.id)
-      : { success: false, error: { code: "SEND_FAILED", reason: started.value.error.code } };
+    if (!started.value.success) {
+      return { success: false, error: { code: "SEND_FAILED", reason: started.value.error.code } };
+    }
+    await discardStagedImages(thread.projectId, images);
+    return reload(thread.id);
   };
 
   const deleteSession = async (
@@ -302,7 +311,7 @@ export const createThreadService = (
     send: async (threadId, text, origin, options) => {
       const thread = await ctx.threadRepository.getById(threadId);
       return thread
-        ? sendToThread(thread, text, origin ?? null, options?.onlyIn)
+        ? sendToThread(thread, text, origin ?? null, options)
         : { success: false, error: { code: "THREAD_NOT_FOUND" } };
     },
 

@@ -25,7 +25,7 @@ export interface ThreadActions {
   resolve: (thread: Thread) => Promise<void>;
   /** Asks first; deletes the thread with its worktree and branch, and leaves it if it is open. */
   remove: (thread: Thread) => Promise<void>;
-  steer: (thread: Thread, text: string) => Promise<SendResult>;
+  steer: (thread: Thread, text: string, images?: readonly string[]) => Promise<SendResult>;
   /** Answers the question a thread is waiting on. */
   reply: (thread: Thread, text: string) => Promise<SendResult>;
 }
@@ -51,7 +51,7 @@ export const threadActions: ThreadActions = {
       }
     });
   },
-  steer: (thread, text) => send(() => steerThread(thread.id, text)),
+  steer: (thread, text, images) => send(() => steerThread(thread.id, text, images)),
   reply: (thread, text) => send(() => replyToThread(thread.id, text)),
 };
 

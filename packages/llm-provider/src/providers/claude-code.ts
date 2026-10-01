@@ -4,6 +4,7 @@ import { extractRuntimeSessionIdFromRawJsonl } from "../logs";
 import { assertNativePlanModeSupported } from "../plan-mode";
 import { resolveRuntimeAlias } from "../runtime-alias";
 import type { LLMProvider, RunOptions, RunResult } from "../types";
+import { prepareStdinPrompt, takesStdinPrompt } from "./claude-code-input";
 
 interface StreamContext {
   sessionId?: string;
@@ -149,9 +150,11 @@ export class ClaudeCodeProvider implements LLMProvider {
     assertNativePlanModeSupported(this.name, options.mode);
     const { isolationArgs, mcpConfig } = buildClaudeIsolation(options);
 
+    const stdinPrompt = takesStdinPrompt(options);
     const cmd = [
       resolveRuntimeAlias(options.runtimeAlias, "claude"),
       ...isolationArgs,
+      ...(stdinPrompt ? ["--input-format", "stream-json"] : []),
       "--output-format",
       "stream-json",
       "--verbose",
@@ -178,7 +181,7 @@ export class ClaudeCodeProvider implements LLMProvider {
     }
 
     appendClaudeSystemPromptFlags(cmd, options);
-    cmd.push(options.prompt);
+    if (!stdinPrompt) cmd.push(options.prompt);
     appendClaudeVariadicFlags(cmd, options, mcpConfig);
 
     return cmd;
@@ -209,17 +212,20 @@ export class ClaudeCodeProvider implements LLMProvider {
 
   private async runWithFileOutput(options: RunOptions, logFilePath: string): Promise<RunResult> {
     const spawnEnv = buildClaudeCodeSpawnEnv(options.env);
+    const stdinPrompt = prepareStdinPrompt(options);
 
-    const proc = resolveExecHost().spawn({
-      cmd: this.buildCommand(options),
-      stdout: { file: logFilePath },
-      stderr: "ignore",
-      stdin: "ignore",
-      cwd: options.cwd,
-      detached: true,
-      unref: true,
-      env: spawnEnv,
-    });
+    const proc = spawnClaude(stdinPrompt, () =>
+      resolveExecHost().spawn({
+        cmd: this.buildCommand(options),
+        stdout: { file: logFilePath },
+        stderr: "ignore",
+        stdin: stdinPrompt ? { file: stdinPrompt.path } : "ignore",
+        cwd: options.cwd,
+        detached: true,
+        unref: true,
+        env: spawnEnv,
+      }),
+    );
 
     const pid = proc.pid;
     await options.onSpawn?.(pid);
@@ -243,6 +249,7 @@ export class ClaudeCodeProvider implements LLMProvider {
 
     const exitCode = await proc.exited;
     watchdog?.stop();
+    stdinPrompt?.remove();
 
     const logContent = existsSync(logFilePath) ? readFileSync(logFilePath, "utf-8") : "";
     const sessionId = extractRuntimeSessionIdFromRawJsonl(logContent);
@@ -261,15 +268,18 @@ export class ClaudeCodeProvider implements LLMProvider {
 
   private async runWithPipeOutput(options: RunOptions): Promise<RunResult> {
     const spawnEnv = buildClaudeCodeSpawnEnv(options.env);
+    const stdinPrompt = prepareStdinPrompt(options);
 
-    const proc = resolveExecHost().spawn({
-      cmd: this.buildCommand(options),
-      stdout: "pipe",
-      stderr: "inherit",
-      stdin: "inherit",
-      cwd: options.cwd,
-      env: spawnEnv,
-    });
+    const proc = spawnClaude(stdinPrompt, () =>
+      resolveExecHost().spawn({
+        cmd: this.buildCommand(options),
+        stdout: "pipe",
+        stderr: "inherit",
+        stdin: stdinPrompt ? { file: stdinPrompt.path } : "inherit",
+        cwd: options.cwd,
+        env: spawnEnv,
+      }),
+    );
 
     const pid = proc.pid;
     options.onSpawn?.(pid);
@@ -303,6 +313,7 @@ export class ClaudeCodeProvider implements LLMProvider {
     }
     await this.processStream(stdout, ctx);
     watchdog?.stop();
+    stdinPrompt?.remove();
 
     return { exitCode: await proc.exited, pid, sessionId: ctx.sessionId, timedOut };
   }
@@ -332,6 +343,19 @@ export class ClaudeCodeProvider implements LLMProvider {
     }
   }
 }
+
+// The child holds its stdin open from the moment it is spawned, so the prompt file can go at
+// once; a spawn that throws leaves no file behind either.
+const spawnClaude = (
+  stdinPrompt: { remove: () => void } | null,
+  spawn: () => Bun.Subprocess,
+): Bun.Subprocess => {
+  try {
+    return spawn();
+  } finally {
+    stdinPrompt?.remove();
+  }
+};
 
 const appendClaudePermissionFlags = (cmd: string[], options: RunOptions): void => {
   if (options.mode === "plan") {

@@ -1,4 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   createFakeCliSandbox,
   FAKE_CLI_PATH,
@@ -149,6 +151,32 @@ describe("ClaudeCodeProvider against the fake CLI", () => {
     expect(finalText(second.log)).toContain(
       `Fake reply for turn 2 of session ${sessionId} (resumed)`,
     );
+  });
+
+  test("images reach the CLI as image blocks on stdin, on a first turn and a resumed one", async () => {
+    const { sandbox, runToEnd } = createHarness();
+    const png = join(sandbox.dir, "shot.png");
+    const jpeg = join(sandbox.dir, "photo.jpg");
+    writeFileSync(png, Buffer.alloc(1234, 1));
+    writeFileSync(jpeg, Buffer.alloc(56, 2));
+
+    const first = await runToEnd("compare #image1 and #image2", {
+      images: [
+        { path: png, mimeType: "image/png" },
+        { path: jpeg, mimeType: "image/jpeg" },
+      ],
+    });
+    const second = await runToEnd("and this one", {
+      images: [{ path: jpeg, mimeType: "image/jpeg" }],
+      resumeSessionId: first.result.sessionId,
+    });
+
+    expect(first.result.exitCode).toBe(0);
+    expect(finalText(first.log)).toContain(
+      "You said: compare #image1 and #image2 [images: image/png (1234 bytes), image/jpeg (56 bytes)]",
+    );
+    expect(finalText(second.log)).toContain("(resumed)");
+    expect(finalText(second.log)).toContain("[images: image/jpeg (56 bytes)]");
   });
 
   test("the appended system prompt reaches the process on every turn, and an edit reaches a resumed turn", async () => {

@@ -40,6 +40,7 @@ export interface ChatSessionRepository {
     sessionId: string,
   ) => Promise<Pick<ChatMessage, "content" | "created_at"> | null>;
   listMessages: (sessionId: string) => Promise<ChatMessage[]>;
+  getMessage: (id: string) => Promise<ChatMessage | null>;
   countMessages: (sessionId: string) => Promise<number>;
   countUnreadAssistantMessages: (sessionId: string, lastReadAt: string | null) => Promise<number>;
   createMessage: (message: NewChatMessage) => Promise<ChatMessage>;
@@ -185,6 +186,10 @@ export const createChatSessionRepository = (db: Kysely<Database>): ChatSessionRe
         .executeTakeFirst();
       return message ?? null;
     },
+
+    getMessage: async (id: string): Promise<ChatMessage | null> =>
+      (await db.selectFrom("chat_messages").selectAll().where("id", "=", id).executeTakeFirst()) ??
+      null,
 
     listMessages: async (sessionId: string): Promise<ChatMessage[]> => {
       return db

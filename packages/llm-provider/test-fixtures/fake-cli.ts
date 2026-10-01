@@ -6,7 +6,12 @@ import { createMcpConnection } from "./fake-cli/mcp-client";
 import { runFakeCli } from "./fake-cli/run";
 
 const exitCode = await runFakeCli(
-  { args: process.argv.slice(2), env: process.env, cwd: process.cwd() },
+  {
+    args: process.argv.slice(2),
+    env: process.env,
+    cwd: process.cwd(),
+    readStdin: () => Bun.stdin.text(),
+  },
   {
     write: (text) => void writeSync(1, text),
     warn: (text) => void writeSync(2, `${text}\n`),

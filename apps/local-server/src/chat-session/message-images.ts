@@ -230,7 +230,7 @@ export const buildRuntimePrompt = (
     lines.push(
       "## Attached Images",
       "",
-      "The message references these as #image1, #image2, ... in order. View each image file before responding:",
+      "The message references these as #image1, #image2, ... in order. Where the runtime supports it they are attached to this message; otherwise view each file before responding:",
       "",
       ...images.map(
         (image, index) => `- ${imageAttachmentMarker(index + 1)}: \`${join(dir, image.fileName)}\``,
@@ -266,6 +266,16 @@ export const loadChatGlobalInstructions = async (settings: {
   get: (key: (typeof SettingKey)[keyof typeof SettingKey]) => Promise<string>;
 }): Promise<string | null> =>
   formatGlobalInstructions(await settings.get(SettingKey.CHAT_GLOBAL_INSTRUCTIONS));
+
+/** A message's stored images as the files a run hands the provider, in order. */
+export const runImagesOf = (
+  sessionId: string,
+  images: readonly StoredChatImage[],
+): { path: string; mimeType: ChatImageMimeType }[] =>
+  images.map((image) => ({
+    path: join(chatSessionAttachmentsDir(sessionId), image.fileName),
+    mimeType: image.mimeType,
+  }));
 
 export const allowedDirectoriesForChatAttachments = (
   sessionId: string,

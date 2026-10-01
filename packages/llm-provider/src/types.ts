@@ -12,8 +12,19 @@ export {
 export type RunIsolation = "hermetic" | "open";
 export type RunAccessMode = "approval-required" | "auto-accept-edits" | "auto" | "full-access";
 
+/** An image a prompt carries: a file on the host and its media type. */
+export interface RunImage {
+  path: string;
+  mimeType: string;
+}
+
 export interface RunOptions {
   prompt: string;
+  /**
+   * Images the prompt carries, in order. Claude Code receives them as image blocks of a
+   * stream-json message on stdin; a provider that cannot take images leaves them out.
+   */
+  images?: RunImage[];
   cwd?: string;
   resumeSessionId?: string;
   model?: string;

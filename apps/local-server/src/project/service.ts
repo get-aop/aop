@@ -1,19 +1,20 @@
 import { rm } from "node:fs/promises";
-import {
-  type Message,
-  type MessagePage,
-  type Project,
-  type ProjectPatch,
-  type ProjectSettings,
-  type ProjectStatus,
-  UserMessageSchema,
+import type {
+  Message,
+  MessagePage,
+  Project,
+  ProjectPatch,
+  ProjectSettings,
+  ProjectStatus,
 } from "@aop/common";
 import { aopPaths, generateTypeId } from "@aop/infra";
+import { discardStagedImages } from "../attachment/service.ts";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
 import type { LocalServerContext } from "../context.ts";
+import type { ChatSession } from "../db/schema.ts";
 import type { ThreadGit } from "../thread/git.ts";
 import { createThreadRepository } from "../thread/repository.ts";
-import { invalidMessage } from "../thread/spawn-target.ts";
+import { readMessageInput } from "../thread/spawn-target.ts";
 import type { ThreadError } from "../thread/types.ts";
 import {
   insertCoordinatorSession,
@@ -27,9 +28,9 @@ import { type ProjectKickoff, recordKickoff } from "./kickoff.ts";
 import { createProjectRepository } from "./repository.ts";
 import { createProjectTeardown } from "./teardown.ts";
 import {
+  getWireMessage,
   listWireMessages,
   type MessagePageRequest,
-  shownUserText,
   UNKNOWN_PAGE_ANCHOR,
 } from "./wire-messages.ts";
 
@@ -74,11 +75,12 @@ export interface ProjectService {
   /**
    * `origin` marks a message the person did not type as such, as when Memory settings frame
    * their request for the coordinator; the message returned shows what the chat will show.
+   * `images` are the ids of images uploaded to the project for this message, in order.
    */
   sendToCoordinator: (
     projectId: string,
     text: string,
-    origin?: MessageOrigin,
+    options?: { origin?: MessageOrigin; images?: readonly string[] },
   ) => Promise<ProjectResult<{ message: Message }>>;
   /** The latest page of the coordinator chat, or the one before message `page.before`. */
   listMessages: (
@@ -103,6 +105,18 @@ export const createProjectService = (
   const notFound = { success: false, error: { code: "PROJECT_NOT_FOUND" } } as const;
 
   const teardown = createProjectTeardown(ctx, chat, git);
+
+  // Only an active project's coordinator takes a message.
+  const activeCoordinator = async (
+    projectId: string,
+  ): Promise<ChatSession | { error: ProjectError }> => {
+    const project = await ctx.projectRepository.getById(projectId);
+    if (project && project.status !== "active") {
+      return { error: { code: "PROJECT_NOT_ACTIVE", status: project.status } };
+    }
+    const coordinator = project && (await ctx.chatSessionRepository.getCoordinator(projectId));
+    return coordinator ?? { error: notFound.error };
+  };
 
   // What a status implies for the work a project holds: paused and archived projects run
   // nothing, and an archived one keeps its threads' branches but not their checkouts.
@@ -257,32 +271,23 @@ export const createProjectService = (
       return { success: true };
     },
 
-    sendToCoordinator: async (projectId, text, origin) => {
-      const project = await ctx.projectRepository.getById(projectId);
-      if (!project) return notFound;
-      if (project.status !== "active") {
-        return {
-          success: false,
-          error: { code: "PROJECT_NOT_ACTIVE", status: project.status },
-        };
-      }
-      const invalid = invalidMessage(text);
-      if (invalid?.code === "INVALID_MESSAGE") return { success: false, error: invalid };
-      const coordinator = await ctx.chatSessionRepository.getCoordinator(projectId);
-      if (!coordinator) return notFound;
+    sendToCoordinator: async (projectId, text, { origin, images = [] } = {}) => {
+      const coordinator = await activeCoordinator(projectId);
+      if ("error" in coordinator) return { success: false, error: coordinator.error };
+      const input = await readMessageInput(projectId, text, images);
+      if ("error" in input) return { success: false, error: input.error };
 
-      const sent = await chat.sendMessage(coordinator.id, { content: text, origin });
+      const sent = await chat.sendMessage(coordinator.id, {
+        content: text,
+        origin,
+        imageAttachments: input.images,
+      });
       if (!sent.success) {
         return { success: false, error: { code: "SEND_FAILED", reason: sent.error.code } };
       }
-      const message = UserMessageSchema.parse({
-        id: sent.message.id,
-        projectId,
-        threadId: null,
-        role: "user",
-        text: shownUserText(sent.message.content, origin),
-        createdAt: sent.message.createdAt,
-      });
+      await discardStagedImages(projectId, images);
+      const message = await getWireMessage(ctx.db, coordinator, sent.message.id);
+      if (!message) throw new Error(`Message ${sent.message.id} was stored with nothing to show`);
       return { success: true, message };
     },
 

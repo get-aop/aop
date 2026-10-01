@@ -2,6 +2,8 @@ import { extname } from "node:path";
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { Hono } from "hono";
+import { createAttachmentRoutes } from "./attachment/routes.ts";
+import { createAttachmentService } from "./attachment/service.ts";
 import { type AuthEnv, createApiAuth } from "./auth/api-auth.ts";
 import { createApiCors } from "./auth/cross-origin.ts";
 import { createOriginGuard } from "./auth/origin-guard.ts";
@@ -115,6 +117,7 @@ export const createApp = (deps: AppDependencies) => {
   const projects = deps.projectServices ?? createProjectServices(ctx);
   app.route("/api/mcp", createMcpRoutes(ctx, projects));
   app.route("/api/projects", createProjectRoutes(projects));
+  app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api", createThreadRoutes(projects));
   app.route("/api", createSuggestionRoutes(projects));
   app.route("/api", createPullRequestWatchRoutes(projects));

@@ -34,7 +34,8 @@ export interface ProjectChat {
   reload: () => void;
   /** Fetches the page of messages before the oldest one held. */
   loadEarlier: () => Promise<void>;
-  send: (text: string) => Promise<SendResult>;
+  /** `images` are ids of images uploaded to the project, in order. */
+  send: (text: string, images?: readonly string[]) => Promise<SendResult>;
   /** The person is looking at the chat: everything in it counts as seen. */
   markSeen: () => void;
 }
@@ -98,9 +99,13 @@ export const createProjectChat = (deps: ProjectChatDeps): ProjectChat => {
     stop: conversation.stop,
     reload: conversation.reload,
     loadEarlier: conversation.loadEarlier,
-    send: async (text) => {
+    send: async (text, images) => {
       try {
-        conversation.receive(await api.sendMessage(projectId, text));
+        conversation.receive(
+          await (images?.length
+            ? api.sendMessage(projectId, text, images)
+            : api.sendMessage(projectId, text)),
+        );
         return { ok: true };
       } catch (error) {
         return { ok: false, error: describe(error) };

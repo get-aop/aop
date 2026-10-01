@@ -84,8 +84,7 @@ export const createMemoryService = (deps: {
         return { success: false, error: { code: "INVALID_MESSAGE", message } };
       }
       return deps.coordinator.sendToCoordinator(projectId, memoryRequestPrompt(words), {
-        type: "memory-request",
-        request: words,
+        origin: { type: "memory-request", request: words },
       });
     },
   };

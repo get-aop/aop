@@ -26,6 +26,8 @@ export interface Runtime {
   args: string[];
   env: Record<string, string | undefined>;
   cwd: string;
+  /** Reads the CLI's stdin; only called when the arguments say the prompt is there. */
+  readStdin?: () => Promise<string>;
 }
 
 export interface Io {
@@ -46,7 +48,8 @@ type Segment = () => Promise<JsonLine[]>;
 export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
   const dialect = DIALECTS.find((candidate) => candidate.matches(runtime.args));
   if (!dialect) return abort(io, "fake-cli: unrecognised arguments", USAGE_EXIT_CODE);
-  const invocation = dialect.parse(runtime.args);
+  const stdin = dialect.readsStdin(runtime.args) ? await runtime.readStdin?.() : undefined;
+  const invocation = dialect.parse(runtime.args, stdin);
   if (!invocation.prompt) return abort(io, "fake-cli: no prompt given", FAILURE_EXIT_CODE);
 
   const directives = parseDirectives(invocation.prompt, runtime.env.FAKE_CLI_SCRIPT);
@@ -76,6 +79,7 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
     resumed: session.resumed,
     systemPrompt: session.appendedSystemPrompt,
     usageWarning: directives.usageWarning,
+    images: invocation.images,
   };
   const { beats, ending } = planTurn(directives, ctx);
   const server = invocation.mcpServers[AOP_MCP_SERVER];

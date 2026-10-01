@@ -19,6 +19,21 @@ describe("MessageSchema", () => {
     expect(parsed(MessageSchema, makeUserMessage())).toEqual(makeUserMessage());
   });
 
+  test("accepts a user message with images, with or without text", () => {
+    const images = [{ id: "img_1", mimeType: "image/png", path: "/projects/p/images/a.png" }];
+    for (const text of ["look at this", ""]) {
+      const message = makeUserMessage({ text, images });
+      expect(parsed(MessageSchema, message)).toEqual(message);
+    }
+  });
+
+  test("refuses a user message with neither text nor images, and an image of another type", () => {
+    expect(MessageSchema.safeParse(makeUserMessage({ text: "" })).success).toBe(false);
+    expect(MessageSchema.safeParse(makeUserMessage({ text: "", images: [] })).success).toBe(false);
+    const svg = { id: "img_1", mimeType: "image/svg+xml", path: "/projects/p/images/a.svg" };
+    expect(MessageSchema.safeParse(makeUserMessage({ images: [svg] })).success).toBe(false);
+  });
+
   test("accepts the coordinator's reply: routing receipt, prose with an inline chip, and cards", () => {
     const message = makeAssistantMessage({
       blocks: [

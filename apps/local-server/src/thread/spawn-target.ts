@@ -1,7 +1,8 @@
 import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
-import type { Project } from "@aop/common";
+import type { ChatImageAttachment, Project } from "@aop/common";
 import { aopPaths } from "@aop/infra";
+import { readStagedImages } from "../attachment/service.ts";
 import { resolveChatWorkspace, WorkspaceBindingError } from "../chat-session/workspace-binding.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { Repo } from "../db/schema.ts";
@@ -77,8 +78,31 @@ export const planTarget = async (
   return { repo: target.repo, workspace, branch };
 };
 
-export const invalidMessage = (text: string): ThreadError | null => {
-  if (!text.trim()) return { code: "INVALID_MESSAGE", message: "Message text is required" };
+type InvalidMessage = Extract<ThreadError, { code: "INVALID_MESSAGE" }>;
+
+/**
+ * A message to the coordinator or a thread, checked: its text, and the images it names (ids of
+ * uploads to the project) read in order for the chat engine.
+ */
+export const readMessageInput = async (
+  projectId: string,
+  text: string,
+  imageIds: readonly string[],
+): Promise<{ images: ChatImageAttachment[] } | { error: InvalidMessage }> => {
+  const invalid = invalidMessage(text, { withImages: imageIds.length > 0 });
+  if (invalid) return { error: invalid };
+  const staged = await readStagedImages(projectId, imageIds);
+  return "error" in staged ? { error: { code: "INVALID_MESSAGE", message: staged.error } } : staged;
+};
+
+/** A message of images alone (`withImages`) may have no text. */
+export const invalidMessage = (
+  text: string,
+  { withImages = false }: { withImages?: boolean } = {},
+): InvalidMessage | null => {
+  if (!text.trim() && !withImages) {
+    return { code: "INVALID_MESSAGE", message: "Message text is required" };
+  }
   if (text.length > THREAD_MESSAGE_MAX) {
     return {
       code: "INVALID_MESSAGE",

@@ -48,9 +48,18 @@ An assistant message is a list of blocks (`MessageBlocks.tsx`):
 
 The coordinator writes a thread into a reply as `[its title](thread:<id>)`; the host stores it as a `thread-chip` block, and the chip shows the thread's own title, state and, on hover, how many replies and how long ago. `thread_spawn` and `thread_steer` add the thread to the reply's routing receipt.
 
-A thread's report to the coordinator is a `thread-report` message. It is drawn as an event line naming the thread and what happened, with the report behind "Show report", and never as something the person said. The person's own messages are shown as typed, not read as markdown.
+A thread's report to the coordinator is a `thread-report` message. It is drawn as an event line naming the thread and what happened, with the report behind "Show report", and never as something the person said. The person's own messages are shown as typed, not read as markdown, with the images they attached above them (see [Images](#images)).
 
 Reports that arrive close together are answered by one coordinator turn (see [the MCP guide](../MCP.md)). Its reply says which message it answers (`inReplyTo`, the newest report of the batch), so it reads after every report it answers, live as well as after a reload, and no report is left looking unanswered.
+
+## Images
+
+The person can attach images to a message, in the coordinator chat and in a thread alike: paste one into the box, drop one on it, or pick files with the "+" before the model chip. The box is one component for both chats (`chat/Composer.tsx`, with `image-attachments.ts` and `ComposerImages.tsx`). Up to 5 PNG, JPEG, GIF or WebP images of 10 MB or less go with one message (`CHAT_IMAGE_LIMITS` in `@aop/common`); a message of images alone needs no text.
+
+1. **Upload.** Each image uploads as soon as it is added: `POST /api/projects/:projectId/attachments`, the file's own bytes as the body (no multipart, no path on the client's disk), so the browser, the desktop app and a remote host all send it the same way. The host names the type from the bytes, not from `Content-Type`, refuses anything else (`415`), an empty body (`400`) and one over the limit (`413`), and keeps the image under `<AOP_HOME>/projects/<id>/uploads/` with an `img_` id. An upload never sent is pruned after a day, and goes with the project.
+2. **Send.** `POST /api/projects/:id/messages` and `POST /api/threads/:id/messages` take `images`, the upload ids in order. An id that is not a waiting upload of the project refuses the message (`400`) and nothing runs. Once stored, the images are copied into the conversation's attachments (`logs/chat-sessions/<session>/attachments/<message id>-<n>.<ext>`), named in the message's content trailer, and the uploads are removed. The box sends only when every image has uploaded, and keeps them if the send is refused.
+3. **The model.** A turn whose message has images gives Claude Code one stream-json user message on stdin (`--input-format stream-json`): the images as base64 image blocks, then the prompt's text (`packages/llm-provider/src/providers/claude-code-input.ts`). The model sees the images themselves, whatever tools the run has; the coordinator has no Read tool to open a file by its path. The message goes through a file the detached CLI holds open, removed as soon as it is spawned, so the run still outlives a host that crashes. A turn without images keeps its prompt as an argument. The prompt's text also lists each image's path, for a thread that wants the file itself and for runtimes that take no images.
+4. **History.** A user message carries `images` (`{ id, mimeType, path }`); `GET /api{path}` (`/projects/:projectId/images/:fileName`) serves one, found only through a message of that project's conversations. The page fetches it with its own credentials (an `<img>` cannot send the desktop app's bearer token), shows thumbnails above the bubble, and opens one larger on click.
 
 ## Suggested threads
 

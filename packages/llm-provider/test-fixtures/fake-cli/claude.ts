@@ -5,6 +5,7 @@ import {
   type Beat,
   type Dialect,
   type Ending,
+  type FakeImage,
   type Invocation,
   type JsonLine,
   type TokenUsage,
@@ -26,6 +27,7 @@ export const claudeDialect: Dialect = {
   name: "claude",
   matches: (args) => args.includes("--output-format"),
   parse: parseInvocation,
+  readsStdin: (args) => parseArgv(args, ARGV_SPEC).values.get("--input-format") === "stream-json",
   start: (ctx) => [
     {
       type: "system",
@@ -68,24 +70,30 @@ function usageWarning(ctx: TurnContext): JsonLine {
   };
 }
 
-function parseInvocation(args: string[]): Invocation {
-  const { flags, values, variadicValues, positionals } = parseArgv(args, {
-    valueFlags: [
-      "--output-format",
-      "--setting-sources",
-      "--permission-mode",
-      "--resume",
-      "--settings",
-      "--model",
-      "--effort",
-      "--append-system-prompt",
-      "--system-prompt-snapshot",
-    ],
-    // The real parser treats these as `<values...>`, so each one swallows a prompt placed after it.
-    variadicFlags: ["--mcp-config", "--disallowedTools", "--add-dir", "--allowedTools", "--tools"],
-  });
+const ARGV_SPEC = {
+  valueFlags: [
+    "--output-format",
+    "--input-format",
+    "--setting-sources",
+    "--permission-mode",
+    "--resume",
+    "--settings",
+    "--model",
+    "--effort",
+    "--append-system-prompt",
+    "--system-prompt-snapshot",
+  ],
+  // The real parser treats these as `<values...>`, so each one swallows a prompt placed after it.
+  variadicFlags: ["--mcp-config", "--disallowedTools", "--add-dir", "--allowedTools", "--tools"],
+};
+
+function parseInvocation(args: string[], stdin?: string): Invocation {
+  const { flags, values, variadicValues, positionals } = parseArgv(args, ARGV_SPEC);
+  const streamed =
+    values.get("--input-format") === "stream-json" ? readStreamJsonPrompt(stdin ?? "") : null;
   return {
-    prompt: positionals[0] ?? "",
+    prompt: streamed ? streamed.prompt : (positionals[0] ?? ""),
+    ...(streamed && { images: streamed.images }),
     resumeId: values.get("--resume"),
     model: values.get("--model"),
     effort: values.get("--effort"),
@@ -93,6 +101,37 @@ function parseInvocation(args: string[]): Invocation {
     appendSystemPrompt: values.get("--append-system-prompt"),
     recordSystemPrompt: values.get("--system-prompt-snapshot") !== "off",
     mcpServers: readMcpServers(variadicValues.get("--mcp-config") ?? []),
+  };
+}
+
+// The first line of stdin is the user message: its text blocks are the prompt, its image blocks
+// what the reply reports. Anything else on stdin is ignored, as one turn takes one message.
+function readStreamJsonPrompt(stdin: string): { prompt: string; images: FakeImage[] } {
+  const firstLine = stdin.split("\n").find((line) => line.trim()) ?? "";
+  let content: unknown[] = [];
+  try {
+    const parsed = JSON.parse(firstLine) as { message?: { content?: unknown } } | null;
+    content = Array.isArray(parsed?.message?.content) ? parsed.message.content : [];
+  } catch {
+    // A line that is not JSON gives no prompt, and the run says so.
+  }
+  const blocks = content as Array<{
+    type?: string;
+    text?: string;
+    source?: Record<string, string>;
+  }>;
+  return {
+    prompt: blocks.flatMap((block) => (block.type === "text" ? [block.text ?? ""] : [])).join("\n"),
+    images: blocks.flatMap((block) =>
+      block.type === "image" && block.source
+        ? [
+            {
+              mediaType: block.source.media_type ?? "",
+              bytes: Buffer.from(block.source.data ?? "", "base64").length,
+            },
+          ]
+        : [],
+    ),
   };
 }
 

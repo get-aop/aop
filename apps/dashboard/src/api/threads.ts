@@ -23,9 +23,21 @@ const post = <T>(path: string, body?: unknown): Promise<T> =>
 export const listThreadMessages = (threadId: string, before?: string): Promise<MessagePage> =>
   request<MessagePage>(threadUrl(threadId, `/messages${beforeQuery(before)}`));
 
-/** Steers a thread: it is queued while the thread works, a new turn while it is idle. */
-export const steerThread = async (threadId: string, text: string): Promise<Thread> =>
-  (await post<{ thread: Thread }>(threadUrl(threadId, "/messages"), { text })).thread;
+/**
+ * Steers a thread: it is queued while the thread works, a new turn while it is idle. `images`
+ * are ids of images uploaded to the thread's project, in order.
+ */
+export const steerThread = async (
+  threadId: string,
+  text: string,
+  images: readonly string[] = [],
+): Promise<Thread> =>
+  (
+    await post<{ thread: Thread }>(
+      threadUrl(threadId, "/messages"),
+      images.length > 0 ? { text, images } : { text },
+    )
+  ).thread;
 
 /** Answers the question a waiting thread asked; the answer resumes its session. */
 export const replyToThread = async (threadId: string, text: string): Promise<Thread> =>

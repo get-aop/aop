@@ -73,6 +73,14 @@ export interface TurnContext {
   usageWarning?: boolean;
   /** The appended system prompt this turn ran with: what the launch passed, or the recorded one on a resume. */
   systemPrompt?: string;
+  /** The images the prompt carried; the reply names them. */
+  images?: FakeImage[];
+}
+
+/** An image block of a stream-json prompt: its media type and decoded size. */
+export interface FakeImage {
+  mediaType: string;
+  bytes: number;
 }
 
 /** What the adapter asked the CLI to do, recovered from argv. */
@@ -91,6 +99,8 @@ export interface Invocation {
   recordSystemPrompt: boolean;
   /** HTTP MCP servers from `--mcp-config`, by name. Other transports are not imitated. */
   mcpServers: Record<string, { url: string }>;
+  /** With `--input-format stream-json`, the image blocks of the message read from stdin. */
+  images?: FakeImage[];
 }
 
 /**
@@ -102,7 +112,10 @@ export interface Dialect {
   name: string;
   /** Recognises the argv shape the matching adapter builds. */
   matches(args: string[]): boolean;
-  parse(args: string[]): Invocation;
+  /** `stdin` is what the CLI read from its input, when its arguments say the prompt is there. */
+  parse(args: string[], stdin?: string): Invocation;
+  /** Whether the prompt comes on stdin rather than as an argument. */
+  readsStdin(args: string[]): boolean;
   start(ctx: TurnContext): JsonLine[];
   beat(beat: Beat, index: number, ctx: TurnContext): JsonLine[];
   end(ending: Ending, ctx: TurnContext): JsonLine[];

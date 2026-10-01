@@ -1,13 +1,20 @@
 import {
+  CHAT_IMAGE_LIMITS,
   type Message,
   type MessageBlock,
   MessageBlockSchema,
+  type MessageImage,
   type MessagePage,
   MessageSchema,
 } from "@aop/common";
 import type { Kysely } from "kysely";
 import { z } from "zod";
-import { decodeMessageContent, expandStoredPastes } from "../chat-session/message-images.ts";
+import { messageImagePath } from "../attachment/service.ts";
+import {
+  decodeMessageContent,
+  decodeStoredAttachmentMetadata,
+  expandStoredPastes,
+} from "../chat-session/message-images.ts";
 import { type MessageOrigin, parseMessageOrigin } from "../chat-session/message-origin.ts";
 import type { ChatMessage, ChatSession, Database } from "../db/schema.ts";
 import { createSuggestionRepository, type MessageAnswers } from "../suggestion/repository.ts";
@@ -161,12 +168,29 @@ export const toWireMessage = (
     const blocks = [...withAnswers(runBlocks, extras.answers), ...welcomeCard(origin)];
     return assistantMessage(base, scope, text, blocks, extras);
   }
-  if (!text) return null;
+  // Only the person's own words carry images; a report or a relay never does.
+  const images = origin ? [] : messageImages(scope.projectId, row);
+  if (!text && images.length === 0) return null;
   // The server's nudge to resume after a rate limit is plumbing: the reply that explains the
   // wait is already in the transcript.
   if (origin?.type === "rate-limit-resume") return null;
-  return MessageSchema.parse(userSideMessage(base, text, origin));
+  return MessageSchema.parse(userSideMessage(base, text, origin, images));
 };
+
+// A stored image of a type the wire does not know (none is accepted today) is left out rather
+// than making the whole conversation unreadable.
+const messageImages = (projectId: string, row: Pick<ChatMessage, "content">): MessageImage[] =>
+  decodeStoredAttachmentMetadata(row.content).images.flatMap((image) =>
+    (CHAT_IMAGE_LIMITS.allowedMimeTypes as readonly string[]).includes(image.mimeType)
+      ? [
+          {
+            id: image.id,
+            mimeType: image.mimeType,
+            path: messageImagePath(projectId, image.fileName),
+          },
+        ]
+      : [],
+  );
 
 const assistantMessage = (
   base: { id: string; projectId: string; threadId: string | null; createdAt: string },
@@ -210,6 +234,7 @@ const userSideMessage = (
   base: { id: string; projectId: string; threadId: string | null; createdAt: string },
   text: string,
   origin: MessageOrigin | null,
+  images: MessageImage[],
 ) => {
   switch (origin?.type) {
     case "thread-report":
@@ -230,7 +255,12 @@ const userSideMessage = (
         ],
       };
     default:
-      return { ...base, role: "user", text: shownUserText(text, origin) };
+      return {
+        ...base,
+        role: "user",
+        text: shownUserText(text, origin),
+        ...(images.length > 0 && { images }),
+      };
   }
 };
 

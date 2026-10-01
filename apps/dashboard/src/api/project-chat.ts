@@ -5,15 +5,19 @@ import { beforeQuery, request } from "./request";
 export const listCoordinatorMessages = (projectId: string, before?: string): Promise<MessagePage> =>
   request<MessagePage>(`/projects/${encodeURIComponent(projectId)}/messages${beforeQuery(before)}`);
 
-/** Says something to the coordinator; the answer is the message as stored, not the coordinator's reply. */
+/**
+ * Says something to the coordinator; the answer is the message as stored, not the coordinator's
+ * reply. `images` are ids of images uploaded to the project, in order.
+ */
 export const sendCoordinatorMessage = async (
   projectId: string,
   text: string,
+  images: readonly string[] = [],
 ): Promise<UserMessage> =>
   (
     await request<{ message: UserMessage }>(`/projects/${encodeURIComponent(projectId)}/messages`, {
       method: "POST",
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(images.length > 0 ? { text, images } : { text }),
     })
   ).message;
 

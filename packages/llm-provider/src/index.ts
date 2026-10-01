@@ -45,6 +45,7 @@ export { PiProvider } from "./providers/pi";
 export { sanitizeSessionId } from "./session-id";
 export type {
   LLMProvider,
+  RunImage,
   RunIsolation,
   RunMode,
   RunOptions,

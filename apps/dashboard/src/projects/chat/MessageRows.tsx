@@ -11,6 +11,7 @@ import { Bubble } from "@/ui/bubble";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { useChatThread } from "./chat-context";
 import { MessageBlocks } from "./MessageBlocks";
+import { MessageImages } from "./MessageImages";
 import { MessageMeta } from "./MessageMeta";
 import { ThreadChip } from "./ThreadChip";
 import { useThreadPresence } from "./thread-presence";
@@ -18,7 +19,10 @@ import { useThreadPresence } from "./thread-presence";
 const COLLAPSED_MAX_CHARS = 600;
 const COLLAPSED_MAX_LINES = 8;
 
-/** The person's words: a bubble on the right, folded when long, with the time and a copy button on hover. */
+/**
+ * The person's words: a bubble on the right, folded when long, with the time and a copy button
+ * on hover. The images they sent sit above it; a message of images alone has no bubble.
+ */
 export const UserRow = memo(function UserRow({ message }: { message: UserMessage }) {
   return (
     <div
@@ -27,9 +31,12 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
       data-message-id={message.id}
       data-message-role="user"
     >
-      <Bubble className="relative">
-        <FoldedText text={message.text} />
-      </Bubble>
+      {message.images ? <MessageImages images={message.images} /> : null}
+      {message.text ? (
+        <Bubble className="relative">
+          <FoldedText text={message.text} />
+        </Bubble>
+      ) : null}
       <div className="w-full max-w-[80%]">
         <MessageMeta timestamp={message.createdAt} copyText={message.text} align="end" />
       </div>

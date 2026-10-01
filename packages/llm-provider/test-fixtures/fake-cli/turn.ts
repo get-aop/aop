@@ -75,5 +75,13 @@ const defaultReply = (ctx: TurnContext): string => {
   const resumed = ctx.resumed ? " (resumed)" : "";
   const firstLine = stripDirectives(ctx.prompt).split("\n")[0] ?? "";
   const echo = firstLine.trim().slice(0, MAX_ECHO_LENGTH);
-  return `Fake reply for turn ${ctx.turn} of session ${ctx.sessionId}${resumed}. You said: ${echo}`;
+  return `Fake reply for turn ${ctx.turn} of session ${ctx.sessionId}${resumed}. You said: ${echo}${describeImages(ctx)}`;
+};
+
+// What a test reads to know the images reached the CLI as images, in order.
+const describeImages = (ctx: TurnContext): string => {
+  const images = ctx.images ?? [];
+  if (images.length === 0) return "";
+  const list = images.map((image) => `${image.mediaType} (${image.bytes} bytes)`).join(", ");
+  return ` [images: ${list}]`;
 };

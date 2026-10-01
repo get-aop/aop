@@ -10,6 +10,8 @@ const SpawnBodySchema = z.object({
   quote: z.string().nullable().optional(),
 });
 const MessageBodySchema = z.object({ text: z.string() });
+/** `images` are ids of images uploaded to the thread's project, in order. */
+const SteerBodySchema = MessageBodySchema.extend({ images: z.array(z.string()).optional() });
 const OpenPullRequestBodySchema = z.object({
   draft: z.boolean().optional(),
   title: z.string().trim().min(1).max(200).optional(),
@@ -65,9 +67,10 @@ export const createThreadRoutes = ({ threads }: ProjectServices) => {
   });
 
   routes.post("/threads/:threadId/messages", async (c) => {
-    const parsed = await readBody(c, MessageBodySchema);
+    const parsed = await readBody(c, SteerBodySchema);
     if ("response" in parsed) return parsed.response;
-    const result = await threads.send(c.req.param("threadId"), parsed.body.text);
+    const { text, images } = parsed.body;
+    const result = await threads.send(c.req.param("threadId"), text, undefined, { images });
     return result.success ? c.json({ thread: result.thread }, 201) : errorResponse(c, result.error);
   });
 

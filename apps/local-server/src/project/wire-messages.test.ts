@@ -308,15 +308,7 @@ describe("listWireMessages", () => {
     });
   });
 
-  test("leaves out a message with nothing to show, and expands pasted text", async () => {
-    await addMessage(coordinator.id, {
-      id: "image-only",
-      role: "user",
-      content: encodeMessageContent("", [
-        { id: "i1", fileName: "smsg_x-1.png", mimeType: "image/png" },
-      ]),
-      turn: 1,
-    });
+  test("leaves out a message with nothing to show", async () => {
     await addMessage(coordinator.id, {
       id: "empty-reply",
       role: "assistant",
@@ -328,6 +320,56 @@ describe("listWireMessages", () => {
     const { messages } = await list(coordinator);
 
     expect(messages.map((message) => message.id)).toEqual(["real"]);
+  });
+
+  test("a person's images come with their message, where the project serves them, even with no text", async () => {
+    await addMessage(coordinator.id, {
+      id: "image-only",
+      role: "user",
+      content: encodeMessageContent("", [
+        { id: "img_a", fileName: "smsg_x-1.png", mimeType: "image/png" },
+      ]),
+      turn: 1,
+    });
+    await addMessage(coordinator.id, {
+      id: "with-text",
+      role: "user",
+      content: encodeMessageContent("compare these", [
+        { id: "img_b", fileName: "smsg_y-1.jpg", mimeType: "image/jpeg" },
+        { id: "img_c", fileName: "smsg_y-2.webp", mimeType: "image/webp" },
+      ]),
+      turn: 2,
+    });
+
+    const { messages } = await list(coordinator);
+
+    expect(messages).toMatchObject([
+      {
+        id: "image-only",
+        role: "user",
+        text: "",
+        images: [
+          { id: "img_a", mimeType: "image/png", path: "/projects/proj_1/images/smsg_x-1.png" },
+        ],
+      },
+      {
+        id: "with-text",
+        text: "compare these",
+        images: [
+          { id: "img_b", mimeType: "image/jpeg", path: "/projects/proj_1/images/smsg_y-1.jpg" },
+          { id: "img_c", mimeType: "image/webp", path: "/projects/proj_1/images/smsg_y-2.webp" },
+        ],
+      },
+    ]);
+    for (const message of messages) expect(MessageSchema.safeParse(message).success).toBe(true);
+  });
+
+  test("a message without images has no images field", async () => {
+    await addMessage(coordinator.id, { id: "plain", role: "user", content: "hello", turn: 1 });
+
+    const { messages } = await list(coordinator);
+
+    expect(messages[0]).not.toHaveProperty("images");
   });
 
   test("returns the latest messages, oldest first, when there are more than the limit", async () => {

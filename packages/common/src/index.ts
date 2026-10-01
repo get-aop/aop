@@ -17,7 +17,11 @@ export type {
   ChatCheckpointCaptureStatus,
   ChatTurnDiffFileSummary,
 } from "./types/chat-checkpoints.ts";
-export type { ChatImageAttachment, ChatImageMimeType } from "./types/chat-image.ts";
+export type {
+  ChatImageAttachment,
+  ChatImageMimeType,
+  UploadedChatImage,
+} from "./types/chat-image.ts";
 export { CHAT_IMAGE_LIMITS, imageAttachmentMarker } from "./types/chat-image.ts";
 export type {
   ChatAbortDisposition,

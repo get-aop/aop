@@ -10,6 +10,7 @@ import {
   extractRuntimeSessionIdFromRawJsonl,
   type LLMProvider,
   parseRawJsonlContent,
+  type RunImage,
   type RunOptions,
 } from "@aop/llm-provider";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
@@ -151,6 +152,8 @@ export const runSessionPrompt = async (input: {
   registration?: SessionRunRegistration;
   /** Extra dirs the provider may read (e.g. chat image attachments). */
   allowedDirectories?: string[];
+  /** The images the prompt carries, in order (see RunOptions). */
+  images?: RunImage[];
   /** Added to the CLI's system prompt for this launch; pass it on every turn (see RunOptions). */
   appendSystemPrompt?: string;
   /** Durable path allocated before launch so a reloaded server can resume the run. */
@@ -185,6 +188,7 @@ export const runSessionPrompt = async (input: {
       repoPath,
       prompt,
       input.allowedDirectories,
+      input.images,
       input.appendSystemPrompt,
       input.logFilePath,
       input.createProviderFn,
@@ -353,6 +357,7 @@ const executeProviderRun = async (
   repoPath: string,
   prompt: string,
   allowedDirectories: string[] | undefined,
+  images: RunImage[] | undefined,
   appendSystemPrompt: string | undefined,
   durableLogFilePath: string | undefined,
   createProviderFn: CreateProviderFn | undefined,
@@ -470,6 +475,7 @@ const executeProviderRun = async (
       repoPath,
       prompt,
       allowedDirectories,
+      images,
       appendSystemPrompt,
       logFilePath,
       provider,
@@ -521,6 +527,7 @@ const raceProviderAgainstInterrupt = async (input: {
   repoPath: string;
   prompt: string;
   allowedDirectories: string[] | undefined;
+  images: RunImage[] | undefined;
   appendSystemPrompt: string | undefined;
   logFilePath: string;
   provider: LLMProvider;
@@ -534,7 +541,7 @@ const raceProviderAgainstInterrupt = async (input: {
   if (input.handle.owner.interrupted) {
     return interruptedRunResult(input.handle, input.getCapturedSessionId());
   }
-  const options = buildRunOptions(
+  const runOptions = buildRunOptions(
     input.session,
     input.repoPath,
     input.prompt,
@@ -549,6 +556,7 @@ const raceProviderAgainstInterrupt = async (input: {
     },
     input.appendSystemPrompt,
   );
+  const options = input.images?.length ? { ...runOptions, images: input.images } : runOptions;
   const providerPromise = completeProviderRun({
     runtime: input.session.runtime,
     provider: input.provider,

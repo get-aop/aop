@@ -6,6 +6,10 @@ import type { ProjectAction } from "./service.ts";
 import type { ProjectServices } from "./services.ts";
 
 const MessageBodySchema = z.object({ text: z.string() });
+/** `images` are ids of images uploaded to the project (POST /:projectId/attachments), in order. */
+const ChatMessageBodySchema = MessageBodySchema.extend({
+  images: z.array(z.string()).optional(),
+});
 const MemoryBodySchema = MemoryFileInputSchema.omit({ name: true });
 
 const ACTIONS: readonly ProjectAction[] = ["pause", "resume", "archive", "restore"];
@@ -65,9 +69,10 @@ export const createProjectRoutes = ({ projects, memory }: ProjectServices) => {
   });
 
   routes.post("/:projectId/messages", async (c) => {
-    const parsed = await readBody(c, MessageBodySchema);
+    const parsed = await readBody(c, ChatMessageBodySchema);
     if ("response" in parsed) return parsed.response;
-    const result = await projects.sendToCoordinator(c.req.param("projectId"), parsed.body.text);
+    const { text, images } = parsed.body;
+    const result = await projects.sendToCoordinator(c.req.param("projectId"), text, { images });
     return result.success
       ? c.json({ message: result.message }, 201)
       : errorResponse(c, result.error);

@@ -1,4 +1,5 @@
 import type { ChatActionPayload } from "@aop/common";
+import type { RunImage } from "@aop/llm-provider";
 import type { LocalServerContext } from "../context.ts";
 import type {
   ChatRun,
@@ -12,6 +13,7 @@ import { executeChatCommand } from "./commands.ts";
 import { prepareConversationPrompt } from "./conversation-history.ts";
 import {
   allowedDirectoriesForChatAttachments,
+  runImagesOf,
   type StoredChatArtifact,
   type StoredChatDocument,
   type StoredChatImage,
@@ -218,7 +220,10 @@ const runRuntimeReply = async (input: RuntimeReplyInput) => {
   return runMainRuntimeReply(
     input,
     repoPath,
-    allowedDirectories.length > 0 ? allowedDirectories : undefined,
+    {
+      allowedDirectories: allowedDirectories.length > 0 ? allowedDirectories : undefined,
+      images: runImagesOf(session.id, input.images),
+    },
     // Read for every turn, resumed ones included: what the CLI was told before is not kept.
     projectContext?.systemPrompt,
     runtimePrompt,
@@ -228,7 +233,7 @@ const runRuntimeReply = async (input: RuntimeReplyInput) => {
 const runMainRuntimeReply = async (
   input: RuntimeReplyInput,
   repoPath: string,
-  allowedDirectories: string[] | undefined,
+  { allowedDirectories, images }: { allowedDirectories?: string[]; images: RunImage[] },
   appendSystemPrompt: string | undefined,
   runtimePrompt: string,
 ): Promise<RuntimeRunResult> => {
@@ -239,6 +244,7 @@ const runMainRuntimeReply = async (
     prompt: composeRuntimePrompt(runtimePrompt, input.runtimePromptPrefix),
     registration: input.registration,
     allowedDirectories,
+    images,
     appendSystemPrompt,
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,
@@ -264,6 +270,7 @@ const runMainRuntimeReply = async (
     prompt: composeRuntimePrompt(freshContext.prompt, input.runtimePromptPrefix),
     registration: input.registration,
     allowedDirectories,
+    images,
     appendSystemPrompt,
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,

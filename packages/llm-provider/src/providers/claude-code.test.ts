@@ -117,6 +117,31 @@ describe("buildCommand", () => {
     ]);
   });
 
+  test("a prompt with images goes on stdin as stream-json, not as an argument", () => {
+    const provider = new ClaudeCodeProvider();
+    const cmd = provider.buildCommand({
+      prompt: "what is this?",
+      images: [{ path: "/tmp/a.png", mimeType: "image/png" }],
+      resumeSessionId: "sess-1",
+      allowedTools: ["mcp__aop__aop_ask_user"],
+    });
+    expect(cmd).toEqual([
+      "claude",
+      ...hermeticArgs,
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--dangerously-skip-permissions",
+      "--resume",
+      "sess-1",
+      "--allowedTools",
+      "mcp__aop__aop_ask_user",
+    ]);
+    expect(cmd).not.toContain("what is this?");
+  });
+
   test("uses runtime alias as the executable", () => {
     const provider = new ClaudeCodeProvider();
     const cmd = provider.buildCommand({ prompt: "test prompt", runtimeAlias: "cw" });

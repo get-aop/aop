@@ -12,7 +12,12 @@ import {
 export interface ChatApi {
   /** The latest page of the coordinator chat, or the one before message `before`. */
   listMessages: (projectId: string, before?: string) => Promise<MessagePage>;
-  sendMessage: (projectId: string, text: string) => Promise<UserMessage>;
+  /** `images` are ids of images uploaded to the project, in order. */
+  sendMessage: (
+    projectId: string,
+    text: string,
+    images?: readonly string[],
+  ) => Promise<UserMessage>;
   /**
    * The answers to a proposal of the coordinator, given by the message and the suggestion. The
    * host records them and publishes the message again, so the page shows an answer when the
