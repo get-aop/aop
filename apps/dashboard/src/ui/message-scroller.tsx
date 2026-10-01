@@ -1,19 +1,18 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 import { cn } from "@/lib/cn";
 
 interface MessageScrollerProps extends React.ComponentProps<"div"> {
-  /** True while the assistant is streaming — keeps the view pinned to the live edge. */
-  streaming?: boolean;
-  /** Increments when a new turn is anchored (e.g. message count). */
-  anchorKey?: number;
+  /** Each change takes the view to the end and follows it again: the person just said something. */
+  followKey?: number;
   /** Access to the scroll element (minimap, scroll-to-end affordances). */
   scrollerRef?: React.Ref<HTMLDivElement | null>;
-  /** Called when the user leaves/returns to the live edge. */
+  /** Called when the view starts or stops following the end. */
   onEdgeChange?: (atEdge: boolean) => void;
   children: React.ReactNode;
 }
 
+/** Scrolling back to within this distance of the end follows it again. */
 const EDGE_THRESHOLD_PX = 48;
 
 /**
@@ -25,13 +24,15 @@ const EDGE_THRESHOLD_PX = 48;
 const TOP_EDGE_FADE = "linear-gradient(to bottom, transparent, black 1rem)";
 
 /**
- * THE thread scroll container. Live-edge follow while streaming, anchors new
- * turns, and preserves scroll position when older history prepends. Replaces
- * the bespoke auto-scroll code in ChatThread — do not port it.
+ * THE thread scroll container, with one rule: while the person is at the end, it stays there.
+ * Whenever the content or the view changes size, a ResizeObserver puts the end in view before
+ * the frame is painted, by setting `scrollTop` directly: no animation to restart, no frame in
+ * which the text sits a few pixels off. Scrolling up stops following; scrolling back to the end
+ * (or `followKey`) follows again. When not following, the browser's own scroll anchoring keeps
+ * what the person reads in place, and older history that loads above keeps its place too.
  */
 function MessageScroller({
-  streaming = false,
-  anchorKey,
+  followKey,
   scrollerRef,
   onEdgeChange,
   onScroll,
@@ -41,8 +42,11 @@ function MessageScroller({
   ...props
 }: MessageScrollerProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const stickToEdgeRef = useRef(true);
-  const prevScrollHeightRef = useRef(0);
+  const following = useRef(true);
+  const lastTop = useRef(0);
+  const lastHeight = useRef(0);
+  const onEdgeChangeRef = useRef(onEdgeChange);
+  onEdgeChangeRef.current = onEdgeChange;
 
   const assignRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -53,92 +57,98 @@ function MessageScroller({
     [scrollerRef],
   );
 
-  const scrollToEdge = useCallback((behavior: ScrollBehavior = "auto") => {
+  const setFollowing = useCallback((value: boolean) => {
+    const el = ref.current;
+    // Following is this component's job; anchoring would fight it at the end.
+    if (el) el.style.overflowAnchor = value ? "none" : "auto";
+    if (following.current === value) return;
+    following.current = value;
+    onEdgeChangeRef.current?.(value);
+  }, []);
+
+  const pinToEnd = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distance <= 1) return;
-    el.scrollTo({
-      top: el.scrollHeight,
-      behavior: behavior === "smooth" && distance <= EDGE_THRESHOLD_PX ? "smooth" : "auto",
-    });
+    el.scrollTop = el.scrollHeight;
+    lastTop.current = el.scrollTop;
   }, []);
 
   const handleScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       const el = ref.current;
       if (el) {
-        const at = el.scrollHeight - el.scrollTop - el.clientHeight <= EDGE_THRESHOLD_PX;
-        if (at !== stickToEdgeRef.current) {
-          stickToEdgeRef.current = at;
-          onEdgeChange?.(at);
-        }
+        setFollowing(followsAfterScroll(el, lastTop.current, following.current));
+        lastTop.current = el.scrollTop;
       }
       onScroll?.(event);
     },
-    [onScroll, onEdgeChange],
+    [onScroll, setFollowing],
   );
 
-  // Follow the live edge while streaming (only when the user hasn't scrolled up).
-  useEffect(() => {
-    if (streaming && stickToEdgeRef.current) {
-      requestAnimationFrame(() => scrollToEdge("smooth"));
-    }
+  useLayoutEffect(() => {
+    void followKey;
+    setFollowing(true);
+    pinToEnd();
+  }, [followKey, setFollowing, pinToEnd]);
+
+  // Every commit while following, before it is painted: a row that just mounted (a reply starting)
+  // is in view from its first frame, without waiting for the observer.
+  useLayoutEffect(() => {
+    if (following.current) pinToEnd();
   });
 
-  // Content growth (images, folds) also nudges the live edge while streaming.
   useEffect(() => {
     const el = ref.current;
     const content = el?.firstElementChild;
-    if (!content || typeof ResizeObserver === "undefined") return;
+    if (!el || !content || typeof ResizeObserver === "undefined") return;
+    lastHeight.current = el.scrollHeight;
     const observer = new ResizeObserver(() => {
-      if (stickToEdgeRef.current) {
-        requestAnimationFrame(() => scrollToEdge(streaming ? "smooth" : "auto"));
+      const grewBy = el.scrollHeight - lastHeight.current;
+      lastHeight.current = el.scrollHeight;
+      if (following.current) {
+        pinToEnd();
+      } else if (grewBy > 0 && el.scrollTop < 4) {
+        // Older history loaded above the top of the view: keep the message that was there.
+        el.scrollTop += grewBy;
+        lastTop.current = el.scrollTop;
       }
     });
     observer.observe(content);
+    observer.observe(el);
     return () => observer.disconnect();
-  }, [scrollToEdge, streaming]);
-
-  // Anchor new turns: jump to the edge when a turn is added while at the edge.
-  useEffect(() => {
-    if (anchorKey === undefined) return;
-    if (stickToEdgeRef.current) requestAnimationFrame(() => scrollToEdge());
-  }, [anchorKey, scrollToEdge]);
+  }, [pinToEnd]);
 
   useMouseFocusMark(ref);
-
-  // Preserve position on history load: when content prepends (scrollHeight
-  // grows while scrolled at the very top), keep the same anchor message.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const previous = prevScrollHeightRef.current;
-    const next = el.scrollHeight;
-    if (previous > 0 && next > previous && !stickToEdgeRef.current && el.scrollTop < 4) {
-      el.scrollTop = next - previous;
-    }
-    prevScrollHeightRef.current = next;
-  });
 
   return (
     <div
       ref={assignRef}
       data-slot="message-scroller"
       onScroll={handleScroll}
-      className={cn("min-h-0 flex-1 overflow-y-auto", className)}
-      style={{
-        maskImage: TOP_EDGE_FADE,
-        WebkitMaskImage: TOP_EDGE_FADE,
-        ...style,
-        overflowAnchor: streaming ? "none" : style?.overflowAnchor,
+      // A wheel turned up means "stop following" at once, before a streaming commit pins the end
+      // again ahead of the scroll event.
+      onWheel={(event) => {
+        if (event.deltaY < 0 && event.currentTarget.scrollTop > 0) setFollowing(false);
       }}
+      className={cn("min-h-0 flex-1 overflow-y-auto", className)}
+      style={{ maskImage: TOP_EDGE_FADE, WebkitMaskImage: TOP_EDGE_FADE, ...style }}
       {...props}
     >
       {children}
     </div>
   );
 }
+
+/**
+ * Whether the view follows the end after a scroll: at the end it does; a scroll up stops it, even
+ * a small one; a scroll down that comes near the end starts it again.
+ */
+const followsAfterScroll = (el: HTMLElement, lastTop: number, following: boolean): boolean => {
+  const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+  if (distance <= 1) return true;
+  if (el.scrollTop < lastTop - 1) return false;
+  return following || distance <= EDGE_THRESHOLD_PX;
+};
 
 /**
  * Marks the scroller `data-mouse-focus` once the mouse presses or wheels in it, so CSS can drop

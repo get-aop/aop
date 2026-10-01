@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { Message } from "@aop/common";
 import { setupDashboardDom } from "../../test/setup-dom";
 import type { EarlierMessages } from "./chat-state";
-import { reply, userMessage } from "./test-utils";
+import { liveTurn, reply, userMessage } from "./test-utils";
 
 setupDashboardDom();
 
@@ -30,16 +30,14 @@ describe("who is working", () => {
     renderList({
       messages: [userMessage("u1", 1)],
       working: true,
-      live: { a1: "Reading the threads" },
+      live: { a1: liveTurn("Reading the threads") },
     });
 
     expect(screen.getByTestId("coordinator-activity")).toBeTruthy();
     expect(screen.getByTestId("coordinator-working").textContent).toContain(
       "Coordinator is working",
     );
-    await waitFor(() =>
-      expect(screen.getByTestId("coordinator-live-text").textContent).toContain("Reading"),
-    );
+    await waitFor(() => expect(assistantOf("a1").textContent).toContain("Reading"));
     expect(screen.queryByTestId("thread-working")).toBeNull();
     expect(COORDINATOR_WORKER).toEqual({ name: "Coordinator", testIdPrefix: "coordinator" });
   });
@@ -48,18 +46,16 @@ describe("who is working", () => {
     renderList({
       messages: [userMessage("u1", 1, { threadId: "thr_1" })],
       working: true,
-      live: { a1: "Reading the tests" },
+      live: { a1: liveTurn("Reading the tests") },
       worker: THREAD_WORKER,
     });
 
     expect(screen.getByTestId("thread-activity")).toBeTruthy();
     expect(screen.getByTestId("thread-working").textContent).toContain("Claude Code is working");
-    await waitFor(() =>
-      expect(screen.getByTestId("thread-live-text").textContent).toContain("Reading the tests"),
-    );
+    // The word still arriving waits for its end.
+    await waitFor(() => expect(assistantOf("a1").textContent).toContain("Reading the"));
     expect(screen.queryByTestId("coordinator-activity")).toBeNull();
     expect(screen.queryByTestId("coordinator-working")).toBeNull();
-    expect(screen.queryByTestId("coordinator-live-text")).toBeNull();
   });
 
   test("nothing is shown as working while nothing works", () => {
@@ -95,61 +91,66 @@ describe("a reply whose run failed", () => {
   });
 });
 
-describe("what the agent did", () => {
-  const messages = [
-    reply("brief", 1),
-    reply("done", 2),
-    userMessage("steer", 3),
-    reply("later", 4),
-  ];
+describe("a reply being written", () => {
+  const live = (text: string) => ({ a1: liveTurn(text, "u1") });
 
-  test("shows the work log of a reply above that reply, and only that reply's", () => {
-    renderList({
-      messages,
-      workLogOf: (id) => (id === "later" ? <div data-testid="log-later">2 tool calls</div> : null),
+  test("is drawn by the reply's own row, which its message takes over in place", () => {
+    const { rerender } = renderList({
+      messages: [userMessage("u1", 1)],
+      working: true,
+      live: live("On it"),
     });
+    const row = assistantOf("a1");
+    expect(row.getAttribute("data-writing")).toBe("true");
+    // Its meta waits for the end, keeping its room.
+    expect(within(row).queryByTestId("message-meta")).toBeNull();
 
-    expect(screen.getAllByTestId("log-later")).toHaveLength(1);
-    const later = assistantOf("later");
-    const log = within(later).getByTestId("log-later");
-    const words = within(later).getByTestId("message-blocks");
-    // Above the words, in the same row.
-    expect(log.compareDocumentPosition(words) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(assistantOf("brief")).queryByTestId("log-later")).toBeNull();
-    expect(within(assistantOf("done")).queryByTestId("log-later")).toBeNull();
+    rerender(
+      <MessageList
+        live={{}}
+        working={false}
+        firstNewId={null}
+        scrollToEndKey={0}
+        messages={[
+          userMessage("u1", 1),
+          reply("a1", 2, [{ type: "text", text: "On it" }], { inReplyTo: "u1" }),
+        ]}
+      />,
+    );
+
+    // The same element: nothing was unmounted, so nothing flashes or retypes.
+    expect(assistantOf("a1")).toBe(row);
+    expect(row.getAttribute("data-writing")).toBeNull();
+    expect(within(row).getByTestId("message-meta")).toBeTruthy();
   });
 
-  test("draws a log in an assistant's reply only, never in the person's message", () => {
-    renderList({
-      messages,
-      workLogOf: (id) => <div data-testid={`log-${id}`}>log</div>,
-    });
-
-    expect(screen.getByTestId("log-brief")).toBeTruthy();
-    expect(screen.getByTestId("log-done")).toBeTruthy();
-    expect(screen.getByTestId("log-later")).toBeTruthy();
-    expect(screen.queryByTestId("log-steer")).toBeNull();
-  });
-
-  test("shows the running turn's log inside the working row", () => {
+  test("shows its tool calls and reasoning in order, folded", () => {
     renderList({
       messages: [userMessage("u1", 1)],
       working: true,
-      worker: THREAD_WORKER,
-      liveWorkLog: <div data-testid="live-log">1 tool call · Bash</div>,
+      live: {
+        a1: {
+          inReplyTo: "u1",
+          parts: [
+            { type: "thinking", text: "Where is the retry?" },
+            { type: "text", text: "Looking. " },
+            { type: "tool", id: "t1", name: "Bash", detail: "rg retry", status: "done" },
+            { type: "tool", id: "t2", name: "Read", detail: "retry.ts", status: "running" },
+          ],
+        },
+      },
     });
 
-    expect(within(screen.getByTestId("thread-activity")).getByTestId("live-log")).toBeTruthy();
-  });
-
-  test("shows no live log when the agent is not working", () => {
-    renderList({
-      messages: [userMessage("u1", 1), reply("a1", 2)],
-      working: false,
-      liveWorkLog: <div data-testid="live-log">1 tool call</div>,
-    });
-
-    expect(screen.queryByTestId("live-log")).toBeNull();
+    const row = assistantOf("a1");
+    const order = [
+      ...row.querySelectorAll(
+        "[data-testid='thinking'],[data-testid='chat-markdown'],[data-testid='tool-run']",
+      ),
+    ].map((el) => el.getAttribute("data-testid"));
+    expect(order).toEqual(["thinking", "chat-markdown", "tool-run"]);
+    expect(within(row).getByTestId("thinking-toggle").textContent).toBe("Thinking");
+    expect(within(row).getByTestId("tool-run-summary").textContent).toBe("2 tool calls · Read");
+    expect(within(row).queryByTestId("thinking-text")).toBeNull();
   });
 });
 
@@ -278,7 +279,10 @@ describe("scroll to latest", () => {
     const scroller = screen.getByTestId("chat-scroll");
     Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 2000 });
     Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
-    scroller.scrollTop = 0;
+    scroller.scrollTop = 1600;
+    fireEvent.scroll(scroller);
+    expect(screen.queryByTestId("chat-scroll-to-end")).toBeNull();
+    scroller.scrollTop = 1200;
     fireEvent.scroll(scroller);
 
     const pill = screen.getByTestId("chat-scroll-to-end");

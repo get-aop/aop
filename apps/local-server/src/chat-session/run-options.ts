@@ -25,6 +25,8 @@ export const buildRunOptions = (
     model: session.model ?? undefined,
     reasoningEffort: session.reasoning_effort ?? undefined,
     fastMode: Boolean(session.fast_mode),
+    // A chat shows a reply as it is written, so it asks for the text token by token.
+    partialMessages: true,
     accessMode: profile.accessMode ?? session.runtime_access_mode ?? "full-access",
     runtimeAlias: session.runtime_alias ?? undefined,
     resumeSessionId: session.runtime_session_id ?? undefined,

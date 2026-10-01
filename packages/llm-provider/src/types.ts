@@ -81,6 +81,12 @@ export interface RunOptions {
   /** Enable Claude Code Ultracode workflow orchestration for the session */
   ultracode?: boolean;
   /**
+   * Stream text and reasoning token by token into the output, besides the finished messages
+   * (Claude Code `--include-partial-messages`, which needs `--print`). Providers without such
+   * events ignore it.
+   */
+  partialMessages?: boolean;
+  /**
    * HTTP URL for AOP MCP tools (chat-first orchestration). Providers that
    * support MCP should pass this through their spawn config when set.
    */

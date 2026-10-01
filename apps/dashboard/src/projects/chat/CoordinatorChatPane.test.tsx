@@ -155,13 +155,16 @@ describe("the conversation", () => {
 
     act(() => fake.delta("a1", "Looking at the open threads"));
     await waitFor(() =>
-      expect(screen.getByTestId("coordinator-live-text").textContent).toContain("Looking at"),
+      expect(screen.getByTestId("assistant-message").textContent).toContain("Looking at"),
     );
+    const row = screen.getByTestId("assistant-message");
 
     act(() => fake.entry(2, reply("a1", 5, [{ type: "text", text: "Two threads are open." }])));
 
     expect(screen.queryByTestId("coordinator-activity")).toBeNull();
-    expect(screen.getByTestId("assistant-message").textContent).toContain("Two threads are open.");
+    // The reply's row stays where it was and takes the message's words.
+    expect(screen.getByTestId("assistant-message")).toBe(row);
+    await waitFor(() => expect(row.textContent).toContain("Two threads are open."));
     expect(screen.getByTestId("coordinator-chat-pane").getAttribute("data-working")).toBe("false");
   });
 
@@ -231,16 +234,20 @@ describe("saying something", () => {
     setup({ fetches: [Promise.resolve([userMessage("u1", 1), reply("a1", 2)])] });
     await settled();
     const scroller = screen.getByTestId("chat-scroll");
-    const scrolledTo: unknown[] = [];
-    scroller.scrollTo = ((options: ScrollToOptions) => {
-      scrolledTo.push(options.top);
-    }) as typeof scroller.scrollTo;
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 2000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 400 });
+    scroller.scrollTop = 1600;
+    fireEvent.scroll(scroller);
+    scroller.scrollTop = 300;
+    fireEvent.scroll(scroller);
+    expect(screen.getByTestId("chat-scroll-to-end")).toBeTruthy();
 
     type("one more thing");
     pressEnter();
     await settled();
 
-    expect(scrolledTo).toContain(scroller.scrollHeight);
+    expect(scroller.scrollTop).toBe(2000);
+    expect(screen.queryByTestId("chat-scroll-to-end")).toBeNull();
   });
 
   test("Shift+Enter is a new line and sends nothing; an empty box cannot send", async () => {

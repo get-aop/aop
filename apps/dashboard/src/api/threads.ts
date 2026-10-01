@@ -5,7 +5,6 @@ import type {
   SessionDiffHunk,
   SessionGitDiff,
   Thread,
-  ThreadActivity,
   ThreadUsage,
 } from "@aop/common";
 import { beforeQuery, request } from "./request";
@@ -100,10 +99,6 @@ export const getThreadDiffFile = async (threadId: string, path: string): Promise
   withHunks(
     await request<WireDiffFile>(threadUrl(threadId, `/diff/file?path=${encodeURIComponent(path)}`)),
   );
-
-/** The tool calls and status paragraphs of the thread's latest turns, which its messages do not carry. */
-export const getThreadActivity = (threadId: string): Promise<ThreadActivity> =>
-  request<ThreadActivity>(threadUrl(threadId, "/activity"));
 
 /** Everything the thread's runs consumed. */
 export const getThreadUsage = (threadId: string): Promise<ThreadUsage> =>

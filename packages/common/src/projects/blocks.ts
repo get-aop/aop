@@ -27,8 +27,45 @@ export const threadCardVariant = (status: ThreadStatus): ThreadCardVariant => {
   return LIVE_STATUSES.has(status) ? "live" : "done";
 };
 
-/** Markdown prose. Adjacent inline blocks (text, thread-chip, pr-chip) flow into one paragraph. */
+/**
+ * Markdown prose. Adjacent inline blocks (text, thread-chip, pr-chip) flow into one paragraph. A
+ * coordinator writes a thread into its text as `[title](thread:<id>)`, which a client shows as a chip.
+ */
 const TextBlockSchema = z.object({ type: z.literal("text"), text: z.string().min(1) });
+
+export const TOOL_NAME_MAX_LENGTH = 200;
+export const TOOL_DETAIL_MAX_LENGTH = 300;
+
+/**
+ * One tool call of the turn, where the agent made it. What the tool returned is not part of it:
+ * it can be large and private.
+ */
+const ToolBlockSchema = z.object({
+  type: z.literal("tool"),
+  /** The runtime's id for the call, unique within the turn. */
+  id: z.string().min(1),
+  /** The tool or command as the runtime names it: "Bash", "Read", "mcp aop thread spawn". */
+  name: z.string().min(1).max(TOOL_NAME_MAX_LENGTH),
+  /** What it was asked to do, e.g. the command line or the file path. */
+  detail: z.string().max(TOOL_DETAIL_MAX_LENGTH).nullable(),
+  status: z.enum(["running", "done", "failed"]),
+});
+
+/** What the model reasoned before it went on, shown folded. */
+const ThinkingBlockSchema = z.object({ type: z.literal("thinking"), text: z.string().min(1) });
+
+/**
+ * One part of what an agent's turn produced, in the order it produced them: prose, a tool call,
+ * or reasoning. A reply is its parts followed by the blocks its tools posted (cards, receipts,
+ * proposals), and a turn being written is the same parts, growing.
+ */
+export const TurnPartSchema = z.discriminatedUnion("type", [
+  TextBlockSchema,
+  ToolBlockSchema,
+  ThinkingBlockSchema,
+]);
+export type TurnPart = z.infer<typeof TurnPartSchema>;
+export type ToolPart = Extract<TurnPart, { type: "tool" }>;
 
 /** Inline pill for a thread mentioned in prose; the hover popover reads the thread by id. */
 const ThreadChipBlockSchema = z.object({
@@ -117,6 +154,8 @@ const SuggestedThreadsBlockSchema = z.object({
 
 export const MessageBlockSchema = z.discriminatedUnion("type", [
   TextBlockSchema,
+  ToolBlockSchema,
+  ThinkingBlockSchema,
   ThreadChipBlockSchema,
   PrChipBlockSchema,
   ThreadCardBlockSchema,

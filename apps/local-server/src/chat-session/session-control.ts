@@ -15,8 +15,6 @@ import { cancelAllResumeTimers } from "./resume-timers.ts";
 import { stopDispatching } from "./run-dispatch.ts";
 import { stopOrphanedChatRunProcess } from "./run-process.ts";
 import { activeSessionRunIds, interruptSessionRun } from "./runtime-engine.ts";
-import { sessionDtoFor } from "./session-dto.ts";
-import { publishChatSessionEvent } from "./session-events.ts";
 import type {
   AbortChatSessionResult,
   ChatSessionServiceDeps,
@@ -128,10 +126,6 @@ const ensureRuntimeBindingCleared = async (
     .set({ runtime_session_id: null, updated_at: now })
     .where("id", "=", sessionId)
     .execute();
-  const updated = await ctx.chatSessionRepository.getById(sessionId);
-  if (!updated) return;
-  const sessionDto = await sessionDtoFor(ctx, updated, null, now);
-  publishChatSessionEvent({ type: "session-updated", sessionId, session: sessionDto });
 };
 
 /** Stop current-process chat work before the local server releases its database. */

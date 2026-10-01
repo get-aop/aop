@@ -36,6 +36,7 @@ export interface McpConnection {
 /** A CLI-neutral step in a scripted turn; each dialect renders it in its own event shape. */
 export type Beat =
   | { kind: "text"; text: string }
+  | { kind: "thinking"; text: string }
   | { kind: "shell"; command: string; output: string }
   | { kind: "ask"; ask: AskUser }
   /** An MCP tool call that has been carried out, with the result the model saw. */
@@ -73,6 +74,8 @@ export interface TurnContext {
   usageWarning?: boolean;
   /** The appended system prompt this turn ran with: what the launch passed, or the recorded one on a resume. */
   systemPrompt?: string;
+  /** The launch asked for partial messages: text and reasoning also stream as they are written. */
+  partialMessages?: boolean;
   /** The images the prompt carried; the reply names them. */
   images?: FakeImage[];
 }

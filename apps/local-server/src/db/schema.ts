@@ -126,6 +126,8 @@ export interface ChatMessagesTable {
   created_at: Generated<string>;
   /** JSON `MessageOrigin`, added by migration v4; null on what a person typed. */
   origin_json: string | null;
+  /** JSON `TurnPart[]` of a reply a run wrote, added by migration v16; null on any other row. */
+  parts: Generated<string | null>;
 }
 
 export interface ChatRunsTable {

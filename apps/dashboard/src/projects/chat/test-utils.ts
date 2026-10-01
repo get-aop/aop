@@ -10,6 +10,7 @@ import type {
 } from "@aop/common";
 import type { ProjectStreamEvent } from "../live-projects";
 import type { StreamConnection } from "../projects-state";
+import type { LiveTurn } from "./chat-state";
 import type { SeenStore } from "./project-chat";
 
 const BASE = Date.parse("2026-09-30T10:00:00.000Z");
@@ -62,16 +63,38 @@ export const report = (
   ...overrides,
 });
 
+type DeltaOverrides = Partial<Omit<MessageDelta, "ops">>;
+
+/**
+ * A reply's first paragraph starting with `text`; with `replace`, the baseline of a turn that is
+ * that one paragraph so far, and with `replace` and no text, the end of a turn with no message.
+ */
 export const delta = (
   messageId: string,
   text: string,
-  overrides: Partial<MessageDelta> = {},
+  { replace = false, ...overrides }: DeltaOverrides & { replace?: boolean } = {},
 ): MessageDelta => ({
   projectId: "prj_1",
   threadId: null,
   messageId,
-  text,
-  replace: false,
+  ops: !replace
+    ? [{ op: "start", index: 0, part: { type: "text", text } }]
+    : text
+      ? [{ op: "reset", parts: [{ type: "text", text }] }]
+      : [{ op: "end" }],
+  ...overrides,
+});
+
+/** `text` added to the reply's first paragraph. */
+export const appended = (
+  messageId: string,
+  text: string,
+  overrides: DeltaOverrides = {},
+): MessageDelta => ({
+  projectId: "prj_1",
+  threadId: null,
+  messageId,
+  ops: [{ op: "append", index: 0, text }],
   ...overrides,
 });
 
@@ -114,7 +137,9 @@ export const createFakeEvents = () => {
       eventListeners.add(listener);
       return () => eventListeners.delete(listener);
     },
+    liveTurns: (_projectId: string) => liveTurns,
   };
+  let liveTurns: MessageDelta[] = [];
   const send = (event: ProjectStreamEvent) => {
     for (const listener of eventListeners) listener(event);
   };
@@ -127,7 +152,15 @@ export const createFakeEvents = () => {
       send({ kind: "entry", entry: messageEntry(id, message) }),
     delta: (messageId: string, text: string, replace = false) =>
       send({ kind: "delta", delta: delta(messageId, text, { replace }) }),
+    append: (messageId: string, text: string) =>
+      send({ kind: "delta", delta: appended(messageId, text) }),
     resync: () => send({ kind: "resync", resync: { cursor: 5, reason: "start" } }),
+    /** What the shared stream already holds of turns being written, for a conversation that starts later. */
+    setLiveTurns: (turns: MessageDelta[]) => {
+      liveTurns = turns;
+    },
+    /** The snapshot a (re)opened connection sends of the turns being written. */
+    live: (...turns: MessageDelta[]) => send({ kind: "live", snapshot: { turns } }),
     setConnection: (next: StreamConnection) => {
       connection = next;
       for (const listener of stateListeners) listener();
@@ -158,3 +191,18 @@ export const deferred = <T>() => {
   });
   return { promise, resolve, reject };
 };
+
+/** The live text of each reply being written, by message id. */
+export const liveTexts = (state: { live: Readonly<Record<string, LiveTurn>> }) =>
+  Object.fromEntries(
+    Object.entries(state.live).map(([id, turn]) => [
+      id,
+      turn.parts.map((part) => (part.type === "text" ? part.text : "")).join(""),
+    ]),
+  );
+
+/** A reply being written, as the chat holds it: one paragraph so far, and the message it answers. */
+export const liveTurn = (text: string, inReplyTo?: string): LiveTurn => ({
+  parts: [{ type: "text", text }],
+  ...(inReplyTo && { inReplyTo }),
+});

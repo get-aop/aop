@@ -112,12 +112,10 @@ describe("a new project's first open", () => {
     );
     const summaryBlocks = blocksOf(summary);
     // The chip stands for the survey: the summary carries no card of it.
-    expect(summaryBlocks.map((block) => block.type)).toEqual([
-      "text",
-      "thread-chip",
-      "suggested-threads",
-    ]);
-    expect(summaryBlocks[1]).toEqual({ type: "thread-chip", threadId: survey.id });
+    expect(summaryBlocks.map((block) => block.type)).toEqual(["tool", "text", "suggested-threads"]);
+    expect(summaryBlocks[1]?.type === "text" && summaryBlocks[1].text).toContain(
+      `(thread:${survey.id})`,
+    );
     const proposals = summaryBlocks.find((block) => block.type === "suggested-threads");
     expect(
       proposals?.type === "suggested-threads" &&

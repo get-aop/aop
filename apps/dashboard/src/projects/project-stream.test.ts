@@ -11,6 +11,7 @@ const handlers = () => ({
   onState: mock((_state: string) => {}),
   onEntry: mock((_entry: unknown) => {}),
   onDelta: mock((_delta: unknown) => {}),
+  onLive: mock((_snapshot: unknown) => {}),
   onResync: mock((_resync: unknown) => {}),
   onRejected: mock(() => {}),
 });
@@ -62,14 +63,15 @@ describe("connectProjectStream", () => {
       projectId: "prj_1",
       threadId: null,
       messageId: "m1",
-      text: "Hel",
-      replace: false,
+      ops: [{ op: "start", index: 0, part: { type: "text", text: "Hel" } }],
     });
     source?.emit("resync", { cursor: 9, reason: "start" }, "9");
+    source?.emit("live", { turns: [] });
     source?.emit("heartbeat", {});
 
     expect(on.onEntry).toHaveBeenCalledWith(entry);
     expect(on.onDelta).toHaveBeenCalledTimes(1);
+    expect(on.onLive).toHaveBeenCalledWith({ turns: [] });
     expect(on.onResync).toHaveBeenCalledWith({ cursor: 9, reason: "start" });
     expect(on.onState).toHaveBeenLastCalledWith("live");
   });

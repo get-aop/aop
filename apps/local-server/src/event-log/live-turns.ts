@@ -1,10 +1,16 @@
-import type { EventLogEntry, MessageDelta } from "@aop/common";
+import {
+  applyLiveOps,
+  compactLiveOps,
+  type EventLogEntry,
+  type MessageDelta,
+  type TurnPart,
+} from "@aop/common";
 
 /**
- * The text so far of every assistant turn that is being written, per project. It exists so a
+ * The parts so far of every assistant turn that is being written, per project. It exists so a
  * client that connects mid-turn gets a baseline for the deltas that follow, which only carry
- * what was appended. Nothing here is durable: a restart forgets turns whose process died with
- * the server anyway.
+ * what changed. Nothing here is durable: a restart forgets turns whose process died with the
+ * server anyway, and recovery writes the ones still running again.
  */
 export interface LiveTurns {
   apply: (delta: MessageDelta) => void;
@@ -14,10 +20,12 @@ export interface LiveTurns {
   list: (projectId: string) => MessageDelta[];
 }
 
-export const createLiveTurns = (): LiveTurns => {
-  const byProject = new Map<string, Map<string, MessageDelta>>();
+type HeldTurn = Omit<MessageDelta, "ops"> & { parts: TurnPart[] };
 
-  const forget = (projectId: string, keep: (turn: MessageDelta) => boolean) => {
+export const createLiveTurns = (): LiveTurns => {
+  const byProject = new Map<string, Map<string, HeldTurn>>();
+
+  const forget = (projectId: string, keep: (turn: HeldTurn) => boolean) => {
     const turns = byProject.get(projectId);
     if (!turns) return;
     for (const [messageId, turn] of turns) {
@@ -28,14 +36,18 @@ export const createLiveTurns = (): LiveTurns => {
 
   return {
     apply: (delta) => {
-      const turns = byProject.get(delta.projectId) ?? new Map<string, MessageDelta>();
-      const text = delta.replace
-        ? delta.text
-        : `${turns.get(delta.messageId)?.text ?? ""}${delta.text}`;
-      if (text === "") {
+      const turns = byProject.get(delta.projectId) ?? new Map<string, HeldTurn>();
+      const held = turns.get(delta.messageId);
+      const parts = applyLiveOps(held?.parts ?? [], delta.ops);
+      if (parts === null || parts.length === 0) {
         turns.delete(delta.messageId);
       } else {
-        turns.set(delta.messageId, { ...delta, text, replace: true });
+        const { ops: _ops, ...turn } = delta;
+        turns.set(delta.messageId, {
+          ...turn,
+          inReplyTo: delta.inReplyTo ?? held?.inReplyTo,
+          parts,
+        });
       }
       if (turns.size === 0) byProject.delete(delta.projectId);
       else byProject.set(delta.projectId, turns);
@@ -52,15 +64,25 @@ export const createLiveTurns = (): LiveTurns => {
       }
     },
 
-    list: (projectId) => [...(byProject.get(projectId)?.values() ?? [])],
+    list: (projectId) =>
+      [...(byProject.get(projectId)?.values() ?? [])].map(({ parts, ...turn }) => ({
+        ...turn,
+        ops: [{ op: "reset", parts }],
+      })),
   };
 };
 
 /**
  * Folds a delta into the one already waiting to be sent for the same message, so a slow
- * client costs one pending frame per running turn, not one per chunk. A replacement wins
- * outright; an append extends the waiting text and keeps its `replace` flag, so a baseline
- * that is still waiting stays a baseline.
+ * client costs one pending frame per running turn, not one per change: their ops in order,
+ * without what a later baseline or end makes obsolete. A baseline that is still waiting stays
+ * a baseline, with what came after it.
  */
 export const mergeDelta = (waiting: MessageDelta | undefined, next: MessageDelta): MessageDelta =>
-  waiting && !next.replace ? { ...waiting, text: `${waiting.text}${next.text}` } : next;
+  waiting
+    ? {
+        ...waiting,
+        inReplyTo: next.inReplyTo ?? waiting.inReplyTo,
+        ops: compactLiveOps([...waiting.ops, ...next.ops]),
+      }
+    : next;

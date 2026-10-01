@@ -5,7 +5,7 @@ import type {
   UserMessage,
 } from "@aop/common";
 import { CircleAlertIcon, CircleCheckIcon, HandIcon } from "lucide-react";
-import { memo, type ReactNode, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Bubble } from "@/ui/bubble";
 import { ChatMarkdown } from "./ChatMarkdown";
@@ -15,6 +15,7 @@ import { MessageImages } from "./MessageImages";
 import { MessageMeta } from "./MessageMeta";
 import { ThreadChip } from "./ThreadChip";
 import { useThreadPresence } from "./thread-presence";
+import { useTurnReveal } from "./use-turn-reveal";
 
 const COLLAPSED_MAX_CHARS = 600;
 const COLLAPSED_MAX_LINES = 8;
@@ -45,23 +46,30 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
 });
 
 /**
- * An agent's reply, or a message the coordinator relayed: blocks on the left, no bubble.
- * `workLog` is what the agent did to write it, shown above the words. A reply whose run failed
- * is drawn as an error, so what the runtime said is not read as the agent's answer.
+ * An agent's reply, or a message the coordinator relayed: blocks on the left, no bubble. The same
+ * row draws a reply while it is being written (`writing`) and once its message has arrived, so
+ * the reply goes on in place: prose that arrives is typed out, and what is left when the turn ends
+ * is typed out quickly, not dropped in. A reply whose run failed is drawn as an error, so what the
+ * runtime said is not read as the agent's answer.
  */
 export const AssistantRow = memo(function AssistantRow({
   message,
-  workLog,
+  writing = false,
 }: {
   message: AssistantMessage;
-  workLog?: ReactNode;
+  writing?: boolean;
 }) {
+  const { blocks, revealing } = useTurnReveal(message.blocks, writing);
+  const settled = !writing && !revealing;
+  // Fixed at mount: a reply that finishes in front of the person keeps rendering as it did.
+  const watched = useRef(writing).current;
   return (
     <div
       className="group pb-5"
       data-testid="assistant-message"
       data-message-id={message.id}
       data-message-role="assistant"
+      data-writing={settled ? undefined : "true"}
       data-failed={message.failed ? "true" : undefined}
     >
       <div
@@ -70,7 +78,6 @@ export const AssistantRow = memo(function AssistantRow({
           message.failed && "rounded-card border border-blocked/30 bg-blocked/5 px-3 py-2",
         )}
       >
-        {workLog}
         {message.failed ? (
           <p
             data-testid="assistant-message-failed"
@@ -80,9 +87,17 @@ export const AssistantRow = memo(function AssistantRow({
             This turn failed
           </p>
         ) : null}
-        <MessageBlocks messageId={message.id} blocks={message.blocks} />
-        <div className="mt-1.5">
-          <MessageMeta timestamp={message.createdAt} copyText={textOf(message)} />
+        <MessageBlocks
+          messageId={message.id}
+          blocks={blocks}
+          writing={!settled}
+          watched={watched}
+        />
+        {/* The meta's room is kept while the reply is written, so it ends without a jump. */}
+        <div className="mt-1.5 min-h-6">
+          {settled ? (
+            <MessageMeta timestamp={message.createdAt} copyText={textOf(message)} />
+          ) : null}
         </div>
       </div>
     </div>

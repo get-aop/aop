@@ -1,4 +1,17 @@
-import type { Message, MessageDelta, MessagePage } from "@aop/common";
+import {
+  applyLiveOps,
+  type LiveSnapshot,
+  type Message,
+  type MessageDelta,
+  type MessagePage,
+  type TurnPart,
+} from "@aop/common";
+
+/** A reply being written: what its turn has produced so far, and the message it answers. */
+export interface LiveTurn {
+  parts: readonly TurnPart[];
+  inReplyTo?: string;
+}
 
 /**
  * One conversation of a project as the page holds it, the coordinator chat or a thread's own:
@@ -21,8 +34,8 @@ export interface ChatState {
   loadingEarlier: boolean;
   /** Why the last fetch of an older page failed. */
   earlierError: string | null;
-  /** Live text of the reply being written, by the id the finished message will have. */
-  live: Readonly<Record<string, string>>;
+  /** The replies being written, by the id the finished message will have. */
+  live: Readonly<Record<string, LiveTurn>>;
 }
 
 export const createChatState = (scope: string | null): ChatState => ({
@@ -136,23 +149,33 @@ export const applyMessageUpdate = (state: ChatState, message: Message): ChatStat
 };
 
 /**
- * A slice of a reply being written. The live text of a message the page already holds is not
- * shown: deltas and entries travel apart, so a delta can arrive after its message.
+ * What changed in a reply being written: text added, a tool call started or finished, reasoning
+ * growing. The live parts of a message the page already holds are not shown: deltas and entries
+ * travel apart, so a delta can arrive after its message.
  */
 export const applyDelta = (state: ChatState, delta: MessageDelta): ChatState => {
   if (delta.threadId !== state.scope) return state;
   if (state.messages.some(({ id }) => id === delta.messageId)) return state;
-  const next = delta.replace ? delta.text : (state.live[delta.messageId] ?? "") + delta.text;
-  if (next === "") return { ...state, live: withoutKey(state.live, delta.messageId) };
-  return { ...state, live: { ...state.live, [delta.messageId]: next } };
+  const held = state.live[delta.messageId];
+  const parts = applyLiveOps(held?.parts ?? [], delta.ops);
+  if (!parts?.length) return { ...state, live: withoutKey(state.live, delta.messageId) };
+  const inReplyTo = delta.inReplyTo ?? held?.inReplyTo;
+  const turn: LiveTurn = { parts, ...(inReplyTo && { inReplyTo }) };
+  return { ...state, live: { ...state.live, [delta.messageId]: turn } };
 };
 
 /**
- * Live text nobody is updating any more: the connection dropped, and a reconnect starts each
- * running reply again from a baseline, so what was held may belong to a turn that died.
+ * The turns being written as the connection (re)opened. What the page holds of them stays, so a
+ * reply goes on from what was already shown; a turn the snapshot does not name ended while the
+ * page could not hear, and its live text goes (its message, if any, came in the replay).
  */
-export const dropLiveText = (state: ChatState): ChatState =>
-  Object.keys(state.live).length === 0 ? state : { ...state, live: {} };
+export const applyLiveSnapshot = (state: ChatState, snapshot: LiveSnapshot): ChatState => {
+  const turns = snapshot.turns.filter((turn) => turn.threadId === state.scope);
+  const running = new Set(turns.map((turn) => turn.messageId));
+  const ended = Object.keys(state.live).filter((id) => !running.has(id));
+  const kept = ended.reduce((live, id) => withoutKey(live, id), state.live);
+  return turns.reduce(applyDelta, kept === state.live ? state : { ...state, live: kept });
+};
 
 /** What the person said (or the server said for them) that no reply follows yet. */
 export const unansweredMessages = (messages: readonly Message[]): readonly Message[] => {
@@ -208,16 +231,16 @@ const afterLatestNotNewer = (messages: readonly Message[], message: Message): nu
 };
 
 const withoutKey = (
-  live: Readonly<Record<string, string>>,
+  live: Readonly<Record<string, LiveTurn>>,
   key: string,
-): Readonly<Record<string, string>> => {
+): Readonly<Record<string, LiveTurn>> => {
   if (!(key in live)) return live;
   const { [key]: _done, ...rest } = live;
   return rest;
 };
 
 const withoutHeld = (
-  live: Readonly<Record<string, string>>,
+  live: Readonly<Record<string, LiveTurn>>,
   messages: readonly Message[],
-): Readonly<Record<string, string>> =>
+): Readonly<Record<string, LiveTurn>> =>
   messages.reduce((kept, { id }) => withoutKey(kept, id), live);

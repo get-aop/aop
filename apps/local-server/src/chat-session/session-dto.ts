@@ -4,7 +4,8 @@ import type { LocalServerContext } from "../context.ts";
 import type { ChatMessage, ChatRun, ChatSession, Repo } from "../db/schema.ts";
 import { decodeMessageContent, expandStoredPastes } from "./message-images.ts";
 import { resolveAssistantLifecycle } from "./session-lifecycle.ts";
-import type { AssistantActivity, ChatMessageDto, ChatSessionDto } from "./session-types.ts";
+import type { ChatMessageDto, ChatSessionDto } from "./session-types.ts";
+import { storedTurnParts } from "./turn-parts.ts";
 
 const SNIPPET_MAX = 46;
 
@@ -139,7 +140,7 @@ export const toMessageDto = (message: ChatMessage, run?: ChatRun): ChatMessageDt
     // Composer stores compact `[paste #N]` tokens + bodies; chat UI shows full text.
     content: expandStoredPastes(decoded.text, decoded.pastes),
     action: parseAction(message.action),
-    activity: parseActivity(message.activity),
+    parts: message.role === "assistant" ? storedTurnParts(message, decoded.text) : [],
     createdAt: message.created_at,
     images: decoded.images,
     documents: decoded.documents,
@@ -158,15 +159,6 @@ export const toMessageDto = (message: ChatMessage, run?: ChatRun): ChatMessageDt
         }
       : {}),
   };
-};
-
-const parseActivity = (raw: string | null): AssistantActivity | null => {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as AssistantActivity;
-  } catch {
-    return null;
-  }
 };
 
 const parseAction = (raw: string | null): ChatActionPayload | null => {

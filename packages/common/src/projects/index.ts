@@ -1,21 +1,4 @@
 export type {
-  ActivityGroup,
-  ActivityRow,
-  ThreadActivity,
-  ThreadTurnActivity,
-} from "./activity.ts";
-export {
-  ACTIVITY_DETAIL_MAX_LENGTH,
-  ACTIVITY_LABEL_MAX_LENGTH,
-  ACTIVITY_NARRATION_MAX_LENGTH,
-  ACTIVITY_ROWS_PER_TURN_MAX,
-  ACTIVITY_TURNS_MAX,
-  ActivityGroupSchema,
-  ActivityRowSchema,
-  ThreadActivitySchema,
-  ThreadTurnActivitySchema,
-} from "./activity.ts";
-export type {
   Artifact,
   PullRequestChecks,
   PullRequestRef,
@@ -27,6 +10,8 @@ export type {
   SuggestedThread,
   SuggestionAnswer,
   ThreadCardVariant,
+  ToolPart,
+  TurnPart,
 } from "./blocks.ts";
 export {
   MessageBlockSchema,
@@ -34,6 +19,9 @@ export {
   SUGGESTION_REASON_MAX,
   SuggestedThreadSchema,
   SuggestionAnswerSchema,
+  TOOL_DETAIL_MAX_LENGTH,
+  TOOL_NAME_MAX_LENGTH,
+  TurnPartSchema,
   threadCardVariant,
 } from "./blocks.ts";
 export type { Device } from "./device.ts";
@@ -52,6 +40,7 @@ export {
 } from "./device-auth.ts";
 export type { EventLogEntry } from "./event-log.ts";
 export { EventLogEntrySchema } from "./event-log.ts";
+export { applyLiveOps, compactLiveOps, diffTurnParts } from "./live-turn.ts";
 export type { MemoryFile, MemoryFileInput } from "./memory.ts";
 export {
   MEMORY_BODY_MAX_LENGTH,
@@ -112,8 +101,10 @@ export {
 } from "./run-cap.ts";
 export type { CliProvider, ReasoningEffort, RuntimePreference } from "./runtime.ts";
 export { CliProviderSchema, ReasoningEffortSchema, RuntimePreferenceSchema } from "./runtime.ts";
-export type { MessageDelta, Resync, ResyncReason } from "./stream.ts";
+export type { LiveOp, LiveSnapshot, MessageDelta, Resync, ResyncReason } from "./stream.ts";
 export {
+  LiveOpSchema,
+  LiveSnapshotSchema,
   MessageDeltaSchema,
   PROJECT_STREAM_EVENTS,
   ResyncReasonSchema,

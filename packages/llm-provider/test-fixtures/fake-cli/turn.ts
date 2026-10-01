@@ -15,7 +15,9 @@ const ECHO_PATTERN =
 
 /** Turns the script into CLI-neutral beats: N tool rounds, MCP calls, an optional question, then how the turn ends. */
 export const planTurn = (directives: Directives, ctx: TurnContext): TurnPlan => {
-  const beats: PlannedBeat[] = [];
+  const beats: PlannedBeat[] = directives.think
+    ? [{ kind: "thinking", text: directives.think }]
+    : [];
   for (let step = 1; step <= directives.steps; step += 1) {
     beats.push(
       { kind: "text", text: `Working on step ${step} of ${directives.steps}.` },

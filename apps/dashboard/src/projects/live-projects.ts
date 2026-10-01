@@ -1,5 +1,13 @@
-import type { EventLogEntry, MessageDelta, Project, Resync, Thread } from "@aop/common";
+import type {
+  EventLogEntry,
+  LiveSnapshot,
+  MessageDelta,
+  Project,
+  Resync,
+  Thread,
+} from "@aop/common";
 import { ApiError, isUnauthenticated } from "../api/request";
+import { createLiveTurnMirror, type LiveTurnMirror } from "./live-turn-mirror";
 import {
   browserStreamDeps,
   connectProjectStream,
@@ -30,6 +38,7 @@ export interface ProjectsApi {
 export type ProjectStreamEvent =
   | { kind: "entry"; entry: EventLogEntry }
   | { kind: "delta"; delta: MessageDelta }
+  | { kind: "live"; snapshot: LiveSnapshot }
   | { kind: "resync"; resync: Resync };
 
 export interface LiveProjectsDeps {
@@ -59,6 +68,8 @@ export interface LiveProjects {
    * arrives. The chat and the thread pane read messages from here; the shell needs only state.
    */
   subscribeEvents: (projectId: string, listener: (event: ProjectStreamEvent) => void) => () => void;
+  /** The project's turns being written, each as a baseline, for a listener that starts mid-turn. */
+  liveTurns: (projectId: string) => MessageDelta[];
   start: () => void;
   stop: () => void;
   /** The project the page is showing: it always gets a stream. */
@@ -95,6 +106,7 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
   const retries = new Map<string, () => void>();
   const stateListeners = new Set<() => void>();
   const eventListeners = new Map<string, Set<(event: ProjectStreamEvent) => void>>();
+  const liveTurns = new Map<string, LiveTurnMirror>();
 
   const setState = (next: ProjectsState) => {
     if (next === state) return;
@@ -106,6 +118,9 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
   };
 
   const publish = (projectId: string, event: ProjectStreamEvent) => {
+    const mirror = liveTurns.get(projectId) ?? createLiveTurnMirror();
+    liveTurns.set(projectId, mirror);
+    mirror.hear(event);
     for (const listener of eventListeners.get(projectId) ?? []) listener(event);
   };
 
@@ -130,6 +145,7 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
   const closeStream = (projectId: string) => {
     streams.get(projectId)?.close();
     streams.delete(projectId);
+    liveTurns.delete(projectId);
     resyncing.delete(projectId);
     retries.get(projectId)?.();
     retries.delete(projectId);
@@ -146,6 +162,7 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
           onState,
           onEntry: (entry) => receive(projectId, entry),
           onDelta: (delta) => publish(projectId, { kind: "delta", delta }),
+          onLive: (snapshot) => publish(projectId, { kind: "live", snapshot }),
           onResync: (resync) => {
             publish(projectId, { kind: "resync", resync });
             void resyncProject(projectId);
@@ -253,6 +270,7 @@ export const createLiveProjects = (deps: LiveProjectsDeps): LiveProjects => {
       eventListeners.set(projectId, listeners);
       return () => listeners.delete(listener);
     },
+    liveTurns: (projectId) => liveTurns.get(projectId)?.baselines() ?? [],
     start: () => {
       if (running) return;
       running = true;

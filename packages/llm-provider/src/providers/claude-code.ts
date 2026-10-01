@@ -159,6 +159,8 @@ export class ClaudeCodeProvider implements LLMProvider {
       "stream-json",
       "--verbose",
     ];
+    // Partial messages only work in print mode (`claude --help`), so it is asked for explicitly.
+    if (options.partialMessages) cmd.push("-p", "--include-partial-messages");
 
     appendClaudePermissionFlags(cmd, options);
 

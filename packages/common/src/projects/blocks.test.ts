@@ -3,6 +3,8 @@ import {
   MessageBlockSchema,
   SUGGESTED_THREADS_MAX,
   SUGGESTION_REASON_MAX,
+  TOOL_DETAIL_MAX_LENGTH,
+  TurnPartSchema,
   threadCardVariant,
 } from "./blocks.ts";
 import { makePrArtifact, parsed, rejectedPaths } from "./test-utils.ts";
@@ -21,6 +23,12 @@ describe("MessageBlockSchema", () => {
     ["thread-card", { type: "thread-card", threadId: "thr_1", variant: "live" }],
     ["routing-receipt", { type: "routing-receipt", threadIds: ["thr_1", "thr_2", "thr_3"] }],
     ["quote-forwarded", { type: "quote-forwarded", text: "release moved to Monday" }],
+    [
+      "tool",
+      { type: "tool", id: "toolu_1", name: "Bash", detail: "git status", status: "running" },
+    ],
+    ["tool without detail", { type: "tool", id: "t2", name: "Read", detail: null, status: "done" }],
+    ["thinking", { type: "thinking", text: "The flaky test races the clock." }],
   ])("accepts a %s block", (_type, block) => {
     expect(parsed(MessageBlockSchema, block)).toEqual(block);
   });
@@ -149,5 +157,27 @@ describe("threadCardVariant", () => {
       idle: "done",
       resolved: "done",
     });
+  });
+});
+
+describe("TurnPartSchema", () => {
+  test("holds prose, tool calls and reasoning, and nothing a tool posts", () => {
+    expect(parsed(TurnPartSchema, { type: "text", text: "Done." })).toEqual({
+      type: "text",
+      text: "Done.",
+    });
+    expect(
+      rejectedPaths(TurnPartSchema, { type: "thread-card", threadId: "t1", variant: "live" }),
+    ).toEqual(["type"]);
+  });
+
+  test("rejects empty prose and reasoning, an unknown tool status, and an oversized detail", () => {
+    expect(rejectedPaths(TurnPartSchema, { type: "text", text: "" })).toEqual(["text"]);
+    expect(rejectedPaths(TurnPartSchema, { type: "thinking", text: "" })).toEqual(["text"]);
+    const tool = { type: "tool", id: "t1", name: "Bash", detail: null, status: "running" };
+    expect(rejectedPaths(TurnPartSchema, { ...tool, status: "queued" })).toEqual(["status"]);
+    expect(
+      rejectedPaths(TurnPartSchema, { ...tool, detail: "x".repeat(TOOL_DETAIL_MAX_LENGTH + 1) }),
+    ).toEqual(["detail"]);
   });
 });

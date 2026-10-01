@@ -36,6 +36,10 @@ Bind the session to that runtime configuration (the dashboard runtime picker, or
 
 The file needs its executable bit (it is committed with mode 755) and `bun` on `PATH`. macOS and Linux only; the shebang does not run on native Windows.
 
+## Partial messages
+
+When the launch passes `--include-partial-messages` (AOP's chat runs do, with `-p`), every content block streams first the way Claude Code 2.1.286 writes it: a `stream_event` `message_start`, a `content_block_start`, `content_block_delta`s (a couple of words per `text_delta` or `thinking_delta`, one `input_json_delta` for a tool's input), the finished block as its `assistant` event, then `content_block_stop`. Without the flag only the `assistant` events are written.
+
 ## Scripting a turn
 
 Put `[fake: key=value ...]` anywhere in the prompt. The last marker wins. Without a marker, `FAKE_CLI_SCRIPT` (same syntax, no brackets) applies to every turn of that process.
@@ -46,6 +50,8 @@ A value is bare (`steps=2`), `"double quoted"` or `'single quoted'`. A quoted va
 | --- | --- |
 | `startup=<ms>` | Sleep before the first event (startup watchdog). |
 | `delay=<ms>` | Sleep between events (streaming, inactivity watchdog, kill windows). |
+| `stream=<ms>` | Sleep before each partial-message event instead of `delay` (default 0), so a reply can be watched arriving a few words at a time. Only matters when the launch passes `--include-partial-messages`. |
+| `think="<text>"` | Starts the turn with this reasoning, as a `thinking` block. |
 | `steps=<n>` | `n` rounds of narration plus a Bash tool call and result before the reply. |
 | `say="<text>"` | Final reply text. The default names the turn and session and echoes the prompt: `Fake reply for turn 2 of session <id> (resumed). You said: ...`. |
 | `calls='[{"name":"thread_spawn","arguments":{...}}, ...]'` | MCP tool calls to the `aop` server, made in order after the `steps` rounds and before `ask`. `arguments` defaults to `{}`. A value that is not a JSON array of `{name, arguments?}` ends the turn with the failure `fake CLI: invalid calls directive` (exit 1) and makes no calls. See [MCP tool calls](#mcp-tool-calls). |

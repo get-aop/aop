@@ -51,11 +51,6 @@ export const createThreadRoutes = ({ threads }: ProjectServices) => {
       : errorResponse(c, result.error);
   });
 
-  routes.get("/threads/:threadId/activity", async (c) => {
-    const result = await threads.activity(c.req.param("threadId"));
-    return result.success ? c.json(result.activity) : errorResponse(c, result.error);
-  });
-
   routes.get("/threads/:threadId/diff", async (c) => {
     const result = await threads.changes(c.req.param("threadId"));
     return result.success ? c.json(result.diff) : errorResponse(c, result.error);

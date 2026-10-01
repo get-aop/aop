@@ -5,7 +5,6 @@ import { executeChatCommand } from "./commands.ts";
 import { drainQueuedSteers } from "./reply-lifecycle.ts";
 import { createSessionRunLogPath } from "./runtime-engine.ts";
 import { sessionDtoFor, toMessageDto } from "./session-dto.ts";
-import { publishChatSessionEvent } from "./session-events.ts";
 import type {
   ChatSessionServiceDeps,
   SendChatMessageInput,
@@ -32,7 +31,6 @@ export const acceptMidRunMessage = async (
     stored.displayText || "(image attachment)",
     stored.userMessage.created_at,
   );
-  publishChatSessionEvent({ type: "session-updated", sessionId, session: sessionDto });
 
   // Drain only if the active run already finished while this message was stored.
   void drainQueuedSteers(ctx, sessionId, stored.session.runtime, deps);
@@ -133,25 +131,7 @@ const tryImmediateMidRunSlash = async (
       .execute();
   });
 
-  const assistantMessage: ChatMessage = {
-    id: assistantMessageId,
-    session_id: sessionId,
-    role: "assistant",
-    content: command.text,
-    action: command.action ? JSON.stringify(command.action) : null,
-    activity: null,
-    origin_json: null,
-    turn_index: turnIndex,
-    disposition: "immediate",
-    created_at: now,
-  };
   const sessionDto = await sessionDtoFor(ctx, nextSession, command.text, now);
-  publishChatSessionEvent({
-    type: "assistant-final",
-    sessionId,
-    message: toMessageDto(assistantMessage),
-  });
-  publishChatSessionEvent({ type: "session-updated", sessionId, session: sessionDto });
 
   return {
     success: true,

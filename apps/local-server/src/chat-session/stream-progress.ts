@@ -1,352 +1,24 @@
-import { type FileHandle, open } from "node:fs/promises";
+import type { TurnPart } from "@aop/common";
+import { createLogReader, type LogReader } from "./log-reader.ts";
 import { type ProgressChunk, parseStreamProgressLines } from "./stream-progress-parse.ts";
+import { createTurnAccumulator } from "./turn-accumulator.ts";
 
 export { parseStreamProgressLine, parseStreamProgressLines } from "./stream-progress-parse.ts";
 
-/** One shell command row inside a Codex-style "Ran N commands" group. */
-export interface StreamCommandRow {
-  id: string;
-  command: string;
-  detail?: string;
-  /** Tool result text when the provider emits a completion payload. */
-  result?: string;
-  status: "running" | "done" | "failed";
-  exitCode?: number | null;
-}
-
-export interface StreamCommandGroup {
-  id: string;
-  commands: StreamCommandRow[];
-}
-
-export interface StreamProgressSnapshot {
-  /** Model reasoning only (not tool/command noise). */
-  thinking: string;
-  /**
-   * Assistant status + answer prose so far. Intermediate status runs are sealed
-   * and stacked (blank-line separated) so the UI keeps agent progress history.
-   */
-  content: string;
-  /** Tool/command batches for Codex-style collapsible "Ran N commands". */
-  commandGroups: StreamCommandGroup[];
-}
-
-export type StreamProgressListener = (snapshot: StreamProgressSnapshot) => void;
-
-export const createStreamProgressAccumulator = () => {
-  let thinking = "";
-  /** Sealed intermediate status narrations (shown as stacked white paragraphs). */
-  let sealedContent = "";
-  /** Live text run currently streaming (status or final answer). */
-  let content = "";
-  /** Providers that re-emit full messages — replace rather than append when longer. */
-  let lastFullText = "";
-  const commandGroups: StreamCommandGroup[] = [];
-  let groupSeq = 0;
-  let commandSeq = 0;
-  /** After text, the next command starts a new collapsible group (Codex interleaving). */
-  let sealCommandsAfterText = false;
-  /** A tool/text run happened since the last thought: the next thought is a new paragraph. */
-  let newThoughtSegment = false;
-  /**
-   * Status narration and later answer text are separate runs broken by thought/tool
-   * events. Seal the previous paragraph into history so the UI stacks agent updates
-   * instead of replacing the same block. Final message content still comes from the
-   * provider log extractor (last text run only).
-   */
-  let startNewTextRun = false;
-
-  const snapshot = (): StreamProgressSnapshot => ({
-    thinking,
-    content: joinSealedContent(sealedContent, content),
-    commandGroups: commandGroups.map((group) => ({
-      ...group,
-      commands: group.commands.map((row) => ({ ...row })),
-    })),
-  });
-
-  return {
-    apply(chunk: ProgressChunk): StreamProgressSnapshot {
-      mutate(chunk);
-      return snapshot();
-    },
-    applyAll(chunks: ProgressChunk[]): StreamProgressSnapshot {
-      for (const chunk of chunks) mutate(chunk);
-      return snapshot();
-    },
-    get: (): StreamProgressSnapshot => snapshot(),
-  };
-
-  function mutate(chunk: ProgressChunk): void {
-    switch (chunk.kind) {
-      case "thought":
-        // Providers (e.g. Pi) re-carry the full reasoning block on later message
-        // lifecycle events; a trailing duplicate is a replay, not new reasoning.
-        if (thinking.endsWith(chunk.data)) return;
-        // Reasoning segments separated by tool/text runs are paragraphs; direct
-        // concatenation produced run-on text ("…error.The model…"). Token-sized
-        // streams have no interruption and keep concatenating directly.
-        thinking =
-          thinking && newThoughtSegment ? `${thinking}\n\n${chunk.data}` : thinking + chunk.data;
-        newThoughtSegment = false;
-        startNewTextRun = true;
-        return;
-      case "text":
-        newThoughtSegment = true;
-        applyText(chunk.data);
-        return;
-      case "command":
-        startNewTextRun = true;
-        newThoughtSegment = true;
-        applyCommand(chunk);
-        return;
-      case "tool":
-        startNewTextRun = true;
-        newThoughtSegment = true;
-        applyTool(chunk);
-        return;
-    }
-  }
-
-  function applyText(data: string): void {
-    // PI replays the completed assistant message in turn_end after tool execution.
-    if (startNewTextRun && data === content) return;
-    if (startNewTextRun) {
-      sealedContent = sealTextRun(sealedContent, content);
-      content = "";
-      lastFullText = "";
-      startNewTextRun = false;
-    }
-    content = mergeTextChunk(content, lastFullText, data);
-    lastFullText = content;
-    sealCommandsAfterText = true;
-  }
-
-  function openGroup(): StreamCommandGroup {
-    const group: StreamCommandGroup = { id: `cg_${++groupSeq}`, commands: [] };
-    commandGroups.push(group);
-    sealCommandsAfterText = false;
-    return group;
-  }
-
-  function activeGroup(): StreamCommandGroup {
-    const last = commandGroups[commandGroups.length - 1];
-    if (!last || sealCommandsAfterText) return openGroup();
-    return last;
-  }
-
-  function applyCommand(chunk: Extract<ProgressChunk, { kind: "command" }>): void {
-    if (chunk.phase === "start") {
-      activeGroup().commands.push(
-        newCommandRow(chunk.itemId, chunk.command, "running", undefined, chunk.detail),
-      );
-      return;
-    }
-    const match = findCommandRow(chunk);
-    if (chunk.phase === "update") {
-      applyCommandUpdate(chunk, match);
-      return;
-    }
-    applyCommandDone(chunk, match);
-  }
-
-  function applyCommandUpdate(
-    chunk: Extract<ProgressChunk, { kind: "command" }>,
-    match: StreamCommandRow | undefined,
-  ): void {
-    if (match) {
-      match.status = "running";
-      match.exitCode = null;
-      match.detail = chunk.detail ?? match.detail;
-      return;
-    }
-    activeGroup().commands.push(
-      newCommandRow(chunk.itemId, chunk.command, "running", undefined, chunk.detail),
-    );
-  }
-
-  function applyCommandDone(
-    chunk: Extract<ProgressChunk, { kind: "command" }>,
-    match: StreamCommandRow | undefined,
-  ): void {
-    const status = commandDoneStatus(chunk.exitCode);
-    if (match) {
-      match.status = status;
-      match.exitCode = chunk.exitCode ?? null;
-      match.detail = chunk.detail ?? match.detail;
-      return;
-    }
-    activeGroup().commands.push(
-      newCommandRow(chunk.itemId, chunk.command, status, chunk.exitCode, chunk.detail),
-    );
-  }
-
-  function newCommandRow(
-    itemId: string | undefined,
-    command: string,
-    status: StreamCommandRow["status"],
-    exitCode?: number | null,
-    detail?: string,
-    result?: string,
-  ): StreamCommandRow {
-    return {
-      id: itemId ?? `cmd_${++commandSeq}`,
-      command,
-      ...(detail ? { detail } : {}),
-      ...(result ? { result } : {}),
-      status,
-      exitCode: exitCode ?? null,
-    };
-  }
-
-  function findCommandRow(
-    chunk: Extract<ProgressChunk, { kind: "command" }>,
-  ): StreamCommandRow | undefined {
-    for (const group of [...commandGroups].reverse()) {
-      const match =
-        group.commands.find((row) => row.id === chunk.itemId) ??
-        group.commands.find((row) => row.command === chunk.command && row.status === "running") ??
-        group.commands.find((row) => row.command === chunk.command);
-      if (match) return match;
-    }
-    return undefined;
-  }
-
-  function commandDoneStatus(exitCode: number | null | undefined): StreamCommandRow["status"] {
-    return exitCode != null && exitCode !== 0 ? "failed" : "done";
-  }
-
-  function applyTool(chunk: Extract<ProgressChunk, { kind: "tool" }>): void {
-    // Keep one activity shape across providers while preserving tool-specific context.
-    if (chunk.phase !== "done") {
-      applyCommand({
-        kind: "command",
-        phase: chunk.phase,
-        command: chunk.name,
-        itemId: chunk.itemId,
-        detail: chunk.detail,
-      });
-      return;
-    }
-    applyToolDone(chunk);
-  }
-
-  function applyToolDone(chunk: Extract<ProgressChunk, { kind: "tool" }>): void {
-    const failed = chunk.failed === true;
-    const status: StreamCommandRow["status"] = failed ? "failed" : "done";
-    const exitCode = failed ? 1 : 0;
-    const match = findCommandRow({
-      kind: "command",
-      phase: "done",
-      command: chunk.name,
-      itemId: chunk.itemId,
-      detail: chunk.detail,
-      exitCode,
-    });
-    if (match) {
-      match.status = status;
-      match.exitCode = exitCode;
-      match.detail = chunk.detail ?? match.detail;
-      if (chunk.result) match.result = chunk.result;
-      return;
-    }
-    activeGroup().commands.push(
-      newCommandRow(chunk.itemId, chunk.name, status, exitCode, chunk.detail, chunk.result),
-    );
-  }
-};
-
-const mergeTextChunk = (content: string, lastFullText: string, data: string): string => {
-  if (lastFullText && data.startsWith(lastFullText)) return data;
-  if (data.length > 40 && content && data.includes(content.slice(0, 20))) return data;
-  // Some runtimes re-send cumulative text with slight whitespace differences.
-  if (content && data.length > content.length && data.includes(content.trim().slice(0, 30))) {
-    return data;
-  }
-  return content + data;
-};
-
-/** Push a finished status paragraph into history so later runs stack below it. */
-const sealTextRun = (sealed: string, live: string): string => {
-  const trimmed = live.trim();
-  if (!trimmed) return sealed;
-  return sealed ? `${sealed}\n\n${trimmed}` : trimmed;
-};
-
-const joinSealedContent = (sealed: string, live: string): string => {
-  if (sealed && live) return `${sealed}\n\n${live}`;
-  return sealed || live;
-};
-
-/**
- * Merge sealed stream narrations with the authoritative final answer so the
- * activity panel keeps intermediate status history after the run ends.
- * Message body still uses the provider's final text alone.
- *
- * Partial last runs are spliced by suffix/prefix overlap (not blank-line split),
- * so multi-paragraph finals and short answers like "OK" stay correct.
- */
-export const finalizeActivityContent = (
-  streamed: string,
-  finalText: string,
-  interrupted = false,
-): string => {
-  if (interrupted) return streamed || finalText;
-  const stream = streamed.trimEnd();
-  const final = finalText.trim();
-  if (!stream) return finalText;
-  if (!final) return streamed;
-  if (stream === final || stream.endsWith(final)) return stream;
-  return mergeStreamedWithFinal(stream, final);
-};
-
-/**
- * If a suffix of streamed is a prefix of finalText, replace that suffix with the
- * full final. Otherwise append final as a new stacked paragraph.
- */
-const mergeStreamedWithFinal = (streamed: string, finalText: string): string => {
-  const overlap = longestAcceptableSuffixPrefix(streamed, finalText);
-  if (overlap <= 0) return `${streamed}\n\n${finalText}`;
-  return streamed.slice(0, streamed.length - overlap) + finalText;
-};
-
-/** Longest k where streamed ends with finalText[0..k) and the match is safe to splice. */
-const longestAcceptableSuffixPrefix = (streamed: string, finalText: string): number => {
-  const maxK = Math.min(streamed.length, finalText.length);
-  for (let k = maxK; k >= 1; k--) {
-    const prefix = finalText.slice(0, k);
-    if (!streamed.endsWith(prefix)) continue;
-    if (isAcceptablePartialOverlap(streamed, prefix, finalText)) return k;
-  }
-  return 0;
-};
-
-/**
- * Reject tiny accidental overlaps (trailing "e" vs "entire…") while allowing
- * short true partials at paragraph boundaries ("…\n\nO" → "OK").
- */
-const isAcceptablePartialOverlap = (
-  streamed: string,
-  prefix: string,
-  finalText: string,
-): boolean => {
-  const minLen = Math.min(12, finalText.length);
-  if (prefix.length >= minLen) return true;
-  const before = streamed.slice(0, streamed.length - prefix.length);
-  return before.length === 0 || before.endsWith("\n\n");
-};
+/** Hears the turn so far, as its ordered parts, whenever the log adds to it. */
+export type StreamProgressListener = (parts: TurnPart[]) => void;
 
 interface TailState {
   stopped: boolean;
-  offset: number;
+  reader: LogReader;
   lineBuffer: string;
   lastEmitAt: number;
-  pending: StreamProgressSnapshot | null;
+  pending: TurnPart[] | null;
   flushTimer: ReturnType<typeof setTimeout> | null;
 }
 
 /**
- * Poll a growing JSONL log and emit cumulative thought/text progress.
+ * Poll a growing JSONL log and emit the turn's parts so far.
  * Providers write stdout to a file; we do not depend on onOutput for streaming.
  */
 export const startLogProgressTail = (input: {
@@ -358,18 +30,18 @@ export const startLogProgressTail = (input: {
 }): (() => Promise<void>) => {
   const minEmitIntervalMs = input.minEmitIntervalMs ?? 100;
   const pollIntervalMs = input.pollIntervalMs ?? 100;
-  const accumulator = createStreamProgressAccumulator();
+  const accumulator = createTurnAccumulator();
   const state: TailState = {
     stopped: false,
-    offset: 0,
+    reader: createLogReader(input.logFilePath),
     lineBuffer: "",
     lastEmitAt: 0,
     pending: null,
     flushTimer: null,
   };
 
-  const emit = (snapshot: StreamProgressSnapshot, force = false) => {
-    emitThrottled(state, snapshot, force, minEmitIntervalMs, input.onProgress);
+  const emit = (parts: TurnPart[], force = false) => {
+    emitThrottled(state, parts, force, minEmitIntervalMs, input.onProgress);
   };
 
   const consumeChunk = async (chunk: string): Promise<void> => {
@@ -384,7 +56,7 @@ export const startLogProgressTail = (input: {
     if (parsed.length > 0) emit(accumulator.applyAll(parsed));
   };
 
-  const tailLoop = runTailLoop(input.logFilePath, state, pollIntervalMs, consumeChunk, async () => {
+  const tailLoop = runTailLoop(state, pollIntervalMs, consumeChunk, async () => {
     await flushResidual(state, accumulator, emit, input.onLine);
   });
 
@@ -400,28 +72,28 @@ export const startLogProgressTail = (input: {
 
 const emitThrottled = (
   state: TailState,
-  snapshot: StreamProgressSnapshot,
+  parts: TurnPart[],
   force: boolean,
   minEmitIntervalMs: number,
   onProgress: StreamProgressListener,
 ): void => {
   const now = Date.now();
   if (!force && now - state.lastEmitAt < minEmitIntervalMs) {
-    schedulePending(state, snapshot, minEmitIntervalMs, onProgress);
+    schedulePending(state, parts, minEmitIntervalMs, onProgress);
     return;
   }
   state.lastEmitAt = now;
   state.pending = null;
-  onProgress(snapshot);
+  onProgress(parts);
 };
 
 const schedulePending = (
   state: TailState,
-  snapshot: StreamProgressSnapshot,
+  parts: TurnPart[],
   minEmitIntervalMs: number,
   onProgress: StreamProgressListener,
 ): void => {
-  state.pending = snapshot;
+  state.pending = parts;
   if (state.flushTimer) return;
   state.flushTimer = setTimeout(() => {
     state.flushTimer = null;
@@ -433,68 +105,40 @@ const schedulePending = (
 };
 
 const runTailLoop = async (
-  logFilePath: string,
   state: TailState,
   pollIntervalMs: number,
   consumeChunk: (chunk: string) => Promise<void>,
   onStop: () => Promise<void>,
 ): Promise<void> => {
   while (!state.stopped) {
-    await readAndConsume(logFilePath, state, consumeChunk);
+    await readAndConsume(state, consumeChunk);
     await sleep(pollIntervalMs);
   }
-  await readAndConsume(logFilePath, state, consumeChunk);
+  await readAndConsume(state, consumeChunk);
   await onStop();
 };
 
 const readAndConsume = async (
-  logFilePath: string,
   state: TailState,
   consumeChunk: (chunk: string) => Promise<void>,
 ): Promise<void> => {
-  const next = await readNewBytes(logFilePath, state.offset);
-  if (!next) return;
-  state.offset = next.offset;
-  await consumeChunk(next.chunk);
+  const chunk = await state.reader.read();
+  if (chunk) await consumeChunk(chunk);
 };
 
 const flushResidual = async (
   state: TailState,
-  accumulator: ReturnType<typeof createStreamProgressAccumulator>,
-  emit: (snapshot: StreamProgressSnapshot, force?: boolean) => void,
+  accumulator: ReturnType<typeof createTurnAccumulator>,
+  emit: (parts: TurnPart[], force?: boolean) => void,
   onLine: ((line: string) => Promise<void> | void) | undefined,
 ): Promise<void> => {
+  state.lineBuffer += state.reader.end();
   if (state.lineBuffer.trim()) {
     await onLine?.(state.lineBuffer);
     const parsed = parseStreamProgressLines(state.lineBuffer);
     if (parsed.length > 0) emit(accumulator.applyAll(parsed), true);
   }
   if (state.pending) emit(state.pending, true);
-};
-
-const readNewBytes = async (
-  path: string,
-  offset: number,
-): Promise<{ chunk: string; offset: number } | null> => {
-  let handle: FileHandle | undefined;
-  try {
-    handle = await open(path, "r");
-    const stat = await handle.stat();
-    if (stat.size <= offset) return null;
-
-    const length = stat.size - offset;
-    const buffer = Buffer.alloc(length);
-    const { bytesRead } = await handle.read(buffer, 0, length, offset);
-    if (bytesRead <= 0) return null;
-    return {
-      chunk: buffer.subarray(0, bytesRead).toString("utf-8"),
-      offset: offset + bytesRead,
-    };
-  } catch {
-    return null;
-  } finally {
-    await handle?.close().catch(() => {});
-  }
 };
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

@@ -31,10 +31,11 @@ describe("project event stream", () => {
     const newest = await h.publisher.publish(threadRemoved("p1", "t1"));
 
     const connection = await h.connect("p1");
-    await connection.waitForFrames("resync", 1);
+    await connection.waitForFrames("live", 1);
 
     expect(connection.status).toBe(200);
     expect(connection.headers.get("content-type")).toContain("text/event-stream");
+    // The snapshot of the turns being written follows the replay: here, none.
     expect(connection.frames).toEqual([
       { event: "heartbeat", id: null, data: "{}" },
       {
@@ -42,6 +43,7 @@ describe("project event stream", () => {
         id: String(newest.id),
         data: JSON.stringify({ cursor: newest.id, reason: "start" }),
       },
+      { event: "live", id: null, data: JSON.stringify({ turns: [] }) },
     ]);
   });
 
@@ -205,8 +207,7 @@ describe("project event stream", () => {
         projectId: "p2",
         threadId: null,
         messageId: "m9",
-        text: "not for p1",
-        replace: false,
+        ops: [{ op: "start", index: 0, part: { type: "text", text: "not for p1" } }],
       });
       const own = await h.publisher.publish(threadRemoved("p1", "mine"));
       await mine.waitForFrames("entry", 1);

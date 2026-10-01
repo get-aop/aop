@@ -172,3 +172,26 @@ describe("single line breaks", () => {
     expect(root.querySelector("p br")).toBeTruthy();
   });
 });
+
+describe("text still arriving", () => {
+  const caretOf = (root: HTMLElement) =>
+    [root, ...root.querySelectorAll<HTMLElement>("*")].some((el) =>
+      el.style.getPropertyValue("--streamdown-caret"),
+    );
+
+  test("prose being written ends with a caret, and finished prose has none", () => {
+    render(<ChatMarkdown content="Looking at the" mode="streaming" animating />);
+    expect(caretOf(screen.getByTestId("chat-markdown"))).toBe(true);
+    cleanup();
+
+    render(<ChatMarkdown content="Looking at the code." mode="streaming" />);
+    expect(caretOf(screen.getByTestId("chat-markdown"))).toBe(false);
+  });
+
+  test("an open code fence of prose being written renders as code, not as raw backticks", () => {
+    render(<ChatMarkdown content={"Run this:\n\n```sh\nbun test"} mode="streaming" animating />);
+    const root = screen.getByTestId("chat-markdown");
+    expect(root.textContent).not.toContain("```");
+    expect(root.textContent).toContain("bun test");
+  });
+});

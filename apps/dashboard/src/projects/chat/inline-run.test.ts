@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { MessageBlock } from "@aop/common";
-import { chipIndexOf, groupBlocks, type InlineBlock, proseOf } from "./inline-run";
+import {
+  chipIndexOf,
+  groupBlocks,
+  type InlineBlock,
+  proseOf,
+  threadChipOf,
+  withThreadChips,
+} from "./inline-run";
 
 const text = (value: string): MessageBlock => ({ type: "text", text: value });
 const chip = (threadId: string): MessageBlock => ({ type: "thread-chip", threadId });
@@ -52,13 +59,13 @@ describe("groupBlocks", () => {
     expect(groups[0]).toMatchObject({ kind: "prose", run: [{}, {}, {}] });
   });
 
-  test("the receipt leads, wherever the tool that made it ran", () => {
+  test("blocks keep the order they were written in: what the tools posted follows the reply", () => {
     const groups = groupBlocks([text("Started."), card("thr_1"), receipt]);
 
     expect(groups.map((group) => (group.kind === "block" ? group.block.type : "prose"))).toEqual([
-      "routing-receipt",
       "prose",
       "thread-card",
+      "routing-receipt",
     ]);
   });
 
@@ -66,5 +73,59 @@ describe("groupBlocks", () => {
     const groups = groupBlocks([text("One."), card("thr_1"), text("Two.")]);
 
     expect(groups.map((group) => group.kind)).toEqual(["prose", "block", "prose"]);
+  });
+});
+
+describe("thread links", () => {
+  test("point at the chip address, which names the thread, and nothing else changes", () => {
+    const markdown = withThreadChips(
+      "See [Fix login](thread:isess_01ab) and [docs](https://x.dev).",
+    );
+
+    expect(markdown).toBe(
+      "See [Fix login](https://chip.aop.invalid/thread/isess_01ab) and [docs](https://x.dev).",
+    );
+    expect(threadChipOf("https://chip.aop.invalid/thread/isess_01ab")).toBe("isess_01ab");
+    expect(threadChipOf("https://chip.aop.invalid/3")).toBeNull();
+    expect(chipIndexOf("https://chip.aop.invalid/thread/isess_01ab")).toBeNull();
+  });
+
+  test("a link still being written is left for the markdown renderer to finish", () => {
+    expect(withThreadChips("See [Fix login](thread:isess_0")).toBe(
+      "See [Fix login](thread:isess_0",
+    );
+  });
+});
+
+describe("tool calls and reasoning in groups", () => {
+  const tool = (id: string): MessageBlock => ({
+    type: "tool",
+    id,
+    name: "Bash",
+    detail: null,
+    status: "done",
+  });
+
+  test("calls one after another are one group, named by where it starts", () => {
+    const groups = groupBlocks([
+      text("A"),
+      tool("t1"),
+      tool("t2"),
+      { type: "thinking", text: "x" },
+      text("B"),
+    ]);
+
+    expect(groups.map((group) => [group.kind, group.at])).toEqual([
+      ["prose", 0],
+      ["tools", 1],
+      ["block", 3],
+      ["prose", 4],
+    ]);
+  });
+
+  test("each group is named by where it starts in the message", () => {
+    const groups = groupBlocks([text("Started."), receipt]);
+
+    expect(groups.map((group) => group.at)).toEqual([0, 1]);
   });
 });

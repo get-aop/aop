@@ -7,7 +7,7 @@ The coordinator chat, the middle pane of a project's screen, is the conversation
 The page learns about messages from three places that overlap and can arrive in any order:
 
 1. A fetch of `GET /api/projects/:id/messages`, which answers `{ messages, hasMore }`: the latest 200 messages, oldest first, and whether older ones exist. `?before=<message id>&limit=<n>` (limit 1 to 500) answers the page before that message, so the page keeps paging back by the oldest message it holds (`loadEarlier`). A newest-page fetch after a resync keeps the older pages already loaded when it joins them. A reply whose run failed (not a usage-limit wait) carries `failed: true`, in the fetch and in its `message.created` entry alike, and is drawn as an error.
-2. The project's stream: a `message.created` entry for every message (the person's, the coordinator's, and the reports threads send it), a `message.updated` entry when the host changes a message after it was created (an answered proposal, see [Suggested threads](#suggested-threads)), and `delta` frames with the text of a reply being written.
+2. The project's stream: a `message.created` entry for every message (the person's, the coordinator's, and the reports threads send it), a `message.updated` entry when the host changes a message after it was created (an answered proposal, see [Suggested threads](#suggested-threads)), and `delta` frames with what changed in a reply being written.
 3. The message a send returns: `POST /api/projects/:id/messages` answers with the stored message, not with the coordinator's reply.
 
 Every message is applied by its id (`chat-state.ts`). Applying one the page already holds replaces it in place, so a fetch, a replayed entry and a send that return the same message leave one copy. A `message.updated` entry replaces the copy held too, but is never the way a message gets in: one the page does not hold is ignored, because the page holds only a window of the conversation (the latest page, and the older pages it loaded) and an old message would be put at the end.
@@ -28,25 +28,35 @@ The host stores messages in the order they were written and gives a reply the pl
 
 The messages that no reply follows are also what says the coordinator is working: the pane shows "Coordinator is working" and how long, while the project is active.
 
-## Live text
+## A reply being written
 
-A reply's text arrives as `delta` frames before its message exists. The page keeps the text by the id the message will have and shows it where the reply will go, typed out at the pace it arrives. It drops that text when the `message.created` entry with the same id arrives, or when a delta with an empty replacement says the turn ended without a message. A delta that arrives after its message is ignored.
+A reply is written token by token: Claude Code runs with `-p --include-partial-messages`, and the host reads its text and reasoning deltas from the run's log as they land (see [Project event stream](./project-event-stream.md#live-turns)). Before its message exists, the reply arrives as `delta` frames that change its parts: a paragraph starts or grows, a tool call starts, finishes or fails, reasoning grows. The page keeps the parts by the id the message will have (`chat-state.ts`), and a delta that arrives after its message is ignored.
 
-A client that connects mid-turn receives the text so far as a first frame with `replace` set, and the page rebuilds from it. When the connection drops, the page forgets the live text it holds, because the turn may have ended while it could not hear; the reconnect sends the baseline again for a turn that is still running.
+The reply is drawn by the same row as its finished message (`AssistantRow`, under the message's id), placed right after the message it answers (`inReplyTo` on the delta), which is where the message lands. When `message.created` arrives, only the data under the mounted row changes: the parts the person watched are the parts the message stores, so nothing is swapped, dropped or typed again. A line under it says the coordinator is working and for how long; it goes once nothing is left to answer.
+
+**The reveal.** Prose that arrives is typed out word by word (`use-turn-reveal.ts`), never letter by letter, at a pace that keeps it at most about 0.4 s behind what has arrived (`max(80 chars/s, backlog / 0.4 s)`). Tool calls, reasoning, cards and receipts appear when the prose before them is shown. What exists when a row mounts shows at once: a message loaded from history, or a reply the page joined mid-turn. When the turn ends with prose still to show, it drains at the same pace instead of appearing at once. Streamdown's own animation stays off; prose still being written gets its caret and has open markdown (a fence, a link) completed, and messages from history render in static mode.
+
+**Following the end.** The transcript follows its end while the person is there (`ui/message-scroller.tsx`): whenever the content or the view changes size, a ResizeObserver sets `scrollTop` to the end before the frame is painted, with no smooth scroll to restart. Scrolling up, even a little, stops following and shows "Scroll to latest"; scrolling back near the end, or sending a message, follows again.
+
+**Reconnecting.** The page keeps the live parts it holds when the connection drops. Each connection opens with a `live` snapshot of the turns being written, after the replay: a turn in it goes on from what the page already showed (the reveal only moves forward when the baseline extends it), and a turn the page holds that is not in it ended while the page could not hear, so its parts go (its message, if it has one, was in the replay). The snapshot comes once per connection, so the page also keeps every project's turns being written as its stream told them (`live-turn-mirror.ts`, `LiveProjects.liveTurns`): a conversation that starts on a stream already open (a thread pane opened again, or opened for another thread, mid-turn) starts from them, shows the turn so far at once, and goes on from there. A delta with an `end` op drops a turn that ended without a message.
 
 ## What a reply is made of
 
-An assistant message is a list of blocks (`MessageBlocks.tsx`):
+An assistant message is a list of blocks (`MessageBlocks.tsx`). It starts with the parts its turn produced, in the order it produced them (`TurnPart`: prose, tool calls, reasoning), followed by the blocks its tools posted:
 
 | Block | Shown as |
 | --- | --- |
-| `text`, `thread-chip`, `pr-chip` | One paragraph of prose with the chips inside the sentence. A chip is a link to a reserved address in the markdown that `inline-run.ts` builds, which the renderer swaps for the chip. |
-| `routing-receipt` | "Sent to one thread" or "Sent to 3 threads", above the reply, with a chip for each thread that has no card of its own in the same message. |
+| `text`, `thread-chip`, `pr-chip` | One paragraph of prose with the chips inside the sentence. A thread the text links to as `[title](thread:<id>)` is a chip too, live and finished alike: `ChatMarkdown` points such links at a reserved address that its link renderer swaps for the chip (`inline-run.ts`). `thread-chip` blocks are only in messages stored before that. |
+| `tool` | One tool call where the agent made it: its status, its name (an MCP tool reads as "aop · thread spawn") and what it was asked to do, which opens in full on a click. Calls made one after another fold into "N tool calls", which opens to their rows; while the agent is on them, the line names the call in progress. What a tool returned is never shown. |
+| `thinking` | A folded "Thinking" line that opens to the reasoning; "Thinking…" while the agent is still on it. |
+| `routing-receipt` | "Sent to one thread" or "Sent to 3 threads", after what the reply said, with a chip for each thread that has no card of its own in the same message. Blocks keep the order they were written in, so nothing lands above what the person has read. |
 | `thread-card` | A card that follows its thread: `needs-call` with the question and View thread while the thread waits on the person, `live` with the status line and steps while it works, `done` with the pull request chip. The variant in the block is only what the card shows until the thread has loaded. |
 | `suggested-threads` | Proposals, each its title and one line of reason with a start button (↵); Skip shows on hover, and "Start N threads" starts the ones still waiting. |
 | `quote-forwarded` | The person's words as the coordinator relayed them to a thread. |
 
-The coordinator writes a thread into a reply as `[its title](thread:<id>)`; the host stores it as a `thread-chip` block, and the chip shows the thread's own title, state and, on hover, how many replies and how long ago. `thread_spawn` and `thread_steer` add the thread to the reply's routing receipt.
+The coordinator writes a thread into a reply as `[its title](thread:<id>)`; the text keeps the link, and the chip shows the thread's own title, state and, on hover, how many replies and how long ago. `thread_spawn` and `thread_steer` add the thread to the reply's routing receipt.
+
+**Where the parts are kept.** A finished turn's parts are in `chat_messages.parts` (migration v16), written when the run is finalized: calls still running then are done (or failed, when the run failed or was stopped), and the turn ends with the run's final text unless it already does, so a reply that failed, waited out a limit or was stopped says so after what it wrote. `chat_messages.content` keeps the final text alone, which the history prompt and thread reports use; a reply's copy button copies all its prose. A reply stored before parts existed is read from its `content` and its older `activity` (reasoning, the paragraphs said while working, the tool calls, then the answer).
 
 A thread's report to the coordinator is a `thread-report` message. It is drawn as an event line naming the thread and what happened, with the report behind "Show report", and never as something the person said. The person's own messages are shown as typed, not read as markdown, with the images they attached above them (see [Images](#images)).
 

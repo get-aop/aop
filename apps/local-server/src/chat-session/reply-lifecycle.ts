@@ -289,7 +289,7 @@ const runAndPublishAssistantReply = async (input: {
             rateLimit: reply.rateLimit,
           }
         : undefined,
-    reply.activity,
+    reply.parts,
     reply.artifacts ?? [],
   );
 };

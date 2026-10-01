@@ -1,4 +1,4 @@
-import type { ChatActionPayload } from "@aop/common";
+import type { ChatActionPayload, TurnPart } from "@aop/common";
 import type { RunImage } from "@aop/llm-provider";
 import type { LocalServerContext } from "../context.ts";
 import type {
@@ -27,13 +27,6 @@ import {
   runSessionPrompt,
   type SessionRunRegistration,
 } from "./runtime-engine.ts";
-import {
-  publishAssistantProgress,
-  publishChatSessionEvent,
-  resetAssistantProgress,
-} from "./session-events.ts";
-import type { AssistantActivity } from "./session-types.ts";
-import { finalizeActivityContent, type StreamProgressSnapshot } from "./stream-progress.ts";
 import { resolveSessionWorkspaceBinding } from "./workspace-binding.ts";
 
 interface AssistantReply {
@@ -46,7 +39,8 @@ interface AssistantReply {
   interruptionKind?: ChatRunInterruptionKind;
   failureKind?: ChatRunFailureKind | null;
   runtimeSessionState?: ChatRun["runtime_session_state"];
-  activity: AssistantActivity | null;
+  /** What the turn produced so far, in order; null when no runtime ran (a local command). */
+  parts: TurnPart[] | null;
   artifacts?: StoredChatArtifact[];
   /** Set when a rate or usage limit refused the run; the session waits and resumes. */
   rateLimit?: RateLimitHit;
@@ -77,17 +71,14 @@ export const produceAssistantReply = async (
       aborted: true,
       interrupted: true,
       interruptionKind: "abort",
-      activity: null,
+      parts: null,
     };
   }
 
-  publishChatSessionEvent({ type: "assistant-typing", sessionId: session.id, userMessageId });
-  resetAssistantProgress(session.id);
-  let activity: AssistantActivity | null = null;
-  const onProgress = (progress: StreamProgressSnapshot) => {
-    activity = progress;
-    publishAssistantProgress(session.id, progress);
-    if (chatRun) ctx.sessionHooks.onAssistantProgress(session, chatRun, progress.content);
+  let parts: TurnPart[] = [];
+  const onProgress = (progress: TurnPart[]) => {
+    parts = progress;
+    if (chatRun) ctx.sessionHooks.onAssistantProgress(session, chatRun, progress);
   };
   const run = await runRuntimeReply({
     ctx,
@@ -103,13 +94,13 @@ export const produceAssistantReply = async (
     chatRun,
     registration,
   });
-  return toAssistantReply(run, null, activity);
+  return toAssistantReply(run, null, parts);
 };
 
 const toAssistantReply = (
   run: RuntimeRunResult,
   action: ChatActionPayload | null,
-  activity: AssistantActivity | null,
+  parts: TurnPart[],
 ): AssistantReply => {
   return {
     text: run.text,
@@ -121,39 +112,10 @@ const toAssistantReply = (
     interruptionKind: run.interruptionKind,
     failureKind: run.failureKind ?? null,
     runtimeSessionState: run.runtimeSessionState,
-    activity: finalizeAssistantActivity(activity, run),
+    parts,
     artifacts: run.artifacts ?? [],
     rateLimit: run.rateLimit,
   };
-};
-
-export const finalizeAssistantActivity = (
-  activity: AssistantActivity | null,
-  run: { text: string; failed?: boolean; aborted?: boolean; interrupted?: boolean },
-): AssistantActivity | null => {
-  if (!activity) return null;
-  const failed = run.failed === true || run.aborted === true || run.interrupted === true;
-  return {
-    ...activity,
-    // Keep intermediate status paragraphs from the live stream; only the
-    // persisted assistant message body uses the provider's final text alone.
-    content: finalizeActivityContent(activity.content, run.text, run.interrupted === true),
-    commandGroups: finalizeCommandGroups(activity.commandGroups, failed),
-  };
-};
-
-const finalizeCommandGroups = (
-  commandGroups: AssistantActivity["commandGroups"],
-  failed: boolean,
-): AssistantActivity["commandGroups"] => {
-  const status = failed ? "failed" : "done";
-  const exitCode = failed ? 1 : 0;
-  return commandGroups.map((group) => ({
-    ...group,
-    commands: group.commands.map((command) =>
-      command.status === "running" ? { ...command, status, exitCode } : command,
-    ),
-  }));
 };
 
 const executeLocalChatCommand = async (
@@ -184,7 +146,7 @@ const executeLocalChatCommand = async (
       failed: false,
       aborted: false,
       interrupted: false,
-      activity: null,
+      parts: null,
     },
   };
 };
@@ -199,7 +161,7 @@ type RuntimeReplyInput = {
   logFilePath: string;
   createProviderFn?: CreateProviderFn;
   runtimePromptPrefix?: string;
-  onProgress?: (progress: StreamProgressSnapshot) => void;
+  onProgress?: (progress: TurnPart[]) => void;
   chatRun?: ChatRun;
   registration?: SessionRunRegistration;
 };

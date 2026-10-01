@@ -6,6 +6,10 @@ export interface Directives {
   startupMs: number;
   /** Sleep between consecutive events, to exercise streaming and inactivity watchdogs. */
   delayMs: number;
+  /** Sleep before each partial-message event instead, so text can be watched arriving word by word. */
+  streamMs: number;
+  /** Reasoning the turn starts with. */
+  think?: string;
   /** Tool-call rounds before the final reply. */
   steps: number;
   /** Final reply text; replaces the default echo. */
@@ -56,6 +60,8 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
   return {
     startupMs: toNumber(tokens.get("startup"), 0),
     delayMs: toNumber(tokens.get("delay"), 0),
+    streamMs: toNumber(tokens.get("stream"), 0),
+    think: tokens.get("think") || undefined,
     steps: toNumber(tokens.get("steps"), 0),
     say: tokens.get("say") || undefined,
     ask: question === undefined ? undefined : readAsk(question, tokens),

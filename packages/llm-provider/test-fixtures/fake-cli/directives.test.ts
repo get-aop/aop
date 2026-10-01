@@ -6,6 +6,8 @@ describe("parseDirectives", () => {
     expect(parseDirectives("hello")).toEqual({
       startupMs: 0,
       delayMs: 0,
+      streamMs: 0,
+      think: undefined,
       steps: 0,
       say: undefined,
       ask: undefined,
@@ -16,6 +18,13 @@ describe("parseDirectives", () => {
       echoSystemPrompt: false,
       mentionLinks: false,
       usageWarning: false,
+    });
+  });
+
+  test("`stream` paces partial-message events and `think` starts the turn with reasoning", () => {
+    expect(parseDirectives('hi [fake: stream=40 think="Plan it"]')).toMatchObject({
+      streamMs: 40,
+      think: "Plan it",
     });
   });
 

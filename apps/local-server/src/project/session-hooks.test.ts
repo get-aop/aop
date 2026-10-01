@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { MessageDelta } from "@aop/common";
+import { applyLiveOps, type TurnPart } from "@aop/common";
 import { Hono } from "hono";
 import { serializeMessageOrigin } from "../chat-session/message-origin.ts";
 import { createChatSessionRoutes } from "../chat-session/routes.ts";
@@ -161,11 +162,13 @@ describe("clients hear of project changes through the event publisher", () => {
     for (const delta of heard.deltas) {
       expect(delta).toMatchObject({ projectId: project.id, threadId: null, messageId: reply?.id });
     }
-    const live = heard.deltas.reduce(
-      (text, delta) => (delta.replace ? delta.text : text + delta.text),
-      "",
+    const live = heard.deltas.reduce<TurnPart[] | null>(
+      (parts, delta) => applyLiveOps(parts ?? [], delta.ops),
+      [],
     );
-    expect(live).toContain("Working on step 1 of 2.");
+    // What a client watched being written is the finished message, part for part.
+    expect(live?.map((part) => part.type)).toEqual(["text", "tool", "text", "tool", "text"]);
+    expect(reply?.role === "assistant" && reply.blocks).toEqual(live ?? []);
     // The user's message and the finished reply were each committed with their log entries.
     expect(heard.commits()).toBeGreaterThanOrEqual(2);
   });

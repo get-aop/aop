@@ -1,5 +1,5 @@
-import { type FileHandle, open } from "node:fs/promises";
 import { extractRuntimeSessionIdFromRawJsonl } from "@aop/llm-provider";
+import { createLogReader } from "./log-reader.ts";
 
 interface RuntimeSessionLineInspectorInput {
   onSession: (sessionId: string) => Promise<void> | void;
@@ -34,7 +34,7 @@ export const startRuntimeSessionTail = (input: {
 }): (() => Promise<void>) => {
   let stopped = false;
   let found = false;
-  let offset = 0;
+  const reader = createLogReader(input.logFilePath);
   let lineBuffer = "";
   const pollIntervalMs = input.pollIntervalMs ?? 100;
   const inspectLine = createRuntimeSessionLineInspector(input);
@@ -50,10 +50,8 @@ export const startRuntimeSessionTail = (input: {
   };
 
   const pollOnce = async (): Promise<void> => {
-    const next = await readNewBytes(input.logFilePath, offset);
-    if (!next) return;
-    offset = next.offset;
-    if (await consume(next.chunk)) found = true;
+    const chunk = await reader.read();
+    if (chunk && (await consume(chunk))) found = true;
   };
 
   const flushResidual = async (): Promise<void> => {
@@ -73,24 +71,4 @@ export const startRuntimeSessionTail = (input: {
     stopped = true;
     await loop;
   };
-};
-
-const readNewBytes = async (
-  path: string,
-  offset: number,
-): Promise<{ chunk: string; offset: number } | null> => {
-  let handle: FileHandle | undefined;
-  try {
-    handle = await open(path, "r");
-    const stat = await handle.stat();
-    if (stat.size <= offset) return null;
-    const buffer = Buffer.alloc(stat.size - offset);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
-    if (bytesRead <= 0) return null;
-    return { chunk: buffer.subarray(0, bytesRead).toString("utf8"), offset: offset + bytesRead };
-  } catch {
-    return null;
-  } finally {
-    await handle?.close().catch(() => undefined);
-  }
 };

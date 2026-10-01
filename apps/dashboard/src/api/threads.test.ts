@@ -8,7 +8,6 @@ import type * as ThreadsApi from "./threads";
 const { ApiError } = await import("./request");
 const {
   deleteThread,
-  getThreadActivity,
   getThreadDiff,
   getThreadDiffFile,
   getThreadUsage,
@@ -135,15 +134,6 @@ describe("reading", () => {
         hunks: [],
       } as never);
     });
-  });
-
-  test("reads the tool calls of the thread's turns", async () => {
-    host.respondWith(() => json({ turns: [] }));
-
-    expect(await getThreadActivity("thr 1")).toEqual({ turns: [] });
-    expect(host.requests).toEqual([
-      { method: "GET", url: "/api/threads/thr%201/activity", body: undefined },
-    ]);
   });
 
   test("reads what the thread's runs consumed from the usage route, not the thread route", async () => {

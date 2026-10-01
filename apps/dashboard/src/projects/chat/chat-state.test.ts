@@ -3,11 +3,11 @@ import type { Message } from "@aop/common";
 import {
   applyDelta,
   applyEarlier,
+  applyLiveSnapshot,
   applyMessage,
   applyMessageUpdate,
   applySnapshot,
   createChatState,
-  dropLiveText,
   initialChatState,
   isWorking,
   setEarlierError,
@@ -16,7 +16,7 @@ import {
   stopLoadingEarlier,
   unansweredMessages,
 } from "./chat-state";
-import { delta, ids, page, reply, report, userMessage } from "./test-utils";
+import { appended, delta, ids, liveTexts, page, reply, report, userMessage } from "./test-utils";
 
 const ready = (...messages: Message[]) => applySnapshot(initialChatState, page(messages));
 
@@ -47,7 +47,9 @@ describe("applySnapshot", () => {
   test("keeps the live text of a reply the snapshot does not hold yet", () => {
     const state = applyDelta(initialChatState, delta("a1", "Working"));
 
-    expect(applySnapshot(state, page([userMessage("u1", 1)])).live).toEqual({ a1: "Working" });
+    expect(liveTexts(applySnapshot(state, page([userMessage("u1", 1)])))).toEqual({
+      a1: "Working",
+    });
   });
 
   test("leaves out messages of a thread", () => {
@@ -211,17 +213,40 @@ describe("applyMessageUpdate", () => {
 describe("applyDelta", () => {
   test("appended slices build the live text of one reply", () => {
     let state = applyDelta(initialChatState, delta("a1", "On it. "));
-    state = applyDelta(state, delta("a1", "Three threads."));
+    state = applyDelta(state, appended("a1", "Three threads."));
 
-    expect(state.live).toEqual({ a1: "On it. Three threads." });
+    expect(liveTexts(state)).toEqual({ a1: "On it. Three threads." });
   });
 
   test("a replace frame is the baseline: it sets the text instead of extending it", () => {
     let state = applyDelta(initialChatState, delta("a1", "stale"));
     state = applyDelta(state, delta("a1", "On it. Three", { replace: true }));
-    state = applyDelta(state, delta("a1", " threads."));
+    state = applyDelta(state, appended("a1", " threads."));
 
-    expect(state.live).toEqual({ a1: "On it. Three threads." });
+    expect(liveTexts(state)).toEqual({ a1: "On it. Three threads." });
+  });
+
+  test("reasoning, tool calls and their results arrive as parts of the reply, in order", () => {
+    const tool = { type: "tool", id: "t1", name: "Bash", detail: null, status: "running" } as const;
+    let state = applyDelta(initialChatState, delta("a1", "Looking. ", { inReplyTo: "u1" }));
+    state = applyDelta(state, {
+      ...appended("a1", "Running it."),
+      ops: [
+        { op: "append", index: 0, text: "Running it." },
+        { op: "start", index: 1, part: tool },
+        { op: "tool", index: 1, status: "done", detail: "bun test" },
+        { op: "start", index: 2, part: { type: "thinking", text: "Green." } },
+      ],
+    });
+
+    expect(state.live.a1).toEqual({
+      inReplyTo: "u1",
+      parts: [
+        { type: "text", text: "Looking. Running it." },
+        { ...tool, status: "done", detail: "bun test" },
+        { type: "thinking", text: "Green." },
+      ],
+    });
   });
 
   test("an empty replace drops the live text of a turn that ended without a message", () => {
@@ -249,14 +274,35 @@ describe("applyDelta", () => {
   });
 });
 
-describe("dropLiveText", () => {
-  test("forgets live text held across a lost connection, and leaves the messages", () => {
-    const state = applyDelta(ready(userMessage("u1", 1)), delta("a1", "Working"));
+describe("applyLiveSnapshot", () => {
+  const snapshot = (...turns: ReturnType<typeof delta>[]) => ({ turns });
 
-    const next = dropLiveText(state);
+  test("keeps what was shown of a turn still running and goes on from its baseline", () => {
+    let state = applyDelta(ready(userMessage("u1", 1)), delta("a1", "Working on"));
+    state = applyLiveSnapshot(state, snapshot(delta("a1", "Working on it", { replace: true })));
+
+    expect(liveTexts(state)).toEqual({ a1: "Working on it" });
+    expect(ids(state.messages)).toEqual(["u1"]);
+  });
+
+  test("drops a turn that ended while the page could not hear, and leaves the messages", () => {
+    let state = applyDelta(ready(userMessage("u1", 1)), delta("a1", "Working"));
+    state = applyDelta(state, delta("t1", "Elsewhere", { threadId: "thr_1" }));
+
+    const next = applyLiveSnapshot(state, snapshot());
 
     expect(next.live).toEqual({});
     expect(ids(next.messages)).toEqual(["u1"]);
+  });
+
+  test("takes only its own conversation's turns, and a turn that started meanwhile", () => {
+    const state = applyLiveSnapshot(
+      ready(userMessage("u1", 1)),
+      snapshot(delta("a2", "Fresh", { inReplyTo: "u1" }), delta("t1", "x", { threadId: "thr_1" })),
+    );
+
+    expect(liveTexts(state)).toEqual({ a2: "Fresh" });
+    expect(state.live.a2?.inReplyTo).toBe("u1");
   });
 });
 
@@ -322,11 +368,11 @@ describe("a thread's conversation", () => {
   test("takes its own live text and not the coordinator's or another thread's", () => {
     let state = threadReady();
     state = applyDelta(state, delta("a1", "Working", { threadId: "thr_1" }));
-    state = applyDelta(state, delta("a1", " on it", { threadId: "thr_1" }));
+    state = applyDelta(state, appended("a1", " on it", { threadId: "thr_1" }));
     state = applyDelta(state, delta("c1", "coordinator"));
     state = applyDelta(state, delta("t2", "elsewhere", { threadId: "thr_2" }));
 
-    expect(state.live).toEqual({ a1: "Working on it" });
+    expect(liveTexts(state)).toEqual({ a1: "Working on it" });
   });
 
   test("its finished reply replaces its live text, as the coordinator's does", () => {
@@ -345,7 +391,7 @@ describe("a thread's conversation", () => {
 
     const next = applySnapshot(state, page([inThread("a1", 1)]));
 
-    expect(next.live).toEqual({ a2: "Two" });
+    expect(liveTexts(next)).toEqual({ a2: "Two" });
     expect(next.scope).toBe("thr_1");
   });
 });

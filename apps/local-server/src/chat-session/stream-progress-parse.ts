@@ -2,9 +2,26 @@
 
 import { formatToolInput } from "@aop/llm-provider";
 
+type StreamedBlock = "text" | "thinking";
+
 export type ProgressChunk =
-  | { kind: "thought"; data: string }
-  | { kind: "text"; data: string }
+  /**
+   * `whole` marks a finished content block of a Claude assistant message, which partial
+   * messages may already have streamed; `final` marks the run's closing result text.
+   */
+  | { kind: "thought"; data: string; whole?: true }
+  | { kind: "text"; data: string; whole?: true; final?: true }
+  /** Claude partial messages (`stream_event`): a new message, its blocks opening, growing, closing. */
+  | { kind: "stream-message" }
+  | {
+      kind: "stream-start";
+      index: number;
+      block: StreamedBlock | "tool";
+      toolId?: string;
+      toolName?: string;
+    }
+  | { kind: "stream-delta"; index: number; block: StreamedBlock; data: string }
+  | { kind: "stream-stop"; index: number }
   | {
       kind: "command";
       phase: "start" | "update" | "done";
@@ -19,8 +36,6 @@ export type ProgressChunk =
       name: string;
       itemId?: string;
       detail?: string;
-      /** Completion payload text from tool_result (when the provider supplies it). */
-      result?: string;
       failed?: boolean;
     };
 
@@ -47,10 +62,13 @@ export const parseStreamProgressLines = (line: string): ProgressChunk[] => {
 };
 
 const extractProgressChunks = (event: Record<string, unknown>): ProgressChunk[] => {
+  // A subagent's own messages belong to the Agent call that started it, which shows its progress.
+  if (typeof event.parent_tool_use_id === "string") return [];
   const claudeChunks = extractClaudeMessage(event);
   if (claudeChunks.length > 0) return claudeChunks;
 
   const chunk =
+    extractClaudeStreamEvent(event) ??
     extractClaudeTaskLifecycle(event) ??
     extractCodexItem(event) ??
     extractPiToolExecution(event) ??
@@ -58,6 +76,46 @@ const extractProgressChunks = (event: Record<string, unknown>): ProgressChunk[] 
     extractPiMessage(event) ??
     extractResultText(event);
   return chunk ? [chunk] : [];
+};
+
+/** Claude `--include-partial-messages`: the Anthropic stream events, one per line. */
+const extractClaudeStreamEvent = (event: Record<string, unknown>): ProgressChunk | null => {
+  if (stringType(event) !== "stream_event" || !isRecord(event.event)) return null;
+  const inner = event.event;
+  const index = typeof inner.index === "number" ? inner.index : -1;
+  switch (stringType(inner)) {
+    case "message_start":
+      return { kind: "stream-message" };
+    case "content_block_start":
+      return isRecord(inner.content_block) ? streamStart(index, inner.content_block) : null;
+    case "content_block_delta":
+      return isRecord(inner.delta) ? streamDelta(index, inner.delta) : null;
+    case "content_block_stop":
+      return { kind: "stream-stop", index };
+    default:
+      return null;
+  }
+};
+
+const streamStart = (index: number, block: Record<string, unknown>): ProgressChunk | null => {
+  const type = stringType(block);
+  if (type === "text") return { kind: "stream-start", index, block: "text" };
+  if (type === "thinking") return { kind: "stream-start", index, block: "thinking" };
+  if (type !== "tool_use" || typeof block.id !== "string") return null;
+  const toolName = humanizeToolName(String(block.name ?? "Tool"));
+  return { kind: "stream-start", index, block: "tool", toolId: block.id, toolName };
+};
+
+const streamDelta = (index: number, delta: Record<string, unknown>): ProgressChunk | null => {
+  const type = stringType(delta);
+  if (type === "text_delta" && typeof delta.text === "string" && delta.text) {
+    return { kind: "stream-delta", index, block: "text", data: delta.text };
+  }
+  if (type === "thinking_delta" && typeof delta.thinking === "string" && delta.thinking) {
+    return { kind: "stream-delta", index, block: "thinking", data: delta.thinking };
+  }
+  // Tool input arrives whole with the finished block; signatures are not for people.
+  return null;
 };
 
 /** CC Personal emits native task lifecycle records alongside generic Agent tool calls. */
@@ -175,38 +233,8 @@ const extractClaudeToolResults = (content: unknown): ProgressChunk[] => {
     if (!isRecord(block) || block.type !== "tool_result") return [];
     const itemId = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
     if (!itemId) return [];
-    const result = extractToolResultText(block.content);
-    return [
-      {
-        kind: "tool",
-        phase: "done",
-        name: "Tool",
-        itemId,
-        ...(result ? { result } : {}),
-        failed: block.is_error === true,
-      },
-    ];
+    return [{ kind: "tool", phase: "done", name: "Tool", itemId, failed: block.is_error === true }];
   });
-};
-
-/** Flatten Claude tool_result content blocks into a short plain-text summary. */
-const extractToolResultText = (content: unknown): string | undefined => {
-  if (typeof content === "string") return truncateToolResult(content.trim());
-  if (!Array.isArray(content)) return undefined;
-  const parts = content.flatMap(toolResultBlockText);
-  return parts.length === 0 ? undefined : truncateToolResult(parts.join("\n"));
-};
-
-const toolResultBlockText = (block: unknown): string[] => {
-  if (!isRecord(block)) return [];
-  if (typeof block.text === "string" && block.text.trim()) return [block.text.trim()];
-  if (typeof block.content === "string" && block.content.trim()) return [block.content.trim()];
-  return [];
-};
-
-const truncateToolResult = (value: string, max = 8_000): string | undefined => {
-  if (!value) return undefined;
-  return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 };
 
 const isShellToolName = (tool: string): boolean => {
@@ -320,7 +348,7 @@ const extractResultText = (event: Record<string, unknown>): ProgressChunk | null
   const subtype = String(event.subtype ?? "").toLowerCase();
   if (subtype && subtype !== "success" && subtype !== "completed") return null;
   if (typeof event.result === "string" && event.result.trim()) {
-    return { kind: "text", data: event.result };
+    return { kind: "text", data: event.result, final: true };
   }
   return null;
 };
@@ -343,10 +371,10 @@ const extractContentChunks = (content: unknown): ProgressChunk[] =>
 const classifyProgressContentBlock = (block: unknown): ProgressChunk[] => {
   if (!isRecord(block)) return [];
   if (block.type === "thinking" && typeof block.thinking === "string" && block.thinking.trim()) {
-    return [{ kind: "thought", data: block.thinking }];
+    return [{ kind: "thought", data: block.thinking, whole: true }];
   }
   if (block.type === "text" && typeof block.text === "string" && block.text.trim()) {
-    return [{ kind: "text", data: block.text }];
+    return [{ kind: "text", data: block.text, whole: true }];
   }
   return block.type === "tool_use" ? [claudeToolChunk(block)] : [];
 };

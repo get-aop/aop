@@ -1,4 +1,9 @@
-import type { ChatAbortDisposition, ChatActionPayload, ChatSessionSummary } from "@aop/common";
+import type {
+  ChatAbortDisposition,
+  ChatActionPayload,
+  ChatSessionSummary,
+  TurnPart,
+} from "@aop/common";
 import type {
   ChatMessage,
   ChatRun,
@@ -12,7 +17,6 @@ import type {
 } from "./message-images.ts";
 import type { MessageOrigin } from "./message-origin.ts";
 import type { CreateProviderFn } from "./runtime-engine.ts";
-import type { StreamProgressSnapshot } from "./stream-progress.ts";
 
 /** The shared wire contract; kept as an alias so no app owns a private copy. */
 export type ChatSessionDto = ChatSessionSummary;
@@ -23,7 +27,8 @@ export interface ChatMessageDto {
   role: "user" | "assistant";
   content: string;
   action: ChatActionPayload | null;
-  activity?: AssistantActivity | null;
+  /** What an assistant reply's turn produced, in order; empty for the person's messages. */
+  parts: TurnPart[];
   createdAt: string;
   /** User-attached images for this message (empty for assistant replies). */
   images: ChatMessageImageDto[];
@@ -40,12 +45,6 @@ export interface ChatMessageDto {
   retryOfRunId?: string | null;
   disposition?: ChatMessage["disposition"];
   runId?: string;
-}
-
-export interface AssistantActivity {
-  thinking: string;
-  content: string;
-  commandGroups: StreamProgressSnapshot["commandGroups"];
 }
 
 export interface ChatSessionDetailDto extends ChatSessionDto {

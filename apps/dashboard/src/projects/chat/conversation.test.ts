@@ -3,10 +3,12 @@ import type { Message } from "@aop/common";
 import type { ChatState } from "./chat-state";
 import { type Conversation, createConversation, FETCH_RETRY_MS } from "./conversation";
 import {
+  appended,
   createFakeEvents,
   deferred,
   delta,
   ids,
+  liveTexts,
   messageEntry,
   pageFrom,
   reply,
@@ -58,6 +60,11 @@ const threadDelta = (messageId: string, text: string, replace = false, threadId 
   delta: delta(messageId, text, { threadId, replace }),
 });
 
+const threadAppend = (messageId: string, text: string) => ({
+  kind: "delta" as const,
+  delta: appended(messageId, text, { threadId: THREAD }),
+});
+
 describe("loading a thread's conversation", () => {
   test("listens to the stream first, then holds what the host lists: its own thread's messages only", async () => {
     const { conversation, fake } = setup({
@@ -72,7 +79,7 @@ describe("loading a thread's conversation", () => {
     });
 
     conversation.start();
-    expect(fake.listenerCount()).toBe(2);
+    expect(fake.listenerCount()).toBe(1);
     expect(conversation.getState().phase).toBe("loading");
     await flush();
 
@@ -199,7 +206,7 @@ describe("following the stream", () => {
     fake.send({ kind: "delta", delta: delta("c1", "coordinator") });
 
     expect(held(conversation)).toEqual(["mine"]);
-    expect(conversation.getState().live).toEqual({ m1: "Working" });
+    expect(liveTexts(conversation.getState())).toEqual({ m1: "Working" });
   });
 
   test("shows a reply as it is written, then the finished message takes its place", async () => {
@@ -208,8 +215,8 @@ describe("following the stream", () => {
     await flush();
 
     fake.send(threadDelta("a1", "On it. ", true));
-    fake.send(threadDelta("a1", "Two files."));
-    expect(conversation.getState().live).toEqual({ a1: "On it. Two files." });
+    fake.send(threadAppend("a1", "Two files."));
+    expect(liveTexts(conversation.getState())).toEqual({ a1: "On it. Two files." });
 
     fake.send(entryOf(1, inThread("a1", 2)));
 
@@ -231,19 +238,23 @@ describe("following the stream", () => {
     expect(held(conversation)).toEqual(["a1", "s1", "a2"]);
   });
 
-  test("live text is dropped when the connection drops, and rebuilt from the baseline the reconnect sends", async () => {
+  test("live text is kept across a dropped connection and goes on from the baseline the reconnect sends", async () => {
     const { conversation, fake } = setup({ fetches: [Promise.resolve([])] });
     conversation.start();
     await flush();
     fake.send(threadDelta("a1", "Working"));
+    fake.send(threadDelta("b1", "A turn that ends while away"));
 
     fake.setConnection("reconnecting");
-    expect(conversation.getState().live).toEqual({});
+    expect(liveTexts(conversation.getState())).toEqual({
+      a1: "Working",
+      b1: "A turn that ends while away",
+    });
 
     fake.setConnection("live");
-    fake.send(threadDelta("a1", "Working on it", true));
-    fake.send(threadDelta("a1", "."));
-    expect(conversation.getState().live).toEqual({ a1: "Working on it." });
+    fake.live(delta("a1", "Working on it", { replace: true, threadId: "thr_1" }));
+    fake.send(threadAppend("a1", "."));
+    expect(liveTexts(conversation.getState())).toEqual({ a1: "Working on it." });
   });
 
   test("a resync fetches again and the fetch replaces what was held", async () => {
@@ -419,7 +430,7 @@ describe("stopping", () => {
     conversation.start();
     await flush();
 
-    expect(fake.listenerCount()).toBe(2);
+    expect(fake.listenerCount()).toBe(1);
     expect(held(conversation)).toEqual(["a1", "a2"]);
   });
 });

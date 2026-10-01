@@ -161,7 +161,9 @@ function renderBeat(beat: Beat, index: number, ctx: TurnContext): JsonLine[] {
   const toolUseId = `toolu_fake_${ctx.turn}_${index}`;
   switch (beat.kind) {
     case "text":
-      return [assistant(ctx, [{ type: "text", text: beat.text }])];
+      return block(ctx, { type: "text", text: beat.text });
+    case "thinking":
+      return block(ctx, { type: "thinking", thinking: beat.text, signature: "fake" });
     case "shell":
       return toolRound(ctx, toolUseId, "Bash", { command: beat.command }, beat.output, false);
     case "ask":
@@ -217,7 +219,7 @@ function toolRound(
   isError: boolean,
 ): JsonLine[] {
   return [
-    assistant(ctx, [{ type: "tool_use", id: toolUseId, name, input }]),
+    ...block(ctx, { type: "tool_use", id: toolUseId, name, input }),
     {
       type: "user",
       message: {
@@ -235,7 +237,7 @@ function renderEnding(ending: Ending, ctx: TurnContext): JsonLine[] {
   switch (ending.kind) {
     case "success":
       return [
-        assistant(ctx, [{ type: "text", text: ending.text }]),
+        ...block(ctx, { type: "text", text: ending.text }),
         result(ctx, {
           subtype: "success",
           is_error: false,
@@ -296,6 +298,59 @@ function clockTime(epochSeconds: number): string {
   const minutes = String(at.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}${at.getHours() < 12 ? "am" : "pm"}`;
 }
+
+/**
+ * One content block of the model's output. With partial messages Claude Code streams it first,
+ * the way 2.1.286 does: the block opens, grows in deltas, its finished copy arrives as an
+ * assistant event, and then it closes.
+ */
+function block(ctx: TurnContext, content: JsonLine): JsonLine[] {
+  const finished = assistant(ctx, [content]);
+  if (!ctx.partialMessages) return [finished];
+  return [
+    streamEvent(ctx, { type: "message_start", message: { id: `msg_fake_${ctx.turn}` } }),
+    streamEvent(ctx, { type: "content_block_start", index: 0, content_block: emptied(content) }),
+    ...deltasOf(content).map((delta) =>
+      streamEvent(ctx, { type: "content_block_delta", index: 0, delta }),
+    ),
+    finished,
+    streamEvent(ctx, { type: "content_block_stop", index: 0 }),
+  ];
+}
+
+const emptied = (content: JsonLine): JsonLine => {
+  if (content.type === "text") return { type: "text", text: "" };
+  if (content.type === "thinking") return { type: "thinking", thinking: "", signature: "" };
+  return { ...content, input: {} };
+};
+
+// A few words at a time, as tokens arrive; a tool's input as one piece of JSON.
+const deltasOf = (content: JsonLine): JsonLine[] => {
+  if (content.type === "tool_use") {
+    return [{ type: "input_json_delta", partial_json: JSON.stringify(content.input) }];
+  }
+  const isText = content.type === "text";
+  const whole = String(isText ? content.text : content.thinking);
+  return chunksOf(whole).map((piece) =>
+    isText ? { type: "text_delta", text: piece } : { type: "thinking_delta", thinking: piece },
+  );
+};
+
+const chunksOf = (text: string): string[] => {
+  const words = text.match(/\s*\S+/g) ?? [text];
+  const chunks: string[] = [];
+  for (let at = 0; at < words.length; at += 2) chunks.push(words.slice(at, at + 2).join(""));
+  const tail = text.slice(chunks.join("").length);
+  if (tail) chunks.push(tail);
+  return chunks;
+};
+
+const streamEvent = (ctx: TurnContext, event: JsonLine): JsonLine => ({
+  type: "stream_event",
+  event,
+  session_id: ctx.sessionId,
+  parent_tool_use_id: null,
+});
 
 const assistant = (ctx: TurnContext, content: JsonLine[]): JsonLine => ({
   type: "assistant",

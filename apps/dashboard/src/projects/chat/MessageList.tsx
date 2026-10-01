@@ -1,17 +1,15 @@
 import type { Message } from "@aop/common";
 import { ChevronDownIcon } from "lucide-react";
-import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useMemo, useRef, useState } from "react";
 import { MarkerSeparator } from "@/ui/marker";
 import { MessageScroller } from "@/ui/message-scroller";
 import { Spinner } from "@/ui/spinner";
 import { useNow } from "../use-now";
-import { ChatMarkdown } from "./ChatMarkdown";
 import { buildRows, type ChatRow } from "./chat-rows";
-import type { EarlierMessages } from "./chat-state";
+import type { EarlierMessages, LiveTurn } from "./chat-state";
 import { formatElapsed } from "./chat-time";
 import { AssistantRow, ThreadReportRow, UserRow } from "./MessageRows";
 import { presenceOf, ThreadPresenceContext } from "./thread-presence";
-import { useStreamingReveal } from "./use-streaming-reveal";
 
 const INITIAL_WINDOW = 60;
 const WINDOW_STEP = 60;
@@ -37,24 +35,18 @@ export const MessageList = ({
   firstNewId,
   scrollToEndKey,
   worker = COORDINATOR_WORKER,
-  workLogOf,
-  liveWorkLog,
   workingSince,
   earlier,
 }: {
   /** Drawn at the top of the messages on screen and scrolling with them. */
   lead?: ReactNode;
   messages: readonly Message[];
-  live: Readonly<Record<string, string>>;
+  live: Readonly<Record<string, LiveTurn>>;
   working: boolean;
   firstNewId: string | null;
   /** Each change takes the list to its end at once: the person just said something. */
   scrollToEndKey: number;
   worker?: Worker;
-  /** What the agent did to write the reply with this id (its tool calls), drawn above the reply. */
-  workLogOf?: (messageId: string) => ReactNode;
-  /** The same for the turn being written now, drawn in the "at work" row. */
-  liveWorkLog?: ReactNode;
   /** When the turn started, for a turn no message on screen started (a thread's first). */
   workingSince?: string | null;
   earlier?: EarlierMessages;
@@ -63,9 +55,6 @@ export const MessageList = ({
   const [atEnd, setAtEnd] = useState(true);
   const scroller = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (scrollToEndKey > 0) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
-  }, [scrollToEndKey]);
   const { rows, hidden } = useMemo(
     () => buildRows({ messages, live, working, firstNewId, window }),
     [messages, live, working, firstNewId, window],
@@ -88,8 +77,7 @@ export const MessageList = ({
         <MessageScroller
           scrollerRef={scroller}
           data-testid="chat-scroll"
-          streaming={working}
-          anchorKey={rows.length}
+          followKey={scrollToEndKey}
           onEdgeChange={setAtEnd}
           className="overflow-x-hidden overscroll-contain"
         >
@@ -109,14 +97,7 @@ export const MessageList = ({
             ) : null}
             {lead}
             {rows.map((row) => (
-              <RowView
-                key={row.key}
-                row={row}
-                worker={worker}
-                workLogOf={workLogOf}
-                liveWorkLog={liveWorkLog}
-                workingSince={workingSince}
-              />
+              <RowView key={row.key} row={row} worker={worker} workingSince={workingSince} />
             ))}
           </div>
         </MessageScroller>
@@ -161,14 +142,10 @@ const LoadEarlier = ({ earlier, onLoad }: { earlier: EarlierMessages; onLoad: ()
 const RowView = ({
   row,
   worker,
-  workLogOf,
-  liveWorkLog,
   workingSince,
 }: {
   row: ChatRow;
   worker: Worker;
-  workLogOf?: (messageId: string) => ReactNode;
-  liveWorkLog?: ReactNode;
   workingSince?: string | null;
 }) => {
   switch (row.kind) {
@@ -181,58 +158,35 @@ const RowView = ({
         </MarkerSeparator>
       );
     case "message":
-      return <MessageRow message={row.message} workLog={workLogOf?.(row.message.id)} />;
-    case "activity":
-      return (
-        <ActivityRow
-          worker={worker}
-          liveText={row.liveText}
-          since={row.since ?? workingSince ?? null}
-          workLog={liveWorkLog}
-        />
-      );
+      return <MessageRow message={row.message} writing={row.streaming} />;
+    case "working":
+      return <WorkingRow worker={worker} since={row.since ?? workingSince ?? null} />;
   }
 };
 
+// A reply being written and the message it becomes go through here alike, under the same key.
 const MessageRow = memo(function MessageRow({
   message,
-  workLog,
+  writing,
 }: {
   message: Message;
-  workLog: ReactNode;
+  writing: boolean;
 }) {
   switch (message.role) {
     case "user":
       return <UserRow message={message} />;
     case "assistant":
-      return <AssistantRow message={message} workLog={workLog} />;
+      return <AssistantRow message={message} writing={writing} />;
     case "thread-report":
       return <ThreadReportRow message={message} />;
   }
 });
 
-/** The agent at work: what it has written so far, typed out as it arrives, and how long it has been. */
-const ActivityRow = ({
-  worker,
-  liveText,
-  since,
-  workLog,
-}: {
-  worker: Worker;
-  liveText: string;
-  since: string | null;
-  workLog: ReactNode;
-}) => {
+/** The agent at work, and for how long, below what it is writing. */
+const WorkingRow = ({ worker, since }: { worker: Worker; since: string | null }) => {
   const now = useNow(1_000);
-  const shown = useStreamingReveal(liveText, true);
   return (
     <div data-testid={`${worker.testIdPrefix}-activity`} className="pb-5">
-      {workLog}
-      {shown ? (
-        <div data-testid={`${worker.testIdPrefix}-live-text`} className="min-w-0 px-1 py-0.5">
-          <ChatMarkdown content={shown} />
-        </div>
-      ) : null}
       <div
         data-testid={`${worker.testIdPrefix}-working`}
         role="status"

@@ -70,9 +70,16 @@ describe("asking the coordinator to change memory", () => {
     const reply = messages.find(
       (message) => message.role === "assistant" && message.inReplyTo === sent.body.message.id,
     );
-    expect(reply?.role === "assistant" && reply.blocks).toEqual([
-      { type: "text", text: "Updated MEMORY.md and deleted fridays.md." },
+    const blocks = reply?.role === "assistant" ? reply.blocks : [];
+    expect(blocks.map((block) => (block.type === "tool" ? block.name : block.type))).toEqual([
+      "mcp aop memory write",
+      "mcp aop memory delete",
+      "text",
     ]);
+    expect(blocks.at(-1)).toEqual({
+      type: "text",
+      text: "Updated MEMORY.md and deleted fridays.md.",
+    });
   }, 60_000);
 
   test("the index cannot be deleted: the tool call comes back as an error and the index stays", async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { EventLogEntry } from "@aop/common";
 import { createLiveTurns, mergeDelta } from "./live-turns.ts";
-import { liveText } from "./test-utils.ts";
+import { appended, baseline, liveDelta, started } from "./test-utils.ts";
 
 const settled = (entry: Omit<EventLogEntry, "id">): EventLogEntry =>
   ({ id: 1, ...entry }) as EventLogEntry;
@@ -33,45 +33,71 @@ const reply = (id: string, role: "assistant" | "user" = "assistant") =>
   });
 
 describe("live turns", () => {
-  test("accumulates appended text and hands it back as a replacing baseline", () => {
+  test("builds a turn's parts from what changed and hands them back as a baseline", () => {
     const turns = createLiveTurns();
 
-    turns.apply(liveText({ text: "Hel" }));
-    turns.apply(liveText({ text: "lo" }));
+    turns.apply(started("Hel", { inReplyTo: "u1" }));
+    turns.apply(appended("lo"));
+    turns.apply(
+      liveDelta([
+        {
+          op: "start",
+          index: 1,
+          part: { type: "tool", id: "t1", name: "Bash", detail: null, status: "running" },
+        },
+      ]),
+    );
+    turns.apply(liveDelta([{ op: "tool", index: 1, status: "done", detail: "ls" }]));
 
-    expect(turns.list("p1")).toEqual([liveText({ text: "Hello", replace: true })]);
+    expect(turns.list("p1")).toEqual([
+      liveDelta(
+        [
+          {
+            op: "reset",
+            parts: [
+              { type: "text", text: "Hello" },
+              { type: "tool", id: "t1", name: "Bash", detail: "ls", status: "done" },
+            ],
+          },
+        ],
+        { inReplyTo: "u1" },
+      ),
+    ]);
   });
 
-  test("a replacement overwrites, and an empty one forgets the turn", () => {
+  test("a baseline overwrites, and the end of a turn forgets it", () => {
     const turns = createLiveTurns();
-    turns.apply(liveText({ text: "Hello" }));
+    turns.apply(started("Hello"));
 
-    turns.apply(liveText({ text: "Hi there", replace: true }));
-    expect(turns.list("p1")).toEqual([liveText({ text: "Hi there", replace: true })]);
+    turns.apply(baseline("Hi there"));
+    expect(turns.list("p1")).toEqual([baseline("Hi there")]);
 
-    turns.apply(liveText({ text: "", replace: true }));
+    turns.apply(liveDelta([{ op: "end" }]));
     expect(turns.list("p1")).toEqual([]);
   });
 
   test("keeps turns apart by message and by project", () => {
     const turns = createLiveTurns();
 
-    turns.apply(liveText({ messageId: "m1", text: "one" }));
-    turns.apply(liveText({ messageId: "m2", threadId: "t1", text: "two" }));
-    turns.apply(liveText({ projectId: "p2", messageId: "m3", text: "three" }));
+    turns.apply(started("one", { messageId: "m1" }));
+    turns.apply(started("two", { messageId: "m2", threadId: "t1" }));
+    turns.apply(started("three", { projectId: "p2", messageId: "m3" }));
 
-    expect(turns.list("p1").map((turn) => turn.text)).toEqual(["one", "two"]);
-    expect(turns.list("p2").map((turn) => turn.text)).toEqual(["three"]);
+    expect(turns.list("p1")).toEqual([
+      baseline("one", { messageId: "m1" }),
+      baseline("two", { messageId: "m2", threadId: "t1" }),
+    ]);
+    expect(turns.list("p2")).toEqual([baseline("three", { projectId: "p2", messageId: "m3" })]);
     expect(turns.list("p3")).toEqual([]);
   });
 
   describe("settle", () => {
     const withThreeTurns = () => {
       const turns = createLiveTurns();
-      turns.apply(liveText({ messageId: "m1", threadId: null, text: "coordinator" }));
-      turns.apply(liveText({ messageId: "m2", threadId: "t1", text: "thread one" }));
-      turns.apply(liveText({ messageId: "m3", threadId: "t2", text: "thread two" }));
-      turns.apply(liveText({ projectId: "p2", messageId: "m4", text: "other project" }));
+      turns.apply(started("coordinator", { messageId: "m1", threadId: null }));
+      turns.apply(started("thread one", { messageId: "m2", threadId: "t1" }));
+      turns.apply(started("thread two", { messageId: "m3", threadId: "t2" }));
+      turns.apply(started("other project", { projectId: "p2", messageId: "m4" }));
       return turns;
     };
 
@@ -114,27 +140,32 @@ describe("live turns", () => {
 
 describe("mergeDelta", () => {
   test("with nothing waiting, is the delta itself", () => {
-    expect(mergeDelta(undefined, liveText({ text: "Hel" }))).toEqual(liveText({ text: "Hel" }));
+    expect(mergeDelta(undefined, started("Hel"))).toEqual(started("Hel"));
   });
 
-  test("extends the waiting text with an append", () => {
-    const merged = mergeDelta(liveText({ text: "Hel" }), liveText({ text: "lo" }));
-
-    expect(merged).toEqual(liveText({ text: "Hello", replace: false }));
-  });
-
-  test("keeps a waiting baseline a baseline when text is appended to it", () => {
-    const merged = mergeDelta(liveText({ text: "Hel", replace: true }), liveText({ text: "lo" }));
-
-    expect(merged).toEqual(liveText({ text: "Hello", replace: true }));
-  });
-
-  test("a replacement supersedes whatever was waiting", () => {
-    const merged = mergeDelta(
-      liveText({ text: "Hello" }),
-      liveText({ text: "Hi there", replace: true }),
+  test("joins what changed, in order", () => {
+    expect(mergeDelta(started("Hel"), appended("lo"))).toEqual(
+      liveDelta([
+        { op: "start", index: 0, part: { type: "text", text: "Hel" } },
+        { op: "append", index: 0, text: "lo" },
+      ]),
     );
+    expect(mergeDelta(appended("Hel"), appended("lo"))).toEqual(appended("Hello"));
+  });
 
-    expect(merged).toEqual(liveText({ text: "Hi there", replace: true }));
+  test("keeps a waiting baseline a baseline when more comes after it", () => {
+    expect(mergeDelta(baseline("Hel"), appended("lo"))).toEqual(
+      liveDelta([
+        { op: "reset", parts: [{ type: "text", text: "Hel" }] },
+        { op: "append", index: 0, text: "lo" },
+      ]),
+    );
+  });
+
+  test("a baseline or the end supersedes whatever was waiting", () => {
+    expect(mergeDelta(appended("Hello"), baseline("Hi there"))).toEqual(baseline("Hi there"));
+    expect(mergeDelta(baseline("Hello"), liveDelta([{ op: "end" }]))).toEqual(
+      liveDelta([{ op: "end" }]),
+    );
   });
 });

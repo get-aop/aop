@@ -13,7 +13,7 @@ export interface SeenStore {
 export interface ProjectChatDeps {
   projectId: string;
   api: Pick<ChatApi, "listMessages" | "sendMessage">;
-  events: Pick<LiveProjects, "subscribeEvents" | "subscribe" | "getState">;
+  events: Pick<LiveProjects, "subscribeEvents" | "liveTurns" | "subscribe" | "getState">;
   seen: SeenStore;
   /** Runs `run` after `delayMs`; returns what cancels it. */
   schedule?: (run: () => void, delayMs: number) => () => void;

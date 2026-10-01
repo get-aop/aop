@@ -1,18 +1,22 @@
-import type { Message } from "@aop/common";
-import { unansweredMessages } from "./chat-state";
+import type { AssistantMessage, Message } from "@aop/common";
+import { type LiveTurn, unansweredMessages } from "./chat-state";
 import { dayMarkerLabel } from "./chat-time";
 
 export type ChatRow =
   | { kind: "day"; key: string; label: string }
   | { kind: "new"; key: string }
-  | { kind: "message"; key: string; message: Message }
-  /** The coordinator at work on the oldest message no reply follows yet, and what it has written so far. */
-  | { kind: "activity"; key: string; liveText: string; since: string | null };
+  /**
+   * A message, or a reply still being written (`streaming`), drawn by the same row under the same
+   * key: when the reply's message arrives, only the data under the row changes.
+   */
+  | { kind: "message"; key: string; message: Message; streaming: boolean }
+  /** The agent at work, and since when: the message it is answering. */
+  | { kind: "working"; key: string; since: string | null };
 
 export interface RowsInput {
   messages: readonly Message[];
-  /** Live text of replies being written, by message id. */
-  live: Readonly<Record<string, string>>;
+  /** Replies being written, by the id their message will have. */
+  live: Readonly<Record<string, LiveTurn>>;
   /** Whether the coordinator is expected to be working: the project is active and something awaits an answer. */
   working: boolean;
   /** The first message this device had not seen when the chat was opened. */
@@ -22,10 +26,12 @@ export interface RowsInput {
   now?: Date;
 }
 
+const END = "";
+
 /**
  * The chat as a list of rows: messages under their day, a "New" line before what arrived while
- * the person was away, and, while the coordinator works, its live text right after the message
- * it is answering, where the finished reply will take its place.
+ * the person was away, each reply being written right after the message it answers, where its
+ * message will take its place, and, while the agent works, a line saying so below them.
  */
 export const buildRows = ({
   messages,
@@ -36,20 +42,19 @@ export const buildRows = ({
   now,
 }: RowsInput): { rows: ChatRow[]; hidden: number } => {
   const start = Math.max(0, messages.length - window);
-  const trigger = working ? (unansweredMessages(messages)[0] ?? null) : null;
-  const liveText = Object.values(live).join("\n\n");
+  const shown = messages.slice(start);
+  const trigger = unansweredMessages(messages)[0] ?? null;
+  const replies = liveRepliesByAnchor(shown, live, trigger);
   const rows: ChatRow[] = [];
   let previous: Message | null = null;
 
-  for (const message of messages.slice(start)) {
+  for (const message of shown) {
     rows.push(...rowsOf(message, previous, firstNewId, now));
-    if (trigger?.id === message.id) rows.push(activityRow(message.createdAt, liveText));
+    rows.push(...(replies.get(message.id) ?? []));
     previous = message;
   }
-  // Live text with no message on screen that it answers (it came before the chat was loaded).
-  if (working && !rows.some(({ kind }) => kind === "activity")) {
-    rows.push(activityRow(null, liveText));
-  }
+  rows.push(...(replies.get(END) ?? []));
+  if (working) insertWorkingRow(rows, shown, trigger, live);
   return { rows, hidden: start };
 };
 
@@ -64,13 +69,72 @@ const rowsOf = (
   const day = dayMarkerLabel(message.createdAt, previous?.createdAt ?? null, now);
   if (day) rows.push({ kind: "day", key: `day:${message.id}`, label: day });
   if (message.id === firstNewId) rows.push({ kind: "new", key: "new" });
-  rows.push({ kind: "message", key: message.id, message });
+  rows.push({ kind: "message", key: message.id, message, streaming: false });
   return rows;
 };
 
-const activityRow = (since: string | null, liveText: string): ChatRow => ({
-  kind: "activity",
-  key: "activity",
-  liveText,
-  since,
+// A reply sits after the message it says it answers; without one, after the oldest message no
+// reply follows yet, which is the one the host answers first (see chat-state.ts). A reply whose
+// message is not on screen goes last.
+const liveRepliesByAnchor = (
+  shown: readonly Message[],
+  live: Readonly<Record<string, LiveTurn>>,
+  trigger: Message | null,
+): Map<string, ChatRow[]> => {
+  const byAnchor = new Map<string, ChatRow[]>();
+  const onScreen = new Map(shown.map((message) => [message.id, message]));
+  const fallback = trigger && onScreen.has(trigger.id) ? trigger : undefined;
+  for (const [id, turn] of Object.entries(live)) {
+    if (turn.parts.length === 0) continue;
+    const anchor = (turn.inReplyTo && onScreen.get(turn.inReplyTo)) || fallback;
+    const key = anchor?.id ?? END;
+    const row: ChatRow = {
+      kind: "message",
+      key: id,
+      message: liveReply(id, turn, anchor, shown[0]),
+      streaming: true,
+    };
+    byAnchor.set(key, [...(byAnchor.get(key) ?? []), row]);
+  }
+  return byAnchor;
+};
+
+// The reply as the message it will be: its parts so far, in the conversation of the messages around it.
+const liveReply = (
+  id: string,
+  turn: LiveTurn,
+  anchor: Message | undefined,
+  neighbour: Message | undefined,
+): AssistantMessage => ({
+  id,
+  role: "assistant",
+  projectId: neighbour?.projectId ?? "",
+  threadId: neighbour?.threadId ?? null,
+  createdAt: anchor?.createdAt ?? "",
+  blocks: [...turn.parts],
+  ...(turn.inReplyTo && { inReplyTo: turn.inReplyTo }),
 });
+
+// Below the reply being written; with none yet, below the message being answered.
+const insertWorkingRow = (
+  rows: ChatRow[],
+  shown: readonly Message[],
+  trigger: Message | null,
+  live: Readonly<Record<string, LiveTurn>>,
+): void => {
+  const lastReply = rows.findLastIndex((row) => row.kind === "message" && row.streaming);
+  const triggerAt = trigger ? rows.findIndex((row) => row.key === trigger.id) : -1;
+  const at = lastReply !== -1 ? lastReply + 1 : triggerAt !== -1 ? triggerAt + 1 : rows.length;
+  const answering =
+    (lastReply !== -1 ? replyAnchor(rows[lastReply], shown, live) : undefined) ?? trigger;
+  rows.splice(at, 0, { kind: "working", key: "working", since: answering?.createdAt ?? null });
+};
+
+const replyAnchor = (
+  row: ChatRow | undefined,
+  shown: readonly Message[],
+  live: Readonly<Record<string, LiveTurn>>,
+): Message | undefined => {
+  const inReplyTo = row ? live[row.key]?.inReplyTo : undefined;
+  return shown.find(({ id }) => id === inReplyTo);
+};

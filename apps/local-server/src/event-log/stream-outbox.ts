@@ -1,4 +1,4 @@
-import { type MessageDelta, PROJECT_STREAM_EVENTS } from "@aop/common";
+import { type LiveSnapshot, type MessageDelta, PROJECT_STREAM_EVENTS } from "@aop/common";
 import { mergeDelta } from "./live-turns.ts";
 import type { SSEStreamHelper } from "./sse-stream.ts";
 import type { FeedItem } from "./stream-feed.ts";
@@ -8,6 +8,10 @@ export interface Outbox {
   queueDelta: (delta: MessageDelta) => void;
   /** Entries and resyncs carry their log id as the SSE id: the cursor a reconnect resumes from. */
   send: (item: FeedItem) => Promise<void>;
+  /**
+   * Sends the live text waiting. The first call of a connection sends it as one `live` frame,
+   * the snapshot of every turn being written, so a client can drop the turns that are not.
+   */
   sendDeltas: () => Promise<void>;
   heartbeat: () => Promise<void>;
 }
@@ -19,6 +23,7 @@ export interface Outbox {
  */
 export const createOutbox = (out: SSEStreamHelper): Outbox => {
   const waiting = new Map<string, MessageDelta>();
+  let snapshotSent = false;
 
   const sendEntry = async (item: Extract<FeedItem, { kind: "entry" }>) => {
     const { entry } = item;
@@ -45,6 +50,15 @@ export const createOutbox = (out: SSEStreamHelper): Outbox => {
     sendDeltas: async () => {
       const batch = [...waiting.values()];
       waiting.clear();
+      if (!snapshotSent) {
+        snapshotSent = true;
+        await out.sendEvent(
+          PROJECT_STREAM_EVENTS.live,
+          { turns: batch } satisfies LiveSnapshot,
+          null,
+        );
+        return;
+      }
       for (const delta of batch) await out.sendEvent(PROJECT_STREAM_EVENTS.delta, delta, null);
     },
 

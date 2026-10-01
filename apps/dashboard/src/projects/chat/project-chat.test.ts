@@ -7,7 +7,9 @@ import {
   at,
   createFakeEvents,
   deferred,
+  delta,
   ids,
+  liveTexts,
   memorySeenStore,
   page,
   pageFrom,
@@ -51,12 +53,29 @@ const setup = (options: { seen?: Record<string, string>; fetches?: Promise<Messa
 const held = (chat: ReturnType<typeof setup>["chat"]) => ids(chat.getState().messages);
 
 describe("loading", () => {
+  test("opened again mid-turn, the chat starts from the turn so far and goes on from there", async () => {
+    const { chat, fake } = setup({ fetches: [Promise.resolve([userMessage("u1", 1)])] });
+    fake.setLiveTurns([
+      delta("a1", "Looking at the open threads. ", { replace: true, inReplyTo: "u1" }),
+    ]);
+
+    chat.start();
+    expect(liveTexts(chat.getState())).toEqual({ a1: "Looking at the open threads. " });
+    await flush();
+    fake.append("a1", "Two are working.");
+
+    expect(liveTexts(chat.getState())).toEqual({
+      a1: "Looking at the open threads. Two are working.",
+    });
+    expect(chat.getState().live.a1?.inReplyTo).toBe("u1");
+  });
+
   test("listens to the stream before it fetches, and holds the fetched messages once they arrive", async () => {
     const fetched = deferred<Message[]>();
     const { chat, fake } = setup({ fetches: [fetched.promise] });
 
     chat.start();
-    expect(fake.listenerCount()).toBe(2);
+    expect(fake.listenerCount()).toBe(1);
     expect(chat.getState().phase).toBe("loading");
 
     fetched.resolve([userMessage("u1", 1), reply("a1", 2)]);
@@ -184,27 +203,27 @@ describe("the stream", () => {
     await flush();
 
     fake.delta("a1", "On it. ");
-    fake.delta("a1", "Two threads.");
-    expect(chat.getState().live).toEqual({ a1: "On it. Two threads." });
+    fake.append("a1", "Two threads.");
+    expect(liveTexts(chat.getState())).toEqual({ a1: "On it. Two threads." });
 
     fake.entry(2, reply("a1", 2));
     expect(chat.getState().live).toEqual({});
     expect(held(chat)).toEqual(["u1", "a1"]);
   });
 
-  test("live text is dropped when the connection drops and rebuilt from the baseline the reconnect sends", async () => {
+  test("live text is kept across a dropped connection and goes on from the baseline the reconnect sends", async () => {
     const { chat, fake } = setup({ fetches: [Promise.resolve([userMessage("u1", 1)])] });
     chat.start();
     await flush();
     fake.delta("a1", "On it. Two");
 
     fake.setConnection("reconnecting");
-    expect(chat.getState().live).toEqual({});
+    expect(liveTexts(chat.getState())).toEqual({ a1: "On it. Two" });
 
     fake.setConnection("live");
-    fake.delta("a1", "On it. Two threads", true);
-    fake.delta("a1", ".");
-    expect(chat.getState().live).toEqual({ a1: "On it. Two threads." });
+    fake.live(delta("a1", "On it. Two threads", { replace: true }));
+    fake.append("a1", ".");
+    expect(liveTexts(chat.getState())).toEqual({ a1: "On it. Two threads." });
   });
 
   test("ignores messages and live text of a thread", async () => {
@@ -246,7 +265,7 @@ describe("the stream", () => {
     chat.start();
     await flush();
 
-    expect(fake.listenerCount()).toBe(2);
+    expect(fake.listenerCount()).toBe(1);
     expect(held(chat)).toEqual(["u1", "a1"]);
   });
 });

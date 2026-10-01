@@ -16,9 +16,9 @@ import {
   expandStoredPastes,
 } from "../chat-session/message-images.ts";
 import { type MessageOrigin, parseMessageOrigin } from "../chat-session/message-origin.ts";
+import { storedTurnParts } from "../chat-session/turn-parts.ts";
 import type { ChatMessage, ChatSession, Database } from "../db/schema.ts";
 import { createSuggestionRepository, type MessageAnswers } from "../suggestion/repository.ts";
-import { textToBlocks } from "./text-blocks.ts";
 
 export const DEFAULT_MESSAGE_PAGE_SIZE = 200;
 export const MAX_MESSAGE_PAGE_SIZE = 500;
@@ -166,7 +166,7 @@ export const toWireMessage = (
   const origin = parseMessageOrigin(row.origin_json);
   if (row.role === "assistant") {
     const blocks = [...withAnswers(runBlocks, extras.answers), ...welcomeCard(origin)];
-    return assistantMessage(base, scope, text, blocks, extras);
+    return assistantMessage(base, [...storedTurnParts(row, text), ...blocks], extras);
   }
   // Only the person's own words carry images; a report or a relay never does.
   const images = origin ? [] : messageImages(scope.projectId, row);
@@ -192,18 +192,13 @@ const messageImages = (projectId: string, row: Pick<ChatMessage, "content">): Me
       : [],
   );
 
+// A reply is the parts its turn produced, in order, then the blocks its tools posted.
 const assistantMessage = (
   base: { id: string; projectId: string; threadId: string | null; createdAt: string },
-  scope: MessageScope,
-  text: string,
-  runBlocks: readonly MessageBlock[],
+  blocks: readonly MessageBlock[],
   { failed = false, inReplyTo }: MessageExtras,
-): Message | null => {
-  // Only the coordinator refers to threads by link; a thread's own text is shown as written.
-  const written =
-    scope.threadId === null ? textToBlocks(text) : text ? [{ type: "text", text }] : [];
-  const blocks = [...written, ...runBlocks];
-  return blocks.length === 0
+): Message | null =>
+  blocks.length === 0
     ? null
     : MessageSchema.parse({
         ...base,
@@ -212,7 +207,6 @@ const assistantMessage = (
         ...(failed && { failed }),
         ...(inReplyTo && { inReplyTo }),
       });
-};
 
 // The host's welcome on a new project has no run to carry blocks: the survey it started is its card.
 const welcomeCard = (origin: MessageOrigin | null): MessageBlock[] =>

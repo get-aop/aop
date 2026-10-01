@@ -64,6 +64,18 @@ describe("prose and chips", () => {
     );
   });
 
+  test("a thread the text links to as [title](thread:<id>) is a chip inside its sentence", () => {
+    const { container } = renderBlocks([
+      { type: "text", text: "Passed it to [whatever](thread:thr_1) for the redate." },
+    ]);
+
+    const paragraphs = container.querySelectorAll("p");
+    expect(paragraphs).toHaveLength(1);
+    const chip = within(paragraphs[0] as HTMLElement).getByTestId("thread-chip");
+    expect(chip.textContent).toBe("Fix login");
+    expect(paragraphs[0]?.textContent).toBe("Passed it to Fix login for the redate.");
+  });
+
   test("a pull request chip shows its number, coloured by state, and links to it", () => {
     renderBlocks([
       { type: "text", text: "It is up as " },
@@ -125,7 +137,7 @@ describe("routing receipt", () => {
     ).toEqual(["Fix login"]);
   });
 
-  test("reads 'Sent to one thread' for one, and leads the message", () => {
+  test("reads 'Sent to one thread' for one, and follows what the reply said", () => {
     const { container } = renderBlocks([
       { type: "text", text: "Passed it on." },
       { type: "routing-receipt", threadIds: ["thr_1"] },
@@ -133,7 +145,7 @@ describe("routing receipt", () => {
 
     expect(screen.getByTestId("routing-receipt").textContent).toContain("Sent to one thread");
     const blocks = container.querySelector("[data-testid=message-blocks]");
-    expect(blocks?.firstElementChild?.getAttribute("data-testid")).toBe("routing-receipt");
+    expect(blocks?.lastElementChild?.getAttribute("data-testid")).toBe("routing-receipt");
   });
 });
 
@@ -369,5 +381,53 @@ describe("resuming a rate-limited thread from its card", () => {
     renderBlocks([{ type: "thread-card", threadId: "thr_1", variant: "live" }], [fixLogin]);
 
     expect(screen.queryByTestId("thread-card-resume")).toBeNull();
+  });
+});
+
+describe("tool calls and reasoning", () => {
+  const tool = (id: string, status: "running" | "done" | "failed" = "done"): MessageBlock => ({
+    type: "tool",
+    id,
+    name: id === "t1" ? "Bash" : "mcp aop thread spawn",
+    detail: id === "t1" ? "bun test" : null,
+    status,
+  });
+
+  test("calls made one after another fold into one line that counts them and opens to them", () => {
+    renderBlocks([
+      { type: "text", text: "Checking." },
+      tool("t1"),
+      tool("t2", "failed"),
+      { type: "text", text: "Done." },
+    ]);
+
+    expect(screen.getByTestId("tool-run-summary").textContent).toBe("2 tool calls · 1 failed");
+    expect(screen.queryAllByTestId("tool-call")).toHaveLength(0);
+    fireEvent.click(screen.getByTestId("tool-run-toggle"));
+    const calls = screen.getAllByTestId("tool-call");
+    expect(calls.map((call) => call.getAttribute("data-status"))).toEqual(["done", "failed"]);
+    expect(calls[1]?.textContent).toContain("aop · thread spawn");
+  });
+
+  test("a single call is one row whose detail opens in full", () => {
+    renderBlocks([tool("t1")]);
+
+    const call = screen.getByTestId("tool-call");
+    expect(call.textContent).toContain("Bash");
+    expect(call.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(call);
+    expect(call.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  test("reasoning folds to a Thinking line that opens to it", () => {
+    renderBlocks([
+      { type: "thinking", text: "The retry fires twice." },
+      { type: "text", text: "Fixed." },
+    ]);
+
+    expect(screen.getByTestId("thinking-toggle").textContent).toBe("Thinking");
+    expect(screen.queryByTestId("thinking-text")).toBeNull();
+    fireEvent.click(screen.getByTestId("thinking-toggle"));
+    expect(screen.getByTestId("thinking-text").textContent).toContain("The retry fires twice.");
   });
 });

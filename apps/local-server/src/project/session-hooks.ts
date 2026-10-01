@@ -1,4 +1,10 @@
-import { type MessageBlock, MessageBlockSchema, threadCardVariant } from "@aop/common";
+import {
+  diffTurnParts,
+  type MessageBlock,
+  MessageBlockSchema,
+  type TurnPart,
+  threadCardVariant,
+} from "@aop/common";
 import { z } from "zod";
 import { parseMessageOrigin } from "../chat-session/message-origin.ts";
 import type {
@@ -15,7 +21,7 @@ import { statusAfterSchedule, type TurnEnd } from "../thread/state.ts";
 import { settleThreadTurn } from "../thread/turn-outcome.ts";
 import { recordMessageCreated, recordThreadUpserted } from "./events.ts";
 import { recordReportedRuntime } from "./reported-runtime.ts";
-import { isFailedRun, scopeOf, toWireMessage } from "./wire-messages.ts";
+import { displayText, isFailedRun, scopeOf, toWireMessage } from "./wire-messages.ts";
 
 /**
  * The project domain's side of the engine's session hooks (see chat-session/session-hooks.ts):
@@ -23,8 +29,8 @@ import { isFailedRun, scopeOf, toWireMessage } from "./wire-messages.ts";
  * engine, and shows a reply being written as it is.
  */
 export const createProjectSessionHooks = (publisher: EventPublisher): SessionHooks => {
-  // What of each running reply clients already have, so a progress snapshot goes out as its new suffix.
-  const liveSoFar = new Map<string, string>();
+  // What of each running reply clients already have, so a progress snapshot goes out as what changed.
+  const liveSoFar = new Map<string, readonly TurnPart[]>();
 
   return {
     onUserMessageStored: async (tx, message) => {
@@ -61,19 +67,17 @@ export const createProjectSessionHooks = (publisher: EventPublisher): SessionHoo
       return followUp;
     },
 
-    onAssistantProgress: (session, run, text) => {
+    onAssistantProgress: (session, run, parts) => {
       if (!session.project_id) return;
-      const before = liveSoFar.get(run.id) ?? "";
-      const appended = text.startsWith(before);
-      const delta = appended ? text.slice(before.length) : text;
-      if (appended && delta === "") return;
-      liveSoFar.set(run.id, text);
+      const ops = diffTurnParts(liveSoFar.get(run.id) ?? [], parts);
+      if (ops.length === 0) return;
+      liveSoFar.set(run.id, parts);
       publisher.publishLive({
         projectId: session.project_id,
         threadId: session.kind === "thread" ? session.id : null,
         messageId: run.assistant_message_id,
-        text: delta,
-        replace: !appended,
+        inReplyTo: run.user_message_id,
+        ops,
       });
     },
   };
@@ -144,7 +148,8 @@ const finishThreadRun = async (
   const { rateLimit } = turn.outcome;
   const wakeSessionIds = await settleThreadTurn(tx, session, {
     end: rateLimit ? "rate-limited" : turnEnd(turn.outcome.status),
-    text: wire && wire.role === "assistant" ? assistantText(wire.blocks) : "",
+    // What the thread reports is its answer, not the paragraphs it said on the way to it.
+    text: wire ? displayText(turn.assistantMessage) : "",
     resumesAt: rateLimit?.resumesAt,
   });
   // The thread may not have gone on hold (it was resolved, say): only a thread that did has a timer to arm.
@@ -237,6 +242,3 @@ const reportedThreadIds = async (
 };
 
 const turnEnd = (status: FinalizedTurn["outcome"]["status"]): TurnEnd => status;
-
-const assistantText = (blocks: readonly MessageBlock[]): string =>
-  blocks.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n\n");

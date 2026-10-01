@@ -6,7 +6,10 @@ export interface ArgvSpec {
 }
 
 export interface ParsedArgv {
-  /** Every `--flag` in order, whether or not the spec knows it; values and positionals are not flags. */
+  /**
+   * Every `--flag` and short `-x` flag in order, whether or not the spec knows it; values and
+   * positionals are not flags.
+   */
   flags: string[];
   values: Map<string, string>;
   /** What each variadic flag consumed, in order; a repeated flag accumulates. */
@@ -25,7 +28,7 @@ export const parseArgv = (args: readonly string[], spec: ArgvSpec): ParsedArgv =
   let index = 0;
   while (index < args.length) {
     const arg = args[index] as string;
-    if (arg.startsWith("--")) parsed.flags.push(arg);
+    if (isFlag(arg)) parsed.flags.push(arg);
     index = consume(args, index + 1, arg, spec, parsed);
   }
   return parsed;
@@ -49,9 +52,12 @@ const consume = (
     parsed.variadicValues.set(arg, [...(parsed.variadicValues.get(arg) ?? []), ...consumed]);
     return end;
   }
-  if (!arg.startsWith("--")) parsed.positionals.push(arg);
+  if (!isFlag(arg)) parsed.positionals.push(arg);
   return from;
 };
+
+// A short flag is one letter (`-p`), which takes no value in the CLIs the fake imitates.
+const isFlag = (arg: string): boolean => arg.startsWith("--") || /^-[A-Za-z]$/.test(arg);
 
 // A variadic flag swallows a trailing prompt exactly like the real parser would,
 // so a missing positional here surfaces an adapter argv-ordering bug.

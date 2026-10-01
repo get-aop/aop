@@ -1,4 +1,4 @@
-import type { ChatActionPayload } from "@aop/common";
+import type { ChatActionPayload, TurnPart } from "@aop/common";
 import { getLogger } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatRun } from "../db/schema.ts";
@@ -6,10 +6,7 @@ import { createUsageService } from "../usage/service.ts";
 import type { StoredChatArtifact } from "./message-images.ts";
 import { isDbClosedError } from "./reply-state.ts";
 import { type FinalizeChatRunOutcome, persistFinalizedChatRun } from "./run-finalization.ts";
-import { sessionDtoFor, toMessageDto } from "./session-dto.ts";
-import { publishChatSessionEvent } from "./session-events.ts";
 import type { TurnFollowUp } from "./session-hooks.ts";
-import type { AssistantActivity } from "./session-types.ts";
 
 const logger = getLogger("chat-session", "finalize");
 
@@ -30,7 +27,7 @@ export const finalizeChatRunAndPublish = async (
     status: "completed",
     errorMessage: null,
   },
-  activity: AssistantActivity | null = null,
+  parts: readonly TurnPart[] | null = null,
   artifacts: StoredChatArtifact[] = [],
 ): Promise<TurnFollowUp> => {
   const persist = (withHooks: boolean) =>
@@ -42,7 +39,7 @@ export const finalizeChatRunAndPublish = async (
         action,
         runtimeSessionId,
         outcome,
-        activity,
+        parts,
         artifacts,
       );
       if (!assistantMessage) return null;
@@ -62,27 +59,8 @@ export const finalizeChatRunAndPublish = async (
     return persist(false);
   });
   if (!done) return NO_FOLLOW_UP;
-  const { finalized, followUp } = done;
-  // Before the client hears the run is over, so a usage read after `assistant-final` sees it.
   await createUsageService(ctx.db).recordRunUsage(run);
-
-  const session = await ctx.chatSessionRepository.getById(run.session_id);
-  if (!session) return followUp;
-  const sessionDto = await sessionDtoFor(ctx, session, finalized.content, finalized.created_at);
-  publishChatSessionEvent({
-    type: "assistant-final",
-    sessionId: run.session_id,
-    message: toMessageDto(
-      finalized,
-      await ctx.db.selectFrom("chat_runs").selectAll().where("id", "=", run.id).executeTakeFirst(),
-    ),
-  });
-  publishChatSessionEvent({
-    type: "session-updated",
-    sessionId: run.session_id,
-    session: sessionDto,
-  });
-  return followUp;
+  return done.followUp;
 };
 
 export const NO_FOLLOW_UP: TurnFollowUp = { wakeSessionIds: [], resume: null };

@@ -140,11 +140,28 @@ export const assistantReply = (
   },
 });
 
-export const liveText = (overrides: Partial<MessageDelta> = {}): MessageDelta => ({
+type DeltaOverrides = Partial<Omit<MessageDelta, "ops">>;
+
+/** A delta of turn `m1` in the coordinator chat of `p1`, unless overridden. */
+export const liveDelta = (
+  ops: MessageDelta["ops"],
+  overrides: DeltaOverrides = {},
+): MessageDelta => ({
   projectId: "p1",
   threadId: null,
   messageId: "m1",
-  text: "Hel",
-  replace: false,
+  ops,
   ...overrides,
 });
+
+/** The turn's first paragraph starts with `text`. */
+export const started = (text: string, overrides: DeltaOverrides = {}): MessageDelta =>
+  liveDelta([{ op: "start", index: 0, part: { type: "text", text } }], overrides);
+
+/** `text` is added to the turn's first paragraph. */
+export const appended = (text: string, overrides: DeltaOverrides = {}): MessageDelta =>
+  liveDelta([{ op: "append", index: 0, text }], overrides);
+
+/** The turn so far is one paragraph, `text`: the baseline a client that connects mid-turn gets. */
+export const baseline = (text: string, overrides: DeltaOverrides = {}): MessageDelta =>
+  liveDelta([{ op: "reset", parts: [{ type: "text", text }] }], overrides);

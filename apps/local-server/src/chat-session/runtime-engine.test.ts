@@ -787,7 +787,11 @@ describe("runSessionPrompt", () => {
       repoPath: "/tmp/repo",
       prompt: "hey",
       createProviderFn: () => provider,
-      onProgress: (s) => progress.push({ thinking: s.thinking, content: s.content }),
+      onProgress: (parts) =>
+        progress.push({
+          thinking: parts.flatMap((p) => (p.type === "thinking" ? [p.text] : [])).join(""),
+          content: parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join(""),
+        }),
     });
 
     expect(result.text).toBe("Done");

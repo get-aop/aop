@@ -11,9 +11,7 @@ import { type ThreadActions, threadActions } from "../thread-actions";
 import { AnswerCard } from "./AnswerCard";
 import { ThreadProgress } from "./ThreadProgress";
 import { ThreadRuntimeChips } from "./ThreadRuntimeChips";
-import { useThreadActivity } from "./use-thread-activity";
 import { useThreadConversation } from "./use-thread-conversation";
-import { WorkLog } from "./WorkLog";
 
 // A thread in these statuses has a turn running or lined up: Stop ends it. A rate-limited one
 // has none; it waits for its reset, and its notice offers "Resume now".
@@ -41,8 +39,6 @@ export const ThreadTranscript = ({
   aboveComposer?: React.ReactNode;
 }) => {
   const { conversation, state } = useThreadConversation(project.id, thread.id);
-  const agentReplies = state.messages.filter((message) => message.role === "assistant").length;
-  const activity = useThreadActivity(thread, agentReplies);
   const [sentCount, setSentCount] = useState(0);
   const working = thread.status === "working" || Object.keys(state.live).length > 0;
   const worker = useMemo(
@@ -83,11 +79,6 @@ export const ThreadTranscript = ({
           working={working}
           sentCount={sentCount}
           worker={worker}
-          workLogOf={(id) => {
-            const turn = activity.finished.get(id);
-            return turn ? <WorkLog turn={turn} /> : null;
-          }}
-          liveWorkLog={activity.running ? <WorkLog turn={activity.running} /> : null}
           onReload={conversation.reload}
           onLoadEarlier={conversation.loadEarlier}
         />
@@ -128,8 +119,6 @@ const Body = ({
   working,
   sentCount,
   worker,
-  workLogOf,
-  liveWorkLog,
   onReload,
   onLoadEarlier,
 }: {
@@ -139,8 +128,6 @@ const Body = ({
   working: boolean;
   sentCount: number;
   worker: Worker;
-  workLogOf: (messageId: string) => React.ReactNode;
-  liveWorkLog: React.ReactNode;
   onReload: () => void;
   onLoadEarlier: () => Promise<void>;
 }) => {
@@ -173,8 +160,6 @@ const Body = ({
       firstNewId={null}
       scrollToEndKey={sentCount}
       worker={worker}
-      workLogOf={workLogOf}
-      liveWorkLog={liveWorkLog}
       workingSince={firstTurnStart(state)}
       earlier={earlierOf(state, onLoadEarlier)}
     />

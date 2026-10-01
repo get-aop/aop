@@ -67,7 +67,9 @@ describe("coordinator and threads against the fake CLI", () => {
       );
     }, "the coordinator's reply with the thread's card");
     const startedBlocks = started.role === "assistant" ? started.blocks : [];
+    // The thread_spawn call is part of the turn, where the coordinator made it.
     expect(startedBlocks.map((block) => block.type)).toEqual([
+      "tool",
       "text",
       "thread-card",
       "routing-receipt",
@@ -195,13 +197,15 @@ describe("coordinator and threads against the fake CLI", () => {
         message.blocks.some((block) => block.type === "suggested-threads"),
     );
     expect(reply?.role === "assistant" && reply.blocks.map((block) => block.type)).toEqual([
+      "tool",
+      "tool",
       "text",
       "routing-receipt",
       "suggested-threads",
     ]);
     const blocks = reply?.role === "assistant" ? reply.blocks : [];
-    expect(blocks[1]).toEqual({ type: "routing-receipt", threadIds: [spawned.thread.id] });
-    const suggestions = blocks[2]?.type === "suggested-threads" ? blocks[2].suggestions : [];
+    expect(blocks[3]).toEqual({ type: "routing-receipt", threadIds: [spawned.thread.id] });
+    const suggestions = blocks[4]?.type === "suggested-threads" ? blocks[4].suggestions : [];
     expect(suggestions.map(({ title, reason }) => [title, reason])).toEqual([
       ["Add retry metrics", "Nobody can tell how often a retry fires."],
       ["Load test", "Checkout has never run under load."],

@@ -5,6 +5,7 @@ import {
   type ConversationContextMessage,
 } from "./conversation-context.ts";
 import { decodeStoredAttachmentMetadata } from "./message-images.ts";
+import { storedTurnParts, turnText } from "./turn-parts.ts";
 
 export const prepareConversationPrompt = async (input: {
   ctx: LocalServerContext;
@@ -46,7 +47,7 @@ export const prepareConversationPrompt = async (input: {
     const run = message.role === "user" ? byUser.get(message.id) : byAssistant.get(message.id);
     const outcome = semanticOutcome(run?.status);
     if (message.role === "assistant" && outcome === "interrupted") {
-      const partial = activityContent(message.activity);
+      const partial = turnText(storedTurnParts(message, ""));
       return partial ? [{ role: "assistant", content: partial, outcome }] : [];
     }
     return [{ role: message.role, content: visibleHistoryText(message.content), outcome }];
@@ -87,14 +88,4 @@ const visibleHistoryText = (content: string): string => {
   return attachmentNames.length > 0
     ? `${text}\n[Attachments: ${attachmentNames.join(", ")}]`
     : text;
-};
-
-const activityContent = (raw: string | null): string => {
-  if (!raw) return "";
-  try {
-    const parsed = JSON.parse(raw) as { content?: unknown };
-    return typeof parsed.content === "string" ? parsed.content.trim() : "";
-  } catch {
-    return "";
-  }
 };

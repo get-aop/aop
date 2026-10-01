@@ -5,7 +5,14 @@ import { createTestDb } from "../db/test-utils.ts";
 import { createProjectRepository } from "../project/repository.ts";
 import { createEventPublisher, type EventPublisher } from "./publisher.ts";
 import { createEventLogRepository } from "./repository.ts";
-import { createProjects, liveText, projectRemoved, threadRemoved } from "./test-utils.ts";
+import {
+  appended,
+  baseline,
+  createProjects,
+  projectRemoved,
+  started,
+  threadRemoved,
+} from "./test-utils.ts";
 
 describe("event publisher", () => {
   let db: Kysely<Database>;
@@ -154,21 +161,21 @@ describe("event publisher", () => {
       const { heard } = listen("p1");
       const other = listen("p2");
 
-      publisher.publishLive(liveText({ text: "Hel" }));
-      publisher.publishLive(liveText({ text: "lo" }));
+      publisher.publishLive(started("Hel"));
+      publisher.publishLive(appended("lo"));
 
-      expect(heard.deltas).toEqual([liveText({ text: "Hel" }), liveText({ text: "lo" })]);
+      expect(heard.deltas).toEqual([started("Hel"), appended("lo")]);
       expect(other.heard.deltas).toEqual([]);
       expect(await stored("p1")).toEqual([]);
     });
 
     test("is handed to a new subscriber as the text so far", () => {
-      publisher.publishLive(liveText({ text: "Hel" }));
-      publisher.publishLive(liveText({ text: "lo" }));
+      publisher.publishLive(started("Hel"));
+      publisher.publishLive(appended("lo"));
 
       const { subscription } = listen("p1");
 
-      expect(subscription.runningTurns).toEqual([liveText({ text: "Hello", replace: true })]);
+      expect(subscription.runningTurns).toEqual([baseline("Hello")]);
     });
   });
 

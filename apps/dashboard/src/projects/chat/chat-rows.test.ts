@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildRows, type ChatRow, type RowsInput } from "./chat-rows";
-import { at, reply, report, userMessage } from "./test-utils";
+import { at, liveTurn, reply, report, userMessage } from "./test-utils";
 
 const NOON = new Date("2026-09-30T12:00:00.000Z");
 
@@ -16,7 +16,10 @@ const rowsOf = (input: Partial<RowsInput>) =>
   });
 
 const shape = (rows: readonly ChatRow[]): string[] =>
-  rows.map((row) => (row.kind === "message" ? row.message.id : row.kind));
+  rows.map((row) => {
+    if (row.kind !== "message") return row.kind;
+    return row.streaming ? `${row.message.id}…` : row.message.id;
+  });
 
 describe("buildRows", () => {
   test("lists the messages in order under the day they were written", () => {
@@ -55,34 +58,58 @@ describe("buildRows", () => {
     expect(shape(rows)).toEqual(["day", "u2", "a2"]);
   });
 
-  test("while the coordinator works, its live text follows the message it is answering, before messages that wait behind it", () => {
+  test("while the coordinator works, its reply is drawn after the message it is answering, with the working line below it", () => {
     const { rows } = rowsOf({
       messages: [userMessage("u1", 1), reply("a1", 2), userMessage("u2", 3), report("r1", 4)],
-      live: { a2: "On it" },
+      live: { a2: liveTurn("On it") },
       working: true,
     });
 
-    expect(shape(rows)).toEqual(["day", "u1", "a1", "u2", "activity", "r1"]);
-    expect(rows.find((row) => row.kind === "activity")).toMatchObject({
-      liveText: "On it",
-      since: at(3),
+    expect(shape(rows)).toEqual(["day", "u1", "a1", "u2", "a2…", "working", "r1"]);
+    // Under the key its message will have, so the arriving message only changes the row's data.
+    expect(rows[4]).toMatchObject({
+      kind: "message",
+      key: "a2",
+      streaming: true,
+      message: { id: "a2", role: "assistant", blocks: [{ type: "text", text: "On it" }] },
     });
+    expect(rows.find((row) => row.kind === "working")).toMatchObject({ since: at(3) });
   });
 
-  test("shows no activity once every message is answered", () => {
+  test("a reply that says what it answers goes after that message, as its message will", () => {
+    const { rows } = rowsOf({
+      messages: [userMessage("u1", 1), report("r1", 2), report("r2", 3)],
+      live: { a1: liveTurn("Both landed.", "r2") },
+      working: true,
+    });
+
+    expect(shape(rows)).toEqual(["day", "u1", "r1", "r2", "a1…", "working"]);
+    expect(rows.at(-1)).toMatchObject({ kind: "working", since: at(3) });
+  });
+
+  test("before any text, the working line follows the message being answered", () => {
+    const { rows } = rowsOf({
+      messages: [userMessage("u1", 1), reply("a1", 2), userMessage("u2", 3), report("r1", 4)],
+      working: true,
+    });
+
+    expect(shape(rows)).toEqual(["day", "u1", "a1", "u2", "working", "r1"]);
+  });
+
+  test("shows no working line once every message is answered", () => {
     const { rows } = rowsOf({ messages: [userMessage("u1", 1), reply("a1", 2)], working: false });
 
-    expect(shape(rows)).not.toContain("activity");
+    expect(shape(rows)).not.toContain("working");
   });
 
-  test("live text that answers nothing on screen goes last", () => {
+  test("a reply that answers nothing on screen goes last", () => {
     const { rows } = rowsOf({
       messages: [userMessage("u1", 1), reply("a1", 2)],
-      live: { a2: "Early" },
+      live: { a2: liveTurn("Early") },
       working: true,
     });
 
-    expect(shape(rows)).toEqual(["day", "u1", "a1", "activity"]);
-    expect(rows.at(-1)).toMatchObject({ kind: "activity", liveText: "Early", since: null });
+    expect(shape(rows)).toEqual(["day", "u1", "a1", "a2…", "working"]);
+    expect(rows.at(-1)).toMatchObject({ kind: "working", since: null });
   });
 });

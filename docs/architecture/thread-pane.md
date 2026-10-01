@@ -1,6 +1,6 @@
 # The Overview and the thread pane in the dashboard
 
-The threads panel beside a project's chat opens on the Overview: every thread grouped by what it needs from the person. Choosing a thread replaces the Overview in the panel with the thread pane, at `/projects/:id/threads/:threadId`: its transcript, the question it waits on, the box to steer it, its pull request, and the files it changed. The code is in `apps/dashboard/src/projects/` (`ThreadOverview.tsx`, `selectors.ts`) and `apps/dashboard/src/projects/thread/`. The wire types (`Thread`, `Message`, `MessageDelta`, `ThreadActivity`) are in `@aop/common`; the routes are in [Threads and git](../THREADS.md) and [Run scheduling](../SCHEDULING.md).
+The threads panel beside a project's chat opens on the Overview: every thread grouped by what it needs from the person. Choosing a thread replaces the Overview in the panel with the thread pane, at `/projects/:id/threads/:threadId`: its transcript, the question it waits on, the box to steer it, its pull request, and the files it changed. The code is in `apps/dashboard/src/projects/` (`ThreadOverview.tsx`, `selectors.ts`) and `apps/dashboard/src/projects/thread/`. The wire types (`Thread`, `Message`, `MessageDelta`, `TurnPart`) are in `@aop/common`; the routes are in [Threads and git](../THREADS.md) and [Run scheduling](../SCHEDULING.md).
 
 ## The Overview
 
@@ -14,8 +14,7 @@ The threads panel beside a project's chat opens on the Overview: every thread gr
 | Pull request bar | `thread.artifacts` (the `pr` item), the diff's file count, and the calls of `usePullRequestControls` |
 | Notice: queued, rate limited (with a countdown to `resumesAt`), landing, resolved | the `Thread` |
 | Steps checklist and status line | `thread.steps` and `thread.liveStatusLine` (the line only while the thread is at work) |
-| Transcript | `GET /api/threads/:id/messages`, the stream's entries and live text |
-| Tool calls of each turn | `GET /api/threads/:id/activity` |
+| Transcript, with each turn's tool calls and reasoning | `GET /api/threads/:id/messages`, the stream's entries and live turns |
 | The question, with its options | `thread.blockedQuestion` |
 | Changes | `GET /api/threads/:id/diff` and `/diff/file?path=` |
 
@@ -28,12 +27,10 @@ A thread's conversation is kept by the same code as the coordinator chat (`chat/
 What a thread's messages are:
 
 - The first one is the brief. The coordinator sends it as a relay, so it arrives as an assistant message: an optional `quote-forwarded` block ("Message forwarded from project chat", folded by default), then the brief as text.
-- The agent's replies are assistant messages with text blocks.
+- The agent's replies are assistant messages: the parts each turn produced, in order (prose, tool calls, reasoning).
 - What the person types is a user message. While the thread waits on a question, the answer is a user message too, sent through `POST /api/threads/:id/reply`.
 
-The agent's tool calls are not messages. The engine keeps them with each finished turn and in memory for the running one, and `GET /api/threads/:id/activity` returns them: per turn, the status paragraphs said while working and the batches of tool calls (label, detail, status; never the tool's output). The pane draws each turn's calls as a folded "N tool calls" line above the reply it produced, and the running turn's calls inside the "is working" row. The running turn is not on the stream, so the pane reads the route again every 2.5 seconds while the thread works, and once more whenever a reply arrives or the status changes. A host that cannot answer leaves the transcript as text.
-
-While a turn runs, its text arrives as `delta` frames and shows typed out in the "at work" row; the finished message replaces it. The row names the agent by its runtime ("Claude Code is working") and counts up from the message that started the turn, or from the brief for a thread's first turn.
+The agent's tool calls and reasoning are parts of its replies, where it made them: a call as a compact row (its status, its name, what it was asked to do; never what the tool returned), calls made one after another folded into "N tool calls", reasoning as a folded "Thinking" line. While a turn runs they arrive with its text on the stream, token by token, and the reply is drawn by the row its finished message takes over in place, exactly as in [the coordinator chat](./coordinator-chat.md#a-reply-being-written). Below it a line names the agent by its runtime ("Claude Code is working") and counts up from the message that started the turn, or from the brief for a thread's first turn.
 
 ## Answering, steering, stopping
 

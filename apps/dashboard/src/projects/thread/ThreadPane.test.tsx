@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { MessageDelta } from "@aop/common";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { delta, messageEntry, reply, userMessage } from "../chat/test-utils";
 import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "../test-utils";
@@ -141,7 +142,7 @@ describe("the transcript", () => {
     expect(attempts).toBe(2);
   });
 
-  test("the reply being written shows as live text, and the finished message takes its place", async () => {
+  test("the reply being written shows in its own row, and the finished message takes it over in place", async () => {
     const stream = await setupPane(host, {
       thread: makeThread({ id: "thr_1", status: "working" }),
       messages: [brief()],
@@ -152,9 +153,12 @@ describe("the transcript", () => {
     act(() =>
       stream.stub.emit({ kind: "delta", delta: delta("m_live", "Editing the header", inThread) }),
     );
-    await waitFor(() =>
-      expect(screen.getByTestId("thread-live-text").textContent).toContain("Editing"),
-    );
+    const liveRow = () =>
+      screen
+        .getAllByTestId("assistant-message")
+        .find((row) => row.getAttribute("data-message-id") === "m_live");
+    await waitFor(() => expect(liveRow()?.textContent).toContain("Editing"));
+    const row = liveRow();
 
     act(() =>
       stream.stub.emit({
@@ -168,10 +172,112 @@ describe("the transcript", () => {
 
     await flush();
 
-    expect(screen.queryByTestId("thread-live-text")).toBeNull();
-    expect(screen.getAllByTestId("assistant-message").at(-1)?.textContent).toContain(
-      "Header edited.",
+    expect(liveRow()).toBe(row);
+    await waitFor(() => expect(row?.textContent).toContain("Header edited."));
+  });
+
+  test("the reply being written shows its tool calls inline, live, where the agent made them", async () => {
+    const stream = await setupPane(host, {
+      thread: makeThread({ id: "thr_1", status: "working" }),
+      messages: [brief()],
+    });
+    await screen.findByTestId("assistant-message");
+
+    act(() =>
+      stream.stub.emit({ kind: "delta", delta: delta("m_live", "Running the tests.", inThread) }),
     );
+    act(() =>
+      stream.stub.emit({
+        kind: "delta",
+        delta: {
+          ...delta("m_live", "", inThread),
+          ops: [
+            {
+              op: "start",
+              index: 1,
+              part: { type: "tool", id: "t1", name: "Bash", detail: "bun test", status: "running" },
+            },
+          ],
+        },
+      }),
+    );
+
+    const call = await screen.findByTestId("tool-call");
+    expect(call.getAttribute("data-status")).toBe("running");
+    expect(call.textContent).toContain("bun test");
+    expect(screen.getByTestId("thread-activity")).toBeTruthy();
+  });
+
+  test("a thread opened while its reply is being written shows the reply so far, at once", async () => {
+    await setupPane(host, {
+      thread: makeThread({ id: "thr_1", status: "working" }),
+      messages: [brief()],
+      // The project's stream told the page of the turn before the pane opened.
+      heardBefore: [
+        { kind: "delta", delta: delta("m_live", "Halfway through the header. ", inThread) },
+      ],
+    });
+
+    const row = await screen.findByText("Halfway through the header.", { exact: false });
+    expect(row).toBeTruthy();
+  });
+
+  // The person's report: a thread left and opened again mid-turn showed only its brief.
+  test("a thread left and opened again mid-turn shows the turn so far, tool calls included, and goes on streaming", async () => {
+    const other = makeThread({ id: "thr_2", projectId: "prj_1", status: "idle" });
+    const stream = await setupPane(host, {
+      thread: makeThread({ id: "thr_1", status: "working" }),
+      others: [other],
+      messages: [brief()],
+    });
+    const turn = (ops: MessageDelta["ops"]) => ({
+      kind: "delta" as const,
+      delta: { ...delta("m_live", "", inThread), inReplyTo: "m_brief", ops },
+    });
+    const liveRow = () =>
+      screen
+        .queryAllByTestId("assistant-message")
+        .find((row) => row.getAttribute("data-message-id") === "m_live");
+    act(() => {
+      stream.stub.emit(
+        turn([
+          { op: "start", index: 0, part: { type: "text", text: "Reading the header code. " } },
+        ]),
+      );
+      stream.stub.emit(
+        turn([
+          {
+            op: "start",
+            index: 1,
+            part: { type: "tool", id: "t1", name: "Read", detail: "Header.tsx", status: "running" },
+          },
+        ]),
+      );
+    });
+    await waitFor(() => expect(liveRow()?.querySelector("[data-testid=tool-call]")).not.toBeNull());
+
+    // Leave for the Overview while the turn goes on, then for another thread, then come back.
+    await stream.showThread(null);
+    act(() =>
+      stream.stub.emit(turn([{ op: "tool", index: 1, status: "done", detail: "Header.tsx" }])),
+    );
+    await stream.showThread(other.id);
+    expect(liveRow()).toBeUndefined();
+    await stream.showThread("thr_1");
+
+    // Everything so far is there at once, in the same render: not retyped from the first word.
+    const row = liveRow();
+    expect(row?.textContent).toContain("Reading the header code.");
+    expect(row?.querySelector("[data-testid=tool-call]")?.getAttribute("data-status")).toBe("done");
+    expect(screen.getByTestId("thread-working")).toBeTruthy();
+
+    act(() =>
+      stream.stub.emit(
+        turn([{ op: "start", index: 2, part: { type: "text", text: "Fixed the header." } }]),
+      ),
+    );
+    await waitFor(() => expect(liveRow()?.textContent).toContain("Fixed the header."));
+    expect(liveRow()).toBe(row);
   });
 
   test("live text and messages of another thread or of the coordinator do not appear here", async () => {
@@ -201,7 +307,6 @@ describe("the transcript", () => {
     });
     await flush();
 
-    expect(screen.queryByTestId("thread-live-text")).toBeNull();
     const text = screen.getByTestId("chat-scroll").textContent ?? "";
     expect(text).not.toContain("Other thread text");
     expect(text).not.toContain("Coordinator text");

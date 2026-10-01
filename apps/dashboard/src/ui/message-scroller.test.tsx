@@ -6,43 +6,136 @@ setupDashboardDom();
 
 const { cleanup, fireEvent, render, screen } = await import("@testing-library/react");
 
-const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+const OriginalResizeObserver = globalThis.ResizeObserver;
+let resized: (() => void)[] = [];
 
 afterEach(() => {
-  globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+  globalThis.ResizeObserver = OriginalResizeObserver;
+  resized = [];
   cleanup();
 });
 
+/** A scroller whose sizes the test sets, and whose ResizeObserver the test fires. */
+const mountScroller = (followKey = 0) => {
+  globalThis.ResizeObserver = class {
+    constructor(callback: ResizeObserverCallback) {
+      resized.push(() => callback([], this as unknown as ResizeObserver));
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+  const edges: boolean[] = [];
+  const scrollCalls: unknown[] = [];
+  const view = (key: number) => (
+    <MessageScroller data-testid="scroller" followKey={key} onEdgeChange={(at) => edges.push(at)}>
+      <div>Live response</div>
+    </MessageScroller>
+  );
+  const { rerender } = render(view(followKey));
+  const scroller = screen.getByTestId("scroller");
+  let height = 240;
+  Object.defineProperties(scroller, {
+    clientHeight: { configurable: true, value: 100 },
+    scrollHeight: { configurable: true, get: () => height },
+    scrollTo: { configurable: true, value: (options: unknown) => scrollCalls.push(options) },
+  });
+  // A ResizeObserver reports once when it starts observing.
+  for (const fire of resized) fire();
+  scroller.scrollTop = 140;
+  fireEvent.scroll(scroller);
+  return {
+    scroller,
+    edges,
+    scrollCalls,
+    grow: (to: number) => {
+      height = to;
+      for (const fire of resized) fire();
+    },
+    setHeight: (to: number) => {
+      height = to;
+    },
+    rerenderSame: () => rerender(view(followKey)),
+    refollow: (key: number) => rerender(view(key)),
+  };
+};
+
 describe("MessageScroller", () => {
-  test("smoothly follows small live-stream growth without browser anchor snaps", () => {
-    const scrollCalls: ScrollToOptions[] = [];
-    const view = (streaming: boolean) => (
-      <MessageScroller data-testid="scroller" streaming={streaming}>
-        <div>Live response</div>
-      </MessageScroller>
-    );
-    const { rerender } = render(view(false));
-    const scroller = screen.getByTestId("scroller");
+  test("while at the end, growth keeps the end in view by setting scrollTop, never a smooth scroll", () => {
+    const { scroller, grow, scrollCalls } = mountScroller();
 
-    Object.defineProperties(scroller, {
-      clientHeight: { configurable: true, value: 100 },
-      scrollHeight: { configurable: true, value: 240 },
-      scrollTop: { configurable: true, value: 120, writable: true },
-      scrollTo: {
-        configurable: true,
-        value: (options: ScrollToOptions) => scrollCalls.push(options),
-      },
-    });
-    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    }) as typeof requestAnimationFrame;
+    grow(400);
 
-    rerender(view(true));
-
+    expect(scroller.scrollTop).toBe(400);
+    expect(scrollCalls).toEqual([]);
     expect(scroller.style.overflowAnchor).toBe("none");
-    expect(scrollCalls).toContainEqual({ top: 240, behavior: "smooth" });
+  });
+
+  test("while at the end, a re-render with more content is pinned before it paints, observer or not", () => {
+    const { scroller, setHeight, rerenderSame } = mountScroller();
+
+    setHeight(380);
+    rerenderSame();
+
+    expect(scroller.scrollTop).toBe(380);
+  });
+
+  test("scrolling up stops following, and the browser keeps what the person reads in place", () => {
+    const { scroller, grow, edges } = mountScroller();
+
+    scroller.scrollTop = 120;
+    fireEvent.scroll(scroller);
+    grow(400);
+
     expect(scroller.scrollTop).toBe(120);
+    expect(edges).toEqual([false]);
+    expect(scroller.style.overflowAnchor).toBe("auto");
+  });
+
+  test("a wheel turned up stops following at once, before any scroll event", () => {
+    const { scroller, setHeight, rerenderSame, edges } = mountScroller();
+
+    fireEvent.wheel(scroller, { deltaY: -40 });
+    setHeight(400);
+    rerenderSame();
+
+    expect(edges).toEqual([false]);
+    expect(scroller.scrollTop).toBe(140);
+  });
+
+  test("scrolling back near the end follows again", () => {
+    const { scroller, grow, edges } = mountScroller();
+    scroller.scrollTop = 20;
+    fireEvent.scroll(scroller);
+
+    scroller.scrollTop = 110;
+    fireEvent.scroll(scroller);
+    grow(500);
+
+    expect(edges).toEqual([false, true]);
+    expect(scroller.scrollTop).toBe(500);
+  });
+
+  test("a new followKey (the person sent something) goes to the end and follows", () => {
+    const { scroller, grow, refollow, edges } = mountScroller();
+    scroller.scrollTop = 20;
+    fireEvent.scroll(scroller);
+
+    grow(600);
+    refollow(1);
+
+    expect(scroller.scrollTop).toBe(600);
+    expect(edges).toEqual([false, true]);
+  });
+
+  test("older history that loads above the top of the view keeps the message that was there", () => {
+    const { scroller, grow } = mountScroller();
+    scroller.scrollTop = 0;
+    fireEvent.scroll(scroller);
+
+    grow(540);
+
+    expect(scroller.scrollTop).toBe(300);
   });
 });
 

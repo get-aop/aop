@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { appendFile, mkdir, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { TurnPart } from "@aop/common";
 import { getRuntimeModelOptions } from "@aop/common";
 import { aopPaths } from "@aop/infra";
 import type { LLMProvider } from "@aop/llm-provider";
@@ -864,7 +865,7 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
-  test("returns persisted assistant activity in session history", async () => {
+  test("returns an assistant reply's parts in session history, reading a legacy one from its activity", async () => {
     const { db, app } = await setup();
     const session = await createSession(app, "repo_chat_1");
     const activity = {
@@ -892,12 +893,14 @@ describe("chat-session routes", () => {
 
     const response = await app.request(`/api/chat-sessions/${session.id}`);
     const body = (await response.json()) as {
-      session: { messages: Array<{ id: string; activity?: typeof activity }> };
+      session: { messages: Array<{ id: string; parts: TurnPart[] }> };
     };
 
-    expect(
-      body.session.messages.find((message) => message.id === "smsg_activity")?.activity,
-    ).toEqual(activity);
+    expect(body.session.messages.find((message) => message.id === "smsg_activity")?.parts).toEqual([
+      { type: "thinking", text: "Inspecting the lifecycle" },
+      { type: "tool", id: "command-1", name: "rg session", detail: null, status: "done" },
+      { type: "text", text: "Partial answer" },
+    ]);
     await teardown(db);
   });
 
@@ -942,32 +945,19 @@ describe("chat-session routes", () => {
 
     const response = await app.request(`/api/chat-sessions/${session.id}`);
     const body = (await response.json()) as {
-      session: {
-        messages: Array<{
-          role: string;
-          activity?: {
-            commandGroups: Array<{
-              commands: Array<{
-                id: string;
-                command: string;
-                status: "running" | "done" | "failed";
-                exitCode?: number | null;
-              }>;
-            }>;
-          } | null;
-        }>;
-      };
+      session: { messages: Array<{ role: string; parts: TurnPart[] }> };
     };
     const assistant = body.session.messages.find((message) => message.role === "assistant");
-    const commands = assistant?.activity?.commandGroups.flatMap((group) => group.commands) ?? [];
 
-    expect(commands).toEqual([
+    expect(assistant?.parts).toEqual([
       {
+        type: "tool",
         id: "command-without-completion",
-        command: "git status --short",
+        name: "Shell",
+        detail: "git status --short",
         status: "done",
-        exitCode: 0,
       },
+      { type: "text", text: "Done." },
     ]);
     await teardown(db);
   });
@@ -2981,12 +2971,6 @@ describe("chat-session routes", () => {
     expect(queuedBody.midRun).toBe("queued");
     expect(queuedBody.queued).toBe(true);
 
-    const events: Array<{ type: string; sessionId: string }> = [];
-    const { subscribeChatSession } = await import("./session-events.ts");
-    const unsubscribe = subscribeChatSession(session.id, (event) => {
-      events.push({ type: event.type, sessionId: event.sessionId });
-    });
-
     const response = await app.request(`/api/chat-sessions/${session.id}/reset-runtime`, {
       method: "POST",
     });
@@ -2997,7 +2981,6 @@ describe("chat-session routes", () => {
       cancelledRun: true,
     });
     await waitForPendingChatReplies();
-    unsubscribe();
 
     const bound = await db
       .selectFrom("chat_sessions")
@@ -3030,8 +3013,6 @@ describe("chat-session routes", () => {
       ),
     ).toBe(true);
     expect(runCount).toBe(1);
-    expect(events.some((event) => event.type === "assistant-final")).toBe(true);
-    expect(events.some((event) => event.type === "session-updated")).toBe(true);
 
     await teardown(db);
   });

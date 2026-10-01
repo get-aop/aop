@@ -199,6 +199,24 @@ describe("buildCommand", () => {
     ]);
   });
 
+  test("asks for partial messages in print mode only when the run wants them", () => {
+    const provider = new ClaudeCodeProvider();
+    expect(provider.buildCommand({ prompt: "test prompt", partialMessages: true })).toEqual([
+      "claude",
+      ...hermeticArgs,
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "-p",
+      "--include-partial-messages",
+      "--dangerously-skip-permissions",
+      "test prompt",
+    ]);
+    expect(provider.buildCommand({ prompt: "test prompt" })).not.toContain(
+      "--include-partial-messages",
+    );
+  });
+
   test("adds --settings flag when fastMode is true", () => {
     const provider = new ClaudeCodeProvider();
     const cmd = provider.buildCommand({

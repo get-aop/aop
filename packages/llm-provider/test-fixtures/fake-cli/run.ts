@@ -79,6 +79,7 @@ export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
     resumed: session.resumed,
     systemPrompt: session.appendedSystemPrompt,
     usageWarning: directives.usageWarning,
+    partialMessages: invocation.flags.includes("--include-partial-messages"),
     images: invocation.images,
   };
   const { beats, ending } = planTurn(directives, ctx);
@@ -119,7 +120,7 @@ const emit = async (segments: Segment[], directives: Directives, io: Io): Promis
   let index = 0;
   for (const segment of segments) {
     for (const line of await segment()) {
-      if (index > 0 && directives.delayMs > 0) await io.sleep(directives.delayMs);
+      if (index > 0) await pauseBefore(line, directives, io);
       const text = JSON.stringify(line);
       if (index === directives.crashAfter) {
         // The half-written line is what a process killed mid-write leaves in the log.
@@ -132,6 +133,12 @@ const emit = async (segments: Segment[], directives: Directives, io: Io): Promis
     }
   }
   return false;
+};
+
+// Partial-message events have their own pace, so a reply can stream slowly between quick beats.
+const pauseBefore = async (line: JsonLine, directives: Directives, io: Io): Promise<void> => {
+  const pause = line.type === "stream_event" ? directives.streamMs : directives.delayMs;
+  if (pause > 0) await io.sleep(pause);
 };
 
 const describeExit = (ending: Exclude<Ending, { kind: "success" }>, exitCode: number): string => {

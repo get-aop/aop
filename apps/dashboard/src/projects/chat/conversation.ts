@@ -3,12 +3,12 @@ import type { LiveProjects } from "../live-projects";
 import {
   applyDelta,
   applyEarlier,
+  applyLiveSnapshot,
   applyMessage,
   applyMessageUpdate,
   applySnapshot,
   type ChatState,
   createChatState,
-  dropLiveText,
   setEarlierError,
   setLoadError,
   startLoadingEarlier,
@@ -21,7 +21,7 @@ export interface ConversationDeps {
   scope: string | null;
   /** The latest page of messages, or the one before message `before`. */
   listMessages: (before?: string) => Promise<MessagePage>;
-  events: Pick<LiveProjects, "subscribeEvents" | "subscribe" | "getState">;
+  events: Pick<LiveProjects, "subscribeEvents" | "liveTurns">;
   /** Runs `run` after `delayMs`; returns what cancels it. */
   schedule?: (run: () => void, delayMs: number) => () => void;
   /** Called after every fetch that succeeded, with the state it produced. */
@@ -68,14 +68,11 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
   const { projectId, scope, events } = deps;
   const schedule = deps.schedule ?? browserSchedule;
 
-  const connectionOf = () => events.getState().byId[projectId]?.connection;
-
   let state = createChatState(scope);
   let running = false;
   let generation = 0;
   let fetching = false;
   let arrivedWhileFetching: ((current: ChatState) => ChatState)[] = [];
-  let connection = connectionOf();
   let cancelRetry: (() => void) | null = null;
   let stopListening: (() => void)[] = [];
   const listeners = new Set<() => void>();
@@ -98,19 +95,12 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
   const onEvent: Parameters<typeof events.subscribeEvents>[1] = (event) => {
     if (event.kind === "resync") void load();
     else if (event.kind === "delta") update((current) => applyDelta(current, event.delta));
+    else if (event.kind === "live") update((current) => applyLiveSnapshot(current, event.snapshot));
     else if (event.entry.type === "message.created") receive(event.entry.payload.message);
     else if (event.entry.type === "message.updated") {
       const { message } = event.entry.payload;
       hear((current) => applyMessageUpdate(current, message));
     }
-  };
-
-  // A dropped connection ends the baseline of every running reply; the reconnect sends new ones.
-  const onConnection = () => {
-    const now = connectionOf();
-    if (now === connection) return;
-    connection = now;
-    if (now === "reconnecting") update(dropLiveText);
   };
 
   const load = async (): Promise<void> => {
@@ -163,8 +153,10 @@ export const createConversation = (deps: ConversationDeps): Conversation => {
     start: () => {
       if (running) return;
       running = true;
-      connection = connectionOf();
-      stopListening = [events.subscribeEvents(projectId, onEvent), events.subscribe(onConnection)];
+      stopListening = [events.subscribeEvents(projectId, onEvent)];
+      // A turn being written when the conversation opens (a thread opened while it works) has
+      // had its baseline already: it starts from what the stream has said of it so far.
+      update((current) => events.liveTurns(projectId).reduce(applyDelta, current));
       void load();
     },
     stop: () => {

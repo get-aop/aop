@@ -1,3 +1,4 @@
+import type { TurnPart } from "@aop/common";
 import type { ChatMessage, ChatRun, ChatSession } from "../db/schema.ts";
 import type { PublisherTransaction } from "../event-log/publisher.ts";
 import type { FinalizeChatRunOutcome } from "./run-finalization.ts";
@@ -25,8 +26,8 @@ export interface SessionHooks {
     sessionId: string,
     phase: SchedulePhase,
   ) => Promise<void>;
-  /** The run's reply so far (`text` is everything written up to now), for clients showing it live. */
-  onAssistantProgress: (session: ChatSession, run: ChatRun, text: string) => void;
+  /** The run's turn so far (every part written up to now), for clients showing it live. */
+  onAssistantProgress: (session: ChatSession, run: ChatRun, parts: readonly TurnPart[]) => void;
 }
 
 export type SchedulePhase = "queued" | "running";

@@ -1,12 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type {
-  Message,
-  Project,
-  SessionDiffFile,
-  SessionGitDiff,
-  Thread,
-  ThreadActivity,
-} from "@aop/common";
+import type { Message, Project, SessionDiffFile, SessionGitDiff, Thread } from "@aop/common";
 import { createProjectStack, type ProjectStack, useTempAopHome } from "../project/test-utils.ts";
 
 const home = useTempAopHome();
@@ -210,7 +203,7 @@ describe("stopping, reading and deleting a thread", () => {
   });
 });
 
-describe("what a thread did: its changed files and its activity", () => {
+describe("what a thread did: its changed files", () => {
   const workingThread = async () => {
     const { s, project } = await setup();
     const { body } = await spawn(s, project.id, {
@@ -266,25 +259,10 @@ describe("what a thread did: its changed files and its activity", () => {
     expect(file).toMatchObject({ status: 409, body: { code: "NO_WORKTREE" } });
   });
 
-  test("GET activity lists the turn's tool calls without their output", async () => {
-    const { s, id } = await workingThread();
-
-    const activity = await s.api<ThreadActivity>("GET", `/api/threads/${id}/activity`);
-
-    expect(activity.status).toBe(200);
-    expect(activity.body.turns).toMatchObject([
-      {
-        running: false,
-        groups: [{ rows: [{ label: "Bash", detail: "echo step 1", status: "done" }] }],
-      },
-    ]);
-    expect(JSON.stringify(activity.body)).not.toContain("result");
-  });
-
-  test("an unknown thread is 404 on all three", async () => {
+  test("an unknown thread is 404 on both", async () => {
     const { s } = await setup();
 
-    for (const path of ["diff", "diff/file?path=a.md", "activity"]) {
+    for (const path of ["diff", "diff/file?path=a.md"]) {
       const response = await s.api("GET", `/api/threads/isess_nope/${path}`);
       expect(response).toMatchObject({ status: 404, body: { code: "THREAD_NOT_FOUND" } });
     }

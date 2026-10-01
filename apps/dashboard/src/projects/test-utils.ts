@@ -1,6 +1,7 @@
 import type { EventLogEntry, Project, Thread, ThreadStatus } from "@aop/common";
 import { buildProject } from "@aop/common/test-utils";
 import type { LiveProjects, ProjectStreamEvent } from "./live-projects";
+import { createLiveTurnMirror } from "./live-turn-mirror";
 import type { ProjectEntry, ProjectsState } from "./projects-state";
 
 export const AT = "2026-09-29T10:00:00.000Z";
@@ -199,6 +200,7 @@ export const stubLiveProjects = (initial: ProjectsState) => {
     refetched: [] as string[],
   };
   const eventListeners = new Set<(event: ProjectStreamEvent) => void>();
+  const mirror = createLiveTurnMirror();
   const live: LiveProjects = {
     getState: () => state,
     subscribe: (listener) => {
@@ -209,6 +211,7 @@ export const stubLiveProjects = (initial: ProjectsState) => {
       eventListeners.add(listener);
       return () => eventListeners.delete(listener);
     },
+    liveTurns: () => mirror.baselines(),
     start: () => {},
     stop: () => {},
     setSelected: (projectId) => {
@@ -230,6 +233,7 @@ export const stubLiveProjects = (initial: ProjectsState) => {
     calls,
     /** Delivers one stream event (an entry, live text, a resync) to whoever listens to the project's stream. */
     emit: (event: ProjectStreamEvent) => {
+      mirror.hear(event);
       for (const listener of eventListeners) listener(event);
     },
     /** Replaces the state and tells the components, as a stream entry would. */

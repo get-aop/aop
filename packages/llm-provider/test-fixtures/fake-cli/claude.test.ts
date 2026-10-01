@@ -175,6 +175,44 @@ describe("claudeDialect events", () => {
     expect(lines.map((line) => line.session_id)).toEqual(lines.map(() => "sess-1"));
   });
 
+  test("with partial messages, a block opens, grows in deltas, arrives finished, then closes", () => {
+    const streaming = { ...ctx, partialMessages: true };
+    const lines = claudeDialect.beat(
+      { kind: "text", text: "Looking at the retry code." },
+      0,
+      streaming,
+    );
+    const events = lines.map((line) =>
+      line.type === "stream_event"
+        ? ((line.event as { type: string }).type as string)
+        : String(line.type),
+    );
+
+    expect(events[0]).toBe("message_start");
+    expect(events[1]).toBe("content_block_start");
+    expect(events.slice(-2)).toEqual(["assistant", "content_block_stop"]);
+    const deltas = lines.flatMap((line) => {
+      const delta = (line.event as { delta?: { text?: string } } | undefined)?.delta;
+      return delta?.text ? [delta.text] : [];
+    });
+    expect(deltas.length).toBeGreaterThan(1);
+    expect(deltas.join("")).toBe("Looking at the retry code.");
+    expect(lines.map((line) => line.session_id)).toEqual(lines.map(() => "sess-1"));
+  });
+
+  test("with partial messages, reasoning streams too and a tool call's input comes whole", () => {
+    const streaming = { ...ctx, partialMessages: true };
+    const thinking = claudeDialect.beat({ kind: "thinking", text: "Plan it first." }, 0, streaming);
+    const call = claudeDialect.beat({ kind: "shell", command: "ls", output: "a" }, 1, streaming);
+    const deltaTypes = [...thinking, ...call].flatMap((line) => {
+      const delta = (line.event as { delta?: { type: string } } | undefined)?.delta;
+      return delta ? [delta.type] : [];
+    });
+
+    expect(deltaTypes).toContain("thinking_delta");
+    expect(deltaTypes.filter((type) => type === "input_json_delta")).toHaveLength(1);
+  });
+
   test("pairs a tool call with a result that references its id", () => {
     const [call, result] = claudeDialect.beat(
       { kind: "shell", command: "ls", output: "a" },

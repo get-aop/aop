@@ -1,6 +1,6 @@
+import type { TurnPart } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatRun } from "../db/schema.ts";
-import { finalizeAssistantActivity } from "./assistant-reply.ts";
 import { waitForChatRunTerminal } from "./chat-run-recovery.ts";
 import { finalizeChatRunAndPublish } from "./finalize-publish.ts";
 import { armStoredResumes, pausedReply } from "./rate-limit-resume.ts";
@@ -13,8 +13,7 @@ import {
 import { pendingSessionReplies, recoveryAbortControllers, recoveryTasks } from "./reply-state.ts";
 import { isChatRunProcessGone } from "./run-process.ts";
 import { isSessionRunActive } from "./runtime-engine.ts";
-import { publishAssistantProgress } from "./session-events.ts";
-import type { AssistantActivity, ChatSessionServiceDeps } from "./session-types.ts";
+import type { ChatSessionServiceDeps } from "./session-types.ts";
 
 export const ensureAllChatRunRecoveries = async (
   ctx: LocalServerContext,
@@ -113,7 +112,7 @@ const recoverChatRun = async (
   deps: ChatSessionServiceDeps,
   signal: AbortSignal,
 ): Promise<void> => {
-  let activity: AssistantActivity | null = null;
+  let parts: TurnPart[] = [];
   let terminal: Awaited<ReturnType<typeof waitForChatRunTerminal>>;
   const session = await ctx.chatSessionRepository.getById(run.session_id);
   const executable = session?.runtime_alias ?? null;
@@ -124,8 +123,8 @@ const recoverChatRun = async (
       isProcessGone: () => isChatRunProcessGone(run, executable),
       signal,
       onProgress: (progress) => {
-        activity = progress;
-        publishAssistantProgress(run.session_id, progress);
+        parts = progress;
+        if (session) ctx.sessionHooks.onAssistantProgress(session, run, progress);
       },
     });
   } catch (error) {
@@ -156,11 +155,7 @@ const recoverChatRun = async (
       runtimeSessionState: recovered.runtimeSessionState,
       rateLimit: recovered.rateLimit,
     },
-    // Same stacking merge as the normal reply path so recovered activity keeps history.
-    finalizeAssistantActivity(activity, {
-      text: recovered.text,
-      failed: recovered.status === "failed",
-    }),
+    parts,
   );
   if (signal.aborted) return;
   // Server restart recovery: also drain steers queued while the recovered run was live.

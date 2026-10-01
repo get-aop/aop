@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { Project, Thread } from "@aop/common";
+import type { MessageDelta, Project, Thread } from "@aop/common";
 import { setupDashboardDom } from "../test/setup-dom";
 import {
   createFakeStreamDeps,
@@ -197,8 +197,7 @@ describe("live entries", () => {
       projectId: "a",
       threadId: null,
       messageId: "m1",
-      text: "Hi",
-      replace: false,
+      ops: [{ op: "start", index: 0, part: { type: "text", text: "Hi" } }],
     });
     h.sourceOf("a").emit("resync", { cursor: 2, reason: "trimmed" }, "2");
     await flush();
@@ -209,6 +208,31 @@ describe("live entries", () => {
     stopA();
     h.sourceOf("a").emit("entry", threadEntry(3, makeThread({ projectId: "a" })), "3");
     expect(heardA).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("turns being written", () => {
+  test("are kept per project as the stream told them, for a chat or thread pane that opens later", async () => {
+    const h = await started([makeProject({ id: "a" })]);
+    const turn = (ops: MessageDelta["ops"]) => ({
+      projectId: "a",
+      threadId: "t1",
+      messageId: "m1",
+      ops,
+    });
+
+    h.sourceOf("a").emit("live", { turns: [] });
+    h.sourceOf("a").emit(
+      "delta",
+      turn([{ op: "start", index: 0, part: { type: "text", text: "Hel" } }]),
+    );
+    h.sourceOf("a").emit("delta", turn([{ op: "append", index: 0, text: "lo" }]));
+    await flush();
+
+    expect(h.live.liveTurns("a")).toEqual([
+      turn([{ op: "reset", parts: [{ type: "text", text: "Hello" }] }]),
+    ]);
+    expect(h.live.liveTurns("b")).toEqual([]);
   });
 });
 

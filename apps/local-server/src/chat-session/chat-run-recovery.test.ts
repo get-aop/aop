@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ChatRun } from "../db/schema.ts";
 import { detectChatRunTerminalState, waitForChatRunTerminal } from "./chat-run-recovery.ts";
+import { turnText } from "./turn-parts.ts";
 
 describe("detectChatRunTerminalState", () => {
   test.each([
@@ -129,7 +130,7 @@ describe("detectChatRunTerminalState", () => {
       run: runningRun(logFilePath),
       pollIntervalMs: 10,
       startupTimeoutMs: 5_000,
-      onProgress: (progress) => contents.push(progress.content),
+      onProgress: (parts) => contents.push(turnText(parts)),
     });
 
     await waitFor(() => contents.some((content) => content.includes("Polling attempt 12")), 2_000);

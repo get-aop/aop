@@ -51,6 +51,8 @@ describe("listWireMessages", () => {
       content: string;
       origin?: Parameters<typeof serializeMessageOrigin>[0];
       turn: number;
+      parts?: unknown[];
+      activity?: unknown;
     },
   ) =>
     db
@@ -63,6 +65,8 @@ describe("listWireMessages", () => {
         turn_index: values.turn,
         created_at: at(),
         origin_json: values.origin ? serializeMessageOrigin(values.origin) : null,
+        parts: values.parts ? JSON.stringify(values.parts) : null,
+        activity: values.activity ? JSON.stringify(values.activity) : null,
       })
       .execute();
 
@@ -286,25 +290,50 @@ describe("listWireMessages", () => {
     });
   });
 
-  test("the coordinator's thread links become chips inside its reply; a thread's own text is left as written", async () => {
+  test("a reply is the parts its turn stored, in order; a thread link stays in its text for the client to show as a chip", async () => {
     const link = "Passed it to [Fix login](thread:isess_thread) now.";
-    await addMessage(coordinator.id, { id: "c1", role: "assistant", content: link, turn: 1 });
-    await addMessage(thread.id, { id: "t1", role: "assistant", content: link, turn: 1 });
+    const parts = [
+      { type: "thinking", text: "Who owns login?" },
+      { type: "tool", id: "t1", name: "mcp aop thread steer", detail: null, status: "done" },
+      { type: "text", text: link },
+    ];
+    await addMessage(coordinator.id, {
+      id: "c1",
+      role: "assistant",
+      content: link,
+      turn: 1,
+      parts,
+    });
 
-    const [coordinatorReply] = (await list(coordinator)).messages;
-    const [threadReply] = (await list(thread)).messages;
+    const [reply] = (await list(coordinator)).messages;
 
-    expect(coordinatorReply).toMatchObject({
+    expect(reply).toMatchObject({ role: "assistant", blocks: parts });
+  });
+
+  test("a reply stored before parts existed is read from its activity and its text", async () => {
+    await addMessage(thread.id, {
+      id: "t1",
+      role: "assistant",
+      content: "Fixed.",
+      turn: 1,
+      activity: {
+        thinking: "",
+        content: "Looking.\n\nFixed.",
+        commandGroups: [
+          { id: "cg_1", commands: [{ id: "c1", command: "Bash", detail: "ls", status: "done" }] },
+        ],
+      },
+    });
+
+    const [reply] = (await list(thread)).messages;
+
+    expect(reply).toMatchObject({
       role: "assistant",
       blocks: [
-        { type: "text", text: "Passed it to " },
-        { type: "thread-chip", threadId: "isess_thread" },
-        { type: "text", text: " now." },
+        { type: "text", text: "Looking." },
+        { type: "tool", id: "c1", name: "Bash", detail: "ls", status: "done" },
+        { type: "text", text: "Fixed." },
       ],
-    });
-    expect(threadReply).toMatchObject({
-      role: "assistant",
-      blocks: [{ type: "text", text: link }],
     });
   });
 

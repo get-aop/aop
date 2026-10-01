@@ -54,9 +54,9 @@ export interface EventPublisher {
    * the connection is busy until the transaction ends.
    */
   transaction: <T>(work: (tx: PublisherTransaction) => Promise<T>) => Promise<T>;
-  /** Live text of a turn being written. Not stored: a client that misses it gets the baseline on connecting. */
+  /** What changed in a turn being written. Not stored: a client that misses it gets the baseline on connecting. */
   publishLive: (delta: MessageDelta) => void;
-  /** Ends a turn that will not produce its message (stopped, failed), so clients drop its live text. */
+  /** Ends a turn that will not produce its message (stopped, failed), so clients drop its live parts. */
   clearLive: (projectId: string, threadId: string | null, messageId: string) => void;
   /** For open streams. */
   subscribe: (projectId: string, listener: ProjectListener) => ProjectSubscription;
@@ -135,7 +135,7 @@ export const createEventPublisher = (
     publishLive,
 
     clearLive: (projectId, threadId, messageId) =>
-      publishLive({ projectId, threadId, messageId, text: "", replace: true }),
+      publishLive({ projectId, threadId, messageId, ops: [{ op: "end" }] }),
 
     subscribe: (projectId, listener) => {
       const forProject = listeners.get(projectId) ?? new Set<ProjectListener>();

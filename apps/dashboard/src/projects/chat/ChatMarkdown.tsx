@@ -6,11 +6,21 @@ import { defaultRemarkPlugins, Streamdown } from "streamdown";
 import { openExternalUrl } from "../../api/client";
 import { lazyCodeHighlighter } from "../../components/lazy-code-highlighter";
 import { isDesktopApp } from "../../utils/desktop-runtime";
-import { chipIndexOf } from "./inline-run";
+import { chipIndexOf, threadChipOf, withThreadChips } from "./inline-run";
 import { remarkLiteralHtml } from "./literal-html";
+import { ThreadChip } from "./ThreadChip";
 
 interface ChatMarkdownProps {
   content: string;
+  /**
+   * `streaming` for prose of a reply that was watched being written: Streamdown completes the
+   * markdown that is still open (a fence, a link) instead of showing it raw. Everything else,
+   * finished messages from history included, renders `static`. It is fixed for a mounted reply,
+   * so finishing does not re-render its prose in another mode.
+   */
+  mode?: "static" | "streaming";
+  /** Text is still arriving at the end of this prose: Streamdown marks the end with a caret. */
+  animating?: boolean;
   desktop?: boolean;
   openLink?: (url: string) => void;
   /** What the links made by `proseOf` stand for: chips that sit inside the paragraph. */
@@ -29,6 +39,8 @@ const ChatLinkContext = createContext({
 // unrelated re-renders (progress frames included).
 export const ChatMarkdown = memo(function ChatMarkdown({
   content,
+  mode = "static",
+  animating = false,
   desktop = isDesktopApp(),
   openLink = openExternalUrl,
   chips = NO_CHIPS,
@@ -37,8 +49,17 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   return (
     <ChatLinkContext.Provider value={{ desktop, openLink, chips }}>
       <div className="chat-markdown text-body text-foreground" data-testid="chat-markdown">
-        <Streamdown plugins={plugins} components={components} remarkPlugins={remarkPlugins}>
-          {content}
+        {/* One animation only: the reveal types the words; Streamdown's own stays off. */}
+        <Streamdown
+          mode={mode}
+          isAnimating={animating}
+          caret={animating ? "circle" : undefined}
+          animated={false}
+          plugins={plugins}
+          components={components}
+          remarkPlugins={remarkPlugins}
+        >
+          {withThreadChips(content)}
         </Streamdown>
       </div>
     </ChatLinkContext.Provider>
@@ -65,6 +86,8 @@ function ChatLink({
   ...props
 }: AnchorHTMLAttributes<HTMLAnchorElement> & ChildrenProps) {
   const { desktop, openLink, chips } = useContext(ChatLinkContext);
+  const thread = threadChipOf(href);
+  if (thread !== null) return <ThreadChip threadId={thread} />;
   const chip = chipIndexOf(href);
   if (chip !== null) return <>{chips[chip] ?? null}</>;
   return (

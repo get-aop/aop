@@ -1,4 +1,4 @@
-import type { ChatActionPayload } from "@aop/common";
+import type { ChatActionPayload, TurnPart } from "@aop/common";
 import type { Kysely } from "kysely";
 import type {
   ChatMessage,
@@ -9,6 +9,7 @@ import type {
 } from "../db/schema.ts";
 import type { RateLimitHit } from "../scheduling/rate-limit.ts";
 import { encodeMessageContent, type StoredChatArtifact } from "./message-images.ts";
+import { finalizeTurnParts } from "./turn-parts.ts";
 
 type SessionBindingPolicy = "preserve" | "set" | "clear";
 
@@ -34,7 +35,8 @@ export const persistFinalizedChatRun = async (
   action: ChatActionPayload | null,
   runtimeSessionId: string | null,
   outcome: FinalizeChatRunOutcome,
-  activity: unknown | null,
+  /** What the turn produced up to its end; null when no runtime ran. */
+  parts: readonly TurnPart[] | null,
   artifacts: StoredChatArtifact[] = [],
 ): Promise<ChatMessage | null | undefined> => {
   const current = await trx
@@ -59,7 +61,7 @@ export const persistFinalizedChatRun = async (
       role: "assistant",
       content: encodeMessageContent(decision.assistantText, [], [], artifacts),
       action: action ? JSON.stringify(action) : null,
-      activity: activity ? JSON.stringify(activity) : null,
+      parts: parts ? JSON.stringify(endTurn(parts, decision.assistantText, outcome)) : null,
       turn_index: userMessage.turn_index,
       disposition: "immediate",
       created_at: createdAt,
@@ -97,6 +99,20 @@ export const persistFinalizedChatRun = async (
     .where("id", "=", current.assistant_message_id)
     .executeTakeFirst();
 };
+
+// The text the reply ends with is decided here (a reset of the runtime session says so instead of
+// what the run said), so the turn's parts end with the same words as the message.
+const endTurn = (
+  parts: readonly TurnPart[],
+  text: string,
+  outcome: FinalizeChatRunOutcome,
+): TurnPart[] =>
+  finalizeTurnParts(parts, {
+    text,
+    failed: outcome.status === "failed",
+    aborted: outcome.status === "cancelled",
+    interrupted: outcome.status === "interrupted",
+  });
 
 const resolveBindingDecision = async (
   trx: Kysely<Database>,

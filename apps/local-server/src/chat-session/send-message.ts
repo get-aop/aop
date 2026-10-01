@@ -12,7 +12,6 @@ import {
 } from "./reply-state.ts";
 import { registerPendingSessionRun, releaseSessionRunRegistration } from "./runtime-engine.ts";
 import { sessionDtoFor, toMessageDto } from "./session-dto.ts";
-import { publishChatSessionEvent } from "./session-events.ts";
 import type {
   ChatSessionServiceDeps,
   RetryFreshChatRunResult,
@@ -94,7 +93,6 @@ const acceptIdleSessionMessage = async (
       prepared.displayText || "(image attachment)",
       prepared.userMessage.created_at,
     );
-    publishChatSessionEvent({ type: "session-updated", sessionId, session: sessionDto });
     return {
       success: true,
       message: toMessageDto(prepared.userMessage, prepared.run),

@@ -15,6 +15,7 @@ import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
 import type { Database } from "./schema.ts";
 import { SUGGESTION_ANSWERS_V10_STATEMENTS } from "./suggestion-answers-v10.ts";
 import { THREAD_GIT_V6_STATEMENTS } from "./thread-git-v6.ts";
+import { TURN_PARTS_V16_STATEMENTS } from "./turn-parts-v16.ts";
 import { USAGE_V3_STATEMENTS } from "./usage-v3.ts";
 
 export interface Migration {
@@ -44,6 +45,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 13, name: "reported-runtime", statements: REPORTED_RUNTIME_V13_STATEMENTS },
   { version: 14, name: "auto-continue", statements: AUTO_CONTINUE_V14_STATEMENTS },
   { version: 15, name: "project-appearance", statements: PROJECT_APPEARANCE_V15_STATEMENTS },
+  { version: 16, name: "turn-parts", statements: TURN_PARTS_V16_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

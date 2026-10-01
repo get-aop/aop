@@ -1,6 +1,8 @@
 import {
   type EventLogEntry,
   EventLogEntrySchema,
+  type LiveSnapshot,
+  LiveSnapshotSchema,
   type MessageDelta,
   MessageDeltaSchema,
   PROJECT_STREAM_EVENTS,
@@ -22,6 +24,8 @@ export interface StreamHandlers {
   onState: (state: StreamState) => void;
   onEntry: (entry: EventLogEntry) => void;
   onDelta: (delta: MessageDelta) => void;
+  /** The turns being written as the connection opened; any other live text held is over. */
+  onLive: (snapshot: LiveSnapshot) => void;
   /** The page must refetch the project: the log cannot catch it up, or an entry was unreadable. */
   onResync: (resync: Resync) => void;
   /** The browser closed the connection for good (an HTTP error, as while the host restarts). */
@@ -108,6 +112,10 @@ export const connectProjectStream = (
     current.addEventListener(PROJECT_STREAM_EVENTS.delta, (event) => {
       const delta = parseJson(MessageDeltaSchema, (event as MessageEvent).data);
       if (delta) handlers.onDelta(delta);
+    });
+    current.addEventListener(PROJECT_STREAM_EVENTS.live, (event) => {
+      const snapshot = parseJson(LiveSnapshotSchema, (event as MessageEvent).data);
+      if (snapshot) handlers.onLive(snapshot);
     });
     current.addEventListener(PROJECT_STREAM_EVENTS.heartbeat, () => handlers.onState("live"));
   };

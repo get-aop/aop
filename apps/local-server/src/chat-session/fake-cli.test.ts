@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import type { TurnPart } from "@aop/common";
 import { RunUsageSchema, ThreadUsageSchema } from "@aop/common";
 import { aopPaths } from "@aop/infra";
 import { ClaudeCodeProvider, type LLMProvider } from "@aop/llm-provider";
@@ -14,7 +15,6 @@ import { createRuntimeConfigurationRepository } from "../runtime-configuration/r
 import { createUsageRoutes } from "../usage/routes.ts";
 import { createChatSessionRoutes } from "./routes.ts";
 import { waitForPendingChatReplies } from "./service.ts";
-import { type ChatSessionEvent, subscribeChatSession } from "./session-events.ts";
 
 // Drives the chat engine with the real ClaudeCodeProvider against the fake CLI. The seam is
 // a runtime configuration whose `command` is the fake's path: choosing it copies the command
@@ -25,6 +25,7 @@ import { type ChatSessionEvent, subscribeChatSession } from "./session-events.ts
 interface MessageRow {
   role: string;
   content: string;
+  parts: TurnPart[];
   runStatus?: string;
   interruptionKind?: string | null;
 }
@@ -100,9 +101,6 @@ const setup = async () => {
   });
   expect(bound.status).toBe(200);
 
-  const events: ChatSessionEvent[] = [];
-  subscribeChatSession(session.id, (event) => events.push(event));
-
   const detail = async (): Promise<SessionBody> => {
     const response = await app.request(`/api/chat-sessions/${session.id}`);
     return ((await response.json()) as { session: SessionBody }).session;
@@ -123,7 +121,7 @@ const setup = async () => {
   const abort = async (): Promise<Response> =>
     app.request(`/api/chat-sessions/${session.id}/abort`, { method: "POST" });
 
-  return { db, app, session, events, detail, send, sendAndSettle, abort };
+  return { db, app, session, detail, send, sendAndSettle, abort };
 };
 
 /** Polls until `predicate` holds; the fake and the reaper settle within a few seconds. */
@@ -200,7 +198,7 @@ const waitForFakeInit = async (sessionId: string): Promise<void> => {
 
 describe("chat engine against the fake CLI", () => {
   test("streams progress while the CLI works, then finalizes the reply and binds the session", async () => {
-    const { db, events, sendAndSettle } = await setup();
+    const { db, sendAndSettle } = await setup();
 
     const body = await sendAndSettle("build it [fake: steps=2 delay=300]");
 
@@ -209,13 +207,9 @@ describe("chat engine against the fake CLI", () => {
     expect(reply?.content).toBe(
       `Fake reply for turn 1 of session ${body.runtimeSessionId}. You said: build it`,
     );
-    const types = events.map((event) => event.type);
-    expect(types.indexOf("assistant-progress")).toBeGreaterThanOrEqual(0);
-    expect(types.indexOf("assistant-progress")).toBeLessThan(types.indexOf("assistant-final"));
-    const streamed = events.flatMap((event) =>
-      event.type === "assistant-progress" ? [event.content] : [],
-    );
-    expect(streamed.join("")).toContain("Working on step 1 of 2.");
+    // What the CLI said and did while working is kept in the reply's parts, in order.
+    expect(reply?.parts.map((part) => part.type)).toEqual(["text", "tool", "text", "tool", "text"]);
+    expect(reply?.parts[0]).toEqual({ type: "text", text: "Working on step 1 of 2." });
     await db.destroy();
   });
 
@@ -396,7 +390,9 @@ describe("usage accounting against the fake CLI", () => {
   test("a turn that dies before its result still counts the messages it streamed", async () => {
     const { db, session, sendAndSettle } = await setup();
 
-    const crashed = await sendAndSettle("break [fake: steps=2 crash=3 usage=700,80,0,9000]");
+    // Chat runs stream partial messages: the first step's narration is init, its message start,
+    // block start, three deltas, then the finished assistant event (the 7th). It dies after that.
+    const crashed = await sendAndSettle("break [fake: steps=2 crash=8 usage=700,80,0,9000]");
 
     expect(crashed.messages[0]?.runStatus).toBe("failed");
     const usage = ThreadUsageSchema.parse(await usageApi(db)(`/threads/${session.id}`));
