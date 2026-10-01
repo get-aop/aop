@@ -46,6 +46,20 @@ describe("MessageScroller", () => {
   });
 });
 
+describe("MessageScroller top edge", () => {
+  test("fades text out under the pane header instead of cutting its letters", () => {
+    render(
+      <MessageScroller data-testid="scroller" style={{ paddingTop: 4 }}>
+        <p>A line</p>
+      </MessageScroller>,
+    );
+    const scroller = screen.getByTestId("scroller");
+
+    expect(scroller.style.maskImage).toBe("linear-gradient(to bottom, transparent, black 1rem)");
+    expect(scroller.style.paddingTop).toBe("4px");
+  });
+});
+
 describe("MessageScroller focus ring", () => {
   const mount = () => {
     render(

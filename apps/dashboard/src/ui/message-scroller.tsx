@@ -17,6 +17,14 @@ interface MessageScrollerProps extends React.ComponentProps<"div"> {
 const EDGE_THRESHOLD_PX = 48;
 
 /**
+ * The pane header above a transcript has the transcript's own background, so a line scrolled half
+ * under it looked like letters with their tops cut off by a bar (#385). Fading the top edge makes
+ * it read as text scrolling away. The content's top padding is taller than the fade, so nothing is
+ * faded while the transcript is scrolled to its start.
+ */
+const TOP_EDGE_FADE = "linear-gradient(to bottom, transparent, black 1rem)";
+
+/**
  * THE thread scroll container. Live-edge follow while streaming, anchors new
  * turns, and preserves scroll position when older history prepends. Replaces
  * the bespoke auto-scroll code in ChatThread — do not port it.
@@ -119,7 +127,12 @@ function MessageScroller({
       data-slot="message-scroller"
       onScroll={handleScroll}
       className={cn("min-h-0 flex-1 overflow-y-auto", className)}
-      style={{ ...style, overflowAnchor: streaming ? "none" : style?.overflowAnchor }}
+      style={{
+        maskImage: TOP_EDGE_FADE,
+        WebkitMaskImage: TOP_EDGE_FADE,
+        ...style,
+        overflowAnchor: streaming ? "none" : style?.overflowAnchor,
+      }}
       {...props}
     >
       {children}
