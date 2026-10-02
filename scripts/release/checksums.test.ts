@@ -14,11 +14,17 @@ describe("release checksums", () => {
     expect(RELEASE_CHECKSUM_ARTIFACTS).not.toContain("aop-windows-x64.exe");
   });
 
-  test("keeps the Windows updater files out of the manifest: latest.yml carries its own sha512", () => {
+  test("keeps the updater files out of the manifest: latest.yml and latest-mac.yml carry their own sha512", () => {
     for (const name of RELEASE_UPDATER_FILES) {
       expect(RELEASE_CHECKSUM_ARTIFACTS).not.toContain(name);
     }
-    expect(RELEASE_UPDATER_FILES).toEqual(["latest.yml", "aop-windows-x64-setup.exe.blockmap"]);
+    expect(RELEASE_UPDATER_FILES).toEqual([
+      "latest.yml",
+      "aop-windows-x64-setup.exe.blockmap",
+      "latest-mac.yml",
+      "aop-macos-x64.zip",
+      "aop-macos-arm64.zip",
+    ]);
   });
 
   test("writes checksums for binaries and DMGs using artifact basenames", async () => {

@@ -63,6 +63,9 @@ upload_artifact "aop-darwin-x64" "application/octet-stream" "public, max-age=315
 upload_artifact "aop-darwin-arm64" "application/octet-stream" "public, max-age=31536000, immutable"
 upload_artifact "aop-macos-x64.dmg" "application/x-apple-diskimage" "public, max-age=31536000, immutable"
 upload_artifact "aop-macos-arm64.dmg" "application/x-apple-diskimage" "public, max-age=31536000, immutable"
+# The installed macOS app updates itself from these zips, which latest/latest-mac.yml names.
+upload_optional_artifact "aop-macos-x64.zip" "application/zip" "public, max-age=31536000, immutable"
+upload_optional_artifact "aop-macos-arm64.zip" "application/zip" "public, max-age=31536000, immutable"
 # A local release from a Mac cannot build the Windows desktop installer, so it may be absent.
 upload_optional_artifact "aop-windows-x64-setup.exe" "application/octet-stream" "public, max-age=31536000, immutable"
 upload_artifact "runtime-assets.tar.gz" "application/gzip" "public, max-age=31536000, immutable"
@@ -132,8 +135,9 @@ upload_latest_alias "aop-windows-x64-setup.exe" "application/octet-stream"
 
 # The release feed (scripts/release/release-feed.ts): every updater reads it, because the GitHub
 # repository is private. The versioned documents go up and are probed first; then the pointers
-# flip: releases/latest.json (the host, `aop update` and the macOS app), its GitHub-shaped copy
-# (what AOP 0.10.0 to 0.10.4 read when pointed here) and latest/latest.yml (the Windows app).
+# flip: releases/latest.json (the host, `aop update` and the macOS app's notice), its GitHub-shaped
+# copy (what AOP 0.10.0 to 0.10.4 read when pointed here), latest/latest.yml (the Windows app) and
+# latest/latest-mac.yml (a signed macOS app updating itself).
 FEED_DIR="$(mktemp -d)"
 INSTALL_SCRIPT="$(mktemp)"
 trap 'rm -rf "$FEED_DIR" "$INSTALL_SCRIPT"' EXIT
@@ -155,6 +159,9 @@ verify_url_available "${PUBLIC_BASE}/releases/v${VERSION}.md"
 
 if [ -f "${FEED_DIR}/latest/latest.yml" ]; then
   upload_feed_document "latest/latest.yml" "text/yaml; charset=utf-8"
+fi
+if [ -f "${FEED_DIR}/latest/latest-mac.yml" ]; then
+  upload_feed_document "latest/latest-mac.yml" "text/yaml; charset=utf-8"
 fi
 upload_feed_document "repos/get-aop/aop-mono/releases/latest" "application/json"
 upload_feed_document "releases/latest.json" "application/json"

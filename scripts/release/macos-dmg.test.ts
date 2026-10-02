@@ -28,6 +28,7 @@ describe("macos-dmg release planning", () => {
       binaryPath: join("/repo", "dist/release/aop-darwin-arm64"),
       builderDmgPath: join("/repo", "dist/electron-builder/aop-macos-arm64.dmg"),
       builderOutputDir: join("/repo", "dist/electron-builder"),
+      builderZipPath: join("/repo", "dist/electron-builder/aop-macos-arm64.zip"),
       dmgPath: join("/repo", "dist/release/aop-macos-arm64.dmg"),
       releaseDir: join("/repo", "dist/release"),
       resourcesDir: join("/repo", "apps/desktop/resources"),
@@ -35,6 +36,7 @@ describe("macos-dmg release planning", () => {
       version: "0.2.7",
       volumeName: "AOP 0.2.7 arm64",
       workspaceRoot: "/repo",
+      zipPath: join("/repo", "dist/release/aop-macos-arm64.zip"),
     });
   });
 });

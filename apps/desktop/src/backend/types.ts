@@ -80,8 +80,9 @@ export type PairingCodeResult =
 
 /**
  * The app's own update, as the screens and the menu show it. `available` is a notice with a
- * download link (the macOS app until it is signed); `downloading` and `ready` belong to the
- * automatic path (the Windows app), where `ready` waits for a restart.
+ * download link (a macOS app that is not Developer ID signed); `downloading` and `ready` belong
+ * to the automatic path (the Windows app and a signed macOS app), where `ready` waits for a
+ * restart.
  */
 export type AppUpdateState =
   | { status: "idle" }

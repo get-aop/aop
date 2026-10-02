@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseReleaseFeed } from "@aop/common";
 import { generateReleaseChecksums } from "./checksums.ts";
+import { writeLatestMacYml } from "./macos-updater.ts";
 
 const SCRIPT = join(import.meta.dir, "deploy-r2.sh");
 const VERSION = "9.9.9";
@@ -20,9 +21,15 @@ const REQUIRED_ARTIFACTS = [
   "runtime-assets.tar.gz",
   "checksums.sha256",
 ];
-const OPTIONAL_ARTIFACTS = ["aop-windows-x64-setup.exe", "aop-windows-x64-setup.exe.blockmap"];
+const OPTIONAL_ARTIFACTS = [
+  "aop-windows-x64-setup.exe",
+  "aop-windows-x64-setup.exe.blockmap",
+  "aop-macos-x64.zip",
+  "aop-macos-arm64.zip",
+];
 const FEED_POINTERS = [
   "latest/latest.yml",
+  "latest/latest-mac.yml",
   "repos/get-aop/aop-mono/releases/latest",
   "releases/latest.json",
 ];
@@ -120,6 +127,9 @@ describe("deploy-r2.sh release commit point", () => {
     expect(await harness.readUploadedFile("latest/latest.yml")).toContain(
       `url: ${artifactUrl("aop-windows-x64-setup.exe")}`,
     );
+    const mac = await harness.readUploadedFile("latest/latest-mac.yml");
+    expect(mac).toContain(`url: ${artifactUrl("aop-macos-x64.zip")}`);
+    expect(mac).toContain(`url: ${artifactUrl("aop-macos-arm64.zip")}`);
   });
 
   test("retires latest/version and publishes no Windows host binary or PowerShell installer", async () => {
@@ -176,6 +186,7 @@ describe("deploy-r2.sh release commit point", () => {
     );
     const lines = await harness.readCallLog();
     expect(lines.some((line) => line.includes("aop-windows-x64"))).toBe(false);
+    expect(lines.some((line) => /aop-macos-.*\.zip|latest-mac\.yml/.test(line))).toBe(false);
     expect(uploadIndex(lines, "install.sh")).toBe(lines.length - 1);
   });
 });
@@ -214,6 +225,7 @@ const createHarness = async ({ withOptionalArtifacts = true } = {}): Promise<Har
       join(releaseDir, "latest.yml"),
       "version: 9.9.9\nfiles:\n  - url: aop-windows-x64-setup.exe\npath: aop-windows-x64-setup.exe\n",
     );
+    await writeLatestMacYml(releaseDir, VERSION);
   }
   await generateReleaseChecksums(releaseDir);
 

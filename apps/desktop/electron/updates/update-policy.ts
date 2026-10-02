@@ -1,15 +1,4 @@
 /**
- * THE SWITCH: whether the macOS app updates itself with electron-updater.
- *
- * Off until the macOS app is Developer ID signed and notarized, because Squirrel.Mac installs an
- * update only over a signed app. While it is off the Mac app shows a notice with a link to the new
- * DMG instead. Flip it when signing is turned on (docs/RELEASE.md, "Desktop app updates"); the
- * release workflow must then also publish `latest-mac.yml` and the DMG's zip, which it does not
- * today. Nothing else in the app changes: both platforms use the same code path.
- */
-export const MAC_AUTO_UPDATE_ENABLED = false;
-
-/**
  * How the app keeps itself current. `auto` downloads in the background and installs on restart,
  * `notice` only says a newer release exists and links to it, `off` does nothing.
  */
@@ -21,20 +10,25 @@ export interface UpdatePolicyInput {
   packaged: boolean;
   /** `AOP_DESKTOP_DISABLE_UPDATES=1`. */
   disabled: boolean;
-  /** Overridable so a test can try both positions of the switch. */
-  macAutoUpdate?: boolean;
+  /**
+   * The macOS app is Developer ID signed (mac-signature.ts). Squirrel.Mac installs an update only
+   * over a signed app, so an ad-hoc signed one shows a notice with a link to the new DMG instead.
+   * A release built with `AOP_SIGN_RELEASES` on is signed, and from then on the app updates
+   * itself; nothing in the code needs to change (docs/RELEASE.md, "Desktop app updates").
+   */
+  macSigned: boolean;
 }
 
 export const chooseUpdateMode = ({
   platform,
   packaged,
   disabled,
-  macAutoUpdate = MAC_AUTO_UPDATE_ENABLED,
+  macSigned,
 }: UpdatePolicyInput): UpdateMode => {
   if (disabled) return "off";
   if (platform === "win32") return packaged ? "auto" : "off";
   if (platform === "darwin") {
-    if (!macAutoUpdate) return "notice";
+    if (!macSigned) return "notice";
     return packaged ? "auto" : "off";
   }
   // The desktop app ships for macOS and Windows only.

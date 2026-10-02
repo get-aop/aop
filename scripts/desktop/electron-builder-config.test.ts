@@ -33,7 +33,11 @@ describe("Electron Builder configuration", () => {
       category: "public.app-category.developer-tools",
       hardenedRuntime: true,
       notarize: true,
-      target: [{ target: "dmg", arch: ["x64", "arm64"] }],
+      // The zip is what an installed, signed app updates itself from.
+      target: [
+        { target: "dmg", arch: ["x64", "arm64"] },
+        { target: "zip", arch: ["x64", "arm64"] },
+      ],
     });
   });
 
