@@ -3,7 +3,7 @@ import { createComputerUseService } from "./service.ts";
 import { CUA_PATH, fakeCua } from "./test-utils.ts";
 
 const ON_CUA = { id: "proj_1", computerUse: "cua" } as const;
-const CUA_SERVERS = { "cua-driver": { type: "stdio", command: CUA_PATH, args: ["mcp"] } };
+const CUA_SERVERS = { "cua-driver": { type: "stdio" as const, command: CUA_PATH, args: ["mcp"] } };
 
 describe("computer use service", () => {
   test("gives a thread of a project on CUA the driver's MCP server, by its absolute path", async () => {
