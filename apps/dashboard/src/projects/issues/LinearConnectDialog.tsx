@@ -1,6 +1,6 @@
 import type { LinearCatalog, LinearScope } from "@aop/common";
 import { ArrowUpRightIcon } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { Button } from "@/ui/button";
 import {
   Dialog,
@@ -168,12 +168,12 @@ const Connected = ({
 
 const KeyStep = ({ setup }: { setup: LinearSetup }) => {
   const [key, setKey] = useState("");
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  const submit = () => {
     if (key.trim()) void setup.checkKey(key.trim());
   };
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
+    // Not a <form> with a password field: the browser would offer to save the key as a login.
+    <div className="flex flex-col gap-4">
       <ol className="flex list-decimal flex-col gap-1.5 pl-4 text-meta leading-relaxed text-text-muted marker:text-text-subtle">
         <li>
           In Linear, open{" "}
@@ -197,12 +197,19 @@ const KeyStep = ({ setup }: { setup: LinearSetup }) => {
         <Input
           id="linear-api-key"
           data-testid="linear-api-key"
-          type="password"
+          type="text"
+          // Masked like a password, without being one to the browser's password manager.
+          style={{ WebkitTextSecurity: "disc" } as CSSProperties}
+          data-1p-ignore
+          data-lpignore="true"
           autoComplete="off"
           spellCheck={false}
           placeholder="lin_api_…"
           value={key}
           onChange={(event) => setKey(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submit();
+          }}
           className="h-9 bg-input-surface font-mono text-meta md:text-meta"
           autoFocus
         />
@@ -214,16 +221,17 @@ const KeyStep = ({ setup }: { setup: LinearSetup }) => {
           </Button>
         ) : null}
         <Button
-          type="submit"
+          type="button"
           size="sm"
           data-testid="linear-check-key"
+          onClick={submit}
           disabled={!key.trim() || setup.busy}
         >
           {setup.busy ? <Spinner className="size-3.5" /> : null}
           Continue
         </Button>
       </DialogFooter>
-    </form>
+    </div>
   );
 };
 

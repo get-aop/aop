@@ -77,6 +77,7 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
             view={view}
             shownCount={shown.length}
             groups={groups}
+            filtering={filtering}
             owner={owner}
             startThread={startThread}
             onConnectLinear={() => setLinearOpen(true)}
@@ -104,6 +105,7 @@ const IssuesBody = ({
   view,
   shownCount,
   groups,
+  filtering,
   owner,
   startThread,
   onConnectLinear,
@@ -113,6 +115,7 @@ const IssuesBody = ({
   view: IssueView;
   shownCount: number;
   groups: IssueGroup[];
+  filtering: boolean;
   owner: boolean;
   startThread: StartThread;
   onConnectLinear: () => void;
@@ -142,8 +145,9 @@ const IssuesBody = ({
       projectId={projectId}
       groups={groups}
       groupBy={view.groupBy}
+      filtering={filtering}
       isCollapsed={view.isCollapsed}
-      onToggle={view.toggleGroup}
+      onToggle={view.setCollapsed}
       startThread={startThread}
     />
   );

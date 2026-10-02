@@ -30,9 +30,10 @@ export interface IssueView extends IssueViewPreferences {
   filters: IssueFilters;
   setFilters: (update: (filters: IssueFilters) => IssueFilters) => void;
   clearFilters: () => void;
-  /** Groups folded away, by group id. Done and canceled start folded. */
+  /** Whether a group is folded: as the person left it, else `folded` (how it starts). */
   isCollapsed: (groupId: string, folded: boolean) => boolean;
-  toggleGroup: (groupId: string) => void;
+  /** Folds or unfolds a group the way the person sees it now. */
+  setCollapsed: (groupId: string, collapsed: boolean) => void;
 }
 
 const storageKey = (projectId: string) => `aop:issues-view:v1:${projectId}`;
@@ -44,8 +45,8 @@ export const useIssueView = (projectId: string): IssueView => {
   );
   const preferences = validPreferences(stored);
   const [filters, setFilterState] = useState<IssueFilters>(NO_FILTERS);
-  // The groups the person toggled away from how they start.
-  const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
+  // The groups the person folded or unfolded, so a group keeps its place across views.
+  const [chosen, setChosen] = useState<ReadonlyMap<string, boolean>>(new Map());
 
   const update = useCallback(
     (patch: Partial<IssueViewPreferences>) =>
@@ -61,13 +62,9 @@ export const useIssueView = (projectId: string): IssueView => {
     filters,
     setFilters: (change) => setFilterState((current) => change(current)),
     clearFilters: () => setFilterState(NO_FILTERS),
-    isCollapsed: (groupId, folded) => folded !== toggled.has(groupId),
-    toggleGroup: (groupId) =>
-      setToggled((current) => {
-        const next = new Set(current);
-        if (!next.delete(groupId)) next.add(groupId);
-        return next;
-      }),
+    isCollapsed: (groupId, folded) => chosen.get(groupId) ?? folded,
+    setCollapsed: (groupId, collapsed) =>
+      setChosen((current) => new Map(current).set(groupId, collapsed)),
   };
 };
 

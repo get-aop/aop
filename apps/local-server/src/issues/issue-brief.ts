@@ -19,7 +19,8 @@ export const issueBrief = (issue: IssueWithBody): string => {
   return [
     `Start a thread to work on this ${SOURCE_NAME[issue.source]} issue. Use its title, description and link as the brief.`,
     "",
-    `**${issue.reference}: ${issue.title}**`,
+    // The chat shows the person's messages as typed, so no Markdown here.
+    `${issue.reference}: ${issue.title}`,
     issue.url,
     "",
     shown || "(The issue has no description.)",

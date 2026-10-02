@@ -10,12 +10,13 @@ import type { StartThread } from "./use-start-thread";
 /**
  * Issues in collapsible groups, each with its count: the grouped-table pattern. A group's
  * header sticks to the top while its rows scroll under it. By status, done and canceled groups
- * start folded, so the open work is what shows.
+ * start folded when open work is listed beside them, so the open work is what shows.
  */
 export const IssueGroupedTable = ({
   projectId,
   groups,
   groupBy,
+  filtering,
   isCollapsed,
   onToggle,
   startThread,
@@ -23,15 +24,20 @@ export const IssueGroupedTable = ({
   projectId: string;
   groups: readonly IssueGroup[];
   groupBy: IssueGroupBy;
+  /** A search or filter is on: every group starts open, so no match is folded away. */
+  filtering: boolean;
   isCollapsed: (groupId: string, folded: boolean) => boolean;
-  onToggle: (groupId: string) => void;
+  onToggle: (groupId: string, collapsed: boolean) => void;
   startThread: StartThread;
 }) => {
   const now = useNow();
+  // Finished work folds away only when there is open work to show instead.
+  const foldFinished =
+    !filtering && groupBy === "status" && groups.some((group) => !isFinished(group));
   return (
     <div data-testid="issue-groups" data-group-by={groupBy} className="flex flex-col gap-1">
       {groups.map((group) => {
-        const collapsed = isCollapsed(group.id, foldedAtFirst(group, groupBy));
+        const collapsed = isCollapsed(group.id, foldFinished && isFinished(group));
         return (
           <section
             key={group.id}
@@ -41,7 +47,11 @@ export const IssueGroupedTable = ({
             data-count={group.issues.length}
             aria-label={`${group.label}, ${group.issues.length}`}
           >
-            <GroupHeader group={group} collapsed={collapsed} onToggle={() => onToggle(group.id)} />
+            <GroupHeader
+              group={group}
+              collapsed={collapsed}
+              onToggle={() => onToggle(group.id, !collapsed)}
+            />
             {collapsed ? null : (
               <ul className="flex flex-col py-0.5">
                 {group.issues.map((issue: ProjectIssue) => (
@@ -63,8 +73,8 @@ export const IssueGroupedTable = ({
   );
 };
 
-const foldedAtFirst = (group: IssueGroup, groupBy: IssueGroupBy): boolean =>
-  groupBy === "status" && (group.stage === "completed" || group.stage === "canceled");
+const isFinished = (group: IssueGroup): boolean =>
+  group.stage === "completed" || group.stage === "canceled";
 
 const GroupHeader = ({
   group,
