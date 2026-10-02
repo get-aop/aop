@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ComputerUseSchema } from "./computer-use.ts";
 import { IdSchema, TimestampSchema } from "./primitives.ts";
 import { ReasoningEffortSchema, RuntimePreferenceSchema } from "./runtime.ts";
 
@@ -107,6 +108,12 @@ export const ProjectSchema = ProjectSettingsSchema.extend({
   id: IdSchema,
   /** Changed by pause, archive, and restore actions, never by editing settings. */
   status: ProjectStatusSchema,
+  /**
+   * Where threads get computer and browser use from. Changed only by the host owner through its
+   * own route (PUT /api/projects/:id/computer-use), never by editing settings, and never by the
+   * coordinator. A project stored before the setting existed reads as `model-default`.
+   */
+  computerUse: ComputerUseSchema.default("model-default"),
   /** Written by the host after a run, never by editing settings. */
   reportedRuntime: z
     .object({ coordinator: ReportedRuntimeSchema, thread: ReportedRuntimeSchema })

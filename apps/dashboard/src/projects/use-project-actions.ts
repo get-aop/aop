@@ -1,4 +1,10 @@
-import type { CreateProjectInput, NotificationLevel, Project, ProjectPatch } from "@aop/common";
+import type {
+  ComputerUseOption,
+  CreateProjectInput,
+  NotificationLevel,
+  Project,
+  ProjectPatch,
+} from "@aop/common";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import {
@@ -7,6 +13,7 @@ import {
   type ProjectAction,
   patchProject,
   restartCoordinator,
+  setProjectComputerUse,
   transitionProject,
 } from "../api/projects";
 import { requestConfirmation } from "../components/ConfirmationHost";
@@ -19,6 +26,8 @@ export interface ProjectActions {
   setNotifications: (project: Project, level: NotificationLevel) => Promise<void>;
   /** Saves settings. Rejects with the host's message, so a form can say why beside its fields. */
   update: (project: Project, patch: ProjectPatch) => Promise<Project>;
+  /** Host owner only; applies from each thread's next turn. */
+  setComputerUse: (project: Project, computerUse: ComputerUseOption) => Promise<void>;
   /** A fresh coordinator session: the chat stays, the threads are untouched. */
   restartCoordinator: (project: Project) => Promise<void>;
   /** Asks first; deletes the project, its threads and its memory for good. */
@@ -51,6 +60,8 @@ export const useProjectActions = (): ProjectActions => {
         live.adopt(updated);
         return updated;
       },
+      setComputerUse: (project, computerUse) =>
+        attempt(async () => live.adopt(await setProjectComputerUse(project.id, computerUse))),
       restartCoordinator: (project) =>
         attempt(async () => {
           live.adopt(await restartCoordinator(project.id));

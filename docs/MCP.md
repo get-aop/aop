@@ -41,7 +41,7 @@ A thread's report reaches the coordinator as a `Thread report:` message that wak
 
 Claude's own `AskUserQuestion` is withheld from threads: it cannot be answered without a terminal. So are the built-ins that schedule or wake a session (`ScheduleWakeup`, `CronCreate`, `CronDelete`, `CronList`, `Monitor`, `RemoteTrigger`): AOP decides when a thread's next turn starts, and a timer the thread armed would fire into a session AOP is not running.
 
-A thread keeps the person's own MCP servers, settings and hooks. Claude Code defers MCP tools behind its tool search by default, so the `aop` server is passed with `alwaysLoad: true` (a per-server option of Claude Code's MCP config). Its tools are in the prompt from the first request and never need a `ToolSearch` call; other servers keep the CLI's default loading.
+A thread keeps the person's own MCP servers, settings and hooks. A thread of a project whose computer use is CUA also gets CUA Driver's server, `cua-driver`, when the driver can serve; see [Threads and git](./THREADS.md#computer-and-browser-use). The coordinator never does. Claude Code defers MCP tools behind its tool search by default, so the `aop` server is passed with `alwaysLoad: true` (a per-server option of Claude Code's MCP config). Its tools are in the prompt from the first request and never need a `ToolSearch` call; other servers keep the CLI's default loading.
 
 ### Plain chat session
 

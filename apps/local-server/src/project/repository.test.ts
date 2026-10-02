@@ -37,6 +37,7 @@ describe("project repository", () => {
       id: "p1",
       ...settings,
       status: "active",
+      computerUse: "model-default",
       reportedRuntime: {
         coordinator: { model: null, effort: null },
         thread: { model: null, effort: null },
@@ -91,6 +92,20 @@ describe("project repository", () => {
     expect((await projects.getById("p1"))?.autoFixPullRequests).toBe(true);
     // A patch that leaves it out leaves it as it is.
     expect((await projects.update("p1", { goal: "Ship" }))?.autoFixPullRequests).toBe(true);
+  });
+
+  test("starts on the model's computer use, and only its own setter changes it", async () => {
+    const created = await projects.create({ id: "p1", ...projectSettings() });
+    expect(created.computerUse).toBe("model-default");
+    clock = T1;
+
+    const chosen = await projects.setComputerUse("p1", "cua");
+
+    expect(chosen).toEqual({ ...created, computerUse: "cua", updatedAt: T1.toISOString() });
+    expect(await projects.getById("p1")).toEqual(chosen);
+    // A settings patch carries no computer use, so it keeps the choice.
+    expect((await projects.update("p1", { goal: "Ship" }))?.computerUse).toBe("cua");
+    expect(await projects.setComputerUse("missing", "cua")).toBeNull();
   });
 
   test("stores the icon and colour, keeps them through other edits, and a null puts the letter back", async () => {

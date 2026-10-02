@@ -10,6 +10,7 @@ import {
   extractRuntimeSessionIdFromRawJsonl,
   type InputChannel,
   type LLMProvider,
+  type McpStdioServer,
   parseRawJsonlContent,
   type RunImage,
   type RunOptions,
@@ -165,6 +166,8 @@ export const runSessionPrompt = async (input: {
   images?: RunImage[];
   /** Added to the CLI's system prompt for this launch; pass it on every turn (see RunOptions). */
   appendSystemPrompt?: string;
+  /** MCP servers this launch adds beside the aop server (see RunOptions). */
+  extraMcpServers?: Record<string, McpStdioServer>;
   /** Durable path allocated before launch so a reloaded server can resume the run. */
   logFilePath?: string;
   createProviderFn?: CreateProviderFn;
@@ -199,7 +202,7 @@ export const runSessionPrompt = async (input: {
       repoPath,
       prompt,
       input.allowedDirectories,
-      input.images,
+      { images: input.images, extraMcpServers: input.extraMcpServers },
       input.appendSystemPrompt,
       input.logFilePath,
       input.createProviderFn,
@@ -369,7 +372,7 @@ const executeProviderRun = async (
   repoPath: string,
   prompt: string,
   allowedDirectories: string[] | undefined,
-  images: RunImage[] | undefined,
+  { images, extraMcpServers }: Pick<RunOptions, "images" | "extraMcpServers">,
   appendSystemPrompt: string | undefined,
   durableLogFilePath: string | undefined,
   createProviderFn: CreateProviderFn | undefined,
@@ -498,6 +501,7 @@ const executeProviderRun = async (
       prompt,
       allowedDirectories,
       images,
+      extraMcpServers,
       appendSystemPrompt,
       inputChannel: runInput?.channel,
       logFilePath,
@@ -551,6 +555,7 @@ const raceProviderAgainstInterrupt = async (input: {
   prompt: string;
   allowedDirectories: string[] | undefined;
   images: RunImage[] | undefined;
+  extraMcpServers: Record<string, McpStdioServer> | undefined;
   appendSystemPrompt: string | undefined;
   inputChannel: InputChannel | undefined;
   logFilePath: string;
@@ -583,6 +588,7 @@ const raceProviderAgainstInterrupt = async (input: {
   const options = {
     ...runOptions,
     ...(input.images?.length && { images: input.images }),
+    ...(input.extraMcpServers && { extraMcpServers: input.extraMcpServers }),
     ...(input.inputChannel && { inputChannel: input.inputChannel }),
   };
   const providerPromise = completeProviderRun({

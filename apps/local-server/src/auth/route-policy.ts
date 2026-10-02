@@ -30,6 +30,8 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
   ["POST", /^\/api\/updates\/apply\/?$/],
   // Installs a new version of an agent CLI on the host.
   ["POST", /^\/api\/agent-clis\/[^/]+\/update\/?$/],
+  // Gives a project's threads control of the host's desktop and browsers.
+  ["PUT", /^\/api\/projects\/[^/]+\/computer-use\/?$/],
 ];
 
 export const routeAccess = (method: string, pathname: string): RouteAccess => {

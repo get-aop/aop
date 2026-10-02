@@ -1,4 +1,9 @@
-import { CreateProjectInputSchema, MemoryFileInputSchema, ProjectPatchSchema } from "@aop/common";
+import {
+  ComputerUseInputSchema,
+  CreateProjectInputSchema,
+  MemoryFileInputSchema,
+  ProjectPatchSchema,
+} from "@aop/common";
 import { Hono } from "hono";
 import { z } from "zod";
 import { CHAT_MID_RUN_MODES } from "../chat-session/mid-run-mode.ts";
@@ -42,6 +47,14 @@ export const createProjectRoutes = ({ projects, memory }: ProjectServices) => {
     const parsed = await readBody(c, ProjectPatchSchema);
     if ("response" in parsed) return parsed.response;
     const result = await projects.update(c.req.param("projectId"), parsed.body);
+    return result.success ? c.json({ project: result.project }) : errorResponse(c, result.error);
+  });
+
+  // Owner-only (auth/route-policy.ts): it decides what threads may do on the host's desktop.
+  routes.put("/:projectId/computer-use", async (c) => {
+    const parsed = await readBody(c, ComputerUseInputSchema);
+    if ("response" in parsed) return parsed.response;
+    const result = await projects.setComputerUse(c.req.param("projectId"), parsed.body.computerUse);
     return result.success ? c.json({ project: result.project }) : errorResponse(c, result.error);
   });
 

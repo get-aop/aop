@@ -8,6 +8,7 @@ import { projectNameProblem } from "../project-fields";
 import { AutoContinueSetting } from "./AutoContinueSetting";
 import { AutoFixSetting } from "./AutoFixSetting";
 import { ROW_SELECT_CLASS, SaveBar, SettingRow, SettingsHeading } from "./blocks";
+import { ComputerUseSetting } from "./ComputerUseSetting";
 import { ModelSettings } from "./ModelSettings";
 import { ProjectLifecycle } from "./ProjectLifecycle";
 import { ThreadAccessSetting } from "./ThreadAccessSetting";
@@ -15,7 +16,7 @@ import { type SettingsDraft, useSettingsDraft } from "./use-settings-draft";
 
 const count = (value: number): string => value.toLocaleString("en-US");
 
-/** Name and icon, goal, models, thread access and notifications in one form, then the actions that are not edits. */
+/** Name and icon, goal, models, thread access and notifications in one form, then computer use (saved on its own) and the actions that are not edits. */
 export const GeneralSection = ({ project }: { project: Project }) => {
   const draft = useSettingsDraft(project);
   const name = draft.value("name");
@@ -126,6 +127,7 @@ export const GeneralSection = ({ project }: { project: Project }) => {
         <SaveBar draft={draft} blocked={nameProblem !== null} />
       </form>
 
+      <ComputerUseSetting project={project} />
       <ProjectLifecycle project={project} />
     </div>
   );

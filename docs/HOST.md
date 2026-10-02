@@ -12,7 +12,7 @@ Every `/api/*` route needs credentials except the few a client must reach before
 | Paired device | `Authorization: Bearer <token>`, or the `aop_device` cookie the host set for it. | Everything except administering the host. |
 | Anyone else | Nothing. | `GET /api/health`, `POST /api/auth/pair`, and `/api/mcp`, which checks its own per-session token. |
 
-Administering the host means pairing devices, listing and revoking them, and starting an update of the host itself. Only the host owner can do these, so a stolen laptop cannot mint itself a new token or remove the owner's other devices. The list lives in `apps/local-server/src/auth/route-policy.ts`. A route that is not listed there is open to paired devices and closed to everyone else.
+Administering the host means pairing devices, listing and revoking them, starting an update of the host itself or of an agent CLI, and choosing whether a project's threads may operate the host's desktop and browsers (computer use, see [Threads and git](./THREADS.md#computer-and-browser-use)). Only the host owner can do these, so a stolen laptop cannot mint itself a new token or remove the owner's other devices. The list lives in `apps/local-server/src/auth/route-policy.ts`. A route that is not listed there is open to paired devices and closed to everyone else.
 
 ### The host owner
 

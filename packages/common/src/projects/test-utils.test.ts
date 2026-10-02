@@ -23,7 +23,15 @@ describe("buildProject", () => {
     const settingKeys = Object.keys(ProjectSettingsSchema.shape).sort();
 
     expect(Object.keys(buildProject()).sort()).toEqual(
-      [...settingKeys, "id", "status", "reportedRuntime", "createdAt", "updatedAt"].sort(),
+      [
+        ...settingKeys,
+        "id",
+        "status",
+        "computerUse",
+        "reportedRuntime",
+        "createdAt",
+        "updatedAt",
+      ].sort(),
     );
   });
 

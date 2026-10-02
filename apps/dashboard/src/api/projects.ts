@@ -1,4 +1,10 @@
-import type { CreateProjectInput, Project, ProjectPatch, Thread } from "@aop/common";
+import type {
+  ComputerUseOption,
+  CreateProjectInput,
+  Project,
+  ProjectPatch,
+  Thread,
+} from "@aop/common";
 import { request } from "./request";
 
 /** What a project's lifecycle buttons post to: `POST /projects/:id/<action>`. */
@@ -27,6 +33,18 @@ export const patchProject = async (projectId: string, patch: ProjectPatch): Prom
     await request<{ project: Project }>(`/projects/${encodeURIComponent(projectId)}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
+    })
+  ).project;
+
+/** Host owner only. Where threads get computer and browser use from, from their next turn. */
+export const setProjectComputerUse = async (
+  projectId: string,
+  computerUse: ComputerUseOption,
+): Promise<Project> =>
+  (
+    await request<{ project: Project }>(`/projects/${encodeURIComponent(projectId)}/computer-use`, {
+      method: "PUT",
+      body: JSON.stringify({ computerUse }),
     })
   ).project;
 

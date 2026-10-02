@@ -1,4 +1,5 @@
 import type {
+  ComputerUse,
   Project,
   ProjectPatch,
   ProjectSettings,
@@ -22,6 +23,8 @@ export interface ProjectRepository {
   /** Applies only the settings present in the patch; `repoIds`, when present, replaces the list. */
   update: (id: string, patch: ProjectPatch) => Promise<Project | null>;
   setStatus: (id: string, status: ProjectStatus) => Promise<Project | null>;
+  /** Not one of the settings a patch carries: only the host owner changes it (project/service.ts). */
+  setComputerUse: (id: string, computerUse: ComputerUse) => Promise<Project | null>;
   /**
    * Stores what a role's last run reported; a field left out keeps what was there. Not a
    * setting, so `updatedAt` stays. Null when there is no such project.
@@ -59,6 +62,7 @@ export const createProjectRepository = (
       return {
         ...project,
         status: "active",
+        computerUse: "model-default",
         reportedRuntime: { coordinator: NOTHING_REPORTED, thread: NOTHING_REPORTED },
         createdAt: at,
         updatedAt: at,
@@ -110,6 +114,19 @@ export const createProjectRepository = (
         .where("id", "=", id)
         .execute();
       return { ...current, status, updatedAt };
+    }),
+
+  setComputerUse: (id, computerUse) =>
+    atomically<Project | null>(db, async (trx) => {
+      const current = await getProject(trx, id);
+      if (!current) return null;
+      const updatedAt = now().toISOString();
+      await trx
+        .updateTable("projects")
+        .set({ computer_use: computerUse, updated_at: updatedAt })
+        .where("id", "=", id)
+        .execute();
+      return { ...current, computerUse, updatedAt };
     }),
 
   recordReportedRuntime: async (id, role, reported) => {
@@ -225,6 +242,7 @@ const toProject = (row: ProjectRow, repoIds: string[]): Project => ({
   threadAccess: row.thread_access,
   autoFixPullRequests: row.auto_fix_pull_requests === 1,
   autoContinue: row.auto_continue === 1,
+  computerUse: row.computer_use,
   repoIds,
   status: row.status,
   reportedRuntime: {

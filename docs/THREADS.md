@@ -67,6 +67,24 @@ The coordinator is not affected. It always runs `approval-required`, pinned for 
 
 Other runtimes map the same two values to their own flags (Codex and Pi); a thread on a runtime without an equivalent is limited by that runtime, not by this table.
 
+## Computer and browser use
+
+The project setting `computerUse` decides where the project's threads get tools to see and operate apps and browsers on the host. Only the host owner changes it (project settings, General, Computer / browser use; or `PUT /api/projects/:id/computer-use` with `{"computerUse": "..."}`), and it saves as soon as it is chosen. A paired device sees it read-only and gets `403` from the route; `PATCH /api/projects/:id` and the coordinator's `project_settings_set` cannot change it.
+
+| Value | What a thread gets |
+| --- | --- |
+| `model-default` (the default) | Nothing from AOP. The thread has whatever its agent CLI brings by itself. |
+| `cua` | [CUA Driver](https://github.com/trycua/cua)'s MCP server, as `cua-driver`, beside the `aop` server: its tools are `mcp__cua-driver__*` (windows, accessibility tree, click, type, browser tabs and so on). |
+| `codex`, `claude` | Shown in settings as WIP. The host refuses them with `400` until they are built. |
+
+**How CUA reaches a thread.** When each of a thread's turns is launched, the host reads the project's setting and asks CUA Driver whether it can serve: `cua-driver --version` and `cua-driver permissions status --json`, both read-only, so neither raises a macOS permission prompt (an answer is reused for 10 seconds). If it can, the run's `--mcp-config` gets `{"cua-driver": {"type": "stdio", "command": "<absolute path>", "args": ["mcp"]}}`, which is what CUA's own docs register for Claude Code. On macOS, `cua-driver mcp` proxies to the CuaDriver.app daemon, so the tools act with the app's Accessibility and Screen Recording grants, not the terminal's. The server keeps Claude Code's default loading, so its tools wait behind tool search until the model looks for them. A change to the setting applies from each thread's next turn.
+
+**When CUA is not ready.** The host looks for `cua-driver` on the PATH runs are spawned with, then in `/Applications/CuaDriver.app` (`AOP_CUA_DRIVER` points it at another file). Not installed, a missing macOS grant, or a driver that does not answer leaves the run without the CUA tools: the turn starts anyway and the host logs a warning naming the project and the reason. A daemon that is not running does not count: `cua-driver mcp` starts the app on first use. The settings row shows the state, why, and what to run on the host to fix it; `GET /api/computer-use/cua` (any paired device; `?fresh=1` probes again) returns the same.
+
+**Thread access still applies.** A thread on Edit files sees the CUA tools, but every call needs an approval no thread can give, so it is denied; the settings row says so. With Full access the calls run without asking. CUA Driver's own permission mode (`standard` unless its daemon was started otherwise) applies on top.
+
+**The coordinator never gets them.** It is hermetic: it runs with the AOP tools only and does no work itself, and a coordinator that could drive the desktop would act on what people and threads write without a thread's boundaries. A thread that needs the desktop does that work.
+
 ## States
 
 | Status | How a thread gets there |

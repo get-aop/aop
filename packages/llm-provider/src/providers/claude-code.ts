@@ -331,7 +331,9 @@ const buildClaudeCodeSettings = (options: RunOptions): Record<string, unknown> |
 };
 
 const buildClaudeMcpConfig = (options: RunOptions): Record<string, unknown> | null => {
-  const servers: Record<string, unknown> = {};
+  // The run's extra servers (CUA Driver's, for a thread whose project chose it) keep the CLI's
+  // default loading, so their tools wait behind tool search until the model looks for them.
+  const servers: Record<string, unknown> = { ...options.extraMcpServers };
   const normalized = options.mcpServerUrl?.trim();
   // Both isolation modes get the aop server: hermetic adds --strict-mcp-config, so there it is
   // the only server the run can reach. `alwaysLoad` (a per-server option of Claude Code 2.1.x MCP

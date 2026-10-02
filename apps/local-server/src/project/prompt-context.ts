@@ -1,4 +1,6 @@
 import { MEMORY_INDEX_NAME } from "@aop/common";
+import type { McpStdioServer } from "@aop/llm-provider";
+import { type ComputerUseService, computerUse } from "../computer-use/service.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
 import type { ProjectMemory } from "./memory-block.ts";
@@ -9,12 +11,14 @@ import {
 } from "./system-prompt.ts";
 import { buildThreadDigest } from "./thread-digest.ts";
 
-/** What the engine adds to a project session's run: the system prompt for its role and the extra folders it may read. */
+/** What the engine adds to a project session's run: the system prompt for its role, the extra folders it may read, and its computer-use tools. */
 export interface ProjectRunContext {
   /** Appended to the CLI's system prompt on every turn, resumed ones included. */
   systemPrompt: string;
   /** Other repos of the project, readable but not the thread's workspace. */
   readableDirectories: string[];
+  /** MCP servers for computer use (see computer-use/service.ts); a coordinator never has any. */
+  mcpServers?: Record<string, McpStdioServer>;
 }
 
 /**
@@ -24,6 +28,7 @@ export interface ProjectRunContext {
 export const loadProjectRunContext = async (
   ctx: LocalServerContext,
   session: ChatSession,
+  computerUseService: ComputerUseService = computerUse,
 ): Promise<ProjectRunContext | null> => {
   if (!session.project_id) return null;
   const project = await ctx.projectRepository.getById(session.project_id);
@@ -43,6 +48,7 @@ export const loadProjectRunContext = async (
       workspace: session.workspace_path ?? "",
     }),
     readableDirectories: repos.filter((repo) => repo.id !== thread.repoId).map((repo) => repo.path),
+    mcpServers: await computerUseService.serversFor(project, "thread"),
   };
 };
 

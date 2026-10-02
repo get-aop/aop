@@ -28,6 +28,8 @@ export const describeServiceError = (error: ServiceError): string => {
       return `Cannot ${error.action} a ${error.status} project`;
     case "PROJECT_NOT_ACTIVE":
       return `The project is ${error.status}`;
+    case "COMPUTER_USE_UNAVAILABLE":
+      return `Computer use through ${error.option === "codex" ? "Codex" : "Claude"} is not available yet; choose the model's default or CUA`;
     case "SESSION_BUSY":
       return `Session ${error.sessionId} is still running`;
     case "INVALID_MESSAGE":
