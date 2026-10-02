@@ -274,8 +274,11 @@ const useSearchShortcut = () => {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable=true], [role=dialog]")) return;
+      const target = event.target;
+      const typing =
+        target instanceof Element &&
+        target.closest("input, textarea, select, [contenteditable=true], [role=dialog]");
+      if (typing) return;
       event.preventDefault();
       search.current?.focus();
     };

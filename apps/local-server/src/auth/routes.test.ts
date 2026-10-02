@@ -354,6 +354,9 @@ describe("auth routes", () => {
         "PATCH /api/projects/:projectId/routines/:routineId",
         "DELETE /api/projects/:projectId/routines/:routineId",
         "POST /api/projects/:projectId/routines/:routineId/run",
+        "PUT /api/projects/:projectId/linear",
+        "DELETE /api/projects/:projectId/linear",
+        "POST /api/projects/:projectId/linear/catalog",
       ];
 
       for (const route of hostOnly) {

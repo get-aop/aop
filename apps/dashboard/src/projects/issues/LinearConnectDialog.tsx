@@ -249,7 +249,13 @@ const KeyStep = ({ setup }: { setup: LinearSetup }) => {
       </div>
       <DialogFooter>
         {setup.connection?.configured ? (
-          <Button type="button" variant="ghost" size="sm" onClick={setup.back}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-testid="linear-key-back"
+            onClick={setup.back}
+          >
             Back
           </Button>
         ) : null}
@@ -288,11 +294,10 @@ const ScopeStep = ({
         Signed in to <span className="text-text">{catalog.workspace}</span> as{" "}
         <span className="text-text">{catalog.viewer}</span>. Which issues should this project show?
       </p>
-      <div
-        role="radiogroup"
+      <fieldset
         aria-label="Linear team or project"
         data-testid="linear-scopes"
-        className="flex max-h-64 flex-col gap-0.5 overflow-y-auto rounded-card border border-border-strong bg-raised p-1"
+        className="m-0 flex max-h-64 min-w-0 flex-col gap-0.5 overflow-y-auto rounded-card border border-border-strong bg-raised p-1"
       >
         {options.length === 0 ? (
           <p className="px-3 py-2 text-meta text-text-subtle">This key sees no team or project.</p>
@@ -306,34 +311,30 @@ const ScopeStep = ({
               {options
                 .filter((option) => option.kind === kind)
                 .map((option) => (
-                  <button
+                  <label
                     key={keyOf(option)}
-                    type="button"
-                    role="radio"
-                    aria-checked={picked === keyOf(option)}
                     data-testid="linear-scope-option"
                     data-scope={keyOf(option)}
-                    onClick={() => setPicked(keyOf(option))}
-                    className="flex items-center gap-2.5 rounded-row px-2.5 py-1.5 text-left text-meta text-text-muted hover:bg-hover aria-checked:bg-active aria-checked:text-text"
+                    className="flex cursor-pointer items-center gap-2.5 rounded-row px-2.5 py-1.5 text-meta text-text-muted hover:bg-hover has-[:checked]:bg-active has-[:checked]:text-text has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-running"
                   >
-                    <span
-                      aria-hidden="true"
-                      className="grid size-3.5 shrink-0 place-items-center rounded-full border border-border-bold"
-                    >
-                      {picked === keyOf(option) ? (
-                        <span className="size-1.5 rounded-full bg-text" />
-                      ) : null}
-                    </span>
+                    <input
+                      type="radio"
+                      name="linear-scope"
+                      value={keyOf(option)}
+                      checked={picked === keyOf(option)}
+                      onChange={() => setPicked(keyOf(option))}
+                      className="size-3.5 shrink-0 accent-[var(--color-text)]"
+                    />
                     <span className="min-w-0 flex-1 truncate">{option.name}</span>
                     {option.hint ? (
                       <span className="text-[11px] text-text-subtle">{option.hint}</span>
                     ) : null}
-                  </button>
+                  </label>
                 ))}
             </div>
           ) : null,
         )}
-      </div>
+      </fieldset>
       <DialogFooter>
         <Button type="button" variant="ghost" size="sm" onClick={setup.back}>
           Back

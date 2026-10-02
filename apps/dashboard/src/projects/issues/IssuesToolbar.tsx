@@ -1,7 +1,6 @@
 import type { IssueSource, IssueStateFilter } from "@aop/common";
 import { ArrowDownUpIcon, SearchIcon, XIcon } from "lucide-react";
 import { forwardRef } from "react";
-import { cn } from "@/lib/cn";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { Input } from "@/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@/ui/toggle-group";
 import { IssueFilterMenu, TOOLBAR_BUTTON } from "./IssueFilterMenu";
 import {
   type facetsOf,
@@ -107,32 +107,27 @@ const StateSwitch = ({
   value: IssueStateFilter;
   onChange: (state: IssueStateFilter) => void;
 }) => (
-  <div
-    role="radiogroup"
+  <ToggleGroup
+    type="single"
+    value={value}
+    // Clicking the chosen state again would clear it; a state is always chosen.
+    onValueChange={(next) => next && onChange(next as IssueStateFilter)}
     aria-label="Issue state"
     data-testid="issues-state"
     data-value={value}
-    className="flex h-8 shrink-0 items-center rounded-row border border-border-strong bg-raised p-0.5"
+    className="h-8 shrink-0 rounded-row border border-border-strong bg-raised p-0.5"
   >
     {STATES.map((state) => (
-      <button
+      <ToggleGroupItem
         key={state.value}
-        type="button"
-        role="radio"
-        aria-checked={value === state.value}
+        value={state.value}
         data-testid={`issues-state-${state.value}`}
-        onClick={() => onChange(state.value)}
-        className={cn(
-          "h-full rounded-[6px] px-2.5 text-meta font-medium transition-colors duration-[120ms] focus-visible:outline-2 focus-visible:outline-running",
-          value === state.value
-            ? "bg-active text-text shadow-1"
-            : "text-text-subtle hover:text-text",
-        )}
+        className="h-full rounded-[6px] px-2.5 text-meta font-medium text-text-subtle hover:bg-transparent hover:text-text data-[state=on]:bg-active data-[state=on]:text-text data-[state=on]:shadow-1 data-[spacing=0]:rounded-[6px]"
       >
         {state.label}
-      </button>
+      </ToggleGroupItem>
     ))}
-  </div>
+  </ToggleGroup>
 );
 
 const ViewMenu = ({ view }: { view: IssueView }) => (

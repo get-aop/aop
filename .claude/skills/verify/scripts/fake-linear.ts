@@ -41,8 +41,8 @@ Bun.serve({
       : query.includes("issues(")
         ? "issues"
         : "issue";
-    console.log(
-      `${new Date().toISOString()} ${kind} authorized=${authorized} ${JSON.stringify(variables)}`,
+    process.stdout.write(
+      `${new Date().toISOString()} ${kind} authorized=${authorized} ${JSON.stringify(variables)}\n`,
     );
     if (!authorized) return refused();
     if (kind === "catalog") return Response.json({ data: LINEAR_CATALOG });
@@ -71,4 +71,4 @@ Bun.serve({
     });
   },
 });
-console.log(`fake Linear on http://127.0.0.1:${port}/graphql`);
+process.stdout.write(`fake Linear on http://127.0.0.1:${port}/graphql\n`);
