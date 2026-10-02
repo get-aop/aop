@@ -1,5 +1,5 @@
 import type { ChatActionPayload, TurnPart } from "@aop/common";
-import type { RunImage } from "@aop/llm-provider";
+import type { McpStdioServer, RunImage } from "@aop/llm-provider";
 import type { LocalServerContext } from "../context.ts";
 import type {
   ChatRun,
@@ -188,6 +188,7 @@ const runRuntimeReply = async (input: RuntimeReplyInput) => {
     {
       allowedDirectories: allowedDirectories.length > 0 ? allowedDirectories : undefined,
       images: runImagesOf(session.id, input.images),
+      extraMcpServers: projectContext?.mcpServers,
     },
     // Read for every turn, resumed ones included: what the CLI was told before is not kept.
     projectContext?.systemPrompt,
@@ -198,7 +199,15 @@ const runRuntimeReply = async (input: RuntimeReplyInput) => {
 const runMainRuntimeReply = async (
   input: RuntimeReplyInput,
   repoPath: string,
-  { allowedDirectories, images }: { allowedDirectories?: string[]; images: RunImage[] },
+  {
+    allowedDirectories,
+    images,
+    extraMcpServers,
+  }: {
+    allowedDirectories?: string[];
+    images: RunImage[];
+    extraMcpServers?: Record<string, McpStdioServer>;
+  },
   appendSystemPrompt: string | undefined,
   runtimePrompt: string,
 ): Promise<RuntimeRunResult> => {
@@ -212,6 +221,7 @@ const runMainRuntimeReply = async (
     allowedDirectories,
     images,
     appendSystemPrompt,
+    extraMcpServers,
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,
     onProgress: input.onProgress,
@@ -240,6 +250,7 @@ const runMainRuntimeReply = async (
     allowedDirectories,
     images,
     appendSystemPrompt,
+    extraMcpServers,
     logFilePath: input.logFilePath,
     createProviderFn: input.createProviderFn,
     onProgress: input.onProgress,

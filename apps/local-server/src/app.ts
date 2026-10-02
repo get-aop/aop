@@ -12,6 +12,8 @@ import { createApiCors } from "./auth/cross-origin.ts";
 import { createOriginGuard } from "./auth/origin-guard.ts";
 import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
+import { createComputerUseRoutes } from "./computer-use/routes.ts";
+import { type ComputerUseService, computerUse } from "./computer-use/service.ts";
 import type { LocalServerContext } from "./context.ts";
 import { createEventStreamRoutes } from "./event-log/routes.ts";
 import { createFsRoutes } from "./fs/routes.ts";
@@ -53,6 +55,8 @@ export interface AppDependencies {
   updates?: UpdateService;
   /** The agent CLIs and their updates; the server passes its own so it can run the periodic check. */
   agentClis?: AgentCliService;
+  /** CUA Driver's status; tests pass one that probes a fake driver. */
+  computerUse?: ComputerUseService;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -136,6 +140,7 @@ export const createApp = (deps: AppDependencies) => {
     "/api/agent-clis",
     createAgentCliRoutes(deps.agentClis ?? createHostAgentCliService(ctx)),
   );
+  app.route("/api/computer-use", createComputerUseRoutes(deps.computerUse ?? computerUse));
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));

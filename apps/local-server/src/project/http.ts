@@ -56,6 +56,7 @@ export const errorResponse = (c: Context, error: ServiceError): Response => {
     case "INVALID_PATH":
     case "REPO_REQUIRED":
     case "REPO_NOT_IN_PROJECT":
+    case "COMPUTER_USE_UNAVAILABLE":
       return c.json(body, 400);
     default:
       return c.json(body, 409);

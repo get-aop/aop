@@ -26,6 +26,27 @@ export {
   TurnPartSchema,
   threadCardVariant,
 } from "./blocks.ts";
+export type {
+  ComputerUse,
+  ComputerUseInput,
+  ComputerUseOption,
+  CuaCheck,
+  CuaReadiness,
+  CuaReason,
+  CuaStatus,
+} from "./computer-use.ts";
+export {
+  AVAILABLE_COMPUTER_USE,
+  ComputerUseInputSchema,
+  ComputerUseOptionSchema,
+  ComputerUseSchema,
+  CuaCheckSchema,
+  CuaReadinessSchema,
+  CuaReasonSchema,
+  CuaStatusSchema,
+} from "./computer-use.ts";
+export type { CuaSetupCommand, CuaSetupStep } from "./cua-setup.ts";
+export { CUA_COMMANDS, cuaSetupSteps } from "./cua-setup.ts";
 export type { Device } from "./device.ts";
 export { DeviceSchema } from "./device.ts";
 export type {

@@ -13,6 +13,15 @@ export {
 export type RunIsolation = "hermetic" | "open";
 export type RunAccessMode = "approval-required" | "auto-accept-edits" | "auto" | "full-access";
 
+/** An MCP server a run launches as a child process and talks to over stdio. */
+export interface McpStdioServer {
+  type: "stdio";
+  /** An absolute path, so the run does not depend on the spawn env's PATH. */
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
 /** An image a prompt carries: a file on the host and its media type. */
 export interface RunImage {
   path: string;
@@ -99,6 +108,12 @@ export interface RunOptions {
    * support MCP should pass this through their spawn config when set.
    */
   mcpServerUrl?: string;
+  /**
+   * More MCP servers for this run, by name, beside the aop server (which keeps its name if one
+   * here takes it). A project's threads get CUA Driver's tools this way. Providers without an
+   * MCP config of their own ignore it.
+   */
+  extraMcpServers?: Record<string, McpStdioServer>;
 }
 
 export interface RunResult {

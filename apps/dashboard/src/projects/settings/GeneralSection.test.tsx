@@ -139,7 +139,7 @@ describe("GeneralSection form", () => {
     type("settings-name", "Other");
     fireEvent.click(screen.getByTestId("settings-discard"));
     expect((screen.getByTestId("settings-name") as HTMLInputElement).value).toBe("Checkout");
-    expect(api.calls).toHaveLength(0);
+    expect(api.writes()).toHaveLength(0);
   });
 
   test("a blank name cannot be saved", async () => {
@@ -147,7 +147,7 @@ describe("GeneralSection form", () => {
     type("settings-name", "   ");
     expect(screen.getByTestId("settings-name-error").textContent).toBe("A project needs a name.");
     expect((screen.getByTestId("settings-save") as HTMLButtonElement).disabled).toBe(true);
-    expect(api.calls).toHaveLength(0);
+    expect(api.writes()).toHaveLength(0);
   });
 
   test("a name past the limit is refused under the name field in plain words, and cannot be saved", async () => {
@@ -158,7 +158,7 @@ describe("GeneralSection form", () => {
       "Name can be at most 100 characters.",
     );
     expect((screen.getByTestId("settings-save") as HTMLButtonElement).disabled).toBe(true);
-    expect(api.calls).toHaveLength(0);
+    expect(api.writes()).toHaveLength(0);
   });
 
   test("the host's refusal is shown and the edits stay", async () => {

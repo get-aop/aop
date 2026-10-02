@@ -1,11 +1,13 @@
 import { rm } from "node:fs/promises";
-import type {
-  Message,
-  MessagePage,
-  Project,
-  ProjectPatch,
-  ProjectSettings,
-  ProjectStatus,
+import {
+  type ComputerUseOption,
+  ComputerUseSchema,
+  type Message,
+  type MessagePage,
+  type Project,
+  type ProjectPatch,
+  type ProjectSettings,
+  type ProjectStatus,
 } from "@aop/common";
 import { aopPaths, generateTypeId } from "@aop/infra";
 import { discardStagedImages } from "../attachment/service.ts";
@@ -43,6 +45,7 @@ export type ProjectError =
   | { code: "REPO_IN_USE"; repoId: string }
   | { code: "INVALID_TRANSITION"; action: ProjectAction; status: ProjectStatus }
   | { code: "SESSION_BUSY"; sessionId: string }
+  | { code: "COMPUTER_USE_UNAVAILABLE"; option: ComputerUseOption }
   | Extract<
       ThreadError,
       { code: "PROJECT_NOT_ACTIVE" | "INVALID_MESSAGE" | "SEND_FAILED" | "WORKTREE_FAILED" }
@@ -69,6 +72,14 @@ export interface ProjectService {
   transition: (
     projectId: string,
     action: ProjectAction,
+  ) => Promise<ProjectResult<{ project: Project }>>;
+  /**
+   * Where threads get computer and browser use from, from their next turn. Only the host owner
+   * reaches it (auth/route-policy.ts). Options that are named but not built yet are refused.
+   */
+  setComputerUse: (
+    projectId: string,
+    option: ComputerUseOption,
   ) => Promise<ProjectResult<{ project: Project }>>;
   /** Recycles the coordinator's runtime session; threads are not touched. */
   restartCoordinator: (projectId: string) => Promise<ProjectResult<{ project: Project }>>;
@@ -243,6 +254,22 @@ export const createProjectService = (
       if (!project) return notFound;
       await enforceStatus(project);
       return { success: true, project };
+    },
+
+    setComputerUse: async (projectId, option) => {
+      const available = ComputerUseSchema.safeParse(option);
+      if (!available.success) {
+        return { success: false, error: { code: "COMPUTER_USE_UNAVAILABLE", option } };
+      }
+      const project = await ctx.eventPublisher.transaction(async (tx) => {
+        const updated = await createProjectRepository(tx.db).setComputerUse(
+          projectId,
+          available.data,
+        );
+        if (updated) await recordProjectUpserted(tx, updated);
+        return updated;
+      });
+      return project ? { success: true, project } : notFound;
     },
 
     restartCoordinator: async (projectId) => {

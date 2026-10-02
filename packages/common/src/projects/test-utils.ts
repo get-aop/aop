@@ -76,6 +76,7 @@ export const makeProject = (overrides: Overrides = {}) => ({
   autoContinue: true,
   repoIds: ["repo_1"],
   status: "active",
+  computerUse: "model-default",
   createdAt: AT,
   updatedAt: AT,
   ...overrides,

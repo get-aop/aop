@@ -69,6 +69,34 @@ The host owner's **Skip permission checks** setting (Settings › Runtimes) over
 
 Other runtimes map the same two values to their own flags (Codex and Pi); a thread on a runtime without an equivalent is limited by that runtime, not by this table.
 
+## Computer and browser use
+
+The project setting `computerUse` decides where the project's threads get tools to see and operate apps and browsers on the host. Only the host owner changes it (project settings, General, Computer / browser use; or `PUT /api/projects/:id/computer-use` with `{"computerUse": "..."}`), and it saves as soon as it is chosen. A paired device sees it read-only and gets `403` from the route; `PATCH /api/projects/:id` and the coordinator's `project_settings_set` cannot change it.
+
+| Value | What a thread gets |
+| --- | --- |
+| `model-default` (the default) | Nothing from AOP. The thread has whatever its agent CLI brings by itself. |
+| `cua` | [CUA Driver](https://github.com/trycua/cua)'s MCP server, as `cua-driver`, beside the `aop` server: its tools are `mcp__cua-driver__*` (windows, accessibility tree, click, type, browser tabs and so on). |
+| `codex`, `claude` | Shown in settings as WIP. The host refuses them with `400` until they are built. |
+
+**Checked on the host.** Whether CUA is ready is decided on the AOP host, the machine whose server spawns the threads, never on the device showing the dashboard (a paired laptop or the desktop app over Tailscale). The host looks for `cua-driver` on the PATH runs are spawned with, then in `/Applications/CuaDriver.app` (`AOP_CUA_DRIVER` points it at another file), and runs only read-only commands: `cua-driver --version`, `cua-driver permissions status --json` (whether its app runs, and its Accessibility and Screen Recording grants; it never raises a macOS prompt) and `cua-driver check-update --json` (a cached answer). Tahoe's direct capture consent cannot be read without a prompt, so it is reported as not checked. `GET /api/computer-use/cua` (any paired device) returns the result:
+
+| `status` | `reason` | Meaning |
+| --- | --- | --- |
+| `ready` | `ready` | Installed, answers, its app runs, both grants given. |
+| `not-installed` | `not-installed` | No `cua-driver` on the host. |
+| `not-ready` | `no-answer`, `not-running` or `missing-permissions` | Installed, but it did not answer, its app is not running, or a grant is missing. |
+
+It also carries `detail` (one sentence), `version`, `latestVersion`, `path`, each check with its result, the host's name (its Sharing name on macOS) and platform, and `checkedAt`. An answer is reused for 10 seconds; `?fresh=1` checks again, and probes that overlap share one run. A newer release is reported but does not make the host unready, nor does being offline.
+
+**How CUA reaches a thread.** When each of a thread's turns is launched on a ready host, the run's `--mcp-config` gets `{"cua-driver": {"type": "stdio", "command": "<absolute path>", "args": ["mcp"]}}`, which is what CUA's own docs register for Claude Code. On macOS, `cua-driver mcp` proxies to the CuaDriver.app daemon, so the tools act with the app's grants, not the terminal's. The server keeps Claude Code's default loading, so its tools wait behind tool search until the model looks for them. A change to the setting applies from each thread's next turn. A host that is not ready starts the run without the CUA tools, and the host logs a warning naming the project, the status and the reason.
+
+**Setting it up.** When the host is not ready, CUA stays selectable and the settings row shows a guide: the host's name and that the commands run there, each command with a Copy button (install, update, start the app, grant the permissions), the System Settings panes to grant by hand, the note that nothing else is configured (no API key; AOP hands the MCP server to threads itself), and Check again. AOP runs none of it. The steps are written once, in `packages/common/src/projects/cua-setup.ts`, so a later host-side setup flow can run the same commands.
+
+**Thread access still applies.** A thread on Edit files sees the CUA tools, but every call needs an approval no thread can give, so it is denied; the settings row says so. With Full access, or while the host owner's Skip permission checks is on, the calls run without asking. CUA Driver's own permission mode (`standard` unless its daemon was started otherwise) applies on top.
+
+**The coordinator never gets them.** It is hermetic: it runs with the AOP tools only and does no work itself, and a coordinator that could drive the desktop would act on what people and threads write without a thread's boundaries. A thread that needs the desktop does that work.
+
 ## States
 
 | Status | How a thread gets there |
