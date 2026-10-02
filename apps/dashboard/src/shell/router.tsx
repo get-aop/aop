@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { type AddableTabId, isAddableTabId } from "../projects/layout/panel-tabs";
 import { canGoBack, canGoForward, pushEntry, replaceEntry } from "./app-history";
 
 /** The screens of a project's settings, in the order its side nav lists them. */
@@ -23,7 +24,8 @@ export interface PullRequestViewRef {
 
 /**
  * The app's screens. `project` is the project screen: the coordinator chat with the threads
- * panel on its overview. `thread` is the same screen with one thread open in the panel;
+ * panel on its overview. `thread` is the same screen with one thread open in the panel, and
+ * `project-tab` the same screen with another of the panel's tabs showing;
  * `project-settings` is one section of the project's settings, in a dialog over the project screen.
  * Either project screen may name a `pullRequest`, shown where the chat is while the panel stays.
  */
@@ -31,16 +33,20 @@ export type Route =
   | { name: "projects" }
   | { name: "project"; projectId: string; pullRequest?: PullRequestViewRef }
   | { name: "thread"; projectId: string; threadId: string; pullRequest?: PullRequestViewRef }
+  | { name: "project-tab"; projectId: string; tab: AddableTabId; pullRequest?: PullRequestViewRef }
   | { name: "project-settings"; projectId: string; section: ProjectSettingsSection };
 
-/** The two screens the panel and the chat (or a pull request in its place) share. */
-export type ProjectScreen = Extract<Route, { name: "project" | "thread" }>;
+/** The screens the panel and the chat (or a pull request in its place) share. */
+export type ProjectScreen = Extract<Route, { name: "project" | "thread" | "project-tab" }>;
 
 export const projectsPath = (): string => "/";
 export const projectPath = (projectId: string): string =>
   `/projects/${encodeURIComponent(projectId)}`;
 export const threadPath = (projectId: string, threadId: string): string =>
   `${projectPath(projectId)}/threads/${encodeURIComponent(threadId)}`;
+/** The project screen with one of the panel's other tabs (pull requests, ...) showing. */
+export const projectTabPath = (projectId: string, tab: AddableTabId): string =>
+  `${projectPath(projectId)}/${tab}`;
 export const projectSettingsPath = (
   projectId: string,
   section: ProjectSettingsSection = "general",
@@ -48,12 +54,15 @@ export const projectSettingsPath = (
 
 /** The address of a project screen, with the pull request it names, if any. */
 export const projectScreenPath = (screen: ProjectScreen): string => {
-  const base =
-    screen.name === "thread"
-      ? threadPath(screen.projectId, screen.threadId)
-      : projectPath(screen.projectId);
+  const base = screenBasePath(screen);
   const pr = screen.pullRequest;
   return pr ? `${base}/pulls/${encodeURIComponent(pr.repoId)}/${pr.number}` : base;
+};
+
+const screenBasePath = (screen: ProjectScreen): string => {
+  if (screen.name === "thread") return threadPath(screen.projectId, screen.threadId);
+  if (screen.name === "project-tab") return projectTabPath(screen.projectId, screen.tab);
+  return projectPath(screen.projectId);
 };
 
 /** The route a path names, or null for a path no screen owns (the app then shows the projects). */
@@ -75,13 +84,15 @@ const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
     const before = rest.slice(0, pullRequestAt);
     // The old chat address is only ever bare; it is not a screen a pull request opens over.
     const screen = before[0] === "chat" ? null : parseScreenRoute(projectId, before);
-    if (!pullRequest || !screen || (screen.name !== "project" && screen.name !== "thread")) {
-      return null;
-    }
+    if (!pullRequest || !screen || !isProjectScreen(screen)) return null;
     return { ...screen, pullRequest };
   }
   return parseScreenRoute(projectId, rest);
 };
+
+/** Whether the route is a project screen (the chat and the panel), which a pull request can open over. */
+export const isProjectScreen = (route: Route): route is ProjectScreen =>
+  route.name === "project" || route.name === "thread" || route.name === "project-tab";
 
 const parsePullRequest = ([repoId, number]: string[]): PullRequestViewRef | null => {
   if (!repoId || !number || !/^[1-9]\d*$/.test(number)) return null;
@@ -97,6 +108,8 @@ const parseScreenRoute = (projectId: string, rest: string[]): Route | null => {
   if (pane === "chat") return detail === undefined ? { name: "project", projectId } : null;
   if (pane === "settings") return parseSettingsRoute(projectId, detail);
   if (pane === "threads" && detail) return { name: "thread", projectId, threadId: detail };
+  if (isAddableTabId(pane) && detail === undefined)
+    return { name: "project-tab", projectId, tab: pane };
   return null;
 };
 

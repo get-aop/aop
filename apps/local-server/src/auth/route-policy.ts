@@ -33,6 +33,13 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
   // Lets every agent run any command without asking (settings/types.ts OWNER_ONLY_SETTING_KEYS;
   // a bulk write of it is refused in settings/routes.ts, since this table sees paths only).
   ["PUT", /^\/api\/settings\/agent_cli_skip_permissions\/?$/],
+  // The caps on routines: how often one may run and how many a project may have on.
+  ["PUT", /^\/api\/settings\/routine_(min_interval_minutes|max_active_per_project)\/?$/],
+  // Routines start work on the host on their own, unattended: only the owner sets them up.
+  ["POST", /^\/api\/projects\/[^/]+\/routines\/?$/],
+  ["PATCH", /^\/api\/projects\/[^/]+\/routines\/[^/]+\/?$/],
+  ["DELETE", /^\/api\/projects\/[^/]+\/routines\/[^/]+\/?$/],
+  ["POST", /^\/api\/projects\/[^/]+\/routines\/[^/]+\/run\/?$/],
   // Invalidates the AOP tool token of every run in flight.
   ["POST", /^\/api\/mcp-secret\/rotate\/?$/],
   // Gives a project's threads control of the host's desktop and browsers.

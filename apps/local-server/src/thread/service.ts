@@ -1,4 +1,11 @@
-import type { BlockedQuestion, MessagePage, Project, Thread, ThreadStatus } from "@aop/common";
+import type {
+  BlockedQuestion,
+  MessagePage,
+  Project,
+  ReasoningEffort,
+  Thread,
+  ThreadStatus,
+} from "@aop/common";
 import { generateTypeId } from "@aop/infra";
 import { discardStagedImages } from "../attachment/service.ts";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
@@ -51,6 +58,9 @@ export interface SpawnThreadInput {
    * commands that change things are denied, for good (a new project's survey).
    */
   readOnly?: boolean;
+  /** The thread's model and effort when not the project's thread settings (a routine's own). */
+  model?: string | null;
+  effort?: ReasoningEffort | null;
   /**
    * Runs in the transaction that stores the thread, once its session exists. What it writes
    * commits with the thread or not at all, and a throw keeps the thread from being made.
@@ -261,7 +271,11 @@ export const createThreadService = (
     const plan = await planSpawn(projectId, input);
     if ("error" in plan) return { success: false, error: plan.error };
     const { project, thread } = plan;
-    const runtime = await resolveSessionRuntime(runtimeConfigurations, project.thread);
+    const runtime = await resolveSessionRuntime(runtimeConfigurations, {
+      ...project.thread,
+      ...(input.model && { model: input.model }),
+      ...(input.effort && { effort: input.effort }),
+    });
     // The session is stored before its worktree exists, so everything on disk has an owner in
     // the database; a spawn that stops halfway leaves a thread whose next turn makes the worktree.
     await ctx.eventPublisher.transaction(async (tx) => {

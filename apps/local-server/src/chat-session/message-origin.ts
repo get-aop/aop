@@ -36,6 +36,21 @@ export const MessageOriginSchema = z.discriminatedUnion("type", [
    * content frames `request` for the coordinator; the chat shows the person's own words.
    */
   z.object({ type: z.literal("memory-request"), request: z.string().min(1) }),
+  /**
+   * A routine sending its brief to the coordinator. The stored content frames `prompt` (which
+   * routine, which occurrence); the chat shows the brief, marked with the routine's name.
+   */
+  z.object({
+    type: z.literal("routine"),
+    routineId: z.string().min(1),
+    name: z.string(),
+    prompt: z.string().min(1),
+  }),
+  /**
+   * A thread proposing a routine to the coordinator (aop_propose_routine). It wakes the
+   * coordinator, which puts the proposal to the person; the message itself is never shown.
+   */
+  z.object({ type: z.literal("routine-proposal"), threadId: z.string().min(1) }),
   /** The server telling a session its wait on a rate limit is over; it is never shown as a message. */
   z.object({ type: z.literal("rate-limit-resume") }),
 ]);

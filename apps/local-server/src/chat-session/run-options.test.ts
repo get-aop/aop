@@ -267,6 +267,7 @@ describe("buildRunOptions for project sessions", () => {
       "mcp__aop__aop_ask_user",
       "mcp__aop__aop_report_status",
       "mcp__aop__aop_open_pr",
+      "mcp__aop__aop_propose_routine",
       "mcp__aop__memory_read",
       "mcp__aop__memory_write",
     ]);

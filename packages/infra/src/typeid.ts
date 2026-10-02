@@ -8,7 +8,9 @@ export type TypeIdPrefix =
   | "crun"
   | "rtprov"
   | "rtmodel"
-  | "img";
+  | "img"
+  | "rtn"
+  | "rrun";
 
 export const generateTypeId = (prefix: TypeIdPrefix): string => typeidUnboxed(prefix);
 

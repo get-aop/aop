@@ -36,34 +36,38 @@ export interface PanelLayout {
  * Where the panel is and how wide. On a wide screen it is a pane beside the chat whose open
  * state and width this browser remembers. On a narrower one it slides over the chat, and on a
  * phone it replaces the chat; there it is closed until the person asks for it (by a toggle or
- * by opening a thread), whatever the wide screen remembers. A screen that names a thread
- * always shows it, and closing the panel takes the thread off the address (`onCloseThread`).
+ * by opening a thread), whatever the wide screen remembers. A screen that names a thread or a
+ * tab always shows it, and closing the panel takes a thread off the address (`onCloseThread`).
  */
 export const usePanelLayout = ({
   projectId,
   threadId,
+  tab = null,
   onCloseThread,
 }: {
   /** Whose panel this is: the open state and width are remembered per project. */
   projectId: string;
   threadId: string | null;
+  /** A tab other than Threads that the address names. */
+  tab?: string | null;
   onCloseThread: () => void;
 }): PanelLayout => {
   const containerRef = useRef<HTMLDivElement>(null);
   const containerWidth = useContainerWidth(containerRef);
   const mode = containerWidth === null ? "side" : layoutModeFor(containerWidth);
   const [prefs, setPrefs] = useState<PanelPrefs>(() => loadPanelPrefs(projectId));
-  const [transient, setTransient] = useState(threadId !== null);
+  const named = threadId ?? tab;
+  const [transient, setTransient] = useState(named !== null);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => savePanelPrefs(projectId, prefs), [projectId, prefs]);
 
-  // Whoever names a thread (a link, a chip, a card, a reload) wants to see it.
+  // Whoever names a thread or a tab (a link, a chip, a card, a reload) wants to see it.
   useEffect(() => {
-    if (threadId === null) return;
+    if (named === null) return;
     setPrefs((current) => (current.open ? current : { ...current, open: true }));
     setTransient(true);
-  }, [threadId]);
+  }, [named]);
 
   const visible = mode === "side" ? prefs.open : transient;
   const close = useCallback(() => {

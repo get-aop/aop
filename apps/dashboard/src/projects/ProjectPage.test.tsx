@@ -146,6 +146,7 @@ describe("project home", () => {
 
     expect(screen.getByTestId("project-attention").textContent).toBe("Nothing is waiting on you.");
     expect(screen.getAllByTestId("thread-group")).toHaveLength(2);
+    fireEvent.pointerDown(screen.getByTestId("panel-add"), { button: 0, ctrlKey: false });
     fireEvent.click(screen.getByTestId("panel-new-thread"));
     await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
     expect(document.activeElement).toBe(screen.getByTestId("composer-input"));
@@ -188,8 +189,8 @@ describe("project screens", () => {
     expect(screen.getByTestId("threads-panel")).toBeTruthy();
     expect(screen.getByTestId("panel-tab-threads").getAttribute("aria-selected")).toBe("true");
     // The tabs, then "+" straight after them.
-    expect(screen.getByTestId("panel-tab-threads").nextElementSibling).toBe(
-      screen.getByTestId("panel-new-thread"),
+    expect(screen.getByTestId("panel-tab-threads").parentElement?.nextElementSibling).toBe(
+      screen.getByTestId("panel-add"),
     );
     expect(screen.getByTestId("thread-groups")).toBeTruthy();
     expect(screen.queryByTestId("thread-pane")).toBeNull();

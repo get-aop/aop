@@ -350,6 +350,10 @@ describe("auth routes", () => {
         "POST /api/agent-clis/:provider/update",
         "PUT /api/projects/:projectId/computer-use",
         "POST /api/mcp-secret/rotate",
+        "POST /api/projects/:projectId/routines",
+        "PATCH /api/projects/:projectId/routines/:routineId",
+        "DELETE /api/projects/:projectId/routines/:routineId",
+        "POST /api/projects/:projectId/routines/:routineId/run",
       ];
 
       for (const route of hostOnly) {
@@ -357,6 +361,14 @@ describe("auth routes", () => {
         expect({ route, mounted: mounted.has(route) }).toEqual({ route, mounted: true });
         expect(routeAccess(method, concrete(path))).toBe("owner");
       }
+    });
+
+    test("leaves reading routines to any device, and the routine caps to the owner", () => {
+      expect(routeAccess("GET", "/api/projects/x/routines")).toBe("device");
+      expect(routeAccess("GET", "/api/projects/x/routines/x/runs")).toBe("device");
+      expect(routeAccess("POST", "/api/projects/x/routines/preview")).toBe("device");
+      expect(routeAccess("PUT", "/api/settings/routine_min_interval_minutes")).toBe("owner");
+      expect(routeAccess("PUT", "/api/settings/routine_max_active_per_project")).toBe("owner");
     });
   });
 });

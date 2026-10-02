@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RoutineSchema } from "../routines/routine.ts";
 import { MessageSchema } from "./message.ts";
 import { IdSchema } from "./primitives.ts";
 import { ProjectSchema } from "./project.ts";
@@ -39,6 +40,15 @@ const EventLogEntryUnionSchema = z.discriminatedUnion("type", [
     type: z.literal("message.updated"),
     payload: z.object({ message: MessageSchema }),
   }),
+  // A routine was made or changed, or one of its runs began, ended or was skipped.
+  EventLogBaseSchema.extend({
+    type: z.literal("routine.upserted"),
+    payload: z.object({ routine: RoutineSchema }),
+  }),
+  EventLogBaseSchema.extend({
+    type: z.literal("routine.removed"),
+    payload: z.object({ routineId: IdSchema }),
+  }),
 ]);
 
 export type EventLogEntry = z.infer<typeof EventLogEntryUnionSchema>;
@@ -52,6 +62,8 @@ const payloadProjectId = (entry: EventLogEntry): string | null => {
     case "message.created":
     case "message.updated":
       return entry.payload.message.projectId;
+    case "routine.upserted":
+      return entry.payload.routine.projectId;
     default:
       return null;
   }

@@ -101,6 +101,8 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   // Shortly after boot and then every `agent_cli_check_interval_minutes`, the agent CLIs are
   // checked for newer versions (and updated, when the person turned that on).
   agentClis.start();
+  // Routines fire when they come due; runs a stopped host left half-started are failed first.
+  await projectServices.routineScheduler.start();
   // A project created just before a restart may not have started its survey yet.
   void projectServices.kickoff.resumePending();
 
@@ -108,6 +110,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     shutdown: async () => {
       logger.info("Shutting down...");
       stopMaintenance();
+      await projectServices.routineScheduler.stop();
       updates.stop();
       agentClis.stop();
       await stopWatcher();

@@ -27,6 +27,12 @@ export const COORDINATOR_TOOL_NAMES = [
   "propose_threads",
   "project_settings_get",
   "project_settings_set",
+  "routine_create",
+  "routine_list",
+  "routine_update",
+  "routine_pause",
+  "routine_delete",
+  "routine_run_now",
   ...MEMORY_TOOL_NAMES,
   // The coordinator's alone: it keeps memory tidy, and Memory settings ask it to remove things.
   "memory_delete",
@@ -36,6 +42,7 @@ export const THREAD_TOOL_NAMES = [
   "aop_ask_user",
   "aop_report_status",
   "aop_open_pr",
+  "aop_propose_routine",
   ...MEMORY_TOOL_NAMES,
 ] as const;
 

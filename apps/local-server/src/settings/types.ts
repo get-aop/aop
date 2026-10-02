@@ -2,10 +2,16 @@ import {
   buildChannel,
   DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   DEFAULT_MAX_CONCURRENT_RUNS,
+  DEFAULT_ROUTINE_MAX_ACTIVE,
+  DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES,
   MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   MAX_CONCURRENT_RUNS_LIMIT,
+  MAX_ROUTINE_MAX_ACTIVE,
+  MAX_ROUTINE_MIN_INTERVAL_MINUTES,
   parseAgentCliCheckInterval,
   parseMaxConcurrentRuns,
+  parseRoutineMaxActive,
+  parseRoutineMinInterval,
 } from "@aop/common";
 import type { Setting } from "../db/schema.ts";
 
@@ -46,6 +52,17 @@ export const SettingKey = {
    */
   MAX_CONCURRENT_RUNS: "max_concurrent_runs",
   /**
+   * How many routines of one project may be enabled at once, a whole number from 1 to
+   * `MAX_ROUTINE_MAX_ACTIVE`. Only the host owner may change it (`OWNER_ONLY_SETTING_KEYS`).
+   */
+  ROUTINE_MAX_ACTIVE: "routine_max_active_per_project",
+  /**
+   * The shortest gap, in minutes, a routine's schedule may leave between runs (see routine/).
+   * Only the host owner may lower it (`OWNER_ONLY_SETTING_KEYS`), so a coordinator or a paired
+   * device cannot set a routine running every minute.
+   */
+  ROUTINE_MIN_INTERVAL: "routine_min_interval_minutes",
+  /**
    * Whether the host looks for a newer release once a day and shows a notice. "true" or
    * "false"; on by default. It never installs anything by itself.
    */
@@ -67,6 +84,8 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
   [SettingKey.DISPLAY_NAME]: "",
   [SettingKey.MAX_CONCURRENT_RUNS]: String(DEFAULT_MAX_CONCURRENT_RUNS),
+  [SettingKey.ROUTINE_MAX_ACTIVE]: String(DEFAULT_ROUTINE_MAX_ACTIVE),
+  [SettingKey.ROUTINE_MIN_INTERVAL]: String(DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES),
   [SettingKey.UPDATE_CHECK]: "true",
   [SettingKey.UPDATE_AUTO_APPLY]: buildChannel().id === "nightly" ? "true" : "false",
 };
@@ -80,6 +99,8 @@ export const VALID_KEYS: SettingKey[] = Object.values(SettingKey);
  */
 export const OWNER_ONLY_SETTING_KEYS: readonly SettingKey[] = [
   SettingKey.AGENT_CLI_SKIP_PERMISSIONS,
+  SettingKey.ROUTINE_MAX_ACTIVE,
+  SettingKey.ROUTINE_MIN_INTERVAL,
 ];
 
 export const isOwnerOnlySettingKey = (key: string): boolean =>
@@ -103,6 +124,12 @@ export const validateSettingValue = (key: SettingKey, value: string): string | n
   }
   if (key === SettingKey.AGENT_CLI_CHECK_INTERVAL && parseAgentCliCheckInterval(value) === null) {
     return `${key} must be a whole number of minutes from 0 to ${MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES}`;
+  }
+  if (key === SettingKey.ROUTINE_MIN_INTERVAL && parseRoutineMinInterval(value) === null) {
+    return `${key} must be a whole number of minutes from 1 to ${MAX_ROUTINE_MIN_INTERVAL_MINUTES}`;
+  }
+  if (key === SettingKey.ROUTINE_MAX_ACTIVE && parseRoutineMaxActive(value) === null) {
+    return `${key} must be a whole number from 1 to ${MAX_ROUTINE_MAX_ACTIVE}`;
   }
   if (BOOLEAN_KEYS.includes(key) && value !== "true" && value !== "false") {
     return `${key} must be "true" or "false"`;

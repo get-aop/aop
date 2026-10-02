@@ -26,12 +26,16 @@ export const MessageImageSchema = z.object({
  */
 const SteersSchema = IdSchema.optional();
 
-/** Typed by the person; plain text, and the images they attached. A message of images alone has no text. */
+/**
+ * Typed by the person; plain text, and the images they attached. A message of images alone has
+ * no text. `routine` marks one a routine sent on the person's behalf: its brief, as they wrote it.
+ */
 export const UserMessageSchema = MessageBaseSchema.extend({
   role: z.literal("user"),
   text: z.string(),
   images: z.array(MessageImageSchema).min(1).optional(),
   steers: SteersSchema,
+  routine: z.object({ id: IdSchema, name: z.string() }).optional(),
 }).refine((message) => message.text.length > 0 || message.images !== undefined, {
   message: "A message needs text or an image",
   path: ["text"],
