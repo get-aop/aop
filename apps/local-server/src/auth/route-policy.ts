@@ -44,6 +44,11 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
   ["POST", /^\/api\/mcp-secret\/rotate\/?$/],
   // Gives a project's threads control of the host's desktop and browsers.
   ["PUT", /^\/api\/projects\/[^/]+\/computer-use\/?$/],
+  // A project's Linear API key: set, mapped, removed or tried only on the host machine, so it
+  // never travels from or to a paired device (issues/linear-connection-store.ts).
+  ["PUT", /^\/api\/projects\/[^/]+\/linear\/?$/],
+  ["DELETE", /^\/api\/projects\/[^/]+\/linear\/?$/],
+  ["POST", /^\/api\/projects\/[^/]+\/linear\/catalog\/?$/],
 ];
 
 export const routeAccess = (method: string, pathname: string): RouteAccess => {

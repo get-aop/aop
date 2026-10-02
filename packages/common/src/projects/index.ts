@@ -77,6 +77,49 @@ export {
   GithubStatusResponseSchema,
   GithubUserSchema,
 } from "./github.ts";
+export type {
+  IssueLabel,
+  IssueList,
+  IssueListQuery,
+  IssuePerson,
+  IssueSource,
+  IssueSourceStatus,
+  IssueStage,
+  IssueStateFilter,
+  LinearCatalog,
+  LinearCatalogInput,
+  LinearConnectInput,
+  LinearConnection,
+  LinearScope,
+  LinkedPullRequest,
+  LinkedPullRequestChecks,
+  LinkedPullRequestState,
+  ProjectIssue,
+  StartThreadFromIssueInput,
+} from "./issues.ts";
+
+export {
+  ISSUE_LIMIT_MAX,
+  ISSUE_PAGE_SIZE,
+  IssueLabelSchema,
+  IssueListQuerySchema,
+  IssueListSchema,
+  IssuePersonSchema,
+  IssueSourceSchema,
+  IssueSourceStatusSchema,
+  IssueStageSchema,
+  IssueStateFilterSchema,
+  LinearCatalogInputSchema,
+  LinearCatalogSchema,
+  LinearConnectInputSchema,
+  LinearConnectionSchema,
+  LinearScopeSchema,
+  LinkedPullRequestChecksSchema,
+  LinkedPullRequestSchema,
+  LinkedPullRequestStateSchema,
+  ProjectIssueSchema,
+  StartThreadFromIssueInputSchema,
+} from "./issues.ts";
 export { applyLiveOps, compactLiveOps, diffTurnParts } from "./live-turn.ts";
 export type { MemoryFile, MemoryFileInput } from "./memory.ts";
 export {
