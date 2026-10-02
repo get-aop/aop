@@ -10,7 +10,7 @@ setupDashboardDom();
 const { act, cleanup, fireEvent, render, screen, within } = await import("@testing-library/react");
 const { PullRequestView } = await import("./PullRequestView");
 const { ConfirmationHost } = await import("../../components/ConfirmationHost");
-const { coordinatorMessage } = await import("./AskCoordinator");
+const { coordinatorMessage, suggestedQuestion } = await import("./AskCoordinator");
 const { checkCounts } = await import("./PullRequestHeader");
 
 let host: ReturnType<typeof mockHost>;
@@ -430,6 +430,29 @@ describe("the PR View", () => {
     expect(coordinatorMessage(makeDetail(), "Can this merge today?")).toBe(
       "Can this merge today?\n\nPull request acme/app#752 “Show monster ability impacts”: https://github.com/acme/app/pull/752",
     );
+  });
+
+  test("the suggested question fits the state: what an open one needs, what a done one left", async () => {
+    await mount();
+    await click(screen.getByTestId("pr-ask-coordinator"));
+    expect((screen.getByTestId("pr-ask-question") as HTMLTextAreaElement).value).toBe(
+      suggestedQuestion("open"),
+    );
+    cleanup();
+
+    await mount(makeDetail({ state: "merged", merge: { ...makeDetail().merge, status: "done" } }));
+    await click(screen.getByTestId("pr-ask-coordinator"));
+    expect((screen.getByTestId("pr-ask-question") as HTMLTextAreaElement).value).toBe(
+      suggestedQuestion("merged"),
+    );
+    expect(suggestedQuestion("merged")).not.toContain("before it can merge");
+  });
+
+  test("the tabs stay on one row and scroll sideways rather than wrap over the content", async () => {
+    await mount();
+    const tabs = screen.getByTestId("pr-tabs");
+    expect(tabs.className).toContain("overflow-x-auto");
+    expect(tabs.className).not.toContain("flex-wrap");
   });
 
   test("Refresh reads GitHub again past the host's cache", async () => {

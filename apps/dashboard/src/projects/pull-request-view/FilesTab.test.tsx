@@ -85,7 +85,10 @@ describe("the Files changed tab", () => {
 
   test("no files, and a failed read with a way to try again", async () => {
     await mount([]);
-    expect(screen.getByTestId("pr-files-empty").textContent).toContain("changes no files");
+    const empty = screen.getByTestId("pr-files-empty");
+    expect(empty.textContent).toContain("changes no files");
+    // Clear of the column's edges, like the error state.
+    expect(empty.className).toContain("m-6");
     cleanup();
 
     await mount(hostError(502, "GITHUB_FAILED", "GitHub is down"));

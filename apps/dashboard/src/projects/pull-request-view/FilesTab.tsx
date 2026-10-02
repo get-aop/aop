@@ -54,7 +54,7 @@ export const FilesTab = ({
   if (!files.data) return <FilesSkeleton />;
   if (files.data.files.length === 0) {
     return (
-      <EmptyTab testId="pr-files-empty" title="No changes">
+      <EmptyTab testId="pr-files-empty" title="No changes" className="m-6">
         This pull request changes no files.
       </EmptyTab>
     );

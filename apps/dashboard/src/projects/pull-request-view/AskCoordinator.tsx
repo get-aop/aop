@@ -5,14 +5,18 @@ import { Button } from "@/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
 import { Textarea } from "@/ui/textarea";
 
-export const DEFAULT_QUESTION = "Where does this stand, and what does it need before it can merge?";
+/** The question the popover suggests: what an open pull request still needs, or what a done one left. */
+export const suggestedQuestion = (state: PullRequestViewDetail["state"]): string =>
+  state === "open"
+    ? "Where does this stand, and what does it need before it can merge?"
+    : "What did this change, and is anything left to follow up on?";
 
 /** The message the coordinator gets: the person's question, then which pull request, with its link. */
 export const coordinatorMessage = (
-  detail: Pick<PullRequestViewDetail, "number" | "title" | "url" | "nameWithOwner">,
+  detail: Pick<PullRequestViewDetail, "number" | "title" | "url" | "nameWithOwner" | "state">,
   question: string,
 ): string =>
-  `${question.trim() || DEFAULT_QUESTION}\n\nPull request ${detail.nameWithOwner}#${detail.number} “${detail.title}”: ${detail.url}`;
+  `${question.trim() || suggestedQuestion(detail.state)}\n\nPull request ${detail.nameWithOwner}#${detail.number} “${detail.title}”: ${detail.url}`;
 
 /**
  * "Ask the coordinator about this PR": a question (one is suggested) sent to the project's
@@ -26,14 +30,19 @@ export const AskCoordinator = ({
   onAsk: (question: string) => Promise<boolean>;
 }) => {
   const [open, setOpen] = useState(false);
-  const [question, setQuestion] = useState(DEFAULT_QUESTION);
+  // Only what the person typed is kept; until then the suggestion follows the pull request's state.
+  const [draft, setDraft] = useState<string | null>(null);
+  const question = draft ?? suggestedQuestion(detail.state);
   const [sending, setSending] = useState(false);
 
   const send = async (event: FormEvent) => {
     event.preventDefault();
     setSending(true);
     try {
-      if (await onAsk(question)) setOpen(false);
+      if (await onAsk(question)) {
+        setOpen(false);
+        setDraft(null);
+      }
     } finally {
       setSending(false);
     }
@@ -58,7 +67,7 @@ export const AskCoordinator = ({
             data-testid="pr-ask-question"
             value={question}
             rows={3}
-            onChange={(event) => setQuestion(event.target.value)}
+            onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) void send(event);
             }}

@@ -91,7 +91,13 @@ export const PullRequestView = ({
         {view.stale ? <StaleNote error={view.stale} /> : null}
       </div>
       <div className="sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b border-border bg-background px-6">
-        <TabsList variant="line" className="h-11 flex-wrap justify-start">
+        {/* One row that scrolls sideways when the pane is narrow: wrapped tabs would spill out of
+            the fixed-height bar onto the content below. */}
+        <TabsList
+          variant="line"
+          data-testid="pr-tabs"
+          className="h-11 min-w-0 max-w-full shrink justify-start overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+        >
           <Tab
             value="conversation"
             icon={<MessageSquareIcon />}
