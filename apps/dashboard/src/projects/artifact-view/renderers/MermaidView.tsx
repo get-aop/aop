@@ -2,17 +2,18 @@ import { MinusIcon, PlusIcon, ScanIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Spinner } from "@/ui/spinner";
 import { renderMermaid } from "../mermaid";
+import { parseMermaidSvg } from "./mermaid-svg";
 
 type Drawn =
   | { state: "drawing" }
-  | { state: "drawn"; svg: string }
+  | { state: "drawn"; svg: SVGSVGElement }
   | { state: "failed"; error: string };
 
 const ZOOM_STEP = 0.25;
 
 /**
  * One Mermaid diagram, drawn by Mermaid under its strict security level, fitted to the view and
- * zoomable. A diagram that does not parse says why and shows its source.
+ * zoomable. A diagram that cannot be drawn says why and shows its source.
  */
 export const MermaidView = ({ source }: { source: string }) => {
   const [drawn, setDrawn] = useState<Drawn>({ state: "drawing" });
@@ -21,6 +22,7 @@ export const MermaidView = ({ source }: { source: string }) => {
     let current = true;
     setDrawn({ state: "drawing" });
     renderMermaid(source)
+      .then(parseMermaidSvg)
       .then((svg) => current && setDrawn({ state: "drawn", svg }))
       .catch((error: unknown) => {
         if (current)
@@ -44,7 +46,7 @@ export const MermaidView = ({ source }: { source: string }) => {
   if (drawn.state === "failed") {
     return (
       <div data-testid="artifact-mermaid-error" className="p-6">
-        <p className="text-meta text-blocked">This diagram does not parse: {drawn.error}</p>
+        <p className="text-meta text-blocked">This diagram can't be drawn: {drawn.error}</p>
         <pre className="mt-3 whitespace-pre-wrap rounded-card border border-border bg-raised p-3 font-mono text-[13px] text-text-muted">
           {source}
         </pre>
@@ -99,26 +101,23 @@ const ZoomButton = ({
 );
 
 /**
- * Mermaid's SVG, parsed as XML and attached as nodes: nothing in it runs (a script parsed this
- * way never executes), and Mermaid's strict level already left out scripts and handlers. At 100%
- * it is fitted to the view, its width and its height, so a tall flowchart is seen whole; zooming
- * scales that, and the view scrolls.
+ * Mermaid's SVG, attached as a copy. At 100% it is fitted to the view, its width and its height,
+ * so a tall flowchart is seen whole; zooming scales that, and the view scrolls.
  */
-const SvgMarkup = ({ svg, zoom }: { svg: string; zoom: number }) => {
+const SvgMarkup = ({ svg, zoom }: { svg: SVGSVGElement; zoom: number }) => {
   const frame = useRef<HTMLDivElement>(null);
   const holder = useRef<HTMLDivElement>(null);
   const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
   const fit = useFitScale(frame, natural);
   useEffect(() => {
-    const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
-    if (root.nodeName !== "svg") return;
+    const root = document.importNode(svg, true);
     const [, , width = 0, height = 0] = (root.getAttribute("viewBox") ?? "")
       .split(/[\s,]+/)
       .map(Number);
     root.removeAttribute("height");
     root.setAttribute("width", "100%");
     root.style.maxWidth = "none";
-    holder.current?.replaceChildren(document.importNode(root, true));
+    holder.current?.replaceChildren(root);
     setNatural(width > 0 && height > 0 ? { width, height } : null);
   }, [svg]);
   const width = natural ? `${Math.round(natural.width * fit * zoom)}px` : `${zoom * 100}%`;
