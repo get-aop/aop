@@ -27,11 +27,11 @@ import { createProjectServices, type ProjectServices } from "./project/services.
 import { createPullRequestWatchRoutes } from "./pull-request-watch/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
+import { createRoutineRoutes } from "./routine/routes.ts";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
 import { createSuggestionRoutes } from "./suggestion/routes.ts";
-import { createRoutineRoutes } from "./routine/routes.ts";
 import { createThreadRoutes } from "./thread/routes.ts";
 import { createHostUpdateService } from "./update/host-update-service.ts";
 import { createUpdateRoutes } from "./update/routes.ts";

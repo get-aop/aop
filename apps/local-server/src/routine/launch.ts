@@ -24,7 +24,8 @@ export const launchRun = async (
   run: { id: string; occurrence: string },
   now: () => Date,
 ): Promise<void> => {
-  const failed = (reason: string) => settleRun(ctx, routine.id, run.id, { state: "failed", reason }, now);
+  const failed = (reason: string) =>
+    settleRun(ctx, routine.id, run.id, { state: "failed", reason }, now);
   try {
     if (routine.target === "thread") {
       const spawned = await services.threads.spawn(routine.project_id, {
@@ -45,11 +46,20 @@ export const launchRun = async (
       if (!spawned.success) await failed(describeServiceError(spawned.error));
       return;
     }
-    const sent = await services.projects.sendToCoordinator(routine.project_id, coordinatorText(routine, run.occurrence), {
-      origin: { type: "routine", routineId: routine.id, name: routine.name, prompt: routine.prompt },
-      // Its own turn, after any the coordinator is in: a routine never steers a reply mid-way.
-      midRunMode: "queue",
-    });
+    const sent = await services.projects.sendToCoordinator(
+      routine.project_id,
+      coordinatorText(routine, run.occurrence),
+      {
+        origin: {
+          type: "routine",
+          routineId: routine.id,
+          name: routine.name,
+          prompt: routine.prompt,
+        },
+        // Its own turn, after any the coordinator is in: a routine never steers a reply mid-way.
+        midRunMode: "queue",
+      },
+    );
     if (!sent.success) {
       await failed(describeServiceError(sent.error));
       return;

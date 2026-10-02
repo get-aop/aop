@@ -62,18 +62,21 @@ export const createRoutineRunner = (
     return latest !== null && (await isRunActive(ctx.db, latest));
   };
 
+  // Why an occurrence cannot start now, whatever the plan's limit says.
+  const blockedReason = async (due: DueRoutine): Promise<string | null> => {
+    if (due.projectStatus === "paused") return "The project is paused";
+    if (await isBusy(due.routine.id)) return "The previous run is still working";
+    return null;
+  };
+
   const decide = async (due: DueRoutine, now: Date): Promise<Decision> => {
     const { routine } = due;
     const missed = missedCount(routine, now, clock.timeZone());
     if (missed > 0 && routine.catch_up === "skip") {
       return { kind: "record", state: "missed", reason: missedReason(missed) };
     }
-    if (due.projectStatus === "paused") {
-      return { kind: "record", state: "skipped", reason: "The project is paused" };
-    }
-    if (await isBusy(routine.id)) {
-      return { kind: "record", state: "skipped", reason: "The previous run is still working" };
-    }
+    const blocked = await blockedReason(due);
+    if (blocked) return { kind: "record", state: "skipped", reason: blocked };
     const until = await usageLimit(routine, now);
     if (until) return limited(until, due.autoContinue);
     return missed > 0
@@ -185,7 +188,15 @@ const keepRun = async (
   }
   const id = generateTypeId("rrun");
   await routines.insertRun(
-    { id, routineId: routine.id, occurrenceKey: key, occurrence: key, trigger, state, reason: decision.reason },
+    {
+      id,
+      routineId: routine.id,
+      occurrenceKey: key,
+      occurrence: key,
+      trigger,
+      state,
+      reason: decision.reason,
+    },
     at,
   );
   return { id, occurrence: key };

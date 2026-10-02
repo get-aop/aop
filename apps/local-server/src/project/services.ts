@@ -55,7 +55,7 @@ export const createProjectServices = (
   const projects = createProjectService(ctx, chat, git, kickoff);
   const toolHealth = createThreadToolHealth(ctx, chat.wake);
   ctx.sessionHooks.observeThreadProgress(toolHealth.turnProgress);
-  const routines = createRoutines(ctx, { threads, projects }, routineDeps);
+  const routines = createRoutines(ctx, { threads, projects, chat }, routineDeps);
   return {
     chat,
     projects,

@@ -31,7 +31,9 @@ export const createRoutineRoutes = (routines: RoutineService) => {
     const parsed = await readBody(c, RoutineInputSchema);
     if ("response" in parsed) return parsed.response;
     const result = await routines.create(c.req.param("projectId"), parsed.body, "person");
-    return result.success ? c.json({ routine: result.routine }, 201) : routineError(c, result.error);
+    return result.success
+      ? c.json({ routine: result.routine }, 201)
+      : routineError(c, result.error);
   });
 
   routes.get("/:projectId/routines/:routineId", async (c) => {

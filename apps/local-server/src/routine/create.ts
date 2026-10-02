@@ -1,5 +1,6 @@
 import { systemTimeZone } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
+import type { ChatEngine } from "../project/engine.ts";
 import type { RoutineLaunchServices } from "./launch.ts";
 import { createRoutineRepository } from "./repository.ts";
 import { createRoutineRunner, type RoutineClock } from "./runner.ts";
@@ -23,7 +24,7 @@ export interface Routines {
 /** The routine domain over the services its runs call. */
 export const createRoutines = (
   ctx: LocalServerContext,
-  services: RoutineLaunchServices,
+  services: RoutineLaunchServices & { chat: ChatEngine },
   deps: RoutineDeps = {},
 ): Routines => {
   const clock: RoutineClock = {
@@ -42,5 +43,8 @@ export const createRoutines = (
     clock,
     deps.timers,
   );
-  return { service: createRoutineService(ctx, runner, clock, scheduler.poke), scheduler };
+  return {
+    service: createRoutineService(ctx, runner, services.chat, clock, scheduler.poke),
+    scheduler,
+  };
 };

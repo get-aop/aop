@@ -16,7 +16,10 @@ const UNKNOWN_RESET_MS = 15 * 60_000;
  * it anyway would cost a failed turn per occurrence until the reset.
  */
 export const createUsageLimitCheck =
-  (db: Kysely<Database>, readUsage: () => Promise<PlanUsage | null> = getPlanUsage): UsageLimitCheck =>
+  (
+    db: Kysely<Database>,
+    readUsage: () => Promise<PlanUsage | null> = getPlanUsage,
+  ): UsageLimitCheck =>
   async (routine, now) => {
     const until = [planLimitUntil(await readUsage(), now)];
     if (routine.target === "coordinator") until.push(await coordinatorWait(db, routine, now));

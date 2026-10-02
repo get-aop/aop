@@ -21,6 +21,8 @@ export interface RoutineScheduler {
   start: () => Promise<void>;
   /** Something changed (a routine made, edited or turned on): look again now. */
   poke: () => void;
+  /** Runs one pass now, after any in progress, and resolves when it is done. */
+  runPass: () => Promise<void>;
   /** Stops watching and waits for a pass in progress. */
   stop: () => Promise<void>;
 }
@@ -83,6 +85,10 @@ export const createRoutineScheduler = (
       if (stopped) return;
       if (timer !== null) timers.clearTimeout(timer);
       tick();
+    },
+    runPass: async () => {
+      while (pass) await pass;
+      await runner.processDue();
     },
     stop: async () => {
       stopped = true;

@@ -8,7 +8,6 @@ import {
   RoutineTargetSchema,
 } from "@aop/common";
 import { z } from "zod";
-import { describeServiceError } from "../project/errors.ts";
 import { describeRoutineError } from "../routine/service.ts";
 import type { RoutineResult } from "../routine/types.ts";
 import { defineTool, type McpToolCall, McpToolError, textResult } from "./registry.ts";
@@ -119,7 +118,8 @@ export const routineUpdateTool = defineTool({
   }),
   handler: async ({ routineId, ...fields }, call) => {
     const patch = RoutinePatchSchema.safeParse(fields);
-    if (!patch.success) throw new McpToolError("Send at least one field to change", "INVALID_INPUT");
+    if (!patch.success)
+      throw new McpToolError("Send at least one field to change", "INVALID_INPUT");
     const { routine } = unwrap(
       await call.services.routines.update(projectIdOf(call), routineId, patch.data),
     );
@@ -180,22 +180,15 @@ export const proposeRoutineTool = defineTool({
       .max(500)
       .describe("One or two sentences for the person: why this is worth doing regularly."),
   }),
-  handler: async ({ reason, ...proposal }, call) => {
+  handler: async ({ reason, ...routine }, call) => {
     const { session } = call;
-    const projectId = projectIdOf(call);
-    const preview = await call.services.routines.preview(proposal.schedule);
-    if (preview.problem) throw new McpToolError(preview.problem, "ROUTINE_TOO_FREQUENT");
-    const text = [
-      `Thread "${session.title}" (${session.id}) proposes a routine. Ask the person before creating it with routine_create; nothing runs until you do.`,
-      `Why: ${reason}`,
-      `Proposal (${preview.description}): ${JSON.stringify(proposal)}`,
-    ].join("\n\n");
-    const sent = await call.services.projects.sendToCoordinator(projectId, text, {
-      origin: { type: "routine-proposal", threadId: session.id },
-      midRunMode: "queue",
-    });
-    if (!sent.success)
-      throw new McpToolError(describeServiceError(sent.error), sent.error.code);
+    unwrap(
+      await call.services.routines.propose(
+        projectIdOf(call),
+        { id: session.id, title: session.title },
+        { routine, reason },
+      ),
+    );
     return textResult(
       "Proposal sent to the coordinator, which will ask the person. Carry on with your work.",
     );

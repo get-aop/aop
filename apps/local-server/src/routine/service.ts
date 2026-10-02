@@ -7,22 +7,24 @@ import {
   type Project,
   parseRoutineMaxActive,
   parseRoutineMinInterval,
+  ROUTINE_HISTORY_MAX,
   type Routine,
   type RoutineLimits,
   type RoutinePatch,
   type RoutineRun,
   type RoutineSchedule,
   type RoutinesResponse,
-  ROUTINE_HISTORY_MAX,
   type SchedulePreview,
   shortestGapMinutes,
 } from "@aop/common";
 import { generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { RoutineRow } from "../db/routines-schema.ts";
+import type { ChatEngine } from "../project/engine.ts";
 import { SettingKey } from "../settings/types.ts";
 import { recordRoutineRemoved, recordRoutineUpserted } from "./events.ts";
-import { createRoutineRepository } from "./repository.ts";
+import { type RoutineProposal, sendRoutineProposal } from "./proposal.ts";
+import { createRoutineRepository, type RoutineColumns } from "./repository.ts";
 import type { RoutineClock, RoutineRunner } from "./runner.ts";
 import type { RoutineError, RoutineResult } from "./types.ts";
 import { toRoutine, toRuns } from "./wire.ts";
@@ -50,6 +52,12 @@ export interface RoutineService {
   ) => Promise<RoutineResult<{ routine: Routine; run: RoutineRun }>>;
   /** Newest first. */
   runs: (projectId: string, routineId: string) => Promise<RoutineResult<{ runs: RoutineRun[] }>>;
+  /** A thread's proposal for the coordinator to put to the person; refused if the host would refuse it. */
+  propose: (
+    projectId: string,
+    thread: { id: string; title: string },
+    proposal: Omit<RoutineProposal, "when">,
+  ) => Promise<RoutineResult<Record<never, never>>>;
   /** A schedule in words with its next runs on the host's clock, and why it would be refused. */
   preview: (schedule: RoutineSchedule) => Promise<SchedulePreview>;
 }
@@ -61,6 +69,7 @@ export interface RoutineService {
 export const createRoutineService = (
   ctx: LocalServerContext,
   runner: RoutineRunner,
+  chat: ChatEngine,
   clock: RoutineClock,
   onChange: () => void,
 ): RoutineService => {
@@ -86,9 +95,7 @@ export const createRoutineService = (
     routineId: string,
   ): Promise<{ row: RoutineRow } | { error: RoutineError }> => {
     const row = await repo.getById(routineId);
-    return row && row.project_id === projectId
-      ? { row }
-      : { error: { code: "ROUTINE_NOT_FOUND" } };
+    return row && row.project_id === projectId ? { row } : { error: { code: "ROUTINE_NOT_FOUND" } };
   };
 
   const scheduleProblem = async (schedule: RoutineSchedule): Promise<RoutineError | null> => {
@@ -131,6 +138,19 @@ export const createRoutineService = (
       return { error: { code: "REPO_REQUIRED", repoIds: [...project.repoIds] } };
     }
     return { repo_id: fields.repo_id, model: fields.model, effort: fields.effort };
+  };
+
+  const updateProblem = async (
+    projectId: string,
+    row: RoutineRow,
+    patch: RoutinePatch,
+  ): Promise<RoutineError | null> => {
+    if (patch.schedule) {
+      const problem = await scheduleProblem(patch.schedule);
+      if (problem) return problem;
+    }
+    const turningOn = patch.enabled === true && row.enabled === 0;
+    return turningOn ? enabledCapProblem(projectId, row.id) : null;
   };
 
   const changed = async (row: RoutineRow): Promise<RoutineResult<{ routine: Routine }>> => {
@@ -192,7 +212,9 @@ export const createRoutineService = (
             enabled: input.enabled ? 1 : 0,
             catch_up: input.catchUp,
             created_by: createdBy,
-            next_run_at: input.enabled ? runner.nextRunAfterNow({ schedule_json: scheduleJson }) : null,
+            next_run_at: input.enabled
+              ? runner.nextRunAfterNow({ schedule_json: scheduleJson })
+              : null,
           },
           at,
         );
@@ -207,42 +229,14 @@ export const createRoutineService = (
       const project = await ctx.projectRepository.getById(projectId);
       if (!project) return { success: false, error: { code: "PROJECT_NOT_FOUND" } };
       const { row } = found;
-      const turningOn = patch.enabled === true && row.enabled === 0;
-      const problem =
-        (patch.schedule ? await scheduleProblem(patch.schedule) : null) ??
-        (turningOn ? await enabledCapProblem(projectId, routineId) : null);
+      const problem = await updateProblem(projectId, row, patch);
       if (problem) return { success: false, error: problem };
-      const target = targetFields(project, {
-        target: patch.target ?? row.target,
-        repo_id: patch.repoId !== undefined ? patch.repoId : row.repo_id,
-        model: patch.model !== undefined ? patch.model : row.model,
-        effort: patch.effort !== undefined ? patch.effort : row.effort,
-      });
+      const target = targetFields(project, mergedTarget(row, patch));
       if ("error" in target) return { success: false, error: target.error };
 
-      const scheduleJson = patch.schedule ? JSON.stringify(patch.schedule) : row.schedule_json;
-      const enabled = patch.enabled ?? row.enabled === 1;
-      // A new schedule, or a routine turned back on, counts from now: a paused routine does not
-      // owe the runs it would have made.
-      const reschedule = patch.schedule !== undefined || patch.enabled !== undefined;
+      const columns = patchColumns(row, patch, target, runner.nextRunAfterNow);
       await ctx.eventPublisher.transaction(async (tx) => {
-        await createRoutineRepository(tx.db).update(
-          routineId,
-          {
-            ...(patch.name !== undefined && { name: patch.name }),
-            ...(patch.prompt !== undefined && { prompt: patch.prompt }),
-            ...(patch.target !== undefined && { target: patch.target }),
-            ...(patch.catchUp !== undefined && { catch_up: patch.catchUp }),
-            ...target,
-            schedule_json: scheduleJson,
-            enabled: enabled ? 1 : 0,
-            ...(reschedule && {
-              next_run_at: enabled ? runner.nextRunAfterNow({ schedule_json: scheduleJson }) : null,
-              deferred_occurrence: null,
-            }),
-          },
-          clock.now().toISOString(),
-        );
+        await createRoutineRepository(tx.db).update(routineId, columns, clock.now().toISOString());
         await recordRoutineUpserted(tx, routineId);
       });
       return changed((await repo.getById(routineId)) as RoutineRow);
@@ -266,7 +260,8 @@ export const createRoutineService = (
       if (project && project.status !== "active") {
         return { success: false, error: { code: "PROJECT_NOT_ACTIVE", status: project.status } };
       }
-      if (await runner.isBusy(routineId)) return { success: false, error: { code: "ROUTINE_BUSY" } };
+      if (await runner.isBusy(routineId))
+        return { success: false, error: { code: "ROUTINE_BUSY" } };
       const started = await runner.runNow(found.row);
       const [run] = await toRuns(ctx.db, [started]);
       return {
@@ -285,6 +280,15 @@ export const createRoutineService = (
       };
     },
 
+    propose: async (projectId, thread, proposal) => {
+      const problem = await scheduleProblem(proposal.routine.schedule);
+      if (problem) return { success: false, error: problem };
+      return sendRoutineProposal(ctx, chat, projectId, thread, {
+        ...proposal,
+        when: describeSchedule(proposal.routine.schedule),
+      });
+    },
+
     preview: async (schedule) => {
       const timeZone = clock.timeZone();
       const problem = await scheduleProblem(schedule);
@@ -301,6 +305,42 @@ export const createRoutineService = (
 };
 
 type TargetFields = Pick<RoutineRow, "repo_id" | "model" | "effort">;
+
+/** The routine's target fields with the patch applied; a field the patch leaves out stays. */
+const mergedTarget = (row: RoutineRow, patch: RoutinePatch) => ({
+  target: patch.target ?? row.target,
+  repo_id: patch.repoId === undefined ? row.repo_id : patch.repoId,
+  model: patch.model === undefined ? row.model : patch.model,
+  effort: patch.effort === undefined ? row.effort : patch.effort,
+});
+
+/**
+ * The columns a patch writes. A new schedule, or a routine turned back on, counts from now:
+ * a paused routine does not owe the runs it would have made.
+ */
+const patchColumns = (
+  row: RoutineRow,
+  patch: RoutinePatch,
+  target: TargetFields,
+  nextRunAfterNow: RoutineRunner["nextRunAfterNow"],
+): RoutineColumns => {
+  const scheduleJson = patch.schedule ? JSON.stringify(patch.schedule) : row.schedule_json;
+  const enabled = patch.enabled ?? row.enabled === 1;
+  const reschedule = patch.schedule !== undefined || patch.enabled !== undefined;
+  return {
+    name: patch.name ?? row.name,
+    prompt: patch.prompt ?? row.prompt,
+    target: patch.target ?? row.target,
+    catch_up: patch.catchUp ?? row.catch_up,
+    ...target,
+    schedule_json: scheduleJson,
+    enabled: enabled ? 1 : 0,
+    ...(reschedule && {
+      next_run_at: enabled ? nextRunAfterNow({ schedule_json: scheduleJson }) : null,
+      deferred_occurrence: null,
+    }),
+  };
+};
 
 export const describeRoutineError = (error: RoutineError): string => {
   switch (error.code) {

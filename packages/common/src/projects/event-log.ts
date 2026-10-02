@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { RoutineSchema } from "../routines/routine.ts";
 import { MessageSchema } from "./message.ts";
 import { IdSchema } from "./primitives.ts";
 import { ProjectSchema } from "./project.ts";
-import { RoutineSchema } from "../routines/routine.ts";
 import { ThreadSchema } from "./thread.ts";
 
 const EventLogBaseSchema = z.object({
