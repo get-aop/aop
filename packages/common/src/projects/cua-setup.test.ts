@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { CuaCheck, CuaStatus } from "./computer-use.ts";
 import { CUA_COMMANDS, cuaSetupSteps } from "./cua-setup.ts";
 
-const check = (id: CuaCheck["id"], ok: boolean | null, label = id): CuaCheck => ({
+const check = (id: CuaCheck["id"], ok: boolean | null, label: string = id): CuaCheck => ({
   id,
   label,
   required: true,
