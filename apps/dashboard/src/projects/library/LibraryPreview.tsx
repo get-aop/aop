@@ -1,5 +1,5 @@
 import type { LibraryFileKind, LibraryItem } from "@aop/common";
-import { DownloadIcon, FileWarningIcon, PinIcon, PinOffIcon } from "lucide-react";
+import { DownloadIcon, FileWarningIcon, PanelLeftIcon, PinIcon, PinOffIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/ui/dialog";
@@ -25,6 +25,7 @@ export const LibraryPreview = ({
   onClose,
   onTogglePin,
   onShowSource,
+  onOpenViewer,
 }: {
   projectId: string;
   item: LibraryItem | null;
@@ -32,6 +33,8 @@ export const LibraryPreview = ({
   onClose: () => void;
   onTogglePin: (item: LibraryItem) => void;
   onShowSource: (item: LibraryItem) => void;
+  /** Opens the item in the artifact view, beside the chat. */
+  onOpenViewer: (item: LibraryItem) => void;
 }) => (
   <Dialog open={item !== null} onOpenChange={(open) => (open ? null : onClose())}>
     {item ? (
@@ -66,6 +69,15 @@ export const LibraryPreview = ({
             >
               {item.pinned ? <PinOffIcon /> : <PinIcon />}
               {item.pinned ? "Unpin" : "Pin"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid="library-preview-viewer"
+              onClick={() => onOpenViewer(item)}
+            >
+              <PanelLeftIcon />
+              Open beside the chat
             </Button>
             <Button
               variant="secondary"

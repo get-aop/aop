@@ -14,7 +14,7 @@ import { saveWorkspaceFile } from "../../api/artifacts";
 import { IconButton } from "../../components/IconButton";
 import { copyContent, downloadBlob, downloadName, formatBytes } from "./file-actions";
 import { KIND_META } from "./kind-meta";
-import { canOpenInLibrary, openInLibrary } from "./library-link";
+import { openInLibrary } from "./library-link";
 import { openArtifactView } from "./open-artifact-view";
 import type { ShownArtifact } from "./use-artifact";
 import { VersionMenu } from "./VersionMenu";
@@ -93,7 +93,7 @@ export const ArtifactToolbar = ({
         </IconButton>
         {file ? (
           <KeepButton projectId={projectId} file={file} />
-        ) : canOpenInLibrary() ? (
+        ) : (
           <IconButton
             testId="artifact-open-library"
             label="Open in Library"
@@ -101,7 +101,7 @@ export const ArtifactToolbar = ({
           >
             <LibraryBigIcon />
           </IconButton>
-        ) : null}
+        )}
         <IconButton
           testId="artifact-fullscreen"
           label={fullscreen ? "Exit full screen (Esc)" : "Full screen"}

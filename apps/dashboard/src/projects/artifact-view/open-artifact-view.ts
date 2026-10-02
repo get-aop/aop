@@ -1,5 +1,6 @@
 import {
   type ArtifactViewRef,
+  isProjectScreen,
   navigate,
   type ProjectScreen,
   parseRoute,
@@ -28,15 +29,19 @@ export const replaceArtifactView = (projectId: string, artifact: ArtifactViewRef
 /** Gives the chat its place back; the threads panel stays as it is. */
 export const closeArtifactView = (): void => {
   const route = parseRoute(window.location.pathname);
-  if (route?.name !== "project" && route?.name !== "thread") return;
-  if (!route.artifact) return;
+  if (!route || !isProjectScreen(route) || !route.artifact) return;
   const { artifact: _closed, ...screen } = route;
   navigate(projectScreenPath(screen));
 };
 
+// The panel keeps what it shows: the thread open in it, or its tab (the Library, ...).
 const screenUnder = (projectId: string): ProjectScreen => {
   const route = parseRoute(window.location.pathname);
-  return route?.name === "thread" && route.projectId === projectId
-    ? { name: "thread", projectId, threadId: route.threadId }
-    : { name: "project", projectId };
+  if (route?.name === "thread" && route.projectId === projectId) {
+    return { name: "thread", projectId, threadId: route.threadId };
+  }
+  if (route?.name === "project-tab" && route.projectId === projectId) {
+    return { name: "project-tab", projectId, tab: route.tab };
+  }
+  return { name: "project", projectId };
 };

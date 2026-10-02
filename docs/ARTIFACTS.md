@@ -38,6 +38,7 @@ They validate like `aop_library_save`. Content and path are exclusive, a path mu
 
 - Routes: `/projects/:p[/threads/:t]/artifacts/:id[/:version]`, `…/files/:threadId|coordinator/:path` for a linked workspace file, and `…/visualize/:messageId` while a diagram is being drawn. `Route` gains `artifact?: ArtifactViewRef`, a sibling of `pullRequest`. They are exclusive: opening one replaces the other.
 - The view takes the coordinator column under the breadcrumb **Coordinator › title** with ×, and Escape closes it. The chat stays mounted and hidden, keeping its scroll and draft. The threads panel stays as it is, so a card clicked in a thread chat opens the artifact in the coordinator column beside that thread.
+- From the Library tab, a file opens here with **Open beside the chat** (its menu, or the preview). The other way, the toolbar's **Open in Library** shows the Library tab in the panel with the file selected and previewed, and keeps the artifact view open.
 - Toolbar: version switcher (`v3 of 3`, with "Compare with v2"), copy, download, open in Library, fullscreen, and a Raw/Rendered toggle where both make sense.
 
 ## Rendering stack

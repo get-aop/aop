@@ -1,6 +1,6 @@
 import type { LibraryItem } from "@aop/common";
 import { FileUpIcon, FolderOpenIcon, LibraryIcon, SearchXIcon } from "lucide-react";
-import { type DragEvent, useCallback, useMemo, useState } from "react";
+import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/ui/empty";
@@ -8,6 +8,8 @@ import { Spinner } from "@/ui/spinner";
 import { downloadLibraryItem } from "../../api/library";
 import { requestConfirmation } from "../../components/ConfirmationHost";
 import { useLocalStorage } from "../../hooks/use-local-storage";
+import { takePendingLibraryItem, usePendingLibraryItem } from "../artifact-view/library-link";
+import { openArtifactView } from "../artifact-view/open-artifact-view";
 import type { ProjectEntry } from "../projects-state";
 import { EditItemDialog, type EditMode } from "./EditItemDialog";
 import type { ItemAction } from "./ItemMenu";
@@ -45,6 +47,10 @@ export const LibraryPanel = ({
   const [dragging, setDragging] = useState(false);
 
   const items = library.listing?.items ?? [];
+  useShowPendingItem(projectId, items, (item) => {
+    setFolder(item.folder);
+    setPreviewId(item.id);
+  });
   const view = useMemo(
     () => libraryView(items, { folder, search, type, sort }),
     [items, folder, search, type, sort],
@@ -79,6 +85,8 @@ export const LibraryPanel = ({
       switch (action) {
         case "open":
           return setPreviewId(item.id);
+        case "viewer":
+          return openArtifactView(projectId, { kind: "artifact", id: item.id });
         case "download":
           return downloadLibraryItem(projectId, item).catch(() =>
             toast.error(`${item.name} could not be downloaded`),
@@ -180,6 +188,10 @@ export const LibraryPanel = ({
         item={preview}
         threadTitle={threadTitle(preview)}
         onClose={() => setPreviewId(null)}
+        onOpenViewer={(item) => {
+          setPreviewId(null);
+          openArtifactView(projectId, { kind: "artifact", id: item.id });
+        }}
         onTogglePin={(item) => void togglePin(item)}
         onShowSource={showSource}
       />
@@ -296,3 +308,20 @@ const confirmDelete = (item: LibraryItem): Promise<boolean> =>
     confirmLabel: "Delete",
     destructive: true,
   });
+
+/** An item "Open in Library" asked for: shown in its folder and previewed once the list has it. */
+const useShowPendingItem = (
+  projectId: string,
+  items: readonly LibraryItem[],
+  show: (item: LibraryItem) => void,
+): void => {
+  const pendingId = usePendingLibraryItem(projectId);
+  const showRef = useRef(show);
+  showRef.current = show;
+  useEffect(() => {
+    const item = pendingId ? items.find((candidate) => candidate.id === pendingId) : undefined;
+    if (!item) return;
+    takePendingLibraryItem();
+    showRef.current(item);
+  }, [pendingId, items]);
+};
