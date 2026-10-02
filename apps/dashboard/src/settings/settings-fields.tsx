@@ -1,4 +1,4 @@
-import type { RuntimeConfigurationProvider } from "@aop/common";
+import { buildChannel, type RuntimeConfigurationProvider } from "@aop/common";
 import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
@@ -33,7 +33,7 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
   },
   {
     label: "Updates",
-    keys: ["update_check"],
+    keys: ["update_check", "update_auto_apply"],
   },
   {
     label: "Agent CLIs",
@@ -57,7 +57,15 @@ export const SETTING_META: Record<string, SettingMeta> = {
   update_check: {
     label: "Check for updates",
     description:
-      "Once a day the host looks for a newer AOP release on GitHub and shows a notice here. It never installs anything without you.",
+      buildChannel().id === "nightly"
+        ? "Every hour the host looks for a newer nightly build of main and shows a notice here."
+        : "Once a day the host looks for a newer AOP release on GitHub and shows a notice here. It never installs anything without you.",
+    type: "toggle",
+  },
+  update_auto_apply: {
+    label: "Install nightly builds automatically",
+    description:
+      "When a newer nightly is out, the host installs it and restarts once no turn is running. Turn it off to stay on this build; Update now still works.",
     type: "toggle",
   },
   agent_cli_check_interval_minutes: {
@@ -88,11 +96,12 @@ export const resolveSettingOptions = (
   _runtimeConfigurations: RuntimeConfigurationProvider[] = [],
 ): SettingMeta["options"] => SETTING_META[settingKey]?.options;
 
+// Only AOP Nightly installs builds by itself; a stable host never reads update_auto_apply.
 export const isSettingVisible = (
-  _settingKey: string,
+  settingKey: string,
   _values: Record<string, string>,
   _runtimeConfigurations: RuntimeConfigurationProvider[] = [],
-): boolean => true;
+): boolean => settingKey !== "update_auto_apply" || buildChannel().id === "nightly";
 
 interface SettingRowProps {
   settingKey: string;

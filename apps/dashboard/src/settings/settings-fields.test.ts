@@ -35,6 +35,14 @@ describe("settings fields", () => {
     expect(SETTINGS_GROUPS.some((group) => group.label === "Polling")).toBe(false);
   });
 
+  test("a stable dashboard hides the nightly-only automatic install", () => {
+    expect(SETTINGS_GROUPS.find((group) => group.label === "Updates")?.keys).toContain(
+      "update_auto_apply",
+    );
+    expect(isSettingVisible("update_auto_apply", { update_auto_apply: "false" }, [])).toBe(false);
+    expect(isSettingVisible("update_check", {}, [])).toBe(true);
+  });
+
   test("keeps remaining settings visible", () => {
     expect(isSettingVisible("chat_global_instructions", {}, [])).toBe(true);
     expect(resolveSettingOptions("chat_global_instructions", {}, [])).toBeUndefined();
