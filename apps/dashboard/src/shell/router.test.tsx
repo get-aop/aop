@@ -16,6 +16,7 @@ const {
   projectSettingsPath,
   projectTabPath,
   routeProjectId,
+  switchProjectPath,
   threadPath,
   useRoute,
 } = await import("./router");
@@ -250,5 +251,32 @@ describe("Link", () => {
     for (const modifier of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }]) {
       expect(fireEvent.click(screen.getByText("Open"), modifier)).toBe(true);
     }
+  });
+});
+
+describe("switchProjectPath", () => {
+  test("keeps the panel's tab and the settings section, which every project has", () => {
+    expect(switchProjectPath({ name: "project-tab", projectId: "a", tab: "library" }, "b")).toBe(
+      "/projects/b/library",
+    );
+    expect(
+      switchProjectPath({ name: "project-settings", projectId: "a", section: "models" }, "b"),
+    ).toBe("/projects/b/settings/models");
+  });
+
+  test("lands on the project's home from a thread, a pull request, an artifact or the browser", () => {
+    expect(switchProjectPath({ name: "thread", projectId: "a", threadId: "t1" }, "b")).toBe(
+      "/projects/b",
+    );
+    expect(
+      switchProjectPath(
+        { name: "project", projectId: "a", pullRequest: { repoId: "r", number: 4 } },
+        "b",
+      ),
+    ).toBe("/projects/b");
+    expect(switchProjectPath({ name: "project", projectId: "a", browser: true }, "b")).toBe(
+      "/projects/b",
+    );
+    expect(switchProjectPath({ name: "projects" }, "b")).toBe("/projects/b");
   });
 });

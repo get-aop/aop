@@ -15,6 +15,7 @@ const { act, cleanup, fireEvent, render, screen, waitFor, within } = await impor
 );
 const { ProjectsProvider } = await import("../projects/ProjectsProvider");
 const { AppShell } = await import("./AppShell");
+const { AppTopBar } = await import("./AppTopBar");
 const { getDialogs, openSettingsDialog, resetDialogs } = await import("./dialog-store");
 
 const originalFetch = globalThis.fetch;
@@ -52,12 +53,14 @@ const renderShell = () => {
 };
 
 describe("AppShell", () => {
-  test("the sidebar is the only chrome around the screen", () => {
+  test("has no sidebar: the screen gets the whole width, and brings its own top bar", () => {
     renderShell();
 
-    expect(screen.getByTestId("projects-sidebar")).toBeTruthy();
     expect(screen.getByTestId("screen")).toBeTruthy();
-    expect(screen.queryByTestId("app-rail")).toBeNull();
+    expect(screen.queryByTestId("projects-sidebar")).toBeNull();
+    expect(screen.queryByTestId("sidebar-toggle")).toBeNull();
+    expect(document.querySelector('[data-slot="sidebar-wrapper"]') === null).toBe(true);
+    expect(screen.getByTestId("screen").parentElement?.tagName).toBe("MAIN");
   });
 
   test("is one screen tall, so a long screen scrolls inside it instead of growing the page", () => {
@@ -81,40 +84,79 @@ describe("AppShell", () => {
   });
 });
 
-describe("AppShell palette", () => {
-  const openPalette = async (): Promise<HTMLElement> => {
-    renderShell();
-    fireEvent.click(screen.getByTestId("sidebar-search"));
-    await screen.findByPlaceholderText("Find a project");
-    return document.querySelector('[role="dialog"]') as HTMLElement;
+describe("AppShell project switcher", () => {
+  const renderWithTopBar = () => {
+    const stub = stubLiveProjects(state());
+    render(
+      <ProjectsProvider live={stub.live}>
+        <AppShell>
+          <AppTopBar />
+        </AppShell>
+      </ProjectsProvider>,
+    );
   };
 
-  test("finds projects by name and opens the chosen one", async () => {
-    const palette = await openPalette();
-    const items = within(palette).getAllByTestId("palette-project");
-    expect(items.map((item) => item.textContent)).toEqual(["CCheckout", "SStorefrontpaused"]);
+  test("⌘K opens it from anywhere, even while typing, and ⌘K again closes it", async () => {
+    renderWithTopBar();
+    const input = document.createElement("textarea");
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: "k", metaKey: true });
+    input.remove();
 
-    fireEvent.click(items[1] as HTMLElement);
-    expect(window.location.pathname).toBe("/projects/b");
-    await waitFor(() => expect(screen.queryByPlaceholderText("Find a project")).toBeNull());
+    expect(getDialogs().switcher).toBe(true);
+    expect(await screen.findByTestId("project-switcher-popover")).toBeTruthy();
+
+    fireEvent.keyDown(document.body, { key: "k", metaKey: true });
+    expect(getDialogs().switcher).toBe(false);
+    await waitFor(() =>
+      expect(screen.queryByTestId("project-switcher-popover") === null).toBe(true),
+    );
   });
 
-  test("offers projects only: no actions, no sessions", async () => {
-    const palette = await openPalette();
-    expect(within(palette).getByText("Projects")).toBeTruthy();
-    for (const label of ["Actions", "Sessions", "New session", "Workflows"]) {
-      expect(within(palette).queryByText(label)).toBeNull();
+  test("its tooltip names the shortcut", () => {
+    renderWithTopBar();
+    expect(screen.getByTestId("project-switcher").getAttribute("title")).toContain("⌘K");
+    expect(screen.getByTestId("project-switcher").getAttribute("aria-keyshortcuts")).toBe("Meta+K");
+  });
+});
+
+describe("AppShell in the desktop app", () => {
+  test("the app menu's Settings… opens the AOP settings", () => {
+    let listener: (() => void) | null = null;
+    const host = window as Window & { aopDesktop?: unknown };
+    host.aopDesktop = {
+      onOpenSettings: (next: () => void) => {
+        listener = next;
+        return () => {
+          listener = null;
+        };
+      },
+    };
+    try {
+      renderShell();
+      expect(listener === null).toBe(false);
+      act(() => listener?.());
+      expect(getDialogs().settings).toEqual({ open: true, section: "general" });
+      cleanup();
+      expect(listener === null).toBe(true);
+    } finally {
+      delete host.aopDesktop;
     }
-  });
-
-  test("⌘K toggles it", async () => {
-    renderShell();
-    fireEvent.keyDown(window, { key: "k", metaKey: true });
-    await screen.findByPlaceholderText("Find a project");
   });
 });
 
 describe("AppShell keyboard and dialogs", () => {
+  test("⌘, opens the AOP settings, even while typing", () => {
+    renderShell();
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: ",", metaKey: true });
+    input.remove();
+    expect(getDialogs().settings).toEqual({ open: true, section: "general" });
+  });
+
   test("⌘N opens New project, except while typing", async () => {
     renderShell();
     const input = document.createElement("input");

@@ -102,7 +102,7 @@ export const usePanelLayout = ({
   };
 };
 
-// The room the panes share, which a collapsing sidebar or a dragged window changes.
+// The room the panes share, which a resized window changes.
 const useContainerWidth = (ref: RefObject<HTMLDivElement | null>): number | null => {
   const [width, setWidth] = useState<number | null>(null);
   useLayoutEffect(() => {

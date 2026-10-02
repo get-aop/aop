@@ -1,7 +1,6 @@
 export type DashboardTheme = "light" | "dark";
 
 export const SELECTED_REPO_STORAGE_KEY = "aop:selected-repo-id";
-export const REPO_SCOPE_STORAGE_KEY = "aop:repo-scope:v1";
 export const DASHBOARD_THEME_STORAGE_KEY = "aop:dashboard-theme:v1";
 
 /** Dark is the default AOP look; light stays available through the toggle. */
@@ -18,27 +17,6 @@ export const loadSelectedRepoId = (): string | null => readStorageValue(SELECTED
 
 export const saveSelectedRepoId = (repoId: string | null): void => {
   writeStorageValue(SELECTED_REPO_STORAGE_KEY, repoId);
-};
-
-/** Sidebar repo-scope filter. Null = "All" (no filtering). */
-export const loadRepoScope = (): string[] | null => {
-  const raw = readStorageValue(REPO_SCOPE_STORAGE_KEY);
-  if (raw === null) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    const ids = parsed.filter((id): id is string => typeof id === "string");
-    return ids.length > 0 ? ids : null;
-  } catch {
-    return null;
-  }
-};
-
-export const saveRepoScope = (scope: string[] | null): void => {
-  writeStorageValue(
-    REPO_SCOPE_STORAGE_KEY,
-    scope && scope.length > 0 ? JSON.stringify(scope) : null,
-  );
 };
 
 const parseDashboardTheme = (value: string | null): DashboardTheme | null => {

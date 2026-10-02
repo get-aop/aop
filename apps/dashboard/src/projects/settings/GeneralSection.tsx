@@ -59,7 +59,7 @@ const NameRow = ({ project, settings }: { project: Project; settings: AutosaveSe
   return (
     <SettingRow
       label="Name and icon"
-      description="How the project shows in the sidebar and in its header."
+      description="How the project shows in the project switcher and in its header."
       htmlFor="settings-name"
       status={settings.state(status.phase === "idle" ? "icon" : "name")}
       control={

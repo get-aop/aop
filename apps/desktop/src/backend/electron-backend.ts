@@ -6,6 +6,11 @@ export interface DashboardBridge {
   getHostConfig: () => Promise<{ baseUrl: string; token: string | null }>;
   hostRejected: () => Promise<void>;
   setZoom: (zoomFactor: number) => Promise<void>;
+  /**
+   * The app menu's Settings… (⌘,). A choice made before the dashboard listens (the menu can load
+   * the dashboard first) is kept and handed to the first listener.
+   */
+  onOpenSettings: (listener: () => void) => () => void;
   browser: DesktopBrowserBridge;
 }
 

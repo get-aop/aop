@@ -10,7 +10,6 @@ const { act, cleanup, fireEvent, render, screen } = await import("@testing-libra
 const { ProjectsProvider } = await import("../ProjectsProvider");
 const { ProjectPage } = await import("../ProjectPage");
 const { ChatApiProvider } = await import("../chat/chat-api");
-const { SidebarProvider } = await import("@/ui/sidebar");
 const { navigate, useRoute } = await import("../../shell/router");
 
 let host: ReturnType<typeof mockEmptyThreadHost>;
@@ -45,13 +44,11 @@ const Routed = () => {
 const mount = (state: ProjectsState = stateWith(blocked, busy)) => {
   const stub = stubLiveProjects(state);
   render(
-    <SidebarProvider>
-      <ChatApiProvider value={silentChatHost}>
-        <ProjectsProvider live={stub.live}>
-          <Routed />
-        </ProjectsProvider>
-      </ChatApiProvider>
-    </SidebarProvider>,
+    <ChatApiProvider value={silentChatHost}>
+      <ProjectsProvider live={stub.live}>
+        <Routed />
+      </ProjectsProvider>
+    </ChatApiProvider>,
   );
   return stub;
 };
@@ -74,7 +71,7 @@ const panel = () => screen.queryByTestId("threads-panel");
 const chatColumn = () => screen.getByTestId("chat-column");
 
 describe("the panel toggle", () => {
-  test("is labelled Overview and leads the settings link and menu, right beside the project name", () => {
+  test("is labelled Overview and leads the settings link and menu, right after the project switcher and its + button", () => {
     mount();
     const toggle = screen.getByTestId("panel-toggle");
     const group = screen.getByTestId("project-topbar-actions");
@@ -85,7 +82,9 @@ describe("the panel toggle", () => {
       "project-settings-link",
       "project-header-menu",
     ]);
-    expect(group.previousElementSibling).toBe(screen.getByTestId("project-home-link"));
+    const nav = screen.getByTestId("shell-nav");
+    expect(group.previousElementSibling === nav).toBe(true);
+    expect(nav.lastElementChild?.getAttribute("data-testid")).toBe("new-project-button");
   });
 
   test("closes the panel and opens it again, and this browser remembers which", async () => {

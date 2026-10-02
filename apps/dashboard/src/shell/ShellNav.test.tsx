@@ -6,7 +6,6 @@ setupDashboardDom();
 
 const { act, cleanup, fireEvent, render, screen } = await import("@testing-library/react");
 const { ProjectsProvider } = await import("../projects/ProjectsProvider");
-const { SidebarProvider } = await import("@/ui/sidebar");
 const { ShellNav } = await import("./ShellNav");
 const { navigate } = await import("./router");
 
@@ -15,11 +14,9 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/");
   const stub = stubLiveProjects(makeState([]));
   render(
-    <SidebarProvider>
-      <ProjectsProvider live={stub.live}>
-        <ShellNav />
-      </ProjectsProvider>
-    </SidebarProvider>,
+    <ProjectsProvider live={stub.live}>
+      <ShellNav current={null} />
+    </ProjectsProvider>,
   );
 });
 afterEach(cleanup);

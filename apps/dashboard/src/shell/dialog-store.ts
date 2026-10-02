@@ -6,12 +6,15 @@ interface DialogState {
   settings: { open: boolean; section: SettingsSection };
   newProject: boolean;
   attachRepo: boolean;
+  /** The project switcher's popover in the top bar (⌘K). */
+  switcher: boolean;
 }
 
 const CLOSED: DialogState = {
   settings: { open: false, section: "general" },
   newProject: false,
   attachRepo: false,
+  switcher: false,
 };
 
 let current: DialogState = CLOSED;
@@ -45,6 +48,9 @@ export const closeSettingsDialog = (): void =>
 
 export const openNewProjectDialog = (): void => setState({ newProject: true });
 export const closeNewProjectDialog = (): void => setState({ newProject: false });
+
+export const setProjectSwitcherOpen = (open: boolean): void => setState({ switcher: open });
+export const toggleProjectSwitcher = (): void => setState({ switcher: !current.switcher });
 
 export const openAttachRepoDialog = (): void => setState({ attachRepo: true });
 export const closeAttachRepoDialog = (): void => setState({ attachRepo: false });

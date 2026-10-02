@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { makeState, stubLiveProjects } from "../projects/test-utils";
 import { setupDashboardDom } from "../test/setup-dom";
 import { installFakeCliHost } from "./test-utils";
 
@@ -10,7 +11,8 @@ setDefaultTimeout(15_000);
 const { cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
 const { AgentCliPanel } = await import("./AgentCliPanel");
 const { ConfirmationHost } = await import("../components/ConfirmationHost");
-const { SidebarFooterStatus } = await import("../shell/sidebar-footer");
+const { ShellStatus } = await import("../shell/ShellStatus");
+const { ProjectsProvider } = await import("../projects/ProjectsProvider");
 const { resetAgentClisForTests } = await import("./agent-cli-store");
 
 const originalFetch = globalThis.fetch;
@@ -62,13 +64,15 @@ describe("Skip permission checks", () => {
     expect(host.bypass.enabled).toBe(false);
   });
 
-  test("confirmed, it is saved on the host and the row, the heading and the sidebar say it is on", async () => {
+  test("confirmed, it is saved on the host and the row, the heading and the top bar say it is on", async () => {
     const host = installFakeCliHost();
     render(
       <>
         <AgentCliPanel />
         <ConfirmationHost />
-        <SidebarFooterStatus connection="connected" />
+        <ProjectsProvider live={stubLiveProjects(makeState([])).live}>
+          <ShellStatus testId="status" />
+        </ProjectsProvider>
       </>,
     );
 
@@ -82,7 +86,7 @@ describe("Skip permission checks", () => {
       "checked",
     );
     expect(screen.getByTestId("permission-bypass-badge").textContent).toBe("Permission checks off");
-    expect(screen.getByTestId("sidebar-permission-bypass").textContent).toBe(
+    expect(screen.getByTestId("permission-bypass-notice").getAttribute("aria-label")).toBe(
       "Permission checks off",
     );
   });

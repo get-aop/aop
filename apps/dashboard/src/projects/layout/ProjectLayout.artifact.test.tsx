@@ -9,7 +9,6 @@ const { act, cleanup, fireEvent, render, screen } = await import("@testing-libra
 const { ProjectsProvider } = await import("../ProjectsProvider");
 const { ProjectPage } = await import("../ProjectPage");
 const { ChatApiProvider } = await import("../chat/chat-api");
-const { SidebarProvider } = await import("@/ui/sidebar");
 const { useRoute } = await import("../../shell/router");
 const { openArtifactView, closeArtifactView } = await import("../artifact-view/open-artifact-view");
 const { openPullRequestView } = await import("../pull-request-view/open-pull-request-view");
@@ -42,13 +41,11 @@ const Routed = () => {
 const mount = () => {
   const stub = stubLiveProjects(makeState([makeEntry(project, [thread])]));
   render(
-    <SidebarProvider>
-      <ChatApiProvider value={silentChatHost}>
-        <ProjectsProvider live={stub.live}>
-          <Routed />
-        </ProjectsProvider>
-      </ChatApiProvider>
-    </SidebarProvider>,
+    <ChatApiProvider value={silentChatHost}>
+      <ProjectsProvider live={stub.live}>
+        <Routed />
+      </ProjectsProvider>
+    </ChatApiProvider>,
   );
 };
 

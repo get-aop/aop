@@ -17,7 +17,7 @@ const OVERLAY_MIN = 600;
 /** What stays uncovered to the left of an overlaid panel. */
 const OVERLAY_MARGIN = 48;
 
-/** The mode for a screen `width` pixels wide (the room right of the projects sidebar). */
+/** The mode for a screen `width` pixels wide (the window's width). */
 export const layoutModeFor = (width: number): LayoutMode => {
   if (width >= SIDE_MIN) return "side";
   return width >= OVERLAY_MIN ? "overlay" : "single";

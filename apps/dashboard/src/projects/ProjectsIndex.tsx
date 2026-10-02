@@ -3,9 +3,9 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
+import { AppTopBar } from "../shell/AppTopBar";
 import { openNewProjectDialog } from "../shell/dialog-store";
 import { Link, projectPath } from "../shell/router";
-import { ShellNav } from "../shell/ShellNav";
 import { ProjectMenu } from "./ProjectMenu";
 import { useProjectsState } from "./ProjectsProvider";
 import { ProjectTile } from "./ProjectTile";
@@ -40,64 +40,64 @@ export const ProjectsIndex = () => {
   );
 
   return (
-    <div data-testid="projects-index" className="flex h-full flex-col overflow-y-auto">
-      <div className="flex h-12 shrink-0 items-center px-2">
-        <ShellNav />
-      </div>
-      <header className="flex items-center gap-4 px-6 pt-2 pb-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-[20px] font-semibold text-text">Projects</h1>
-          {total > 0 ? (
-            <p data-testid="projects-attention" className="mt-0.5 text-[13px] text-text-subtle">
-              {attentionSentence(waiting)}
-            </p>
-          ) : null}
-        </div>
-        <Button size="sm" data-testid="projects-new" onClick={openNewProjectDialog}>
-          <SquarePenIcon />
-          New project
-        </Button>
-      </header>
-
-      {state.phase === "error" ? (
-        <p data-testid="projects-error" className="px-6 text-[13px] text-blocked">
-          Could not load projects. {state.error}
-        </p>
-      ) : null}
-      {state.phase === "loading" ? (
-        <p className="px-6 text-[13px] text-text-subtle">Loading projects…</p>
-      ) : null}
-      {state.phase === "ready" && total === 0 ? <FirstProject /> : null}
-      {total > 0 ? (
-        <div className="flex flex-col gap-4 px-6 pb-6">
-          <div className="relative w-full max-w-xs">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-text-subtle" />
-            <Input
-              data-testid="project-search"
-              type="search"
-              aria-label="Search projects"
-              placeholder="Search projects"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="h-8 pl-8 text-[13px]"
-            />
+    <div data-testid="projects-index" className="flex h-full min-h-0 flex-col">
+      <AppTopBar />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <header className="flex items-center gap-4 px-6 pt-2 pb-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[20px] font-semibold text-text">Projects</h1>
+            {total > 0 ? (
+              <p data-testid="projects-attention" className="mt-0.5 text-[13px] text-text-subtle">
+                {attentionSentence(waiting)}
+              </p>
+            ) : null}
           </div>
-          {entries.length === 0 ? (
-            <p className="py-8 text-center text-[13px] text-text-subtle">
-              No projects match “{query.trim()}”.
-            </p>
-          ) : (
-            <div
-              data-testid="project-grid"
-              className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3"
-            >
-              {entries.map((entry) => (
-                <ProjectCard key={entry.project.id} entry={entry} now={now} />
-              ))}
+          <Button size="sm" data-testid="projects-new" onClick={openNewProjectDialog}>
+            <SquarePenIcon />
+            New project
+          </Button>
+        </header>
+
+        {state.phase === "error" ? (
+          <p data-testid="projects-error" className="px-6 text-[13px] text-blocked">
+            Could not load projects. {state.error}
+          </p>
+        ) : null}
+        {state.phase === "loading" ? (
+          <p className="px-6 text-[13px] text-text-subtle">Loading projects…</p>
+        ) : null}
+        {state.phase === "ready" && total === 0 ? <FirstProject /> : null}
+        {total > 0 ? (
+          <div className="flex flex-col gap-4 px-6 pb-6">
+            <div className="relative w-full max-w-xs">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-text-subtle" />
+              <Input
+                data-testid="project-search"
+                type="search"
+                aria-label="Search projects"
+                placeholder="Search projects"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="h-8 pl-8 text-[13px]"
+              />
             </div>
-          )}
-        </div>
-      ) : null}
+            {entries.length === 0 ? (
+              <p className="py-8 text-center text-[13px] text-text-subtle">
+                No projects match “{query.trim()}”.
+              </p>
+            ) : (
+              <div
+                data-testid="project-grid"
+                className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3"
+              >
+                {entries.map((entry) => (
+                  <ProjectCard key={entry.project.id} entry={entry} now={now} />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 };

@@ -19,7 +19,7 @@ Everything that runs an agent needs a stack seeded with `--fake-runtime` and sta
 ## How to get to it (user POV)
 
 - Open a project and choose **Settings** in its header, or `…` then **Settings**. The addresses are `/projects/:id/settings` (General), `/settings/models`, `/settings/threads`, `/settings/computer-use`, `/settings/notifications`, `/settings/environment`, `/settings/memory`, `/settings/usage` and `/settings/advanced`. `/settings/general` is not an address.
-- Devices: choose **Settings** in the sidebar footer (or `⌘,`), then **Devices**. The entry is missing for a paired device.
+- Devices: choose **AOP settings** in the project switcher (or `⌘,`), then **Devices**. The entry is missing for a paired device.
 
 ## Test handles
 

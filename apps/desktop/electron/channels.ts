@@ -25,6 +25,8 @@ export const IPC_CHANNELS = {
   browserDownloadAction: "desktop:browser-download-action",
   // The app to the dashboard: what its browser's pages did that only the app sees.
   browserEvent: "desktop:browser-event",
+  // The app to the dashboard: the app menu's Settings… was chosen.
+  openSettings: "desktop:open-settings",
   // The app to the connect screen: something it shows changed.
   stateChanged: "desktop:state-changed",
   updateStateChanged: "desktop:update-state-changed",

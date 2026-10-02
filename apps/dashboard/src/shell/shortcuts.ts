@@ -1,5 +1,5 @@
 export interface ShortcutActions {
-  toggleCommandPalette: () => void;
+  toggleProjectSwitcher: () => void;
   newProject: () => void;
   openSettings: () => void;
 }
@@ -9,9 +9,8 @@ const isEditableTarget = (target: EventTarget | null): boolean =>
   (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
 
 /**
- * Global keyboard map (PLAN §4.2). ⌘B is handled by the sidebar provider
- * itself (SIDEBAR_KEYBOARD_SHORTCUT), ⌘J by the sessions workspace — this
- * routes the rest. Editable targets only yield to ⌘K/⌘, so typing is never
+ * Global keyboard map: ⌘K opens the project switcher, ⌘, the AOP settings, ⌘N a new project.
+ * ⌘J belongs to the sessions workspace. Editable targets only yield to ⌘K/⌘, so typing is never
  * eaten (esp. ⌘N inside the composer).
  */
 export const handleGlobalShortcut = (event: KeyboardEvent, actions: ShortcutActions): boolean => {
@@ -19,7 +18,7 @@ export const handleGlobalShortcut = (event: KeyboardEvent, actions: ShortcutActi
 
   if (event.key === "k") {
     event.preventDefault();
-    actions.toggleCommandPalette();
+    actions.toggleProjectSwitcher();
     return true;
   }
   if (event.key === ",") {

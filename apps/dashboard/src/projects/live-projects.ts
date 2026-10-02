@@ -51,7 +51,7 @@ export interface LiveProjectsDeps {
 
 /**
  * How often the project list is refetched. No host-level stream announces a project made on
- * another client (streams are per project), so this is how fast one appears in the sidebar; the
+ * another client (streams are per project), so this is how fast one appears in the project switcher; the
  * list is one small request.
  */
 export const POLL_INTERVAL_MS = 5_000;
