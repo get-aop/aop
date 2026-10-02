@@ -51,6 +51,7 @@ export const BrowserPane = ({
   const addressRef = useRef<AddressBarHandle>(null);
 
   const front = activeTab(tabs);
+  const loaded = useTabsLoaded(front.id);
   const frontRuntime = runtime[front.id] ?? IDLE;
   const onStartPage = front.url === null || Boolean(frontRuntime.home);
   const frontPrompt = prompts.find((prompt) => prompt.webContentsId === frontRuntime.webContentsId);
@@ -132,7 +133,7 @@ export const BrowserPane = ({
       ) : null}
       <div data-testid="browser-viewport" className="relative min-h-0 flex-1 overflow-hidden">
         {tabs.tabs.map((tab) =>
-          tab.url === null ? null : (
+          tab.url === null || !loaded.has(tab.id) ? null : (
             <TabWebview
               key={tab.id}
               tabId={tab.id}
@@ -249,6 +250,19 @@ const shortcutAction = (shortcut: BrowserShortcut, context: ShortcutContext): ((
     "zoom-reset": () => {},
   };
   return actions[shortcut];
+};
+
+/**
+ * The tabs whose pages have been in front since the browser opened. Saved tabs come back as
+ * names only and load when first brought forward, as Chrome restores a session, so twenty saved
+ * tabs do not load twenty pages at once.
+ */
+const useTabsLoaded = (frontId: string): ReadonlySet<string> => {
+  const [loaded, setLoaded] = useState<ReadonlySet<string>>(() => new Set([frontId]));
+  useEffect(() => {
+    setLoaded((current) => (current.has(frontId) ? current : new Set([...current, frontId])));
+  }, [frontId]);
+  return loaded.has(frontId) ? loaded : new Set([...loaded, frontId]);
 };
 
 /** Tells the app whether the browser is shown, so its window sends ⌘R and the rest here. */

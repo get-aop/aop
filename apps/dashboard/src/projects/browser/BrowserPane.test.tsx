@@ -206,6 +206,31 @@ describe("the AOP Browser in the chat's place", () => {
     expect(address().value).toBe("https://example.com/");
   });
 
+  test("saved tabs come back as names, and a page loads when its tab first comes forward", async () => {
+    window.localStorage.setItem(
+      browserTabsKey("p1"),
+      JSON.stringify({
+        tabs: [
+          { id: "a", url: "https://a.example/", title: "A" },
+          { id: "b", url: "https://b.example/", title: "B" },
+        ],
+        activeId: "a",
+        recent: [],
+      }),
+    );
+    window.history.pushState({}, "", "/projects/p1/browser");
+    mount();
+    expect(screen.getAllByTestId("browser-tab").map((tab) => tab.textContent)).toEqual(["A", "B"]);
+    expect(webviews().map((page) => page.getAttribute("src"))).toEqual(["https://a.example/"]);
+
+    fireEvent.click(screen.getAllByTestId("browser-tab")[1] as HTMLElement);
+    await settle();
+    expect(webviews().map((page) => page.getAttribute("src"))).toEqual([
+      "https://a.example/",
+      "https://b.example/",
+    ]);
+  });
+
   test("a panel that covers the chat's column parks the page out of the window", async () => {
     window.history.pushState({}, "", "/projects/p1/browser");
     mount();
