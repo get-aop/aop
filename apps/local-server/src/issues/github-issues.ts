@@ -82,6 +82,15 @@ export const createGithubIssueLoader = (
 
   return {
     load: async ({ nameWithOwner, state, limit, refresh }) => {
+      // The name comes from a git remote and goes into an API path: only GitHub's own characters.
+      if (!GITHUB_NAME.test(nameWithOwner)) {
+        return {
+          nodes: [],
+          hasMore: false,
+          fetchedAt: null,
+          failure: `Not a GitHub repository name: ${nameWithOwner}`,
+        };
+      }
       const key = `${nameWithOwner.toLowerCase()}|${state}`;
       const held = entries.get(key);
       if (held && !refresh && now() - held.checkedAt < reuseMs && covers(held, limit)) {
@@ -97,6 +106,8 @@ export const createGithubIssueLoader = (
     },
   };
 };
+
+const GITHUB_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
 interface Entry {
   /** The ETag of the last probe. */

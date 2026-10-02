@@ -149,7 +149,8 @@ const PanelTabBody = ({
     case "routines":
       return <RoutinesTab project={entry.project} />;
     case "issues":
-      return <IssuesTab projectId={entry.project.id} />;
+      // Keyed by project, so a search or filter never carries over to another project's issues.
+      return <IssuesTab key={entry.project.id} projectId={entry.project.id} />;
   }
 };
 

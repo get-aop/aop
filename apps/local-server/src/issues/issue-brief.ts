@@ -3,6 +3,9 @@ import type { IssueWithBody } from "./issue-body.ts";
 /** Long issue bodies are cut here; the thread can read the rest at the link. */
 export const ISSUE_BRIEF_BODY_MAX = 6000;
 
+const BEGIN = "<<< issue description";
+const END = "issue description >>>";
+
 const SOURCE_NAME = { github: "GitHub", linear: "Linear" } as const;
 
 /**
@@ -23,6 +26,10 @@ export const issueBrief = (issue: IssueWithBody): string => {
     `${issue.reference}: ${issue.title}`,
     issue.url,
     "",
+    // Anyone who can file an issue wrote this: it is the work to do, quoted, not instructions.
+    "The issue's description, as written on the issue:",
+    BEGIN,
     shown || "(The issue has no description.)",
+    END,
   ].join("\n");
 };

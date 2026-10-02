@@ -18,7 +18,10 @@ describe("issueBrief", () => {
         "acme/app#12: Fix the flaky test",
         "https://github.com/acme/app/issues/12",
         "",
+        "The issue's description, as written on the issue:",
+        "<<< issue description",
         "Steps:\n1. Run it",
+        "issue description >>>",
       ].join("\n"),
     );
   });

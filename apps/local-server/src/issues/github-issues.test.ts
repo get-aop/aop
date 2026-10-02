@@ -120,3 +120,15 @@ describe("the GitHub issue loader", () => {
     expect(calls.filter((call) => call.startsWith("graphql"))).toHaveLength(2);
   });
 });
+
+describe("a repository name read from a git remote", () => {
+  test("is refused before any request when it is not GitHub's shape", async () => {
+    const { github, calls } = scriptedGithub({ issues: githubNodes(1) });
+    const loader = createGithubIssueLoader(github);
+
+    const read = await loader.load({ ...request, nameWithOwner: "acme/app?per_page=100&x=1" });
+
+    expect(read.failure).toContain("Not a GitHub repository name");
+    expect(calls).toEqual([]);
+  });
+});
