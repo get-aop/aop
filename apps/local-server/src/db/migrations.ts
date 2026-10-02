@@ -12,6 +12,7 @@ import { PROJECT_KICKOFF_V12_STATEMENTS } from "./project-kickoff-v12.ts";
 import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
 import { REPORTED_RUNTIME_V13_STATEMENTS } from "./reported-runtime-v13.ts";
+import { ROUTINES_V22_STATEMENTS } from "./routines-v22.ts";
 import { RUN_CLI_VERSION_V17_STATEMENTS } from "./run-cli-version-v17.ts";
 import { RUN_PERMISSIONS_V19_STATEMENTS } from "./run-permissions-v19.ts";
 import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
@@ -56,6 +57,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 19, name: "run-permissions", statements: RUN_PERMISSIONS_V19_STATEMENTS },
   { version: 20, name: "computer-use", statements: COMPUTER_USE_V20_STATEMENTS },
   { version: 21, name: "thread-attention", statements: THREAD_ATTENTION_V21_STATEMENTS },
+  { version: 22, name: "routines", statements: ROUTINES_V22_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

@@ -13,6 +13,27 @@ export const ROUTINE_PROMPT_MAX = 8000;
 /** Runs more often than this are refused unless the host owner lowers the setting. */
 export const DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES = 15;
 export const DEFAULT_ROUTINE_MAX_ACTIVE = 10;
+export const MAX_ROUTINE_MIN_INTERVAL_MINUTES = 24 * 60;
+export const MAX_ROUTINE_MAX_ACTIVE = 100;
+
+/** A stored `routine_min_interval_minutes`, or null when it is not a whole number from 1 to a day. */
+export const parseRoutineMinInterval = (value: string | null | undefined): number | null =>
+  parseWholeNumber(value, 1, MAX_ROUTINE_MIN_INTERVAL_MINUTES);
+
+/** A stored `routine_max_active_per_project`, or null when it is not a whole number from 1 to 100. */
+export const parseRoutineMaxActive = (value: string | null | undefined): number | null =>
+  parseWholeNumber(value, 1, MAX_ROUTINE_MAX_ACTIVE);
+
+const parseWholeNumber = (
+  value: string | null | undefined,
+  min: number,
+  max: number,
+): number | null => {
+  if (!value || !/^\d+$/.test(value.trim())) return null;
+  const number = Number(value.trim());
+  return number >= min && number <= max ? number : null;
+};
+
 /** How many runs of one routine the host keeps; older ones are dropped. */
 export const ROUTINE_HISTORY_MAX = 50;
 

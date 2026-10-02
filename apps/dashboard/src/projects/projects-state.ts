@@ -114,7 +114,10 @@ export const setConnection = (
   return { ...state, reachable, byId: { ...state.byId, [projectId]: { ...entry, connection } } };
 };
 
-/** One log entry from a project's stream. Messages belong to the chat and change nothing here. */
+/**
+ * One log entry from a project's stream. Messages belong to the chat and routines to the
+ * Routines tab (which listens to the stream itself); they change nothing here.
+ */
 export const applyEntry = (state: ProjectsState, entry: EventLogEntry): ProjectsState => {
   switch (entry.type) {
     case "project.upserted":
@@ -127,6 +130,8 @@ export const applyEntry = (state: ProjectsState, entry: EventLogEntry): Projects
       return removeThread(state, entry.projectId, entry.payload.threadId);
     case "message.created":
     case "message.updated":
+    case "routine.upserted":
+    case "routine.removed":
       return state;
   }
 };
