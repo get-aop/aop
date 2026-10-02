@@ -57,6 +57,7 @@ const createHarness = async (
     // GitHub is only asked when the feed is down, which a test asks for with `feedDown`.
     feed: {
       origin: fake.url,
+      channel: "stable" as const,
       github: { apiUrl: fake.url, repo: "get-aop/aop-mono", token: FAKE_TOKEN },
     },
     fetch: (url, init) => fetch(url, init),

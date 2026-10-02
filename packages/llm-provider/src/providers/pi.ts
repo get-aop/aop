@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
-import { buildSpawnEnv, resolveExecHost } from "@aop/infra";
+import { aopPaths, buildSpawnEnv, resolveExecHost } from "@aop/infra";
 import { extractRuntimeSessionIdFromRawJsonl } from "../logs";
 import { assertNativePlanModeSupported } from "../plan-mode";
 import { resolveRuntimeAlias } from "../runtime-alias";
@@ -157,7 +156,7 @@ const buildPiEnv = (
   const baseEnv = {
     ...(extraEnv ?? {}),
   };
-  const aopHome = baseEnv.AOP_HOME ?? process.env.AOP_HOME ?? join(homedir(), ".aop");
+  const aopHome = baseEnv.AOP_HOME ?? aopPaths.home();
 
   if (!baseEnv.PI_CODING_AGENT_SESSION_DIR) {
     baseEnv.PI_CODING_AGENT_SESSION_DIR = join(aopHome, PI_SESSION_DIR);

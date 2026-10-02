@@ -17,6 +17,8 @@ export {
   PermissionBypassSchema,
   parseAgentCliCheckInterval,
 } from "./agent-clis.ts";
+export type { ChannelConfig, ReleaseChannel } from "./channel.ts";
+export { buildChannel, CHANNELS, channelDefine, parseReleaseChannel } from "./channel.ts";
 export { AOP_PORTS, AOP_URLS } from "./env.ts";
 export type { HostHealth } from "./host-api.ts";
 export {
@@ -139,7 +141,10 @@ export {
 } from "./updates.ts";
 export {
   compareReleaseVersions,
+  isChannelVersion,
+  isNewerBuild,
   isNewerRelease,
+  isNightlyVersion,
   isReleaseVersion,
   normalizeReleaseVersion,
 } from "./version.ts";

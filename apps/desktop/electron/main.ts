@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { buildChannel } from "@aop/common";
 import {
   app,
   BrowserWindow,
@@ -69,6 +70,10 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+// A packaged app's version is the one Electron Builder wrote into it: a nightly build carries
+// `0.10.7-nightly.<date>.<run>`, not the release in package.json. A development run has none.
+const appVersion = app.isPackaged ? app.getVersion() : packageInfo.version;
+
 // `AOP_RELEASE_FEED_URL` points the app at a fake release feed; it is how the updater is tested.
 const feedOverride = process.env.AOP_RELEASE_FEED_URL?.trim() || undefined;
 
@@ -85,7 +90,7 @@ if (!app.requestSingleInstanceLock()) {
 
 async function start(): Promise<void> {
   // Windows attributes notifications to this id; a packaged NSIS install uses the same one.
-  app.setAppUserModelId("com.getaop.aop");
+  app.setAppUserModelId(buildChannel().appId);
   const paths = resolveDesktopPaths(app.getAppPath(), process.resourcesPath, development);
   const userData = app.getPath("userData");
   const logDir = resolveLogDir(process.env);
@@ -153,7 +158,7 @@ async function start(): Promise<void> {
     : null;
 
   const controller = createDesktopController({
-    appVersion: packageInfo.version,
+    appVersion,
     platform:
       process.platform === "win32" ? "win32" : process.platform === "linux" ? "linux" : "darwin",
     config,
@@ -181,7 +186,7 @@ async function start(): Promise<void> {
   });
   appUpdater = createAppUpdater({
     mode: updateMode,
-    appVersion: packageInfo.version,
+    appVersion,
     arch: process.arch,
     feedOrigin: feedOverride,
     fetch: fetchImpl,
@@ -227,7 +232,8 @@ async function start(): Promise<void> {
   installMenuActions(controller);
   installLifecycle(controller);
   log("started", {
-    version: packageInfo.version,
+    version: appVersion,
+    channel: buildChannel().id,
     development,
     hostMode: supervisor !== null,
     updates: updateMode,

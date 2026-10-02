@@ -4,6 +4,7 @@ import { mkdir, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { registerCommands, setupLogging } from "@aop/cli/commands";
+import { buildChannel } from "@aop/common";
 import { configureLogging, getLogger } from "@aop/infra";
 import { startServer } from "@aop/local-server/server";
 import { runUpdate } from "@aop/local-server/update";
@@ -14,11 +15,14 @@ declare const BUILD_VERSION: string;
 
 const logger = getLogger("entrypoint");
 
-const AOP_DIR = join(homedir(), ".aop");
+// The channel this binary was built for decides its data folder and ports, so AOP Nightly
+// (`aop-nightly`) runs beside a stable `aop` without sharing either.
+const CHANNEL = buildChannel();
+const AOP_DIR = join(homedir(), CHANNEL.homeDirName);
 const PID_FILE = join(AOP_DIR, "server.pid");
 const LOG_DIR = join(AOP_DIR, "logs");
-const DEFAULT_LOCAL_SERVER_PORT = "25150";
-const DEFAULT_DASHBOARD_PORT = "25160";
+const DEFAULT_LOCAL_SERVER_PORT = String(CHANNEL.hostPort);
+const DEFAULT_DASHBOARD_PORT = String(CHANNEL.dashboardPort);
 
 const ensureAopDir = async (): Promise<void> => {
   await mkdir(AOP_DIR, { recursive: true });
@@ -86,7 +90,7 @@ const configureRuntimeEnvironment = (port?: string): number => {
 const spawnSystemctl = (command: string[]): { exitCode: number | null } =>
   Bun.spawnSync(command, { stdout: "ignore", stderr: "ignore" });
 
-const cli = cac("aop");
+const cli = cac(CHANNEL.binaryName);
 
 cli
   .command("run", "Start the local server")

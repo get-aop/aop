@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { buildChannel } from "@aop/common";
 import { hostPort } from "./host-port.ts";
 import { waitForHostVersion, waitUntilHostDown } from "./host-probe.ts";
 import { detectPlatform, type InstallLayout } from "./install-layout.ts";
@@ -43,7 +44,8 @@ export const systemPlanInput = (
 ): Omit<PlanInput, "layout"> => ({
   home: homedir(),
   os: process.platform,
-  pidFile: join(homedir(), ".aop", "server.pid"),
+  // Where `aop run --background` (scripts/installer/entrypoint.ts) writes it for this channel.
+  pidFile: join(homedir(), buildChannel().homeDirName, "server.pid"),
   port: hostPort(env),
   runsBinary,
 });

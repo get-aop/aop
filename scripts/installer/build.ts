@@ -4,6 +4,7 @@
 import { cpSync, existsSync, rmSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { channelDefine, parseReleaseChannel, type ReleaseChannel } from "@aop/common";
 import cac from "cac";
 import { generateChecksumFile } from "../release/checksums.ts";
 
@@ -23,10 +24,12 @@ const targetToFilename = (target: Target): string => {
   return `aop-${os}-${arch}`;
 };
 
-const getBuildVersion = async (): Promise<string> => {
+// `x.y.z+<commit>`. A nightly passes its own version (`0.10.7-nightly.<date>.<run>`, from
+// scripts/release/nightly-version.ts) in place of the one in package.json.
+const getBuildVersion = async (override?: string): Promise<string> => {
   const pkg = await Bun.file("./package.json").json();
   const commit = (await Bun.$`git rev-parse --short HEAD`.text()).trim();
-  return `${pkg.version}+${commit}`;
+  return `${override?.trim() || pkg.version}+${commit}`;
 };
 
 const buildDashboard = async (): Promise<void> => {
@@ -59,7 +62,11 @@ const archiveRuntimeAssets = async (): Promise<string> => {
   return archivePath;
 };
 
-const buildTarget = async (target: Target, version: string): Promise<string> => {
+const buildTarget = async (
+  target: Target,
+  version: string,
+  channel: ReleaseChannel,
+): Promise<string> => {
   const filename = targetToFilename(target);
   const outfile = join(RELEASE_DIR, filename);
   console.log(`Building ${filename}...`);
@@ -73,6 +80,8 @@ const buildTarget = async (target: Target, version: string): Promise<string> => 
     minify: true,
     define: {
       BUILD_VERSION: JSON.stringify(version),
+      // AOP_BUILD_CHANNEL=nightly makes `aop-nightly` (docs/NIGHTLY.md).
+      ...channelDefine(channel),
     },
   });
 
@@ -90,6 +99,7 @@ const buildTarget = async (target: Target, version: string): Promise<string> => 
 const main = async (): Promise<void> => {
   const cli = cac("build");
   cli.option("--target <target>", "Build only a single platform target");
+  cli.option("--version <version>", "Build as this version instead of the one in package.json");
   const { options } = cli.parse();
 
   const targetFilter = options.target as string | undefined;
@@ -112,12 +122,13 @@ const main = async (): Promise<void> => {
   await buildDashboard();
   const runtimeAssetsArchive = await archiveRuntimeAssets();
 
-  const version = await getBuildVersion();
-  console.log(`Version: ${version}`);
+  const version = await getBuildVersion(options.version ? String(options.version) : undefined);
+  const channel = parseReleaseChannel(process.env.AOP_BUILD_CHANNEL);
+  console.log(`Version: ${version} (${channel})`);
 
   const outputs: string[] = [runtimeAssetsArchive];
   for (const target of targets) {
-    const outfile = await buildTarget(target, version);
+    const outfile = await buildTarget(target, version, channel);
     outputs.push(outfile);
   }
 

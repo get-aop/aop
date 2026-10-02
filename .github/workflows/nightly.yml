@@ -1,0 +1,345 @@
+name: Nightly
+
+# AOP Nightly (docs/NIGHTLY.md): `main` built after every push that passes `ci`, signed and
+# published to getaop.com/nightly/, where nightly hosts and AOP Nightly.app update themselves from.
+# The stable release is release.yml; nothing here touches its tags, environment or feed.
+#
+# - A push to main: once the `AOP CI` run of that push succeeds, `workflow_run` starts this.
+#   Pull request runs of `AOP CI` (forks included) also fire `workflow_run`; the `resolve` job
+#   drops them, because this workflow runs with the nightly environment's secrets.
+# - A manual run from main with "publish" on publishes `main`'s head, the same way.
+# - A pull request that changes the nightly files, or a manual run with "publish" off, builds
+#   everything unsigned, checks it and runs deploy-nightly.sh as a dry run: nothing is published
+#   and no secret is read.
+#
+# Publishing runs only while the repository variable AOP_NIGHTLY_ENABLED is "true", and only in
+# the `nightly` environment, which accepts deployments from `main` alone and holds the Apple
+# signing secrets and a key to the nightly R2 bucket (never stable's).
+#
+# Actions are pinned to commit SHAs (version in the comment), as in release.yml.
+on:
+  workflow_run:
+    workflows: ["AOP CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish this build of main to getaop.com/nightly. Leave off for a dry run.
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - ".github/workflows/nightly.yml"
+      - "scripts/release/deploy-nightly.sh"
+      - "scripts/release/nightly-*.ts"
+      - "scripts/installer/**"
+      - "packages/common/src/channel.ts"
+
+permissions:
+  contents: read
+
+# One publishing run at a time, never cancelled: a burst of merges leaves one pending run, which
+# builds the newest main. Pull request runs have a group of their own.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('nightly-pr-{0}', github.event.pull_request.number) || 'nightly' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Every build step reads it: aop-nightly, ~/.aop-nightly, port 25650, AOP Nightly.app.
+  AOP_BUILD_CHANNEL: nightly
+  NIGHTLY_FEED: https://getaop.com/nightly/releases/latest.json
+
+jobs:
+  resolve:
+    if: >-
+      github.event_name != 'workflow_run' || (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        vars.AOP_NIGHTLY_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      version: ${{ steps.meta.outputs.version }}
+      publish: ${{ steps.meta.outputs.publish }}
+      skip: ${{ steps.meta.outputs.skip }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - run: bun install --frozen-lockfile
+
+      - name: Resolve the build
+        id: meta
+        env:
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+          ENABLED: ${{ vars.AOP_NIGHTLY_ENABLED }}
+        run: |
+          publish=false
+          if [ "$EVENT" = "workflow_run" ]; then publish=true; fi
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$DISPATCH_PUBLISH" = "true" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "A publishing nightly runs from main only; this run is from $GITHUB_REF." >&2
+              exit 1
+            fi
+            if [ "$ENABLED" != "true" ]; then
+              echo "Set the repository variable AOP_NIGHTLY_ENABLED to true to publish nightlies." >&2
+              exit 1
+            fi
+            publish=true
+          fi
+          skip=false
+          if [ "$publish" = "true" ]; then
+            git fetch --quiet origin main
+            if ! git merge-base --is-ancestor "$SHA" origin/main; then
+              echo "$SHA is not on main; a nightly is built from main only." >&2
+              exit 1
+            fi
+            published="$(curl -fsSL "$NIGHTLY_FEED" 2>/dev/null | jq -r '.commit // empty' || true)"
+            if [ "$published" = "$SHA" ]; then
+              echo "::notice::The nightly feed already carries ${SHA}; nothing to build."
+              skip=true
+            fi
+          fi
+          version="$(bun run ./scripts/release/nightly-version.ts --run "$GITHUB_RUN_NUMBER")"
+          echo "Nightly ${version} of ${SHA} (publish: ${publish}, skip: ${skip})"
+          {
+            echo "sha=${SHA}"
+            echo "version=${version}"
+            echo "publish=${publish}"
+            echo "skip=${skip}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - run: bun install --frozen-lockfile
+
+      # The four host binaries as aop-nightly, and the nightly dashboard.
+      - run: bun run build:release -- --version "${{ needs.resolve.outputs.version }}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-binaries
+          path: dist/release
+          retention-days: 1
+
+  package-macos:
+    needs: [resolve, build]
+    runs-on: macos-latest
+    # The Apple secrets live in the nightly environment; a dry run enters none and stays unsigned.
+    environment: ${{ needs.resolve.outputs.publish == 'true' && 'nightly' || '' }}
+    env:
+      SIGN: ${{ needs.resolve.outputs.publish == 'true' }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - run: bun install --frozen-lockfile
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nightly-binaries
+          path: dist/release
+
+      - name: Import Apple Developer ID certificate
+        if: env.SIGN == 'true'
+        env:
+          AOP_MACOS_CERTIFICATE_P12_BASE64: ${{ env.SIGN == 'true' && secrets.AOP_MACOS_CERTIFICATE_P12_BASE64 || '' }}
+          AOP_MACOS_CERTIFICATE_PASSWORD: ${{ env.SIGN == 'true' && secrets.AOP_MACOS_CERTIFICATE_PASSWORD || '' }}
+          AOP_MACOS_KEYCHAIN_PASSWORD: ${{ env.SIGN == 'true' && secrets.AOP_MACOS_KEYCHAIN_PASSWORD || '' }}
+        run: |
+          if [ -z "${AOP_MACOS_CERTIFICATE_P12_BASE64:-}" ]; then
+            echo "The nightly environment has no Apple certificate (docs/NIGHTLY.md, maintainer setup)." >&2
+            exit 1
+          fi
+
+          KEYCHAIN_PASSWORD="${AOP_MACOS_KEYCHAIN_PASSWORD:-$(uuidgen)}"
+          KEYCHAIN_PATH="$RUNNER_TEMP/aop-signing.keychain-db"
+          CERTIFICATE_PATH="$RUNNER_TEMP/aop-signing.p12"
+
+          echo "$AOP_MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$AOP_MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      # AOP Nightly.app, both architectures, with the zips and latest-mac.yml it updates from.
+      - name: Package AOP Nightly.app
+        env:
+          AOP_MACOS_SIGN_IDENTITY: ${{ env.SIGN == 'true' && secrets.AOP_MACOS_SIGN_IDENTITY || '' }}
+          AOP_MACOS_NOTARIZE: ${{ env.SIGN == 'true' && secrets.AOP_MACOS_NOTARIZE || '' }}
+          APPLE_ID: ${{ env.SIGN == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_TEAM_ID: ${{ env.SIGN == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ env.SIGN == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+        run: bun run package:macos-dmg -- --version "${{ needs.resolve.outputs.version }}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-macos
+          path: |
+            dist/release/aop-macos-x64.dmg
+            dist/release/aop-macos-arm64.dmg
+            dist/release/aop-macos-x64.zip
+            dist/release/aop-macos-arm64.zip
+            dist/release/latest-mac.yml
+          retention-days: 1
+
+  # Checks the set, writes checksums.sha256 and, for a build that does not publish, runs
+  # deploy-nightly.sh as a dry run so the publishing plan shows in the log.
+  assemble:
+    needs: [resolve, build, package-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - run: bun install --frozen-lockfile
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nightly-binaries
+          path: dist/release
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nightly-macos
+          path: dist/release
+
+      - name: Check the nightly set
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          for name in aop-linux-x64 aop-linux-arm64 aop-darwin-x64 aop-darwin-arm64 \
+            aop-macos-x64.dmg aop-macos-arm64.dmg aop-macos-x64.zip aop-macos-arm64.zip \
+            latest-mac.yml runtime-assets.tar.gz; do
+            if [ ! -s "dist/release/$name" ]; then
+              echo "Missing or empty nightly artifact: $name" >&2
+              exit 1
+            fi
+          done
+          # The Linux binary runs here: it must be aop-nightly at this version.
+          chmod +x dist/release/aop-linux-x64
+          reported="$(dist/release/aop-linux-x64 --version)"
+          echo "$reported"
+          case "$reported" in
+            "aop-nightly/${VERSION}+"*) ;;
+            *) echo "The host reports ${reported}, not aop-nightly/${VERSION}" >&2; exit 1 ;;
+          esac
+
+      - name: Check the macOS updater config
+        run: bun run ./scripts/release/macos-updater.ts check --dir dist/release --version "${{ needs.resolve.outputs.version }}"
+
+      - name: Generate checksums
+        run: |
+          rm -f dist/release/checksums.sha256
+          bun run ./scripts/release/checksums.ts dist/release
+          cat dist/release/checksums.sha256
+
+      - name: Dry run of the publish
+        if: needs.resolve.outputs.publish != 'true'
+        env:
+          AOP_NIGHTLY_DRY_RUN: "1"
+        run: bash scripts/release/deploy-nightly.sh "${{ needs.resolve.outputs.version }}" "${{ needs.resolve.outputs.sha }}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-all
+          path: |
+            dist/release/aop-linux-x64
+            dist/release/aop-linux-arm64
+            dist/release/aop-darwin-x64
+            dist/release/aop-darwin-arm64
+            dist/release/aop-macos-x64.dmg
+            dist/release/aop-macos-arm64.dmg
+            dist/release/aop-macos-x64.zip
+            dist/release/aop-macos-arm64.zip
+            dist/release/latest-mac.yml
+            dist/release/runtime-assets.tar.gz
+            dist/release/checksums.sha256
+          retention-days: 1
+
+  publish:
+    needs: [resolve, assemble]
+    if: needs.resolve.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    # Only main may deploy to it; it holds the key to the nightly bucket and nothing of stable's.
+    environment: nightly
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+
+      - run: bun install --frozen-lockfile
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nightly-all
+          path: dist/release
+
+      # The commits since the nightly the feed carries now (the last 30 when there is none).
+      - name: Write the notes
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          mkdir -p dist
+          previous="$(curl -fsSL "$NIGHTLY_FEED" 2>/dev/null | jq -r '.commit // empty' || true)"
+          if [ -n "$previous" ] && git cat-file -e "${previous}^{commit}" 2>/dev/null; then
+            range="${previous}..${SHA}"
+          else
+            range="-30 ${SHA}"
+          fi
+          # shellcheck disable=SC2086
+          git log --format='* %s (%h)' $range > dist/release-notes.md
+          cat dist/release-notes.md
+
+      - name: Publish to getaop.com/nightly
+        env:
+          AOP_NIGHTLY_R2_ACCESS_KEY_ID: ${{ secrets.AOP_NIGHTLY_R2_ACCESS_KEY_ID }}
+          AOP_NIGHTLY_R2_SECRET_ACCESS_KEY: ${{ secrets.AOP_NIGHTLY_R2_SECRET_ACCESS_KEY }}
+          AOP_NIGHTLY_R2_ENDPOINT: ${{ secrets.AOP_NIGHTLY_R2_ENDPOINT }}
+          AOP_NIGHTLY_R2_BUCKET: ${{ secrets.AOP_NIGHTLY_R2_BUCKET }}
+        run: bash scripts/release/deploy-nightly.sh "${{ needs.resolve.outputs.version }}" "${{ needs.resolve.outputs.sha }}"

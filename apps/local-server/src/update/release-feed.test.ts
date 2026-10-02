@@ -1,17 +1,50 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { CHANNELS } from "@aop/common";
 import { downloadAsset } from "./download.ts";
 import { downloadFetch, feedConfigFromEnv, fetchLatestRelease } from "./release-feed.ts";
 import { BINARY_ASSET, FAKE_TOKEN, scratchDir, serve, startFakeRelease } from "./test-utils.ts";
 
-const noGithub = (origin: string) => ({ origin, github: null });
+const noGithub = (origin: string) => ({ origin, channel: "stable" as const, github: null });
 
 describe("feedConfigFromEnv", () => {
   test("reads getaop.com, with no GitHub fallback unless a token is set", () => {
-    expect(feedConfigFromEnv({})).toEqual({ origin: "https://getaop.com", github: null });
+    expect(feedConfigFromEnv({})).toEqual({
+      origin: "https://getaop.com",
+      channel: "stable" as const,
+      github: null,
+    });
     expect(feedConfigFromEnv({ AOP_RELEASE_FEED_URL: "http://127.0.0.1:9" }).origin).toBe(
       "http://127.0.0.1:9",
     );
+  });
+
+  test("a nightly host reads the nightly feed and never falls back to GitHub", () => {
+    expect(feedConfigFromEnv({ GH_TOKEN: "gh" }, CHANNELS.nightly)).toEqual({
+      origin: "https://getaop.com/nightly",
+      channel: "nightly",
+      github: null,
+    });
+  });
+
+  test("a nightly host takes a nightly from its feed and refuses a stable release", async () => {
+    const nightly = await startFakeRelease({ version: "0.10.7-nightly.20261002.14" });
+    const stable = await startFakeRelease({ version: "0.10.7" });
+    try {
+      const config = (origin: string) => ({ origin, channel: "nightly" as const, github: null });
+      expect((await fetchLatestRelease(config(nightly.url))).version).toBe(
+        "0.10.7-nightly.20261002.14",
+      );
+      await expect(fetchLatestRelease(config(stable.url))).rejects.toThrow(
+        "did not describe a published release",
+      );
+      await expect(fetchLatestRelease(noGithub(nightly.url))).rejects.toThrow(
+        "did not describe a published release",
+      );
+    } finally {
+      nightly.stop();
+      stable.stop();
+    }
   });
 
   test("a token turns on the GitHub fallback, which the old variables still point", () => {
@@ -65,7 +98,11 @@ describe("fetchLatestRelease", () => {
     const fake = await startFakeRelease({ version: "0.10.5", feedDown: true });
     const github = { apiUrl: fake.url, repo: "get-aop/aop-mono", token: FAKE_TOKEN };
 
-    const release = await fetchLatestRelease({ origin: fake.url, github });
+    const release = await fetchLatestRelease({
+      origin: fake.url,
+      channel: "stable" as const,
+      github,
+    });
     const asset = release.assets[BINARY_ASSET];
     const dir = await scratchDir("fallback");
     await downloadAsset(BINARY_ASSET, asset ?? { url: "" }, join(dir, "aop"), downloadFetch);
@@ -86,6 +123,7 @@ describe("fetchLatestRelease", () => {
     await expect(
       fetchLatestRelease({
         origin: fake.url,
+        channel: "stable" as const,
         github: { apiUrl: fake.url, repo: "a/b", token: "wrong" },
       }),
     ).rejects.toThrow(/answered 404 .*releases\/latest\.json \(GitHub fallback: .*answered 404/);

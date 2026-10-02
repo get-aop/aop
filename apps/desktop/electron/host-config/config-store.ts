@@ -1,7 +1,9 @@
+import { buildChannel } from "@aop/common";
 import type { HostChoice } from "../../src/backend/types";
 import type { JsonFile } from "./json-file";
 
-export const DEFAULT_LOCAL_PORT = 25150;
+/** The port this app's channel runs its host on: 25150, or 25650 for AOP Nightly. */
+export const DEFAULT_LOCAL_PORT = buildChannel().hostPort;
 
 /** The app's settings that are not secret. The device token is kept apart, in the keychain. */
 export interface DesktopConfig {

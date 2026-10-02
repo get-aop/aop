@@ -16,6 +16,19 @@ export const readRunCap = async (settings: SettingsRepository): Promise<number> 
   DEFAULT_MAX_CONCURRENT_RUNS;
 
 /**
+ * Turns of any kind running now (threads, coordinators, chats): what AOP Nightly waits on before
+ * it restarts itself onto a new build.
+ */
+export const countRunningRuns = async (db: Kysely<Database>): Promise<number> => {
+  const row = await db
+    .selectFrom("chat_runs")
+    .select(sql<number>`COUNT(*)`.as("running"))
+    .where("status", "=", "running")
+    .executeTakeFirstOrThrow();
+  return Number(row.running);
+};
+
+/**
  * Thread turns running now. It counts `chat_runs` rows, not in-memory registrations, so a run a
  * restarted server is still recovering holds its slot until it ends.
  */

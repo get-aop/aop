@@ -16,6 +16,7 @@ import {
 } from "@/ui/dropdown-menu";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/ui/sidebar";
 import { AopLogoMark } from "../components/brand/AopLogoMark";
+import { ChannelTag } from "../components/ChannelTag";
 import { ProjectRow } from "../projects/ProjectRow";
 import { useProjectsState } from "../projects/ProjectsProvider";
 import { usePinnedProjects } from "../projects/project-preferences";
@@ -59,6 +60,7 @@ export const ProjectsSidebar = ({
               >
                 <AopLogoMark size={20} />
                 AOP
+                <ChannelTag />
                 <ChevronDownIcon className="size-3.5 text-text-subtle" />
               </button>
             </DropdownMenuTrigger>

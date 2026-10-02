@@ -1,4 +1,4 @@
-import { desktopUpdaterFeedUrl } from "@aop/common";
+import { buildChannel, desktopUpdaterFeedUrl } from "@aop/common";
 import { autoUpdater } from "electron-updater";
 import type { AutoUpdaterPort } from "./app-updater";
 
@@ -10,11 +10,16 @@ import type { AutoUpdaterPort } from "./app-updater";
  * stopped being the feed still finds it.
  */
 export const createElectronUpdaterPort = (feedOrigin?: string): AutoUpdaterPort => {
-  autoUpdater.setFeedURL({ provider: "generic", url: desktopUpdaterFeedUrl(feedOrigin) });
+  const channel = buildChannel();
+  autoUpdater.setFeedURL({
+    provider: "generic",
+    url: desktopUpdaterFeedUrl(feedOrigin ?? channel.feedOrigin),
+  });
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  // The feed is a stable release channel; a pre-release never reaches an installed app.
-  autoUpdater.allowPrerelease = false;
+  // Stable's feed is releases only, and a pre-release never reaches a stable app. AOP Nightly's
+  // feed (getaop.com/nightly/latest/) is nothing but pre-releases, `0.10.7-nightly.<date>.<run>`.
+  autoUpdater.allowPrerelease = channel.id === "nightly";
   autoUpdater.allowDowngrade = false;
 
   return {

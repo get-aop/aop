@@ -1,3 +1,4 @@
+import { buildChannel } from "@aop/common";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { DesktopBackend, DesktopState } from "../backend/types";
 import { Brand, Notice } from "../ui";
@@ -111,7 +112,7 @@ export const ConnectScreen = ({
               On the host, ask for a one-time code. It works once and expires after ten minutes.
             </p>
             <code className="command" data-testid="connect-pairing-command">
-              curl -s -X POST http://127.0.0.1:25150/api/auth/pairing-codes
+              curl -s -X POST http://127.0.0.1:{buildChannel().hostPort}/api/auth/pairing-codes
             </code>
             <p className="subtle">
               The address is the one `tailscale serve` shows, starting with https://. See

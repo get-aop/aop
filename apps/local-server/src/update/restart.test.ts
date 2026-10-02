@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { CHANNELS } from "@aop/common";
 import { layoutOf } from "./install-layout.ts";
 import {
   detectRestartPlan,
@@ -73,7 +74,47 @@ describe("detectRestartPlan", () => {
     await mkdir(units, { recursive: true });
     await writeFile(join(units, SYSTEMD_UNIT), `ExecStart=${layout.binaryPath} run --port 25150\n`);
 
-    expect(await detectRestartPlan(input)).toEqual({ kind: "systemd" });
+    expect(await detectRestartPlan(input)).toEqual({ kind: "systemd", unit: SYSTEMD_UNIT });
+  });
+
+  test("a nightly host restarts its own services and never stable's", async () => {
+    const { home, input } = await planInput("darwin");
+    const nightly = { ...input, layout: layoutOf("/u/.aop-nightly/bin/aop-nightly") };
+    const agents = join(home, "Library", "LaunchAgents");
+    await mkdir(agents, { recursive: true });
+    // Stable's plist names a different binary; nightly's names this one.
+    await writeFile(
+      join(agents, "com.aop.local-server.plist"),
+      `<string>${layout.binaryPath}</string>`,
+    );
+    await writeFile(
+      join(agents, "com.aop.local-server.nightly.plist"),
+      "<string>/u/.aop-nightly/bin/aop-nightly</string>",
+    );
+    expect(await detectRestartPlan({ ...nightly, channel: CHANNELS.nightly })).toEqual({
+      kind: "launchd",
+      plist: join(agents, "com.aop.local-server.nightly.plist"),
+    });
+    expect(await detectRestartPlan({ ...input, channel: CHANNELS.nightly })).toEqual({
+      kind: "manual",
+    });
+
+    const linux = await planInput("linux");
+    const units = join(linux.home, ".config", "systemd", "user");
+    await mkdir(units, { recursive: true });
+    await writeFile(
+      join(units, "aop-nightly-local-server.service"),
+      "ExecStart=/u/.aop-nightly/bin/aop-nightly run --port 25650\n",
+    );
+    expect(
+      await detectRestartPlan({
+        ...linux.input,
+        ...nightly,
+        home: linux.home,
+        os: "linux",
+        channel: CHANNELS.nightly,
+      }),
+    ).toEqual({ kind: "systemd", unit: "aop-nightly-local-server.service" });
   });
 
   test("treats a live pid file as a host started with `aop run --background`", async () => {
@@ -112,7 +153,7 @@ describe("restartHost", () => {
   test("systemd: restarts the user unit", async () => {
     const { tools, commands } = recordingTools();
 
-    await restartHost({ kind: "systemd" }, layout, tools);
+    await restartHost({ kind: "systemd", unit: SYSTEMD_UNIT }, layout, tools);
 
     expect(commands).toEqual([["systemctl", "--user", "restart", SYSTEMD_UNIT]]);
   });
@@ -139,9 +180,9 @@ describe("restartHost", () => {
   test("reports a service manager that refuses", async () => {
     const { tools } = recordingTools(1);
 
-    await expect(restartHost({ kind: "systemd" }, layout, tools)).rejects.toThrow(
-      "systemctl restart failed (exit 1)",
-    );
+    await expect(
+      restartHost({ kind: "systemd", unit: SYSTEMD_UNIT }, layout, tools),
+    ).rejects.toThrow("systemctl restart failed (exit 1)");
   });
 
   test("a host nothing supervises cannot be restarted", async () => {

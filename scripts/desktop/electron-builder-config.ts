@@ -1,4 +1,9 @@
-import { desktopUpdaterFeedUrl } from "@aop/common";
+import {
+  CHANNELS,
+  desktopUpdaterFeedUrl,
+  parseReleaseChannel,
+  type ReleaseChannel,
+} from "@aop/common";
 import packageInfo from "../../package.json";
 
 interface ElectronBuilderConfigOptions {
@@ -6,15 +11,21 @@ interface ElectronBuilderConfigOptions {
   notarize: boolean;
   /** True when a Developer ID identity is configured; false builds get an ad-hoc signature. */
   signed?: boolean;
+  /**
+   * `nightly` builds AOP Nightly (docs/NIGHTLY.md): its own app id and name (so its own data
+   * folder, keychain item and single-instance lock), its own icon and its own update feed.
+   */
+  channel?: ReleaseChannel;
 }
 
 export const createElectronBuilderConfig = ({
   version,
   notarize,
   signed = true,
+  channel = "stable",
 }: ElectronBuilderConfigOptions) => ({
-  appId: "com.getaop.aop",
-  productName: "AOP",
+  appId: CHANNELS[channel].appId,
+  productName: CHANNELS[channel].productName,
   electronVersion: "43.3.0",
   asar: true,
   compression: "normal" as const,
@@ -25,6 +36,14 @@ export const createElectronBuilderConfig = ({
     output: "dist/electron-builder",
   },
   extraMetadata: {
+    // Electron names the app (menus, its data folder, its keychain item) after the packaged
+    // package.json: productName, else name. Stable has only `@aop/desktop`, so its data lives in
+    // ~/Library/Application Support/@aop/desktop; that stays as it is, or installed apps would
+    // lose their host and device token. AOP Nightly gets its own name and productName, so it
+    // never shares stable's data, keychain item or electron-updater download folder.
+    ...(channel === "nightly"
+      ? { name: "aop-nightly-desktop", productName: CHANNELS.nightly.productName }
+      : {}),
     main: "dist-electron/main.cjs",
     version,
     description: "AOP desktop app for running local coding-agent workflows.",
@@ -35,7 +54,16 @@ export const createElectronBuilderConfig = ({
   // (what electron-updater reads). The macOS `latest-mac.yml` that ships is written by
   // macos-updater.ts, because each architecture is a separate build. The workflow still passes
   // `--publish never`: nothing is uploaded from the build, the release job does that.
-  publish: [{ provider: "generic" as const, url: desktopUpdaterFeedUrl() }],
+  publish: [
+    {
+      provider: "generic" as const,
+      url: desktopUpdaterFeedUrl(CHANNELS[channel].feedOrigin),
+    },
+  ],
+  // A nightly's version has a pre-release part (`-nightly.…`), from which electron-builder would
+  // name the updater file `nightly-mac.yml`. Both channels publish `latest-mac.yml`, each under
+  // its own feed (macos-updater.ts), so the app looks for that name.
+  detectUpdateChannel: false,
   files: ["dist/**/*", "dist-electron/**/*", "package.json"],
   extraResources: [
     {
@@ -67,7 +95,10 @@ export const createElectronBuilderConfig = ({
     // differently-signed Electron frameworks.
     identity: signed ? undefined : "-",
     hardenedRuntime: signed,
-    icon: "apps/desktop/build/icon.icns",
+    icon:
+      channel === "nightly"
+        ? "apps/desktop/build/nightly/icon.icns"
+        : "apps/desktop/build/icon.icns",
     notarize,
     // The DMG is what people install; the zip is what an installed, signed app updates from.
     target: [
@@ -77,7 +108,7 @@ export const createElectronBuilderConfig = ({
   },
   dmg: {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Electron Builder expands artifact placeholders.
-    title: "AOP ${version} ${arch}",
+    title: `${CHANNELS[channel].productName} ${"${version} ${arch}"}`,
     contents: [
       { x: 140, y: 220, type: "file" as const },
       { x: 400, y: 220, type: "link" as const, path: "/Applications" },
@@ -92,12 +123,14 @@ export const createElectronBuilderConfig = ({
   nsis: {
     oneClick: true,
     perMachine: false,
-    shortcutName: "AOP",
+    shortcutName: CHANNELS[channel].productName,
   },
 });
 
+// macos-dmg.ts passes a nightly's version (`0.10.7-nightly.<date>.<run>`) in AOP_APP_VERSION.
 export default createElectronBuilderConfig({
-  version: packageInfo.version,
+  version: process.env.AOP_APP_VERSION?.trim() || packageInfo.version,
+  channel: parseReleaseChannel(process.env.AOP_BUILD_CHANNEL),
   signed: Boolean(process.env.AOP_MACOS_SIGN_IDENTITY?.trim()),
   notarize:
     process.env.AOP_MACOS_NOTARIZE === "1" ||

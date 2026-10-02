@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
+import { buildChannel } from "@aop/common";
 import type { TailscaleHint } from "../../src/backend/types";
 import type { HostClient } from "../connection/host-client";
 import type { ManagedChild } from "./supervisor";
@@ -69,8 +70,10 @@ export const resolveHostExecutable = (
   return exists(executable) ? executable : null;
 };
 
-export const resolveLogDir = (env: Record<string, string | undefined>): string =>
-  env.AOP_LOG_DIR || join(env.HOME ?? "", ".aop", "logs");
+export const resolveLogDir = (
+  env: Record<string, string | undefined>,
+  homeDirName = buildChannel().homeDirName,
+): string => env.AOP_LOG_DIR || join(env.HOME ?? "", homeDirName, "logs");
 
 export const spawnHostServer = (launch: HostLaunch): ManagedChild => {
   const child = spawn(launch.program, launch.args, { env: launch.env, stdio: "ignore" });
