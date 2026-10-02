@@ -68,6 +68,18 @@ export const ALWAYS_LISTED: Readonly<Partial<Record<ThreadStatus, string>>> = {
 };
 
 /**
+ * The line an empty group shows. While the host's agents skip permission checks, no thread can
+ * be waiting on a permission, so Waiting on you does not offer one.
+ */
+export const emptyGroupLine = (
+  status: ThreadStatus,
+  skipsPermissions: boolean,
+): string | undefined =>
+  status === "waiting-on-you" && skipsPermissions
+    ? "Decisions and reviews."
+    : ALWAYS_LISTED[status];
+
+/**
  * The Overview's groups: one per status, questions first and closed work last, each newest
  * activity first, except the queue, which lists threads in the order the host starts them
  * (oldest first). A status with no thread has no group, unless it is one of `alwaysListed`.

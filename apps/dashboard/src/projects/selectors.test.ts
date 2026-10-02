@@ -4,6 +4,7 @@ import {
   attentionKind,
   attentionOf,
   attentionSentence,
+  emptyGroupLine,
   formatAge,
   formatAgo,
   groupProjects,
@@ -279,5 +280,16 @@ describe("pullRequestOf", () => {
   test("is null for a thread with none, including one that only has documents", () => {
     expect(pullRequestOf(makeThread({ artifacts: [] }))).toBeNull();
     expect(pullRequestOf(makeThread({ artifacts: [{ type: "doc", name: "Notes" }] }))).toBeNull();
+  });
+});
+
+describe("emptyGroupLine", () => {
+  test("Waiting on you offers permission requests only while agents can still ask for one", () => {
+    expect(emptyGroupLine("waiting-on-you", false)).toBe(
+      "Decisions, reviews, and permission requests.",
+    );
+    expect(emptyGroupLine("waiting-on-you", true)).toBe("Decisions and reviews.");
+    expect(emptyGroupLine("resolved", true)).toBe("Completed threads.");
+    expect(emptyGroupLine("working", true)).toBeUndefined();
   });
 });

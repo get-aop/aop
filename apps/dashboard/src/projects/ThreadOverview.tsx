@@ -3,6 +3,7 @@ import { ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Input } from "@/ui/input";
+import { skipsPermissions, useAgentClis } from "../agent-clis/agent-cli-store";
 import { useDisplayName } from "../settings/display-name";
 import { greetingOf } from "./greeting";
 import type { OverviewFilters } from "./layout/use-overview-filters";
@@ -11,6 +12,7 @@ import {
   ALWAYS_LISTED,
   attentionOf,
   attentionSentence,
+  emptyGroupLine,
   groupThreads,
   matchesThreadSearch,
   THREAD_STATUS_LABEL,
@@ -225,37 +227,40 @@ const GroupSection = ({
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
-}) => (
-  <section data-testid="thread-group" data-status={status} data-open={open} data-count={count}>
-    <h2>
+}) => {
+  const noPermissionAsks = skipsPermissions(useAgentClis().data);
+  return (
+    <section data-testid="thread-group" data-status={status} data-open={open} data-count={count}>
+      <h2>
+        {count === 0 ? (
+          <div data-testid="thread-group-label" className={GROUP_BAR}>
+            <GroupLabel status={status} count={count} />
+          </div>
+        ) : (
+          <button
+            type="button"
+            data-testid="thread-group-toggle"
+            aria-expanded={open}
+            onClick={onToggle}
+            className={cn(GROUP_BAR, "transition-colors duration-[120ms] hover:bg-active")}
+          >
+            <ChevronDownIcon
+              aria-hidden="true"
+              className={cn("size-4 text-text-subtle transition-transform", !open && "-rotate-90")}
+            />
+            <GroupLabel status={status} count={count} />
+          </button>
+        )}
+      </h2>
       {count === 0 ? (
-        <div data-testid="thread-group-label" className={GROUP_BAR}>
-          <GroupLabel status={status} count={count} />
-        </div>
-      ) : (
-        <button
-          type="button"
-          data-testid="thread-group-toggle"
-          aria-expanded={open}
-          onClick={onToggle}
-          className={cn(GROUP_BAR, "transition-colors duration-[120ms] hover:bg-active")}
-        >
-          <ChevronDownIcon
-            aria-hidden="true"
-            className={cn("size-4 text-text-subtle transition-transform", !open && "-rotate-90")}
-          />
-          <GroupLabel status={status} count={count} />
-        </button>
-      )}
-    </h2>
-    {count === 0 ? (
-      <p data-testid="thread-group-hint" className="px-3.5 py-3 text-body text-text-subtle">
-        {ALWAYS_LISTED[status]}
-      </p>
-    ) : null}
-    {open && count > 0 ? <div className="flex flex-col gap-1 pt-1.5">{children}</div> : null}
-  </section>
-);
+        <p data-testid="thread-group-hint" className="px-3.5 py-3 text-body text-text-subtle">
+          {emptyGroupLine(status, noPermissionAsks)}
+        </p>
+      ) : null}
+      {open && count > 0 ? <div className="flex flex-col gap-1 pt-1.5">{children}</div> : null}
+    </section>
+  );
+};
 
 const GroupLabel = ({ status, count }: { status: ThreadStatus; count: number }) => (
   <>

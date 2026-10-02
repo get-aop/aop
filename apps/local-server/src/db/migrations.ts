@@ -12,6 +12,7 @@ import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
 import { REPORTED_RUNTIME_V13_STATEMENTS } from "./reported-runtime-v13.ts";
 import { RUN_CLI_VERSION_V17_STATEMENTS } from "./run-cli-version-v17.ts";
+import { RUN_PERMISSIONS_V19_STATEMENTS } from "./run-permissions-v19.ts";
 import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
 import type { Database } from "./schema.ts";
 import { STEER_DELIVERY_V18_STATEMENTS } from "./steer-delivery-v18.ts";
@@ -50,6 +51,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 16, name: "turn-parts", statements: TURN_PARTS_V16_STATEMENTS },
   { version: 17, name: "run-cli-version", statements: RUN_CLI_VERSION_V17_STATEMENTS },
   { version: 18, name: "steer-delivery", statements: STEER_DELIVERY_V18_STATEMENTS },
+  { version: 19, name: "run-permissions", statements: RUN_PERMISSIONS_V19_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

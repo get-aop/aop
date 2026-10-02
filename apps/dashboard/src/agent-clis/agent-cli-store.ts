@@ -1,6 +1,11 @@
 import type { AgentCliStatus, AgentClisResponse } from "@aop/common";
 import { useSyncExternalStore } from "react";
-import { checkAgentClis, getAgentClis, updateAgentCli } from "../api/agent-clis";
+import {
+  checkAgentClis,
+  getAgentClis,
+  setSkipPermissions,
+  updateAgentCli,
+} from "../api/agent-clis";
 
 /**
  * What every agent CLI surface (the Runtimes panel, the sidebar notice, the nav dot) shows, in
@@ -12,11 +17,19 @@ export interface AgentClisState {
   checking: boolean;
   /** Providers whose update request is on its way to the host. */
   starting: readonly string[];
+  /** A change of "skip permission checks" is on its way to the host. */
+  savingBypass: boolean;
   /** Why the last request failed; the host's own refusals show on the CLI's update instead. */
   error: string | null;
 }
 
-const INITIAL: AgentClisState = { data: null, checking: false, starting: [], error: null };
+const INITIAL: AgentClisState = {
+  data: null,
+  checking: false,
+  starting: [],
+  savingBypass: false,
+  error: null,
+};
 const ACTIVE_POLL_MS = 1_500;
 
 let state: AgentClisState = INITIAL;
@@ -59,6 +72,23 @@ export const startCliUpdate = async (provider: string): Promise<void> => {
   }
   await refreshAgentClis();
 };
+
+/** Saves "skip permission checks" (host owner only), then reads back what the host now says. */
+export const changeSkipPermissions = async (enabled: boolean): Promise<void> => {
+  publish({ savingBypass: true, error: null });
+  try {
+    await setSkipPermissions(enabled);
+  } catch (error) {
+    publish({ error: messageOf(error, "Could not change the permission setting.") });
+  } finally {
+    publish({ savingBypass: false });
+  }
+  await refreshAgentClis();
+};
+
+/** Whether the agents this host starts now skip permission checks: the setting is on and can apply. */
+export const skipsPermissions = (data: AgentClisResponse | null): boolean =>
+  Boolean(data?.skipPermissions.enabled && data.skipPermissions.blockedReason === null);
 
 /** CLIs with a newer version out and no update of theirs running: what the notice counts. */
 export const pendingCliUpdates = (data: AgentClisResponse | null): AgentCliStatus[] =>

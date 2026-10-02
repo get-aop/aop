@@ -63,7 +63,9 @@ The project setting `threadAccess` decides what every thread of the project may 
 
 A project created without a `threadAccess` gets `full-access`; the dashboard's New project form says so and does not offer the choice. Projects that already exist keep the value they stored. Changing the setting applies to the project's existing threads from their next turn, and to the ones started afterwards. The settings page shows a warning for as long as Full access is selected, and saving a change to Full access asks once more.
 
-The coordinator is not affected. It always runs `approval-required`, pinned for every run whatever the project or the stored session says, and no coordinator tool can change `threadAccess`; see [the MCP guide](./MCP.md).
+The coordinator is not affected. It runs `approval-required`, pinned for every run whatever the project or the stored session says, and no coordinator tool can change `threadAccess`; see [the MCP guide](./MCP.md).
+
+The host owner's **Skip permission checks** setting (Settings › Runtimes) overrides this table while it is on: every thread then runs with `--dangerously-skip-permissions`, Edit files projects included, and the project's Thread access setting says so. A read-only survey thread is the exception. See [Runtimes](./RUNTIMES.md#skipping-permission-checks).
 
 Other runtimes map the same two values to their own flags (Codex and Pi); a thread on a runtime without an equivalent is limited by that runtime, not by this table.
 

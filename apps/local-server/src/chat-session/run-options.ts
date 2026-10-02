@@ -3,7 +3,7 @@ import type { RunOptions } from "@aop/llm-provider";
 import type { ChatSession } from "../db/schema.ts";
 import { createAuthenticatedMcpUrl } from "../mcp/auth.ts";
 import { isMcpCapableRuntime } from "../mcp/availability.ts";
-import { runProfileFor } from "./run-profile.ts";
+import { type HostRunAccess, runProfileFor } from "./run-profile.ts";
 import { CHAT_RUNTIME_TIMEOUT_POLICY } from "./runtime-timeout-policy.ts";
 
 /** What one chat turn asks the provider adapter to run, derived from the session row. */
@@ -16,8 +16,9 @@ export const buildRunOptions = (
   allowedDirectories?: string[],
   onSpawn?: (pid: number) => Promise<void>,
   appendSystemPrompt?: string,
+  host?: HostRunAccess,
 ): RunOptions => {
-  const profile = runProfileFor(session);
+  const profile = runProfileFor(session, host);
   return {
     prompt,
     cwd: repoPath,
@@ -27,7 +28,7 @@ export const buildRunOptions = (
     fastMode: Boolean(session.fast_mode),
     // A chat shows a reply as it is written, so it asks for the text token by token.
     partialMessages: true,
-    accessMode: profile.accessMode ?? session.runtime_access_mode ?? "full-access",
+    accessMode: profile.accessMode,
     runtimeAlias: session.runtime_alias ?? undefined,
     resumeSessionId: session.runtime_session_id ?? undefined,
     logFilePath,

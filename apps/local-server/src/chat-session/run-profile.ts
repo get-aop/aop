@@ -1,4 +1,4 @@
-import type { RunIsolation, RunOptions } from "@aop/llm-provider";
+import type { RunAccessMode, RunIsolation } from "@aop/llm-provider";
 import type { ChatSession } from "../db/schema.ts";
 import { claudeMcpToolName, sessionRole, toolNamesFor } from "../mcp/availability.ts";
 
@@ -6,10 +6,11 @@ import { claudeMcpToolName, sessionRole, toolNamesFor } from "../mcp/availabilit
 export interface RunProfile {
   isolation: RunIsolation;
   /**
-   * Pins the access mode whatever the session row says. Left out, the row decides (a plain chat's
-   * own setting, or the access a project chose for its threads).
+   * The command and file permission policy of the run: the host's permission bypass, else what
+   * the session is (a pinned mode), else the row (a plain chat's own setting, or the access a
+   * project chose for its threads).
    */
-  accessMode?: NonNullable<RunOptions["accessMode"]>;
+  accessMode: RunAccessMode;
   /** Tools pre-approved because a run without a terminal cannot ask. */
   allowedTools?: string[];
   disallowedTools?: string[];
@@ -18,16 +19,46 @@ export interface RunProfile {
   env: Record<string, string>;
 }
 
-// The coordinator processes what people and threads write, so it fails closed: `approval-required`
-// adds no permission-skipping flag, and a headless run denies whatever `allowedTools` does not
-// pre-approve. It is also hermetic (no user or project settings, hooks, MCP servers, CLAUDE.md or
-// auto memory) and asks for no built-in tools, so all real work goes through a thread. The
-// access is pinned here rather than trusted from the row, so no stored value can reopen it. The
-// mode does not depend on `--tools ""` behaving as documented: it is a second layer, not the guard.
-const COORDINATOR_PROFILE: RunProfile = {
+/** What the host decided for every run it launches now (see agent-cli/permission-bypass.ts). */
+export interface HostRunAccess {
+  /** The owner's "skip permission checks" setting is on and this host can honour it. */
+  skipPermissions: boolean;
+}
+
+const NO_HOST_BYPASS: HostRunAccess = { skipPermissions: false };
+
+type BaseProfile = Omit<RunProfile, "accessMode"> & { accessMode?: RunAccessMode };
+
+// Claude Code built-ins that read or change the host, reach the network, or start other agents
+// (2.1.287 names; Glob and Grep join the tool list when Bash is withheld).
+const HOST_BUILT_IN_TOOLS = [
+  "Bash",
+  "Read",
+  "Edit",
+  "Write",
+  "NotebookEdit",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "Task",
+  "Agent",
+];
+
+// The coordinator processes what people and threads write, so it fails closed. It is hermetic
+// (no user or project settings, hooks, MCP servers, CLAUDE.md or auto memory) and asks for no
+// built-in tools (`--tools ""`), so all real work goes through a thread. Two more layers back
+// that up. Without the host's permission bypass it runs `approval-required`, pinned here rather
+// than trusted from the row, so no stored value can reopen it: no permission-skipping flag, and a
+// headless run denies whatever `allowedTools` does not pre-approve. With the bypass, allow-lists
+// no longer hold, so the built-ins that touch the host are also denied by name: deny rules hold
+// in bypass mode, and `--tools ""` holds whatever the mode (both checked on Claude Code 2.1.287;
+// see run-profile.test.ts and docs/RUNTIMES.md).
+const COORDINATOR_PROFILE: BaseProfile = {
   isolation: "hermetic",
   accessMode: "approval-required",
   builtInTools: [],
+  disallowedTools: HOST_BUILT_IN_TOOLS,
   env: { CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1", CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1" },
 };
 
@@ -48,7 +79,7 @@ export const SCHEDULING_BUILT_IN_TOOLS = [
   "RemoteTrigger",
 ];
 
-const THREAD_PROFILE: RunProfile = {
+const THREAD_PROFILE: BaseProfile = {
   isolation: "open",
   disallowedTools: ["AskUserQuestion", ...SCHEDULING_BUILT_IN_TOOLS],
   env: {},
@@ -76,11 +107,28 @@ export const READ_ONLY_COMMANDS = [
 
 export const runProfileFor = (
   session: Pick<ChatSession, "kind" | "runtime_access_mode">,
+  host: HostRunAccess = NO_HOST_BYPASS,
 ): RunProfile => {
   const role = sessionRole(session);
-  if (role === "plain") return { isolation: "open", env: {} };
+  const readOnly = role === "thread" && session.runtime_access_mode === READ_ONLY_ACCESS;
+  const accessMode = (pinned: RunAccessMode | undefined): RunAccessMode => {
+    // A read-only thread is held read-only by its allow-list, which a bypassed run ignores.
+    if (host.skipPermissions && !readOnly) return "full-access";
+    return pinned ?? session.runtime_access_mode ?? "full-access";
+  };
+  if (role === "plain") return { isolation: "open", env: {}, accessMode: accessMode(undefined) };
   const profile = role === "coordinator" ? COORDINATOR_PROFILE : THREAD_PROFILE;
   const tools = toolNamesFor(role).map(claudeMcpToolName);
-  const readOnly = role === "thread" && session.runtime_access_mode === READ_ONLY_ACCESS;
-  return { ...profile, allowedTools: readOnly ? [...tools, ...READ_ONLY_COMMANDS] : tools };
+  return {
+    ...profile,
+    accessMode: accessMode(profile.accessMode),
+    allowedTools: readOnly ? [...tools, ...READ_ONLY_COMMANDS] : tools,
+  };
 };
+
+/**
+ * Whether a run with this profile carries a permission-skipping flag (Claude Code's
+ * `--dangerously-skip-permissions`): what `chat_runs.permissions_bypassed` records.
+ */
+export const bypassesPermissions = (profile: Pick<RunProfile, "accessMode">): boolean =>
+  profile.accessMode === "full-access";

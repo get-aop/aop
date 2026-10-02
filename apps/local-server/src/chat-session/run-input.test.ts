@@ -67,6 +67,7 @@ const setup = async (log: string, run: Partial<ChatRun> = {}) => {
     pid: null,
     blocks_json: "[]",
     cli_version: null,
+    permissions_bypassed: null,
     input_path: `${logFilePath}.in`,
     created_at: now,
     updated_at: now,
