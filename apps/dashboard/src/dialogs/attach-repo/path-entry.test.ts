@@ -3,12 +3,12 @@ import { joinPath, matchingFolders, splitTypedPath, typedFolder } from "./path-e
 
 describe("splitTypedPath", () => {
   test("splits an absolute path at its last slash", () => {
-    expect(splitTypedPath("/Users/marcelorm/re", "/x")).toEqual({
-      dir: "/Users/marcelorm",
+    expect(splitTypedPath("/Users/me/re", "/x")).toEqual({
+      dir: "/Users/me",
       fragment: "re",
     });
-    expect(splitTypedPath("/Users/marcelorm/", "/x")).toEqual({
-      dir: "/Users/marcelorm",
+    expect(splitTypedPath("/Users/me/", "/x")).toEqual({
+      dir: "/Users/me",
       fragment: "",
     });
   });

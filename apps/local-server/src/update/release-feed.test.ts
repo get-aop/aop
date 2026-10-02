@@ -24,7 +24,7 @@ describe("feedConfigFromEnv", () => {
     ).toEqual({ apiUrl: "http://x", repo: "a/b", token: "gh" });
     expect(feedConfigFromEnv({ GITHUB_TOKEN: "env", AOP_GITHUB_TOKEN: "aop" }).github).toEqual({
       apiUrl: "https://api.github.com",
-      repo: "get-aop/aop-mono",
+      repo: "get-aop/aop",
       token: "aop",
     });
   });

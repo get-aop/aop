@@ -19,7 +19,7 @@ export const SettingsAbout = () => {
       <UpdateStatusRow />
 
       <a
-        href="https://github.com/get-aop/aop-mono/releases"
+        href="https://github.com/get-aop/aop/releases"
         target="_blank"
         rel="noreferrer"
         className="flex items-center gap-1.5 rounded-row px-1 text-[12.5px] text-running hover:underline"

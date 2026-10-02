@@ -199,7 +199,7 @@ A proxy that rewrites `Host` to `127.0.0.1` and adds no forwarding header passes
 | `AOP_RELEASE_FEED_URL` | `https://getaop.com` | The origin of the release feed the update check and `aop update` read (`/releases/latest.json`). Tests and trials point it at a fake feed. The desktop app reads the same variable. |
 | `AOP_GITHUB_TOKEN` | none (`GH_TOKEN`, `GITHUB_TOKEN` also work) | A token that reads the private repository turns on the GitHub fallback when the feed cannot be read. |
 | `AOP_GITHUB_API_URL` | `https://api.github.com` | The GitHub API the fallback reads. |
-| `AOP_GITHUB_REPO` | `get-aop/aop-mono` | The repository whose releases the fallback reads. |
+| `AOP_GITHUB_REPO` | `get-aop/aop` | The repository whose releases the fallback reads. |
 | `AOP_PR_POLL_INTERVAL_MS` | none (adaptive) | Milliseconds between looks at an open pull request, for a fixed pace instead of the adaptive one. See [Threads and git](./THREADS.md#watching-the-pull-request). |
 
 Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over plain HTTP, so use it only on a network you trust, and the browser will not treat the page as a secure context. If you bind one specific non-loopback address, the host's own agents can no longer reach the MCP endpoint at `127.0.0.1`; set `AOP_MCP_URL` to an address they can reach.

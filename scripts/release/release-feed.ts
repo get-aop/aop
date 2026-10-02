@@ -7,7 +7,6 @@ import {
   describeReleaseFile,
   latestReleaseApiUrl,
   RELEASE_FEED_ORIGIN,
-  RELEASE_REPO,
   type ReleaseFeed,
   type ReleaseFeedFile,
   releaseNotesUrl,
@@ -17,6 +16,9 @@ import { RELEASE_CHECKSUM_ARTIFACTS } from "./checksums.ts";
 
 const CHECKSUMS_NAME = "checksums.sha256";
 const WINDOWS_UPDATER_CONFIG = "latest.yml";
+// The repository AOP 0.10.0 to 0.10.4 were built against. Their path is frozen into those
+// binaries, so it stays when the repository moves.
+const LEGACY_RELEASE_REPO = "get-aop/aop-mono";
 
 export interface FeedInput {
   releaseDir: string;
@@ -104,7 +106,7 @@ export const buildFeedDocuments = async (input: FeedInput): Promise<FeedDocument
  * Those installs reach the feed by setting `AOP_GITHUB_API_URL=https://getaop.com`.
  */
 export const githubCompatKey = (): string =>
-  new URL(latestReleaseApiUrl("https://x", RELEASE_REPO)).pathname.slice(1);
+  new URL(latestReleaseApiUrl("https://x", LEGACY_RELEASE_REPO)).pathname.slice(1);
 
 /** The feed in the shape of GitHub's release JSON, the part those installs parse. */
 export const githubShaped = (feed: ReleaseFeed) => ({

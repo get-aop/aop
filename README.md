@@ -30,8 +30,8 @@ It needs Git, the GitHub CLI signed in, and Claude Code signed in on that machin
 From source:
 
 ```bash
-git clone https://github.com/get-aop/aop-mono.git
-cd aop-mono
+git clone https://github.com/get-aop/aop.git
+cd aop
 ./install
 ```
 
