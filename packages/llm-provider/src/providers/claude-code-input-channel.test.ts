@@ -29,13 +29,14 @@ afterEach(() => {
 });
 
 /** A relay in front of `cli`, spawned the way the provider spawns it: detached, stdout to the log. */
-const startRelay = (cli: string[], idle?: RelayIdle) => {
+const startRelay = (cli: string[], idle?: RelayIdle, shell?: string) => {
   const dir = mkdtempSync(join(tmpdir(), "aop-input-channel-"));
   dirs.push(dir);
   const channel: InputChannel = { path: join(dir, "run.in"), promptUuid: "prompt" };
   const log = join(dir, "run.jsonl");
   const { promptPath } = openInputChannel(channel, '{"n":0}\n');
-  const proc = Bun.spawn(relayCommand(channel, promptPath, log, cli, idle), {
+  const command = relayCommand(channel, promptPath, log, cli, idle);
+  const proc = Bun.spawn(shell ? [shell, ...command.slice(1)] : command, {
     stdout: Bun.file(log),
     stdin: "ignore",
     stderr: "ignore",
@@ -77,6 +78,19 @@ describe("the input relay", () => {
     expect(await proc.exited).toBe(0);
     expect(existsSync(channel.path)).toBe(false);
     expect(await writeInputLine(channel.path, '{"n":3}\n')).toBe(false);
+  });
+
+  // Debian and Ubuntu's /bin/sh. macOS ships /bin/dash too, so this runs on every host we build on.
+  test.skipIf(!existsSync("/bin/dash"))("ends when its input does under dash too", async () => {
+    const { channel, log, proc } = startRelay(["sh", "-c", "cat; exit 3"], undefined, "/bin/dash");
+    await waitFor(() => readLines(log).length === 1);
+    expect(await writeInputLine(channel.path, '{"n":1}\n')).toBe(true);
+    await waitFor(() => readLines(log).length === 2);
+
+    expect(endInput(proc.pid)).toBe(true);
+    const exited = await Promise.race([proc.exited, Bun.sleep(3_000).then(() => "still running")]);
+    expect(exited).toBe(3);
+    expect(existsSync(channel.path)).toBe(false);
   });
 
   test("takes a line larger than the pipe holds", async () => {
