@@ -99,14 +99,12 @@ export const PullRequestToolbar = ({
           onClear={() => set("assignee", [])}
         />
         <InvolvesMe pressed={filters.involves} onChange={(on) => set("involves", on)} />
-        <span className="flex-1" />
-        <SortMenu value={filters.sort} onChange={(sort) => set("sort", sort)} />
       </div>
     </div>
   );
 };
 
-/** "12 pull requests" and, while any filter narrows them, the way to drop every filter. */
+/** "12 pull requests", the way to drop every filter while any narrows them, and the sort. */
 export const ResultLine = ({
   total,
   controls,
@@ -116,10 +114,11 @@ export const ResultLine = ({
 }) => {
   const active = activeFilterCount(controls.filters);
   return (
-    <div className="flex min-h-6 items-center justify-between px-4 text-meta text-text-subtle">
+    <div className="flex min-h-7 items-center gap-2 pr-2 pl-4 text-meta text-text-subtle">
       <span data-testid="pr-count" className="tabular-nums" aria-live="polite">
         {total} {total === 1 ? "pull request" : "pull requests"}
       </span>
+      <span className="flex-1" />
       {active > 0 ? (
         <button
           type="button"
@@ -131,6 +130,7 @@ export const ResultLine = ({
           Clear filters
         </button>
       ) : null}
+      <SortMenu value={controls.filters.sort} onChange={(sort) => controls.set("sort", sort)} />
     </div>
   );
 };

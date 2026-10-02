@@ -24,6 +24,7 @@ import { PullRequestToolbar, ResultLine } from "./PullRequestToolbar";
 import {
   activeFilterCount,
   type PullRequestFilterControls,
+  type PullRequestFilters,
   usePullRequestFilters,
 } from "./pull-request-filters";
 import {
@@ -52,6 +53,8 @@ export const PullRequestsTab = ({
   const searchRef = useRef<HTMLInputElement>(null);
   const tabRef = useRef<HTMLDivElement>(null);
   useSlashToSearch(tabRef, searchRef);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useScrollToTopOn(scrollRef, controls.filters);
   const ready = list.response?.status === "ready" ? list.response : null;
 
   return (
@@ -65,7 +68,7 @@ export const PullRequestsTab = ({
           searchRef={searchRef}
         />
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto" data-testid="pr-scroll">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto" data-testid="pr-scroll">
         <Body entry={entry} list={list} controls={controls} />
       </div>
     </div>
@@ -176,6 +179,17 @@ const moveBetweenRows = (event: KeyboardEvent<HTMLElement>) => {
   if (at === -1) return;
   event.preventDefault();
   buttons[Math.min(buttons.length - 1, Math.max(0, at + step))]?.focus();
+};
+
+/** Another filter is another list: it starts at its top, not where the last one was scrolled to. */
+const useScrollToTopOn = (scroll: RefObject<HTMLElement | null>, filters: PullRequestFilters) => {
+  const key = JSON.stringify(filters);
+  const last = useRef(key);
+  useEffect(() => {
+    if (last.current === key) return;
+    last.current = key;
+    if (scroll.current) scroll.current.scrollTop = 0;
+  }, [scroll, key]);
 };
 
 /** "/" anywhere in the tab but a text box goes to the search, as on GitHub. */

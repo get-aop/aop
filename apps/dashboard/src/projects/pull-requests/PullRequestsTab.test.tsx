@@ -164,6 +164,17 @@ describe("the Pull requests tab", () => {
     expect((screen.getByTestId("pr-search") as HTMLInputElement).value).toBe("");
   });
 
+  test("another filter starts the list at its top", async () => {
+    mount(() => readyList([makePull()]));
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    const scroll = screen.getByTestId("pr-scroll");
+    scroll.scrollTop = 400;
+
+    fireEvent.click(screen.getByTestId("pr-state-merged"));
+
+    await waitFor(() => expect(scroll.scrollTop).toBe(0));
+  });
+
   test("Escape in the search clears it", async () => {
     mount(() => readyList([makePull()]));
     const search = screen.getByTestId("pr-search") as HTMLInputElement;

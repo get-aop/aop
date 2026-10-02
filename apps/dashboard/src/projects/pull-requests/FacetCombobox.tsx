@@ -75,7 +75,11 @@ export const FacetCombobox = ({
         className="w-64 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-menu border-border-strong p-0 shadow-[var(--menu-shadow)]"
       >
         <Command>
-          <CommandInput placeholder={`Filter ${plural}`} className="text-meta" />
+          <CommandInput
+            placeholder={`Filter ${plural}`}
+            aria-label={`Filter ${plural}`}
+            className="text-meta"
+          />
           <CommandList className="max-h-72 p-1">
             <CommandEmpty className="py-5 text-center text-meta text-text-subtle">
               No {plural} match.

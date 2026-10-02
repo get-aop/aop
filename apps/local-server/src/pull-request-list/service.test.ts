@@ -131,8 +131,18 @@ describe("the pull request list", () => {
       expect(await list()).toMatchObject({
         status: "unavailable",
         reason: "signed-out",
-        message: expect.stringContaining("gh auth login"),
+        message: expect.stringContaining("not signed in"),
       });
+    });
+
+    test("Refresh asks gh about its session again, so a sign-in shows at once", async () => {
+      const { fake, list } = setup();
+      fake.state.signedOut = true;
+      expect(await list()).toMatchObject({ reason: "signed-out" });
+      fake.state.signedOut = false;
+
+      expect(await list()).toMatchObject({ reason: "signed-out" });
+      expect(await list({ refresh: true })).toMatchObject({ status: "ready" });
     });
 
     test("a host without gh says so", async () => {

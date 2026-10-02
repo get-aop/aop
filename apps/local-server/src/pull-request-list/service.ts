@@ -79,7 +79,8 @@ export const createPullRequestListService = ({
     list: async (projectId, query) => {
       const repos = await github.resolveProjectRepos(projectId);
       if (!repos) return null;
-      const unavailable = await availability(github, repos);
+      // A person's Refresh (or Check again) asks gh about its session again too.
+      const unavailable = await availability(github, repos, query.refresh);
       if (unavailable) return unavailable;
       const auth = await github.authStatus();
       const viewerLogin = auth.authenticated ? auth.login : "";
@@ -131,7 +132,7 @@ const UNAVAILABLE_MESSAGES: Record<PullRequestListUnavailableReason, string> = {
   "no-repos": "This project has no repositories.",
   "no-github-repos": "None of this project's repositories has a GitHub remote.",
   "gh-missing": "The GitHub CLI (gh) is not installed on the host.",
-  "signed-out": "The host's GitHub CLI is not signed in. Run `gh auth login` on the host.",
+  "signed-out": "The host's GitHub CLI is not signed in. Sign in on the host, then check again.",
   unreachable: "The host could not reach GitHub.",
 };
 
@@ -139,8 +140,9 @@ const UNAVAILABLE_MESSAGES: Record<PullRequestListUnavailableReason, string> = {
 const availability = async (
   github: GithubService,
   repos: ProjectGithubRepo[],
+  fresh: boolean,
 ): Promise<PullRequestListResponse | null> => {
-  const reason = await unavailableReason(github, repos);
+  const reason = await unavailableReason(github, repos, fresh);
   if (!reason) return null;
   return {
     status: "unavailable",
@@ -153,10 +155,11 @@ const availability = async (
 const unavailableReason = async (
   github: GithubService,
   repos: ProjectGithubRepo[],
+  fresh: boolean,
 ): Promise<PullRequestListUnavailableReason | null> => {
   if (repos.length === 0) return "no-repos";
   if (!repos.some(isOnGithub)) return "no-github-repos";
-  const auth = await github.authStatus();
+  const auth = await github.authStatus({ fresh });
   return auth.authenticated ? null : auth.reason;
 };
 
