@@ -1,12 +1,18 @@
 import { useRef } from "react";
-import { Link, navigate, projectPath, projectsPath, type Route, threadPath } from "../shell/router";
+import {
+  Link,
+  navigate,
+  type ProjectScreen,
+  projectScreenPath,
+  projectsPath,
+  type Route,
+} from "../shell/router";
 import { useProjectChat } from "./chat/use-project-chat";
 import { ProjectLayout } from "./layout/ProjectLayout";
 import { useProjectEntry, useProjectsState } from "./ProjectsProvider";
 import { ProjectSettingsDialog } from "./settings/ProjectSettingsDialog";
 
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
-type ProjectScreen = Extract<Route, { name: "project" | "thread" }>;
 
 /**
  * One project: the three-pane screen (chat and threads panel) for its home and its threads.
@@ -41,7 +47,7 @@ export const ProjectPage = ({ route }: { route: ProjectRoute }) => {
         <ProjectSettingsDialog
           entry={entry}
           section={route.section}
-          onClose={() => navigate(screenPath(screen))}
+          onClose={() => navigate(projectScreenPath(screen))}
         />
       ) : null}
     </div>
@@ -60,11 +66,6 @@ const useScreenUnderSettings = (route: ProjectRoute): ProjectScreen => {
   }
   return last.current;
 };
-
-const screenPath = (screen: ProjectScreen): string =>
-  screen.name === "thread"
-    ? threadPath(screen.projectId, screen.threadId)
-    : projectPath(screen.projectId);
 
 const ProjectLoading = () => (
   <p data-testid="project-loading" className="p-6 text-body text-text-subtle">
