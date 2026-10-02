@@ -63,6 +63,30 @@ describe("release wiring", () => {
     expect(beforeRelease).not.toContain("CLOUDFLARE");
   });
 
+  test("keeps secrets in the release environment, entered by the release job and by packaging only when it signs", async () => {
+    const releaseWorkflow = await readReleaseWorkflow();
+    const releaseJob = releaseWorkflow.slice(releaseWorkflow.indexOf("\n  release:"));
+    const signingEnvironment = `environment: $\{{ ((${PUBLISHING_RUN}) && vars.AOP_SIGN_RELEASES == 'true') && 'release' || '' }}`;
+
+    expect(releaseJob).toContain("\n    environment: release\n");
+    expect(releaseWorkflow.match(/\n {4}environment: .*/g)).toEqual([
+      `\n    ${signingEnvironment}`,
+      `\n    ${signingEnvironment}`,
+      "\n    environment: release",
+    ]);
+  });
+
+  test("pins every action to a full commit SHA and leaves no git credentials behind", async () => {
+    const releaseWorkflow = await readReleaseWorkflow();
+    const uses = releaseWorkflow.match(/uses: .*/g) ?? [];
+    const checkouts = releaseWorkflow.match(/uses: actions\/checkout@.*/g) ?? [];
+
+    expect(uses.length).toBeGreaterThan(0);
+    for (const line of uses)
+      expect(line).toMatch(/^uses: [\w.-]+\/[\w.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+$/);
+    expect(releaseWorkflow.match(/persist-credentials: false/g)).toHaveLength(checkouts.length);
+  });
+
   test("packages macOS with certificate import, signing, and notarization on macos-latest", async () => {
     const releaseWorkflow = await readReleaseWorkflow();
 
@@ -121,7 +145,9 @@ describe("release wiring", () => {
     const r2Index = releaseWorkflow.indexOf("Deploy release assets to Cloudflare R2");
     expect(releaseIndex).toBeGreaterThan(-1);
     expect(r2Index).toBeGreaterThan(releaseIndex);
-    expect(releaseWorkflow).toContain("softprops/action-gh-release@v3.0.1");
+    expect(releaseWorkflow).toMatch(
+      /uses: softprops\/action-gh-release@[0-9a-f]{40} # v3\.\d+\.\d+/,
+    );
     expect(releaseWorkflow).toContain("aop-linux-x64");
     expect(releaseWorkflow).toContain("aop-darwin-x64");
     expect(releaseWorkflow).toContain("aop-windows-x64-setup.exe");
@@ -171,7 +197,10 @@ describe("release wiring", () => {
     expect(r2).toMatch(/^upload_feed_document "releases\/latest\.json" "application\/json"/m);
     // The retired 0.9 pointer is only ever deleted, never written again.
     expect(r2).not.toMatch(/^upload_\w+ "latest\/version"/m);
-    expect(r2).toMatch(/wrangler@4 r2 object delete "\$\{BUCKET\}\/latest\/version"/);
+    expect(r2).toMatch(/npx --yes "\$WRANGLER" r2 object delete "\$\{BUCKET\}\/latest\/version"/);
+    // The step holding the Cloudflare token runs one reviewed wrangler, never whatever 4.x is newest.
+    expect(r2).toMatch(/^WRANGLER="wrangler@\d+\.\d+\.\d+"$/m);
+    expect(r2).not.toMatch(/npx --yes wrangler@/);
     expect(r2).not.toContain("install.ps1");
     expect(r2).not.toContain("aop-windows-x64.exe");
   });

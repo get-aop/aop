@@ -40,7 +40,18 @@ The workflow (`.github/workflows/release.yml`) runs these jobs:
 
 On a pull request that touches the release files, jobs 1 to 4 run and stop. Nothing is published, and the assembled files are kept for a day as the `release-all` workflow artifact, so a change to the packaging is checked before it merges.
 
-To rebuild and publish a release by hand, run the workflow from the Actions tab (`workflow_dispatch`) with `publish` on, optionally with a `release_ref`.
+To rebuild and publish a release by hand, run the workflow from the Actions tab (`workflow_dispatch`) from its `vX.Y.Z` tag (the "Use workflow from" picker) with `publish` on. A publishing run started from a branch is refused, because the `release` environment accepts only `v*` tags.
+
+### The `release` environment
+
+Every secret the workflow reads lives in the `release` environment (Settings → Environments → `release`), not in the repository's secrets. The environment accepts deployments only from `v*` tags, and each run waits there until the maintainer approves it (Actions → the run → **Review deployments**). Self-approval is allowed, because the project has one maintainer.
+
+- The `release` job always enters the environment, so a tag push builds everything and then waits for approval before publishing.
+- `package-macos` and `package-windows` enter it only when they sign (a publishing run with `AOP_SIGN_RELEASES` on), so a signed release asks for approval twice: once for packaging, once for publishing.
+- Pull requests and build-only dispatches enter no environment and read no secret.
+- `AOP_SIGN_RELEASES` is a repository variable (Settings → Secrets and variables → Actions → Variables), not an environment variable: the packaging jobs read it to decide whether to enter the environment at all.
+
+The workflow pins every action to a commit SHA, with the version in a comment; Dependabot proposes the updates. `deploy-r2.sh` runs one exact wrangler version (`WRANGLER`) for the same reason.
 
 ### Build installers without releasing
 
@@ -61,7 +72,7 @@ This runs jobs 1 to 4 and stops, like a pull request: no GitHub Release, no R2 u
 5. The retired `latest/version` file (AOP 0.9 read it; nothing has written it since 0.9.51) is deleted.
 6. `getaop.com/install.sh`, last. The script is copied with its `DEFAULT_VERSION` line set to this release, so the published script installs exactly this release. There is no separate "latest version" file to keep in step. Publishing it last means nobody is pointed at a release whose files are not yet reachable.
 
-The script needs these repository secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `AOP_RELEASES_R2_BUCKET`.
+The script needs these `release` environment secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `AOP_RELEASES_R2_BUCKET`.
 
 ### Release from your own machine
 
@@ -161,7 +172,7 @@ When the macOS app is signed and notarized ([Signing is off](#signing-is-off) sa
 
 ## Signing is off
 
-Every build is unsigned, on purpose, until signing is decided. The Apple and Windows secrets may already exist in the repository, but the workflow does not read them unless two things are true: the run is a tag push or a manual run (never a pull request), and the repository variable `AOP_SIGN_RELEASES` is `true`. Nothing in the workflow needs to change to sign: set the variable and make sure the secrets below exist.
+Every build is unsigned, on purpose, until signing is decided. The Apple and Windows secrets may already exist in the `release` environment, but the workflow does not read them unless two things are true: the run is a tag push or a manual run (never a pull request), and the repository variable `AOP_SIGN_RELEASES` is `true`. Nothing in the workflow needs to change to sign: set the variable and make sure the secrets below exist.
 
 An unsigned macOS build is still ad-hoc signed (`mac.identity: "-"` in `scripts/desktop/electron-builder-config.ts`). Without any signature Apple silicon kills the app at launch, because changing the Electron fuses invalidates the signature the framework shipped with.
 
@@ -194,5 +205,6 @@ Tell anyone you send a build to about these.
 
 - **Tag already exists.** Delete the local tag or pick a new version.
 - **A pull request shows the release jobs red.** Open the failing job: `assemble` names the missing artifact. The `ci` job is the merge gate; the release jobs are there to catch packaging breakage early.
-- **R2 step fails on missing secrets.** Add the three Cloudflare secrets and run the workflow again from the Actions tab.
+- **R2 step fails on missing secrets.** Add the three Cloudflare secrets to the `release` environment and run the workflow again from the Actions tab, from the tag.
+- **A release run waits.** It is waiting for approval in the `release` environment: open the run and choose **Review deployments**.
 - **`install.sh` says it is "not tied to a release".** You ran a copy from a checkout. Pass `--version X.Y.Z`, or use the copy published at `getaop.com/install.sh`.
