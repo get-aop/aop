@@ -33,6 +33,12 @@ describe("openBrowserView", () => {
     expect(window.location.pathname).toBe("/projects/p1/issues");
   });
 
+  test("takes the chat's place from an open artifact", () => {
+    window.history.pushState({}, "", "/projects/p1/threads/t1/artifacts/art_1");
+    openBrowserView({ projectId: "p1" });
+    expect(window.location.pathname).toBe("/projects/p1/threads/t1/browser");
+  });
+
   test("another project's thread is not this one's", () => {
     window.history.pushState({}, "", "/projects/p2/threads/t9");
     openBrowserView({ projectId: "p1" });

@@ -33,14 +33,17 @@ export const toggleBrowserView = (projectId: string): void => {
   else openBrowserView({ projectId });
 };
 
-// The panel keeps its place (a thread, another tab); a pull request in the chat's place gives way.
+// The panel keeps its place (a thread, another tab); whatever was in the chat's place (a pull
+// request, an artifact) gives way.
 const screenUnder = (projectId: string): ProjectScreen => {
   const route = parseRoute(window.location.pathname);
-  if (!route || !isProjectScreen(route) || route.projectId !== projectId) {
-    return { name: "project", projectId };
+  if (route?.name === "thread" && route.projectId === projectId) {
+    return { name: "thread", projectId, threadId: route.threadId };
   }
-  const { pullRequest: _replaced, ...screen } = route;
-  return screen;
+  if (route?.name === "project-tab" && route.projectId === projectId) {
+    return { name: "project-tab", projectId, tab: route.tab };
+  }
+  return { name: "project", projectId };
 };
 
 // Addresses waiting for a project's browser to take them: it may not be mounted yet.
