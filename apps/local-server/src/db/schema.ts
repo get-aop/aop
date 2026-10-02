@@ -161,6 +161,11 @@ export interface ChatRunsTable {
   cli_version: Generated<string | null>;
   /** The FIFO the running CLI reads steers from (migration v18); null on a run that takes none. */
   input_path: Generated<string | null>;
+  /**
+   * 1 when the run was launched with a permission-skipping flag, 0 when not, recorded before its
+   * CLI starts (migration v19); null on runs from before it.
+   */
+  permissions_bypassed: Generated<number | null>;
   created_at: Generated<string>;
   updated_at: Generated<string>;
 }

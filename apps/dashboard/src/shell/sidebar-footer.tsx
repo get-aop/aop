@@ -1,7 +1,7 @@
-import { Settings2Icon } from "lucide-react";
+import { Settings2Icon, ShieldOffIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { CliUpdateDot } from "../agent-clis/AgentCliPanel";
-import { pendingCliUpdates } from "../agent-clis/agent-cli-store";
+import { pendingCliUpdates, skipsPermissions, useAgentClis } from "../agent-clis/agent-cli-store";
 import { useAgentCliStatus } from "../agent-clis/use-agent-clis";
 import { useHostVersion } from "../hooks/useHostVersion";
 import type { HostConnection } from "../projects/selectors";
@@ -36,6 +36,7 @@ export const SidebarFooterStatus = ({ connection }: { connection: HostConnection
         <kbd className="text-[11px] text-text-subtle">⌘,</kbd>
       </button>
       <CliUpdateNotice />
+      <PermissionBypassNotice />
       <div
         data-testid="connection-status"
         data-state={connection}
@@ -70,6 +71,27 @@ const CliUpdateNotice = () => {
     >
       <CliUpdateDot className="mx-[5px]" />
       <span className="flex-1 truncate">{label}</span>
+    </button>
+  );
+};
+
+/**
+ * A line under Settings for as long as the agents this host starts skip permission checks, on
+ * every page, so it is never forgotten on. It opens the Runtimes panel, where it is turned off.
+ * The CLI notice above keeps the shared status fresh.
+ */
+const PermissionBypassNotice = () => {
+  if (!skipsPermissions(useAgentClis().data)) return null;
+  return (
+    <button
+      type="button"
+      data-testid="sidebar-permission-bypass"
+      title="Agents run any command on this host without asking"
+      onClick={() => openSettingsDialog("runtimes")}
+      className="flex h-7 items-center gap-2 rounded-row px-2 text-left text-[12px] text-blocked transition-colors duration-[120ms] hover:bg-hover"
+    >
+      <ShieldOffIcon className="size-4 shrink-0" strokeWidth={1.7} />
+      <span className="flex-1 truncate">Permission checks off</span>
     </button>
   );
 };

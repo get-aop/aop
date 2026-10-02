@@ -16,3 +16,14 @@ export const checkAgentClis = async (): Promise<AgentClisResponse> =>
 export const updateAgentCli = async (provider: string): Promise<void> => {
   await request<unknown>(`/agent-clis/${encodeURIComponent(provider)}/update`, { method: "POST" });
 };
+
+/**
+ * Host owner only: turns "skip permission checks" on or off for every agent the host starts.
+ * Each launch reads it, so it applies from the next turn; a paired device gets a 403.
+ */
+export const setSkipPermissions = async (enabled: boolean): Promise<void> => {
+  await request<unknown>("/settings/agent_cli_skip_permissions", {
+    method: "PUT",
+    body: JSON.stringify({ value: String(enabled) }),
+  });
+};

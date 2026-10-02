@@ -26,6 +26,7 @@ describe("settings/handlers", () => {
       expect(result.settings).toEqual([
         { key: "agent_cli_auto_update", value: "false" },
         { key: "agent_cli_check_interval_minutes", value: "60" },
+        { key: "agent_cli_skip_permissions", value: "false" },
         { key: "chat_global_instructions", value: "" },
         { key: "display_name", value: "" },
         { key: "max_concurrent_runs", value: "4" },
@@ -189,6 +190,19 @@ describe("settings/handlers", () => {
         error: { message: 'agent_cli_auto_update must be "true" or "false"' },
       });
       expect(await ctx.settingsRepository.get(SettingKey.AGENT_CLI_AUTO_UPDATE)).toBe("true");
+    });
+
+    test("skipping permission checks is off until the owner turns it on, and takes only true or false", async () => {
+      expect(await ctx.settingsRepository.get(SettingKey.AGENT_CLI_SKIP_PERMISSIONS)).toBe("false");
+      expect(await setSetting(ctx, "agent_cli_skip_permissions", "on")).toMatchObject({
+        success: false,
+        error: { message: 'agent_cli_skip_permissions must be "true" or "false"' },
+      });
+      expect(await ctx.settingsRepository.get(SettingKey.AGENT_CLI_SKIP_PERMISSIONS)).toBe("false");
+      expect(await setSetting(ctx, "agent_cli_skip_permissions", "true")).toMatchObject({
+        success: true,
+      });
+      expect(await ctx.settingsRepository.get(SettingKey.AGENT_CLI_SKIP_PERMISSIONS)).toBe("true");
     });
 
     test("display_name is empty until the owner sets one, and takes any text", async () => {

@@ -6,7 +6,13 @@ import { RuntimeProviderIcon } from "@/ui/provider-icon";
 import { Spinner } from "@/ui/spinner";
 import { formatAgo } from "../projects/selectors";
 import { useIsHostOwner } from "../settings/use-host-owner";
-import { checkForCliUpdates, isUpdateRunning, startCliUpdate } from "./agent-cli-store";
+import {
+  checkForCliUpdates,
+  isUpdateRunning,
+  skipsPermissions,
+  startCliUpdate,
+} from "./agent-cli-store";
+import { PermissionBypassBadge, PermissionBypassSetting } from "./PermissionBypassSetting";
 import { useAgentCliStatus } from "./use-agent-clis";
 
 const METHOD_LABELS: Record<AgentCliInstallMethod, string> = {
@@ -24,13 +30,15 @@ const METHOD_LABELS: Record<AgentCliInstallMethod, string> = {
  * background; the row follows it and says how it went.
  */
 export const AgentCliPanel = () => {
-  const { data, checking, starting, error } = useAgentCliStatus();
+  const { data, checking, starting, savingBypass, error } = useAgentCliStatus();
   const owner = useIsHostOwner(true);
 
   return (
     <section data-testid="agent-clis" className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <h2 className="flex-1 text-[13px] font-semibold text-text">Agent CLIs</h2>
+        <h2 className="text-[13px] font-semibold text-text">Agent CLIs</h2>
+        {skipsPermissions(data) ? <PermissionBypassBadge /> : null}
+        <span className="flex-1" />
         <Button
           type="button"
           size="xs"
@@ -55,14 +63,21 @@ export const AgentCliPanel = () => {
       {data === null ? (
         <p className="py-3 text-center text-[12px] text-text-subtle">Looking for agent CLIs…</p>
       ) : (
-        data.clis.map((cli) => (
-          <CliRow
-            key={cli.provider}
-            cli={cli}
+        <>
+          {data.clis.map((cli) => (
+            <CliRow
+              key={cli.provider}
+              cli={cli}
+              owner={owner}
+              starting={starting.includes(cli.provider)}
+            />
+          ))}
+          <PermissionBypassSetting
+            bypass={data.skipPermissions}
             owner={owner}
-            starting={starting.includes(cli.provider)}
+            saving={savingBypass}
           />
-        ))
+        </>
       )}
     </section>
   );

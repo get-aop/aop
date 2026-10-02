@@ -43,6 +43,7 @@ const RESPONSE: AgentClisResponse = {
   ],
   checkIntervalMinutes: 60,
   autoUpdate: false,
+  skipPermissions: { enabled: false, blockedReason: null },
 };
 
 describe("agent CLI routes", () => {

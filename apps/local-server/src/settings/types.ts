@@ -24,6 +24,12 @@ export const SettingKey = {
    */
   AGENT_CLI_CHECK_INTERVAL: "agent_cli_check_interval_minutes",
   /**
+   * Whether every Claude Code session the host starts runs with `--dangerously-skip-permissions`.
+   * "true" or "false"; off by default. Read at each launch (see agent-cli/permission-bypass.ts).
+   * Only the host owner may change it (`OWNER_ONLY_SETTING_KEYS`).
+   */
+  AGENT_CLI_SKIP_PERMISSIONS: "agent_cli_skip_permissions",
+  /**
    * Optional free-text preferences injected into every chat runtime prompt
    * (not stored in the visible message transcript).
    */
@@ -50,6 +56,7 @@ export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
 export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.AGENT_CLI_AUTO_UPDATE]: "false",
   [SettingKey.AGENT_CLI_CHECK_INTERVAL]: String(DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES),
+  [SettingKey.AGENT_CLI_SKIP_PERMISSIONS]: "false",
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
   [SettingKey.DISPLAY_NAME]: "",
   [SettingKey.MAX_CONCURRENT_RUNS]: String(DEFAULT_MAX_CONCURRENT_RUNS),
@@ -58,9 +65,27 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
 
 export const VALID_KEYS: SettingKey[] = Object.values(SettingKey);
 
+/**
+ * Keys a paired device may read but not write: they lower a guard on the host itself. The
+ * single-key route is the owner's in auth/route-policy.ts; settings/routes.ts refuses them in a
+ * bulk write from anyone else.
+ */
+export const OWNER_ONLY_SETTING_KEYS: readonly SettingKey[] = [
+  SettingKey.AGENT_CLI_SKIP_PERMISSIONS,
+];
+
+export const isOwnerOnlySettingKey = (key: string): boolean =>
+  OWNER_ONLY_SETTING_KEYS.includes(key as SettingKey);
+
 export const isValidSettingKey = (key: string): key is SettingKey => {
   return VALID_KEYS.includes(key as SettingKey);
 };
+
+const BOOLEAN_KEYS: readonly SettingKey[] = [
+  SettingKey.UPDATE_CHECK,
+  SettingKey.AGENT_CLI_AUTO_UPDATE,
+  SettingKey.AGENT_CLI_SKIP_PERMISSIONS,
+];
 
 /** Why `value` cannot be saved under `key`, or null when it can. Free-text keys take any value. */
 export const validateSettingValue = (key: SettingKey, value: string): string | null => {
@@ -70,8 +95,7 @@ export const validateSettingValue = (key: SettingKey, value: string): string | n
   if (key === SettingKey.AGENT_CLI_CHECK_INTERVAL && parseAgentCliCheckInterval(value) === null) {
     return `${key} must be a whole number of minutes from 0 to ${MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES}`;
   }
-  const isBoolean = key === SettingKey.UPDATE_CHECK || key === SettingKey.AGENT_CLI_AUTO_UPDATE;
-  if (isBoolean && value !== "true" && value !== "false") {
+  if (BOOLEAN_KEYS.includes(key) && value !== "true" && value !== "false") {
     return `${key} must be "true" or "false"`;
   }
   return null;

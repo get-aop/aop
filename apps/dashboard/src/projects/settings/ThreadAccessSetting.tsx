@@ -1,6 +1,7 @@
 import type { ThreadAccess } from "@aop/common";
 import { TriangleAlertIcon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { skipsPermissions, useAgentClis } from "../../agent-clis/agent-cli-store";
 import { ROW_SELECT_CLASS, SettingRow } from "./blocks";
 import type { SettingsDraft } from "./use-settings-draft";
 
@@ -27,6 +28,7 @@ const OPTIONS: { value: ThreadAccess; label: string; description: string }[] = [
 export const ThreadAccessSetting = ({ draft }: { draft: SettingsDraft }) => {
   const access = draft.value("threadAccess");
   const chosen = OPTIONS.find((option) => option.value === access);
+  const hostBypass = skipsPermissions(useAgentClis().data);
 
   return (
     <SettingRow
@@ -34,6 +36,15 @@ export const ThreadAccessSetting = ({ draft }: { draft: SettingsDraft }) => {
       description={
         <span data-testid="settings-thread-access-description">
           How much a thread may do on this host without asking you first. {chosen?.description}
+          {hostBypass ? (
+            <span
+              data-testid="settings-thread-access-overridden"
+              className="block pt-1 text-blocked"
+            >
+              Skip permission checks is on for this host (Settings › Runtimes), so every thread runs
+              with full access whatever this says.
+            </span>
+          ) : null}
         </span>
       }
       htmlFor="settings-thread-access"

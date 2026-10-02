@@ -20,6 +20,7 @@ import { runAndReap } from "../process/reaper.ts";
 import { detectRateLimit, type RateLimitHit } from "../scheduling/rate-limit.ts";
 import { isProviderFailureEvent } from "./provider-event-classifier.ts";
 import { buildRunOptions } from "./run-options.ts";
+import type { HostRunAccess } from "./run-profile.ts";
 import {
   createRuntimeSessionLineInspector,
   startRuntimeSessionTail,
@@ -174,6 +175,11 @@ export const runSessionPrompt = async (input: {
   onSpawn?: (pid: number) => Promise<void> | void;
   /** Keeps the run open for messages sent while it works (see run-input.ts). */
   input?: RunInput;
+  /**
+   * Asked right before the CLI is spawned, after any wait for a CLI update: what the host
+   * decided for this launch (the permission bypass). Left out, the run gets no bypass.
+   */
+  hostAccess?: () => Promise<HostRunAccess>;
   /** Test seam; production uses CHAT_MAX_LOG_BYTES. */
   maxLogBytes?: number;
   /** Test seam; production uses CHAT_LOG_SIZE_POLL_MS. */
@@ -208,6 +214,7 @@ export const runSessionPrompt = async (input: {
       input.onSpawn,
       handle,
       input.input,
+      input.hostAccess,
       input.maxLogBytes,
       input.logSizePollMs,
     );
@@ -378,6 +385,7 @@ const executeProviderRun = async (
   onSpawn: ((pid: number) => Promise<void> | void) | undefined,
   handle: ActiveRunHandle,
   runInput: RunInput | undefined,
+  hostAccess: (() => Promise<HostRunAccess>) | undefined,
   maxLogBytes = CHAT_MAX_LOG_BYTES,
   logSizePollMs = CHAT_LOG_SIZE_POLL_MS,
 ): Promise<RuntimeRunResult> => {
@@ -500,6 +508,7 @@ const executeProviderRun = async (
       images,
       appendSystemPrompt,
       inputChannel: runInput?.channel,
+      hostAccess,
       logFilePath,
       provider,
       handle,
@@ -553,6 +562,7 @@ const raceProviderAgainstInterrupt = async (input: {
   images: RunImage[] | undefined;
   appendSystemPrompt: string | undefined;
   inputChannel: InputChannel | undefined;
+  hostAccess: (() => Promise<HostRunAccess>) | undefined;
   logFilePath: string;
   provider: LLMProvider;
   handle: ActiveRunHandle;
@@ -562,6 +572,7 @@ const raceProviderAgainstInterrupt = async (input: {
   setProviderSettled: (settled: Promise<void>) => void;
   interruptPromise: Promise<RuntimeRunResult>;
 }): Promise<RuntimeRunResult> => {
+  const host = await input.hostAccess?.();
   if (input.handle.owner.interrupted) {
     return interruptedRunResult(input.handle, input.getCapturedSessionId());
   }
@@ -579,6 +590,7 @@ const raceProviderAgainstInterrupt = async (input: {
       await reportSpawnedPid(input.onSpawn, pid, input.session.id);
     },
     input.appendSystemPrompt,
+    host,
   );
   const options = {
     ...runOptions,

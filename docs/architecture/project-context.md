@@ -46,7 +46,7 @@ Sessions write memory, and they write what they read, so a memory file can carry
 - Topic descriptions are collapsed to one line, so a description cannot open a heading.
 - Truncation notes are outside the markers, in AOP's own voice.
 
-This lowers the odds that a poisoned note is obeyed; it cannot make a model immune to persuasion. The real limits are the tools: the coordinator has only AOP tools and asks permission for anything else, and a thread has the access its project chose.
+This lowers the odds that a poisoned note is obeyed; it cannot make a model immune to persuasion. The real limits are the tools: the coordinator has only AOP tools, and a thread has the access its project chose, or full access while the host skips permission checks ([Runtimes](../RUNTIMES.md#skipping-permission-checks)).
 
 The person's goal and instructions are trusted text, and only the person can change them: the coordinator's `project_settings_set` takes only the thread model and effort and the notification level, and refuses a call that names anything else (its schema is strict). What the coordinator learns goes to memory, its one writable channel into other sessions' prompts, and memory is delimited as untrusted data as described above.
 
