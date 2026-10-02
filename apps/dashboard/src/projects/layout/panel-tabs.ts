@@ -1,11 +1,14 @@
-import { MessagesSquareIcon } from "lucide-react";
+import { ClockIcon, MessagesSquareIcon } from "lucide-react";
 
 /**
  * The threads panel's sections. Threads is always there; every other tab is one the person
  * opens from the strip's "+" menu and can close again. A section added here gets a tab, an
  * entry in that menu, an address (`projectTabPath`) and a case in `PanelTabBody`.
  */
-export const PANEL_TABS = [{ id: "threads", label: "Threads", icon: MessagesSquareIcon }] as const;
+export const PANEL_TABS = [
+  { id: "threads", label: "Threads", icon: MessagesSquareIcon },
+  { id: "routines", label: "Routines", icon: ClockIcon },
+] as const;
 
 export type PanelTabSpec = (typeof PANEL_TABS)[number];
 export type PanelTabId = PanelTabSpec["id"];

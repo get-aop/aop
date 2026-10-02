@@ -16,6 +16,7 @@ import {
 } from "@/ui/dropdown-menu";
 import { IconButton } from "../../components/IconButton";
 import type { ProjectEntry } from "../projects-state";
+import { RoutinesTab } from "../routines/RoutinesTab";
 import { attentionOf, THREAD_STATUS_LABEL, THREAD_STATUS_ORDER } from "../selectors";
 import { ThreadOverview } from "../ThreadOverview";
 import { ThreadPane } from "../thread/ThreadPane";
@@ -144,6 +145,8 @@ const PanelTabBody = ({
           <ThreadOverview entry={entry} filters={filters} />
         </div>
       );
+    case "routines":
+      return <RoutinesTab project={entry.project} />;
   }
 };
 
