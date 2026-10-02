@@ -9,6 +9,7 @@ setupDashboardDom();
 const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
 const { ProjectsProvider } = await import("../ProjectsProvider");
 const { ComputerUseSetting } = await import("./ComputerUseSetting");
+const { savePhase } = await import("./section-test-utils");
 const { refreshAgentClis, resetAgentClisForTests } = await import(
   "../../agent-clis/agent-cli-store"
 );
@@ -140,6 +141,8 @@ describe("ComputerUseSetting", () => {
       ]),
     );
     await waitFor(() => expect(stub.calls.adopted.at(-1)?.computerUse).toBe("cua"));
+    // It says so on its row, like every project setting.
+    await waitFor(() => expect(savePhase("settings-computer-use")).toBe("saved"));
   });
 
   test("on CUA, says the driver is ready on the host, with what it checked", async () => {

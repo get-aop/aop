@@ -1,9 +1,11 @@
-import type { ThreadAccess } from "@aop/common";
-import { TriangleAlertIcon } from "lucide-react";
+import type { Project, ThreadAccess } from "@aop/common";
+import { Button } from "@/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { skipsPermissions, useAgentClis } from "../../agent-clis/agent-cli-store";
-import { ROW_SELECT_CLASS, SettingRow } from "./blocks";
-import type { SettingsDraft } from "./use-settings-draft";
+import { requestConfirmation } from "../../components/ConfirmationHost";
+import { openSettingsDialog } from "../../shell/dialog-store";
+import { ROW_SELECT_CLASS, SettingNote, SettingRow } from "./blocks";
+import type { AutosaveSettings } from "./use-settings-autosave";
 
 const OPTIONS: { value: ThreadAccess; label: string; description: string }[] = [
   {
@@ -22,13 +24,34 @@ const OPTIONS: { value: ThreadAccess; label: string; description: string }[] = [
 
 /**
  * What a project's threads may do without asking. Full access is what a new project starts with,
- * so its warning shows for as long as it is selected; only the person can change the setting,
- * since no coordinator tool can. The coordinator itself never gets full access.
+ * so its note shows for as long as it is selected; only the person can change the setting, since
+ * no coordinator tool can. Choosing it asks once more before it saves. While the host skips
+ * permission checks this setting does not apply, and the row says that instead of warning twice.
  */
-export const ThreadAccessSetting = ({ draft }: { draft: SettingsDraft }) => {
-  const access = draft.value("threadAccess");
+export const ThreadAccessSetting = ({
+  project,
+  settings,
+}: {
+  project: Project;
+  settings: AutosaveSettings;
+}) => {
+  const access = settings.value("threadAccess");
   const chosen = OPTIONS.find((option) => option.value === access);
   const hostBypass = skipsPermissions(useAgentClis().data);
+
+  const choose = async (next: ThreadAccess) => {
+    // Full access is the one setting that lowers a guard, so choosing it asks once more.
+    if (next === "full-access") {
+      const confirmed = await requestConfirmation({
+        title: "Give threads full access?",
+        message: `Threads of “${project.name}” will run any command on this host without asking, starting with their next turn. Only continue for a project you trust.`,
+        confirmLabel: "Give full access",
+        destructive: true,
+      });
+      if (!confirmed) return;
+    }
+    settings.set("threadAccess", next);
+  };
 
   return (
     <SettingRow
@@ -36,23 +59,12 @@ export const ThreadAccessSetting = ({ draft }: { draft: SettingsDraft }) => {
       description={
         <span data-testid="settings-thread-access-description">
           How much a thread may do on this host without asking you first. {chosen?.description}
-          {hostBypass ? (
-            <span
-              data-testid="settings-thread-access-overridden"
-              className="block pt-1 text-blocked"
-            >
-              Skip permission checks is on for this host (Settings › Runtimes), so every thread runs
-              with full access whatever this says.
-            </span>
-          ) : null}
         </span>
       }
       htmlFor="settings-thread-access"
+      status={settings.state("threadAccess")}
       control={
-        <Select
-          value={access}
-          onValueChange={(value) => draft.set("threadAccess", value as ThreadAccess)}
-        >
+        <Select value={access} onValueChange={(value) => void choose(value as ThreadAccess)}>
           <SelectTrigger
             id="settings-thread-access"
             data-testid="settings-thread-access"
@@ -74,28 +86,39 @@ export const ThreadAccessSetting = ({ draft }: { draft: SettingsDraft }) => {
           </SelectContent>
         </Select>
       }
-      below={access === "full-access" ? <FullAccessWarning /> : null}
+      below={
+        hostBypass ? (
+          <OverriddenNote />
+        ) : access === "full-access" ? (
+          <SettingNote
+            tone="warn"
+            testId="settings-full-access-warning"
+            title="Threads can run any command on this host."
+          >
+            They run as you: a wrong instruction, or text an attacker put in a file or in memory,
+            can make one delete files outside the repository, read credentials or push anywhere.
+            Choose Edit files for repositories and instructions you do not trust. The coordinator
+            never gets this access.
+          </SettingNote>
+        ) : null
+      }
     />
   );
 };
 
-const FullAccessWarning = () => (
-  <div
-    role="alert"
-    data-testid="settings-full-access-warning"
-    className="flex gap-2.5 rounded-row border border-blocked/30 bg-blocked/10 px-3 py-2.5 text-[12.5px] leading-relaxed text-text"
-  >
-    <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-blocked" />
-    <div className="flex flex-col gap-1">
-      <p className="font-medium text-blocked">Threads can run any command on this host.</p>
-      <p className="text-text-muted">
-        A thread runs as you on this machine: it can delete files outside the repository, read
-        credentials and push to any remote. A wrong instruction, or text an attacker put in a file
-        or in memory, is enough to make it try. Choose Edit files for a project whose repositories
-        and instructions you do not trust. The setting applies to every thread of the project,
-        including the ones running now, from their next turn. The coordinator never gets this
-        access.
-      </p>
-    </div>
-  </div>
+const OverriddenNote = () => (
+  <SettingNote tone="warn" testId="settings-thread-access-overridden">
+    Overridden on this host: Skip permission checks is on, so every thread runs with full access
+    whatever this says.{" "}
+    <Button
+      type="button"
+      variant="link"
+      size="xs"
+      data-testid="settings-thread-access-runtimes"
+      className="h-auto p-0 text-[12.5px]"
+      onClick={() => openSettingsDialog("runtimes")}
+    >
+      Settings › Runtimes
+    </Button>
+  </SettingNote>
 );

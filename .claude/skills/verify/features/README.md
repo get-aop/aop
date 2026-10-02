@@ -41,5 +41,5 @@ This directory is the maintained source for verifying the user-facing behavior o
 - [Sessions](./sessions.md) covers plain chat sessions through the API (no page in the dashboard): fake chat, usage, a server crash mid-turn.
 - [Settings](./settings.md) covers the Settings dialog and its sections.
 - [Updates](./updates.md) covers `aop update`, the update notice and Update now, against a fake release feed and a host installed in a scratch folder.
-- [Project settings, memory, usage and Devices](./projects-settings.md) covers a project's settings screen (General, Memory, Environment, Usage) and the host owner's Devices section.
+- [Project settings, memory, usage and Devices](./projects-settings.md) covers a project's settings screen (General, Models, Threads & permissions, Computer use, Notifications, Environment, Memory, Usage, Advanced) and the host owner's Devices section.
 - [Desktop app](./desktop.md) covers the Electron thin client: connecting to a host, the bundled dashboard, notifications, revoked devices, and the host it can run on a Mac. Half of it runs in Chrome, half over the DevTools protocol.

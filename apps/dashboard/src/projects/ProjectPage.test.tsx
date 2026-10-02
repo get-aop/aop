@@ -11,6 +11,7 @@ const { ProjectsProvider } = await import("./ProjectsProvider");
 const { ProjectPage } = await import("./ProjectPage");
 const { ChatApiProvider } = await import("./chat/chat-api");
 const { SidebarProvider } = await import("@/ui/sidebar");
+const { PROJECT_SETTINGS_SECTIONS, projectSettingsPath } = await import("../shell/router");
 type Route = import("../shell/router").Route;
 
 type ProjectRoute = Exclude<Route, { name: "projects" }>;
@@ -269,13 +270,13 @@ describe("project screens", () => {
     expect(window.location.pathname).toBe("/projects/p1/threads/blocked");
   });
 
-  test("on a phone only the current section keeps its name in the nav; the others are named icons, and the row never scrolls", async () => {
+  test("on a phone only the current section keeps its name in the nav; the others are named icons in a row that scrolls sideways", async () => {
     renderPage(state(), { name: "project-settings", projectId: "p1", section: "environment" });
     await act(async () => {});
 
     const nav = screen.getByRole("navigation", { name: "Project settings" });
-    expect(nav.className).not.toContain("overflow-x");
-    for (const id of ["general", "memory", "environment", "usage"]) {
+    expect(nav.className).toContain("overflow-x-auto");
+    for (const id of PROJECT_SETTINGS_SECTIONS) {
       const tab = screen.getByTestId(`project-settings-nav-${id}`);
       const label = within(tab).getByTestId("project-settings-nav-label");
       if (id === "environment") {
@@ -287,6 +288,44 @@ describe("project screens", () => {
         expect(label.className).toContain("max-md:hidden");
       }
     }
+  });
+
+  test("the nav lists every section in its groups, each with a heading and a line about it", async () => {
+    renderPage(state(), { name: "project-settings", projectId: "p1", section: "threads" });
+    await act(async () => {});
+
+    const links = within(screen.getByRole("navigation", { name: "Project settings" })).getAllByRole(
+      "link",
+    );
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(
+      PROJECT_SETTINGS_SECTIONS.map((id) => projectSettingsPath("p1", id)),
+    );
+    expect(screen.getByTestId("project-settings-title").textContent).toBe("Threads & permissions");
+    expect(screen.getByTestId("project-settings-description").textContent).toContain(
+      "What threads may do on this host",
+    );
+    expect(screen.getByTestId("settings-thread-access")).toBeTruthy();
+  });
+
+  test("arrow keys, Home and End move between the sections in the nav", async () => {
+    renderPage(state(), { name: "project-settings", projectId: "p1", section: "general" });
+    await act(async () => {});
+    const nav = screen.getByRole("navigation", { name: "Project settings" });
+    const tab = (id: string) => screen.getByTestId(`project-settings-nav-${id}`);
+
+    tab("general").focus();
+    fireEvent.keyDown(nav, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(tab("models"));
+    fireEvent.keyDown(nav, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(tab("threads"));
+    fireEvent.keyDown(nav, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(tab("models"));
+    fireEvent.keyDown(nav, { key: "End" });
+    expect(document.activeElement).toBe(tab("advanced"));
+    fireEvent.keyDown(nav, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(tab("general"));
+    fireEvent.keyDown(nav, { key: "Home" });
+    expect(document.activeElement).toBe(tab("general"));
   });
 
   test("a deep link to the settings closes to the project's home", async () => {

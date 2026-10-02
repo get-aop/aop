@@ -15,7 +15,7 @@ const { ConfirmationHost } = await import("../../components/ConfirmationHost");
 const { ProjectsProvider } = await import("../ProjectsProvider");
 const { MemorySection } = await import("./MemorySection");
 
-const project = makeProject({ id: "p1", name: "Checkout", instructions: "Never touch payments." });
+const project = makeProject({ id: "p1", name: "Checkout" });
 const index = makeMemoryFile({
   name: "MEMORY.md",
   description: "The index",
@@ -114,46 +114,6 @@ const userMessage: Message = {
   text: "hello",
   createdAt: AT,
 };
-
-describe("instructions", () => {
-  test("count characters against the limit as the person types", async () => {
-    renderMemory();
-    await screen.findAllByTestId("memory-file");
-    expect(screen.getByTestId("settings-instructions-count").textContent).toBe("21 / 16000");
-
-    type("settings-instructions", "twelve chars");
-    expect(screen.getByTestId("settings-instructions-count").textContent).toBe("12 / 16000");
-    type("settings-instructions", "x".repeat(14_500));
-    expect(screen.getByTestId("settings-instructions-count").getAttribute("data-near-limit")).toBe(
-      "true",
-    );
-  });
-
-  test("Save sends only the instructions, and stays disabled until they change", async () => {
-    respond = (method, path, body) =>
-      method === "PATCH" && path === "/projects/p1"
-        ? Response.json({ project: { ...project, ...(body as object) } })
-        : undefined;
-    const stub = renderMemory();
-    await screen.findAllByTestId("memory-file");
-    const saveButton = screen.getByTestId("settings-instructions-save") as HTMLButtonElement;
-    expect(saveButton.disabled).toBe(true);
-
-    type("settings-instructions", "Never touch payments.\nAsk before migrations.");
-    fireEvent.click(saveButton);
-
-    await waitFor(() =>
-      expect(api.writes().filter((call) => call.method === "PATCH")).toEqual([
-        {
-          method: "PATCH",
-          path: "/projects/p1",
-          body: { instructions: "Never touch payments.\nAsk before migrations." },
-        },
-      ]),
-    );
-    await waitFor(() => expect(stub.calls.adopted).toHaveLength(1));
-  });
-});
 
 describe("the memory list", () => {
   test("puts the index under Read every thread and topic files under Memory files", async () => {

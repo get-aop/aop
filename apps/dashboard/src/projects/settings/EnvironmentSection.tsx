@@ -12,14 +12,14 @@ import type { RegisteredRepo } from "../../api/client";
 import type { ProjectEntry } from "../projects-state";
 import { useProjectActions } from "../use-project-actions";
 import { useRegisteredRepos } from "../use-registered-repos";
-import { SettingRow } from "./blocks";
+import { SettingRow, SettingsGroup } from "./blocks";
 import { explainRepoChange, type ProjectRepoRef } from "./repo-change-error";
 import { useRegisterToAdd } from "./use-register-to-add";
 
 /**
  * The repositories the project's threads work in: one list with a remove × per row, and an Add
  * menu of the registered repositories not in it yet, or a new one registered through the attach
- * dialog. Each change is saved as soon as it is made.
+ * dialog. Each change is saved as soon as it is made, like every project setting.
  */
 export const EnvironmentSection = ({ entry }: { entry: ProjectEntry }) => {
   const { project, threads } = entry;
@@ -59,7 +59,7 @@ export const EnvironmentSection = ({ entry }: { entry: ProjectEntry }) => {
   const available = (registered ?? []).filter((repo) => !project.repoIds.includes(repo.id));
 
   return (
-    <div data-testid="settings-environment" className="flex flex-col">
+    <SettingsGroup testId="settings-environment">
       <SettingRow
         testId="settings-repos"
         label="Project repositories"
@@ -73,9 +73,9 @@ export const EnvironmentSection = ({ entry }: { entry: ProjectEntry }) => {
           />
         }
       />
-      <div data-testid="settings-repos-attached" className="flex flex-col border-t border-border">
+      <div data-testid="settings-repos-attached" className="flex flex-col">
         {attached.length === 0 ? (
-          <p className="py-3 text-[12.5px] text-text-subtle">No repository is attached.</p>
+          <p className="px-4 py-3.5 text-[12.5px] text-text-subtle">No repository is attached.</p>
         ) : (
           attached.map((repo) => (
             <RepoRow
@@ -88,7 +88,7 @@ export const EnvironmentSection = ({ entry }: { entry: ProjectEntry }) => {
           ))
         )}
       </div>
-    </div>
+    </SettingsGroup>
   );
 };
 
@@ -169,7 +169,7 @@ const RepoRow = ({
     <div
       data-testid="settings-repo"
       data-repo-id={repo.id}
-      className="flex flex-col gap-1 border-b border-border/60 py-2.5 last:border-b-0"
+      className="flex flex-col gap-1 border-b border-border/60 px-4 py-2.5 last:border-b-0"
     >
       <div className="flex items-center gap-3">
         <GitBranchIcon className="size-4 shrink-0 text-text-subtle" strokeWidth={1.7} />

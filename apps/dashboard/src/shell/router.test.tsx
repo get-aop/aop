@@ -9,6 +9,7 @@ const { act, cleanup, fireEvent, render, renderHook, screen } = await import(
 const {
   Link,
   navigate,
+  PROJECT_SETTINGS_SECTIONS,
   parseRoute,
   projectPath,
   projectSettingsPath,
@@ -39,7 +40,7 @@ describe("parseRoute", () => {
   });
 
   test("names each section of a project's settings, and General only by the bare address", () => {
-    for (const section of ["memory", "environment", "usage"] as const) {
+    for (const section of PROJECT_SETTINGS_SECTIONS.filter((id) => id !== "general")) {
       expect(parseRoute(`/projects/p1/settings/${section}`)).toEqual({
         name: "project-settings",
         projectId: "p1",
@@ -48,6 +49,10 @@ describe("parseRoute", () => {
     }
     expect(parseRoute("/projects/p1/settings/general")).toBeNull();
     expect(parseRoute("/projects/p1/settings/billing")).toBeNull();
+    // The addresses from before the sections split still open the same screens.
+    for (const old of ["memory", "environment", "usage"]) {
+      expect(parseRoute(`/projects/p1/settings/${old}`)).not.toBeNull();
+    }
     expect(parseRoute("/projects/p1/settings/usage/extra")).toBeNull();
   });
 
