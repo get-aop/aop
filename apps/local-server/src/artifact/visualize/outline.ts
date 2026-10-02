@@ -7,43 +7,54 @@ const MAX_ITEMS = 80;
  * are in, and each paragraph gives its sentences. Code and tables are left out.
  */
 export const outlineOf = (reply: string): string => {
-  const items: string[] = [];
-  let headingDepth = -1;
-  let minHeading = 7;
-  let inFence = false;
   const lines = reply.split(/\r?\n/);
-  for (const line of lines) {
-    const heading = /^(#{1,6})\s+/.exec(line);
-    if (heading) minHeading = Math.min(minHeading, heading[1]?.length ?? 7);
-  }
-  for (const raw of lines) {
-    if (/^\s*(```|~~~)/.test(raw)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence || /^\s*\|/.test(raw) || !raw.trim()) continue;
-    const heading = /^(#{1,6})\s+(.*)$/.exec(raw);
-    if (heading) {
-      headingDepth = (heading[1]?.length ?? 1) - minHeading;
-      items.push(bullet(headingDepth, `**${plain(heading[2] ?? "")}**`));
-      continue;
-    }
-    const listItem = /^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$/.exec(raw);
-    if (listItem) {
-      const nesting = Math.floor((listItem[1]?.length ?? 0) / 2);
-      items.push(bullet(headingDepth + 1 + nesting, plain(listItem[2] ?? "")));
-      continue;
-    }
-    for (const sentence of sentencesOf(plain(raw))) {
-      items.push(bullet(headingDepth + 1, sentence));
-    }
-  }
+  const items = outlineItems(proseLines(lines), topHeadingLevel(lines));
   const kept = items.filter((item) => item.trim() !== "-").slice(0, MAX_ITEMS);
   return [
     "# Outline",
     "",
     ...(kept.length > 0 ? kept : ["- (The reply has no text to outline.)"]),
   ].join("\n");
+};
+
+// The lines an outline reads: no code, no tables, no blank lines.
+const proseLines = (lines: readonly string[]): string[] => {
+  let inFence = false;
+  return lines.filter((line) => {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      return false;
+    }
+    return !inFence && !/^\s*\|/.test(line) && line.trim() !== "";
+  });
+};
+
+const topHeadingLevel = (lines: readonly string[]): number =>
+  Math.min(7, ...lines.map((line) => /^(#{1,6})\s+/.exec(line)?.[1]?.length ?? 7));
+
+const outlineItems = (lines: readonly string[], topLevel: number): string[] => {
+  const items: string[] = [];
+  let headingDepth = -1;
+  for (const line of lines) {
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) {
+      headingDepth = (heading[1]?.length ?? 1) - topLevel;
+      items.push(bullet(headingDepth, `**${plain(heading[2] ?? "")}**`));
+    } else {
+      items.push(...bodyItems(line, headingDepth));
+    }
+  }
+  return items;
+};
+
+// A list item keeps its nesting under the heading it is in; a paragraph gives its sentences.
+const bodyItems = (line: string, headingDepth: number): string[] => {
+  const listItem = /^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
+  if (listItem) {
+    const nesting = Math.floor((listItem[1]?.length ?? 0) / 2);
+    return [bullet(headingDepth + 1 + nesting, plain(listItem[2] ?? ""))];
+  }
+  return sentencesOf(plain(line)).map((sentence) => bullet(headingDepth + 1, sentence));
 };
 
 const bullet = (depth: number, text: string): string =>

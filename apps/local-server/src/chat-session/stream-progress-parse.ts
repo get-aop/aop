@@ -239,12 +239,15 @@ const extractClaudeToolResults = (content: unknown): ProgressChunk[] => {
   return content.flatMap((block): ProgressChunk[] => {
     if (!isRecord(block) || block.type !== "tool_result") return [];
     const itemId = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
-    if (!itemId) return [];
-    const failed = block.is_error === true;
-    const done: ProgressChunk = { kind: "tool", phase: "done", name: "Tool", itemId, failed };
-    const ref = failed ? null : artifactOfResult(block.content);
-    return ref ? [done, { kind: "artifact", itemId, ref }] : [done];
+    return itemId ? toolResultChunks(block, itemId) : [];
   });
+};
+
+const toolResultChunks = (block: Record<string, unknown>, itemId: string): ProgressChunk[] => {
+  const failed = block.is_error === true;
+  const done: ProgressChunk = { kind: "tool", phase: "done", name: "Tool", itemId, failed };
+  const ref = failed ? null : artifactOfResult(block.content);
+  return ref ? [done, { kind: "artifact", itemId, ref }] : [done];
 };
 
 // Only an MCP result (text blocks) is read, and only for the marker: what tools return is

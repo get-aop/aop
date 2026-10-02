@@ -79,24 +79,19 @@ export const createVisualizeService = (
     save: async (projectId, input) => {
       const reply = await replyOf(ctx, projectId, input.messageId);
       if (!reply.success) return reply;
-      const content = input.result === "outline" ? outlineOf(reply.text) : input.candidate.source;
-      const kind = input.result === "diagram" ? input.candidate.kind : "markdown";
-      const note =
-        input.result === "outline" ? "Outline (no valid diagram)" : TYPE_NOTES[input.type];
+      const result = resultOf(input, reply.text);
       const existing = await artifacts.byOriginMessage(projectId, input.messageId);
       const saved = existing
         ? await artifacts.update(reply.session, {
             artifactId: existing.id,
-            content,
-            kind,
-            note,
+            ...result,
             originType: input.type,
           })
         : await artifacts.create(reply.session, {
             title: titleOf(reply.text),
-            content,
-            kind,
-            name: `diagram-${input.messageId.slice(-8).toLowerCase()}.${kind === "mermaid" ? "mmd" : "md"}`,
+            content: result.content,
+            kind: result.kind,
+            name: `diagram-${input.messageId.slice(-8).toLowerCase()}.${result.kind === "mermaid" ? "mmd" : "md"}`,
             folder: "Artifacts/Diagrams",
             description: "Made with Visualize from a reply",
             originMessageId: input.messageId,
@@ -106,6 +101,15 @@ export const createVisualizeService = (
     },
   };
 };
+
+// What is kept: the checked diagram, or the outline when none parsed.
+const resultOf = (
+  input: VisualizeSaveInput,
+  reply: string,
+): { content: string; kind: "mermaid" | "markdown"; note: string } =>
+  input.result === "outline"
+    ? { content: outlineOf(reply), kind: "markdown", note: "Outline (no valid diagram)" }
+    : { content: input.candidate.source, kind: input.candidate.kind, note: TYPE_NOTES[input.type] };
 
 const TYPE_NOTES: Record<VisualizeType, string> = {
   auto: "Diagram",

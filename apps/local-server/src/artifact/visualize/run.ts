@@ -50,18 +50,12 @@ export const createVisualizeModel =
         model: VISUALIZE_MODEL,
         noSessionPersistence: true,
         env: { MAX_THINKING_TOKENS: "0" },
-        runtimeAlias:
-          session.runtime === "claude-code" ? (session.runtime_alias ?? undefined) : undefined,
+        runtimeAlias: runtimeAliasOf(session),
         logFilePath,
         startupTimeoutMs: CHAT_RUNTIME_TIMEOUT_POLICY.startupTimeoutMs,
         inactivityTimeoutMs: INACTIVITY_TIMEOUT_MS,
       });
-      const text = result.exitCode === 0 ? await readAssistantTextFromLog(logFilePath) : "";
-      if (!text) {
-        log.warn("Visualize run wrote nothing", { exitCode: result.exitCode });
-        return null;
-      }
-      return { text, durationMs: Date.now() - started, costUsd: result.usage?.costUsd ?? null };
+      return await runOutput(result.exitCode, logFilePath, started, result.usage?.costUsd);
     } catch (error) {
       log.warn("Visualize run failed", {
         error: error instanceof Error ? error.message : String(error),
@@ -71,3 +65,21 @@ export const createVisualizeModel =
       await rm(logFilePath, { force: true });
     }
   };
+
+// A custom Claude Code runtime (another executable, the fake in tests) is the session's alias.
+const runtimeAliasOf = (session: ChatSession): string | undefined =>
+  session.runtime === "claude-code" ? (session.runtime_alias ?? undefined) : undefined;
+
+const runOutput = async (
+  exitCode: number,
+  logFilePath: string,
+  started: number,
+  costUsd: number | undefined,
+): Promise<VisualizeRun | null> => {
+  const text = exitCode === 0 ? await readAssistantTextFromLog(logFilePath) : "";
+  if (!text) {
+    log.warn("Visualize run wrote nothing", { exitCode });
+    return null;
+  }
+  return { text, durationMs: Date.now() - started, costUsd: costUsd ?? null };
+};

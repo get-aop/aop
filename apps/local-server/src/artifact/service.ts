@@ -170,18 +170,11 @@ const create = async (
 ): Promise<ArtifactResult<ArtifactSaved>> => {
   const projectId = session.project_id;
   if (!projectId) return fail({ code: "PROJECT_NOT_FOUND" });
-  const title = normalizeTitle(input.title);
-  if (!title) return fail({ code: "INVALID_TITLE" });
-  const body = await readBody(session, input);
-  if (!body.success) return body;
-  const name = artifactFileName({ ...input, title });
-  const kind = input.kind ?? artifactKindOf(name, libraryMimeType(name, body.bytes));
-  const problem = checkArtifactContent(kind, body.bytes, libraryMimeType(name, body.bytes));
-  if (problem) return fail({ code: "INVALID_CONTENT", message: problem });
-
+  const checked = await checkNew(session, input);
+  if (!checked.success) return checked;
   const saved = await env.library.saveFromAgent(session, {
     ...(input.path !== undefined ? { path: input.path } : { content: input.content }),
-    name,
+    name: checked.name,
     folder: input.folder,
     description: input.description,
   });
@@ -189,21 +182,48 @@ const create = async (
   const row = await env.items.getLive(projectId, saved.item.id);
   if (!row) return fail({ code: "ITEM_NOT_FOUND" });
   // The same file saved again under the same name is the Library's item already there.
-  if (!(await env.artifacts.get(row.id))) {
-    await env.artifacts.insert(
-      {
-        item_id: row.id,
-        title,
-        kind,
-        language: kind === "code" ? (input.language ?? codeLanguageOf(name)) : null,
-        current_version: 1,
-        origin_message_id: input.originMessageId ?? null,
-        origin_type: input.originType ?? null,
-      },
-      firstVersion(row, kind, session),
-    );
-  }
+  if (!(await env.artifacts.get(row.id))) await recordNew(env, row, checked, input, session);
   return savedResult(env, projectId, row.id, "created");
+};
+
+const recordNew = (
+  env: Env,
+  row: LibraryItemWithSession,
+  checked: { title: string; name: string; kind: ArtifactKind },
+  input: CreateArtifactInput,
+  session: ChatSession,
+): Promise<void> =>
+  env.artifacts.insert(
+    {
+      item_id: row.id,
+      title: checked.title,
+      kind: checked.kind,
+      language: checked.kind === "code" ? (input.language ?? codeLanguageOf(checked.name)) : null,
+      current_version: 1,
+      origin_message_id: input.originMessageId ?? null,
+      origin_type: input.originType ?? null,
+    },
+    firstVersion(row, checked.kind, session),
+  );
+
+// A new artifact's title, file name and kind, once its content is known to fit the kind.
+const checkNew = async (
+  session: ChatSession,
+  input: CreateArtifactInput,
+): Promise<
+  | { success: true; title: string; name: string; kind: ArtifactKind }
+  | { success: false; error: ArtifactError }
+> => {
+  const title = normalizeTitle(input.title);
+  if (!title) return fail({ code: "INVALID_TITLE" });
+  const body = await readBody(session, input);
+  if (!body.success) return body;
+  const name = artifactFileName({ ...input, title });
+  const mimeType = libraryMimeType(name, body.bytes);
+  const kind = input.kind ?? artifactKindOf(name, mimeType);
+  const problem = checkArtifactContent(kind, body.bytes, mimeType);
+  if (problem) return fail({ code: "INVALID_CONTENT", message: problem });
+  return { success: true, title, name, kind };
 };
 
 const update = async (

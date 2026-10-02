@@ -186,7 +186,7 @@ describe("visualize service with a scripted model", () => {
 
   test("a run that fails, says nothing, or answers a table with no table, is a failed draw", async () => {
     const { service, projectId, messageId } = await withModel([null, "   ", "no table here"]);
-    const failed = { success: false, error: { code: "VISUALIZE_FAILED" } };
+    const failed = { success: false, error: { code: "VISUALIZE_FAILED" } } as const;
     expect(await service.generate(projectId, { messageId, type: "auto" })).toEqual(failed);
     expect(await service.generate(projectId, { messageId, type: "auto" })).toEqual(failed);
     expect(await service.generate(projectId, { messageId, type: "table" })).toEqual(failed);
