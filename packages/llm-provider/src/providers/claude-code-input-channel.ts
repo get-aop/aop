@@ -52,13 +52,16 @@ const RELAY_NAME = "aop-claude-input";
 // no writer blocks. `wait` waits for the whole pipeline, and `cat` would read the FIFO for ever,
 // so the CLI's end also lets go of the FIFO; its status goes through a file, as a `wait` a trap
 // cut short loses it. A stop signals the process group: the CLI is a grandchild.
+// Each pipeline stage closes the FIFO with `exec` inside its own subshell, not with a redirection
+// on the group: dash (Debian and Ubuntu's /bin/sh) keeps a saved copy of a redirected fd open in
+// the subshell, and that hidden write end meant `cat` never saw end of input on a Linux host.
 const RELAY_SCRIPT = `fifo=$1 first=$2 log=$3 idle=$4 poll=$5
 shift 5
 trap 'exec 3>&-' USR1
 trap 'trap - TERM INT HUP; kill -TERM 0' TERM INT HUP
 exec 3<>"$fifo" 4<"$fifo" || exit 125
-{ cat "$first"; rm -f "$first"; exec cat <&4 4<&-; } 3>&- |
-  { "$@"; status=$?; echo "$status" >"$fifo.status"; kill -USR1 $$; exit "$status"; } 3>&- 4<&- &
+{ exec 3>&-; cat "$first"; rm -f "$first"; exec cat <&4 4<&-; } |
+  { exec 3>&- 4<&-; "$@"; status=$?; echo "$status" >"$fifo.status"; kill -USR1 $$; exit "$status"; } &
 pid=$!
 exec 4<&-
 ( while sleep "$poll"; do
