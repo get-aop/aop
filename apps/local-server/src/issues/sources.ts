@@ -29,12 +29,7 @@ export const readGithubSources = async (
     repos.map(async (repo): Promise<SourceRead> => {
       const { nameWithOwner } = repo;
       if (!nameWithOwner) return { issues: [], status: githubStatus(repo, "no-github-remote") };
-      if (!auth?.authenticated) {
-        return {
-          issues: [],
-          status: { ...githubStatus(repo, "not-authenticated"), message: signedOutMessage(auth) },
-        };
-      }
+      if (!auth?.authenticated) return { issues: [], status: signedOut(repo, auth) };
       const read = await deps.githubIssues.load({ nameWithOwner, ...query });
       return {
         issues: read.nodes.map((node) =>
@@ -75,11 +70,12 @@ export const readLinearSource = async (
 };
 
 // What the person does about it differs: install `gh`, or log it in.
-const signedOutMessage = (auth: GithubAuth | null): string | null => {
-  if (!auth || auth.authenticated) return null;
-  return auth.reason === "gh-missing"
-    ? "The GitHub CLI (gh) is not installed on the host."
-    : auth.message;
+const signedOut = (repo: GithubProjectRepo, auth: GithubAuth | null): IssueSourceStatus => {
+  const missing = auth?.authenticated === false && auth.reason === "gh-missing";
+  return {
+    ...githubStatus(repo, missing ? "gh-missing" : "not-authenticated"),
+    message: auth?.authenticated === false ? auth.message : null,
+  };
 };
 
 /** Whether a failed read failed for want of a login, which the tab explains differently. */

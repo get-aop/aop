@@ -1,4 +1,4 @@
-import { ClockIcon, MessagesSquareIcon } from "lucide-react";
+import { CircleDotIcon, ClockIcon, MessagesSquareIcon } from "lucide-react";
 
 /**
  * The threads panel's sections. Threads is always there; every other tab is one the person
@@ -8,6 +8,7 @@ import { ClockIcon, MessagesSquareIcon } from "lucide-react";
 export const PANEL_TABS = [
   { id: "threads", label: "Threads", icon: MessagesSquareIcon },
   { id: "routines", label: "Routines", icon: ClockIcon },
+  { id: "issues", label: "Issues", icon: CircleDotIcon },
 ] as const;
 
 export type PanelTabSpec = (typeof PANEL_TABS)[number];

@@ -110,7 +110,7 @@ export const ProjectIssueSchema = z.object({
 export type ProjectIssue = z.infer<typeof ProjectIssueSchema>;
 
 /**
- * How one source answered. `not-authenticated`: the host's `gh` is not logged in.
+ * How one source answered. `not-authenticated`: the host's `gh` is not logged in. `gh-missing`: the host has no `gh`.
  * `no-github-remote`: the repository has no GitHub `origin`. `not-configured`: no Linear
  * connection. `unauthorized`: Linear refused the stored key. `error`: anything else, in `message`.
  * A source that fails keeps the issues it served last, with `stale` set.
@@ -124,6 +124,7 @@ export const IssueSourceStatusSchema = z.object({
   status: z.enum([
     "ok",
     "not-authenticated",
+    "gh-missing",
     "no-github-remote",
     "not-configured",
     "unauthorized",
