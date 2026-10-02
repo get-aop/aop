@@ -17,6 +17,7 @@ export const createDesktopBridge = (
   invoke: IpcInvoke,
   subscribe: IpcSubscribe,
 ): ElectronDesktopBridge => ({
+  onOpenSettings: heldSignal(subscribe, IPC_CHANNELS.openSettings),
   getState: () => invoke(IPC_CHANNELS.getState) as Promise<DesktopState>,
   onStateChanged: (listener) =>
     subscribe(IPC_CHANNELS.stateChanged, (payload) => listener(payload as DesktopState)),
@@ -51,3 +52,26 @@ export const createDesktopBridge = (
       invoke(IPC_CHANNELS.browserDownloadAction, { id, action }) as Promise<void>,
   },
 });
+
+/**
+ * A signal from the app that waits for its listener: the app may send it while the page is still
+ * starting, so it is heard from the moment the preload runs and handed over once someone listens.
+ */
+const heldSignal = (subscribe: IpcSubscribe, channel: string) => {
+  let listener: (() => void) | null = null;
+  let held = false;
+  subscribe(channel, () => {
+    if (listener) listener();
+    else held = true;
+  });
+  return (next: () => void): (() => void) => {
+    listener = next;
+    if (held) {
+      held = false;
+      next();
+    }
+    return () => {
+      if (listener === next) listener = null;
+    };
+  };
+};

@@ -7,6 +7,7 @@ const HOST = "https://mac.tail1234.ts.net";
 describe("buildMenuTemplate", () => {
   const actions = (): MenuActions => ({
     showDashboard: mock(() => {}),
+    openSettings: mock(() => {}),
     reconnect: mock(() => {}),
     changeHost: mock(() => {}),
     manageHost: mock(() => {}),
@@ -51,10 +52,34 @@ describe("buildMenuTemplate", () => {
     expect(menuActions.quit).toHaveBeenCalledTimes(1);
   });
 
+  test("on a Mac, the app menu has Settings… (⌘,), which opens the AOP settings", () => {
+    const menuActions = actions();
+    const items = (buildMenuTemplate(model(), menuActions)[0]?.submenu ??
+      []) as MenuItemConstructorOptions[];
+    const settings = items.find((item) => item.label === "Settings…");
+
+    expect(items.indexOf(settings as MenuItemConstructorOptions)).toBe(2);
+    expect(settings?.accelerator).toBe("CommandOrControl+,");
+    expect(settings?.enabled).toBe(true);
+    settings?.click?.({} as never, undefined, {} as never);
+    expect(menuActions.openSettings).toHaveBeenCalledTimes(1);
+  });
+
+  test("Settings… is off until the app has a host to talk to", () => {
+    const items = (buildMenuTemplate(
+      model({ connection: { status: "unreachable", host: HOST, message: "down" } }),
+      actions(),
+    )[0]?.submenu ?? []) as MenuItemConstructorOptions[];
+
+    expect(items.find((item) => item.label === "Settings…")?.enabled).toBe(false);
+  });
+
   test("a Windows app has a File menu to quit from instead of an app menu", () => {
     const template = buildMenuTemplate(model({ platform: "win32" }), actions());
 
     expect(template[0]?.label).toBe("File");
+    const file = (template[0]?.submenu ?? []) as MenuItemConstructorOptions[];
+    expect(file[0]?.label).toBe("Settings…");
   });
 
   test("shows how the app stands with its host, and offers to change it", () => {

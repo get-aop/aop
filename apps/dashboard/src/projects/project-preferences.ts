@@ -5,7 +5,7 @@ const PINNED_STORAGE_KEY = "aop:pinned-projects:v1";
 const NONE: readonly string[] = [];
 
 /**
- * Which projects this device pins to the top of the sidebar. It is a per-device choice kept
+ * Which projects this device pins to the top of the project switcher and the projects page. It is a per-device choice kept
  * in local storage: the host stores no pin, so pinning here does not follow you to another computer.
  */
 export const usePinnedProjects = (): {

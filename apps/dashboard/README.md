@@ -2,7 +2,7 @@
 
 React operational UI for AOP. Built with Bun (no Vite); static assets are produced by `build.ts` and served by `@aop/local-server` in production.
 
-The dashboard is Projects-first. A project is one coordinator chat plus the threads the coordinator starts. The sidebar lists projects with what needs attention in each (threads waiting on you, threads working), `/` shows them as cards, and a project's home is its Overview, its threads grouped by what they need from you, which changes live as the host's event stream delivers entries. Settings is a dialog over the app for host-level settings (the run cap, repositories, runtimes, devices, about).
+The dashboard is Projects-first. A project is one coordinator chat plus the threads the coordinator starts. There is no sidebar: the top bar's project switcher lists projects with what needs attention in each (threads waiting on you, threads working), `/` shows them as cards, and a project's home is its Overview, its threads grouped by what they need from you, which changes live as the host's event stream delivers entries. Settings is a dialog over the app for host-level settings (the run cap, repositories, runtimes, devices, about).
 
 ## Run
 
@@ -39,7 +39,7 @@ There is no router library: `src/shell/router.tsx` parses the path and `navigate
 - **Reconnect.** A dropped connection is resumed by the browser with `Last-Event-ID`. When the browser gives up (any HTTP error, as while the host restarts), a fresh source opens with `?after=` set to the newest entry seen, after a growing delay.
 - **Resync.** A `resync` event means the log cannot catch the page up. The page refetches the project and its threads and replaces its state, and replays the entries that arrived while it fetched.
 - **A fetch that fails.** The project keeps the host's reason (`threadsError`) until a fetch succeeds, and tries again every three seconds while it has a stream. Until its threads have loaded once, the Threads tab, a thread's page and the coordinator's thread cards show that reason with Try again (`ThreadsLoadError.tsx`) instead of loading forever.
-- **Stream cap.** A browser allows six HTTP/1.1 connections to a host, and a stream holds one. At most four projects have a stream (`watch-set.ts`): the open project, then the most recently changed. The rest are refetched every 30 seconds, so their sidebar attention stays roughly current.
+- **Stream cap.** A browser allows six HTTP/1.1 connections to a host, and a stream holds one. At most four projects have a stream (`watch-set.ts`): the open project, then the most recently changed. The rest are refetched every 30 seconds, so their attention in the project switcher stays roughly current.
 - **Pin, icon, colour.** Pinning is a per-device choice kept in local storage. A project's icon is its first letter on a colour taken from its id.
 
 ## Pairing
@@ -54,25 +54,36 @@ The host answers `401 UNAUTHENTICATED` to a browser it does not know. `src/auth/
 
 ## The project screen
 
-`src/projects/layout/` lays a project out in three panes: the projects sidebar (the shell's), the coordinator chat, which is always mounted, and a threads panel. The panel shows the overview or, when the address names a thread, that thread under a breadcrumb; closing the panel on a thread takes the thread off the address. The top bar (`ProjectTopBar`, with the sidebar toggle and browser back/forward from `shell/ShellNav`) holds the panel toggle, which has a dot while a thread waits on the person.
+`src/projects/layout/` lays a project out in two panes across the whole width: the coordinator chat, which is always mounted, and a threads panel. The panel shows the overview or, when the address names a thread, that thread under a breadcrumb; closing the panel on a thread takes the thread off the address. The top bar (`ProjectTopBar`, which starts with `shell/ShellNav`: back/forward, the project switcher and the new-project button, and ends with `shell/ShellStatus`) holds the panel toggle, which has a dot while a thread waits on the person. See [The top bar](#the-top-bar).
 
-How the panes share the room depends on the width of the area right of the sidebar, measured with a `ResizeObserver` (`panel-layout.ts`): from 900px the panel sits beside the chat with a draggable divider; from 600px it lies over the chat; below that only one pane shows at a time, switched from the top bar. Only the wide layout uses the remembered open state. This browser remembers the panel's open state and width in `localStorage` under `aop:threads-panel:v1`; a blocked storage only means nothing is remembered. Expanding the panel hides the chat without unmounting it, so the chat keeps its stream, scroll place and draft.
+How the panes share the room depends on the width of the screen, measured with a `ResizeObserver` (`panel-layout.ts`): from 900px the panel sits beside the chat with a draggable divider; from 600px it lies over the chat; below that only one pane shows at a time, switched from the top bar. Only the wide layout uses the remembered open state. This browser remembers the panel's open state and width in `localStorage` under `aop:threads-panel:v1`; a blocked storage only means nothing is remembered. Expanding the panel hides the chat without unmounting it, so the chat keeps its stream, scroll place and draft.
 
 ## The thread pane
 
 `src/projects/thread/` is one thread at `/projects/:id/threads/:threadId`. `docs/architecture/thread-pane.md` describes it; in short, the thread comes from the project's live state, its transcript from `chat/conversation.ts` (the coordinator chat's engine, scoped to the thread id), the tool calls of each turn from `GET /api/threads/:id/activity`, and the changed files from `GET /api/threads/:id/diff`. The pane holds no state the host owns: Stop, Resume, Resolve, Delete, answering and merging call the host (`src/projects/thread-actions.ts`, `thread/use-pull-request.ts`), and the page follows the entry the host publishes. The diff view (`thread/changes/`) takes line comments that queue in the browser and go to the thread as one message.
 
+## The top bar
+
+The dashboard has no sidebar; every screen has one top bar, so the project screen gets the whole width. A project's screens use `ProjectTopBar`; a screen with no project open (`/`, a project that is loading or missing) uses `shell/AppTopBar`. Both start with `shell/ShellNav` and end with `shell/ShellStatus`.
+
+- **Back and forward** walk the app's own history (hidden under 640px).
+- **The project switcher** (`shell/project-switcher/`) is the app's menu. Its chip names the open project (or reads "Select a project") and carries a dot while another project has a thread waiting on the person. A click or ⌘K (anywhere, even while typing) opens a popover: a search field, focused, that filters by name or goal; the projects in three groups (Pinned, Projects, Archived), each with its waiting count or working dot and a check on the open one; then New project (⌘N), All projects and AOP settings (⌘,); and a last line with the host connection and version that opens About. Arrows (they wrap and reach the actions), Enter and Escape work as in any command list. Picking another project keeps the panel's tab or the settings section (`switchProjectPath`); from a thread, pull request, artifact or the browser it lands on the project's home. The open state lives in the dialog store, so ⌘K reaches whichever top bar is on screen.
+- **+** opens the New project dialog (⌘N).
+- **The far end** (`ShellStatus`) holds host-wide state: a newer agent CLI and permission checks off (each opens Settings › Runtimes; their words drop on a narrow bar), "Host unreachable" when the host stops answering, then the Claude plan's usage meter.
+
+Project actions (Overview, the AOP Browser, the gear, the `…` menu, "Live") stay with the project, apart from the app-wide items in the switcher, so the scope of each menu is clear. In the desktop app the Mac's app menu has AOP › Settings… (⌘,), which the app hands to the page through the preload bridge (`onOpenSettings`), loading the dashboard first if it is not showing.
+
 ## Layout
 
 ```text
 src/
-  projects/     the domain: live state, stream, sidebar rows, the Overview, New project dialog
+  projects/     the domain: live state, stream, the Overview, New project dialog
   projects/layout/  the project screen's panes: top-level layout, threads panel, divider, remembered state
   projects/chat/  the coordinator chat: state, messages and blocks, composer
   projects/thread/  the thread pane: header, transcript, answer card, pull request bar
   projects/thread/changes/  the thread's changed files: diff view and review comments
   auth/         the authentication gate and the pairing screen
-  shell/        the sidebar, router, dialog store, settings dialog, shortcuts
+  shell/        top bar start and end (ShellNav, project-switcher/, ShellStatus), router, dialog store, settings dialog, shortcuts
   api/          typed fetch wrapper (request/domain modules), host config, re-export hub
   ui/           the one component kit (shadcn + custom)
   components/   dialogs, confirmation host

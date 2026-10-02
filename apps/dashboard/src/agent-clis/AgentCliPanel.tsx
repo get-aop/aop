@@ -281,7 +281,7 @@ const runsLine = (cli: AgentCliStatus): string => {
 
 const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-/** A small dot that says an agent CLI has a newer version out (the Runtimes nav, the sidebar). */
+/** A small dot that says an agent CLI has a newer version out (the Runtimes nav, the top bar). */
 export const CliUpdateDot = ({ className }: { className?: string }) => (
   <span
     data-testid="agent-cli-update-dot"

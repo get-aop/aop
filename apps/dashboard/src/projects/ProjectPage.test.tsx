@@ -10,7 +10,6 @@ const { act, cleanup, fireEvent, render, screen, within } = await import("@testi
 const { ProjectsProvider } = await import("./ProjectsProvider");
 const { ProjectPage } = await import("./ProjectPage");
 const { ChatApiProvider } = await import("./chat/chat-api");
-const { SidebarProvider } = await import("@/ui/sidebar");
 const { PROJECT_SETTINGS_SECTIONS, projectSettingsPath } = await import("../shell/router");
 type Route = import("../shell/router").Route;
 
@@ -32,13 +31,11 @@ afterEach(() => {
 const renderPage = (state: ProjectsState, route: ProjectRoute) => {
   const stub = stubLiveProjects(state);
   render(
-    <SidebarProvider>
-      <ChatApiProvider value={silentChatHost}>
-        <ProjectsProvider live={stub.live}>
-          <ProjectPage route={route} />
-        </ProjectsProvider>
-      </ChatApiProvider>
-    </SidebarProvider>,
+    <ChatApiProvider value={silentChatHost}>
+      <ProjectsProvider live={stub.live}>
+        <ProjectPage route={route} />
+      </ProjectsProvider>
+    </ChatApiProvider>,
   );
   return stub;
 };
@@ -235,13 +232,11 @@ describe("project screens", () => {
   test("× and Escape close the settings back to the screen they opened over, and the chat keeps its draft", async () => {
     const stub = stubLiveProjects(state());
     const page = (route: ProjectRoute) => (
-      <SidebarProvider>
-        <ChatApiProvider value={silentChatHost}>
-          <ProjectsProvider live={stub.live}>
-            <ProjectPage route={route} />
-          </ProjectsProvider>
-        </ChatApiProvider>
-      </SidebarProvider>
+      <ChatApiProvider value={silentChatHost}>
+        <ProjectsProvider live={stub.live}>
+          <ProjectPage route={route} />
+        </ProjectsProvider>
+      </ChatApiProvider>
     );
     const thread: ProjectRoute = { name: "thread", projectId: "p1", threadId: "blocked" };
     const settings: ProjectRoute = {

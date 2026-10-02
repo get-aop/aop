@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
  * THE chip — every pill in the app renders through these variants.
  * No other chip markup may exist (PLAN §5.1).
  *
- * filter: sidebar repo-scope chips (border; .on = white-9% fill)
+ * filter: repo-scope chips (border; .on = white-9% fill)
  * ghost:  composer footer chips (transparent; .on = white-9% fill)
  * git:    composer git-row chips (11.5px, mono)
  * step:   workflow rail chips (raised bg + border; done/active/legacy states)

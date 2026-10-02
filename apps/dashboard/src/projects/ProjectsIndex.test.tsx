@@ -8,7 +8,6 @@ const { cleanup, fireEvent, render, screen, within } = await import("@testing-li
 const { getDialogs, resetDialogs } = await import("../shell/dialog-store");
 const { ProjectsProvider } = await import("./ProjectsProvider");
 const { ProjectsIndex } = await import("./ProjectsIndex");
-const { SidebarProvider } = await import("@/ui/sidebar");
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -22,11 +21,9 @@ afterEach(() => {
 const renderIndex = (state: ReturnType<typeof makeState>) => {
   const stub = stubLiveProjects(state);
   render(
-    <SidebarProvider>
-      <ProjectsProvider live={stub.live}>
-        <ProjectsIndex />
-      </ProjectsProvider>
-    </SidebarProvider>,
+    <ProjectsProvider live={stub.live}>
+      <ProjectsIndex />
+    </ProjectsProvider>,
   );
 };
 

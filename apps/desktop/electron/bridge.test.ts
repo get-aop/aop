@@ -86,6 +86,23 @@ describe("createDesktopBridge", () => {
     expect(unsubscribed).toEqual([IPC_CHANNELS.stateChanged]);
   });
 
+  test("holds the app menu's Settings… until the dashboard listens, then hands it over once", () => {
+    const { bridge, listeners } = setup();
+    const opened: string[] = [];
+
+    // The menu loaded the dashboard and told it before its app had started.
+    listeners.get(IPC_CHANNELS.openSettings)?.(undefined);
+    const stop = bridge.onOpenSettings(() => opened.push("first"));
+    expect(opened).toEqual(["first"]);
+
+    listeners.get(IPC_CHANNELS.openSettings)?.(undefined);
+    expect(opened).toEqual(["first", "first"]);
+
+    stop();
+    bridge.onOpenSettings(() => opened.push("second"));
+    expect(opened).toEqual(["first", "first"]);
+  });
+
   test("uses distinct channels, so one page's call cannot be mistaken for another's", () => {
     const channels = Object.values(IPC_CHANNELS);
 

@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 const actions = (): ShortcutActions => ({
-  toggleCommandPalette: mock(() => {}),
+  toggleProjectSwitcher: mock(() => {}),
   newProject: mock(() => {}),
   openSettings: mock(() => {}),
 });
@@ -40,10 +40,10 @@ const cleanup = () => {
 };
 
 describe("handleGlobalShortcut", () => {
-  test("⌘K opens the command palette", () => {
+  test("⌘K opens the project switcher", () => {
     const a = actions();
     expect(handleGlobalShortcut(keyEvent("k", document.body, { metaKey: true }), a)).toBe(true);
-    expect(a.toggleCommandPalette).toHaveBeenCalled();
+    expect(a.toggleProjectSwitcher).toHaveBeenCalled();
   });
 
   test("⌘, opens settings", () => {
@@ -78,7 +78,7 @@ describe("handleGlobalShortcut", () => {
     const a = actions();
     expect(handleGlobalShortcut(keyEvent("k"), a)).toBe(false);
     expect(handleGlobalShortcut(keyEvent("n"), a)).toBe(false);
-    expect(a.toggleCommandPalette).not.toHaveBeenCalled();
+    expect(a.toggleProjectSwitcher).not.toHaveBeenCalled();
     expect(a.newProject).not.toHaveBeenCalled();
   });
 });

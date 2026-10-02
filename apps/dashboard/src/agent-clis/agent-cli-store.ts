@@ -8,7 +8,7 @@ import {
 } from "../api/agent-clis";
 
 /**
- * What every agent CLI surface (the Runtimes panel, the sidebar notice, the nav dot) shows, in
+ * What every agent CLI surface (the Runtimes panel, the top bar notice, the nav dot) shows, in
  * one place so an update started from one is seen by all. While an update runs the host is
  * asked every second and a half; otherwise the always-mounted surface re-reads it now and then.
  */

@@ -79,6 +79,17 @@ export const projectScreenPath = (screen: ProjectScreen): string => {
   return screen.browser ? `${base}/${BROWSER_SEGMENT}` : base;
 };
 
+/**
+ * Where switching to another project goes from `route`: the same tab of the panel, or the same
+ * section of the settings, since every project has them. A thread, a pull request, an artifact
+ * and the browser belong to the project they are in, so from those it lands on the project's home.
+ */
+export const switchProjectPath = (route: Route, projectId: string): string => {
+  if (route.name === "project-tab") return projectTabPath(projectId, route.tab);
+  if (route.name === "project-settings") return projectSettingsPath(projectId, route.section);
+  return projectPath(projectId);
+};
+
 const artifactViewPath = (ref: ArtifactViewRef): string => {
   switch (ref.kind) {
     case "artifact":

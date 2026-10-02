@@ -152,7 +152,7 @@ export interface ProjectGroups {
 }
 
 /**
- * The sidebar's groups. Pinned projects (a per-device choice) lead; each group is newest
+ * The project switcher's and the projects page's groups. Pinned projects (a per-device choice) lead; each group is newest
  * first by last change, which the host bumps on every project update.
  */
 export const groupProjects = (

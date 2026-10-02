@@ -19,8 +19,8 @@ import { useOverviewFilters } from "./use-overview-filters";
 import { type PanelLayout, usePanelLayout } from "./use-panel-layout";
 
 /**
- * The project screen in three panes: the projects sidebar (the shell's), the coordinator chat,
- * which is always here, and the threads panel beside it. `/projects/:id` has the panel on its
+ * The project screen in two panes across the whole width: the coordinator chat, which is always
+ * here, and the threads panel beside it. `/projects/:id` has the panel on its
  * overview; `/projects/:id/threads/:threadId` has it on that thread, and `/projects/:id/<tab>`
  * on another of its tabs.
  *

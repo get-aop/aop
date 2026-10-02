@@ -1,37 +1,46 @@
-import { type ReactNode, useEffect, useState } from "react";
-import { SidebarInset, SidebarProvider } from "@/ui/sidebar";
+import { type ReactNode, useEffect } from "react";
 import { Toaster } from "@/ui/sonner";
 import { ConfirmationHost } from "../components/ConfirmationHost";
 import { AttachRepoDialog } from "../dialogs/AttachRepoDialog";
 import { NewProjectDialog } from "../projects/NewProjectDialog";
 import { useLiveProjects } from "../projects/ProjectsProvider";
 import { UpdateNotice } from "../updates/UpdateNotice";
-import { announceRepoAttached, openNewProjectDialog, openSettingsDialog } from "./dialog-store";
-import { ProjectPalette } from "./ProjectPalette";
-import { ProjectsSidebar } from "./ProjectsSidebar";
+import { useDesktopSettingsMenu } from "./desktop-settings-menu";
+import {
+  announceRepoAttached,
+  openNewProjectDialog,
+  openSettingsDialog,
+  setProjectSwitcherOpen,
+  toggleProjectSwitcher,
+} from "./dialog-store";
 import { routeProjectId, useRoute } from "./router";
 import { SettingsDialog } from "./SettingsDialog";
 import { handleGlobalShortcut } from "./shortcuts";
 
 /**
- * The shell: the projects sidebar is the only chrome, and the route's screen fills the rest.
- * It also tells the live state which project is open (that project always gets a stream),
- * mounts the dialogs, the ⌘K palette, the toaster and the global keyboard layer.
+ * The shell: no chrome of its own. Each screen brings its top bar, which holds the project
+ * switcher (the app's menu), so the route's screen has the whole width. The shell tells the live
+ * state which project is open (that project always gets a stream), and mounts the dialogs, the
+ * toaster and the global keyboard layer.
  */
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const live = useLiveProjects();
   const route = useRoute();
   const openProjectId = routeProjectId(route);
-  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     live.setSelected(openProjectId);
   }, [live, openProjectId]);
 
+  // Whatever moved the page (a pick, back, a notification) leaves no switcher open on the new screen.
+  useEffect(() => {
+    if (route) setProjectSwitcherOpen(false);
+  }, [route]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       handleGlobalShortcut(event, {
-        toggleCommandPalette: () => setPaletteOpen((open) => !open),
+        toggleProjectSwitcher,
         newProject: openNewProjectDialog,
         openSettings: () => openSettingsDialog("general"),
       });
@@ -39,23 +48,17 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+  useDesktopSettingsMenu();
 
   return (
-    <SidebarProvider data-testid="app-shell" className="h-svh min-h-0">
-      <ProjectsSidebar
-        onOpenCommand={() => setPaletteOpen(true)}
-        onNewProject={openNewProjectDialog}
-      />
-      <SidebarInset className="min-h-0 min-w-0">
-        <UpdateNotice />
-        {children}
-      </SidebarInset>
-      <ProjectPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+    <div data-testid="app-shell" className="flex h-svh min-h-0 w-full flex-col bg-background">
+      <UpdateNotice />
+      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">{children}</main>
       <SettingsDialog />
       <NewProjectDialog />
       <AttachRepoDialog onAttached={announceRepoAttached} />
       <Toaster position="bottom-right" />
       <ConfirmationHost />
-    </SidebarProvider>
+    </div>
   );
 };

@@ -12,7 +12,6 @@ const { ProjectsProvider } = await import("../ProjectsProvider");
 const { ProjectPage } = await import("../ProjectPage");
 const { ChatApiProvider } = await import("../chat/chat-api");
 const { ChatMarkdown } = await import("../chat/ChatMarkdown");
-const { SidebarProvider } = await import("@/ui/sidebar");
 const { useRoute } = await import("../../shell/router");
 const { PullRequestLinksProvider } = await import("./pull-request-links");
 
@@ -56,13 +55,11 @@ const Routed = () => {
 const mount = async () => {
   const stub = stubLiveProjects(makeState([makeEntry(project, [owner])]));
   render(
-    <SidebarProvider>
-      <ChatApiProvider value={silentChatHost}>
-        <ProjectsProvider live={stub.live}>
-          <Routed />
-        </ProjectsProvider>
-      </ChatApiProvider>
-    </SidebarProvider>,
+    <ChatApiProvider value={silentChatHost}>
+      <ProjectsProvider live={stub.live}>
+        <Routed />
+      </ProjectsProvider>
+    </ChatApiProvider>,
   );
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 };

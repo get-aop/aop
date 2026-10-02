@@ -1,11 +1,10 @@
 import { EllipsisIcon, GlobeIcon, ListChecksIcon, SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { IconButton, iconButtonClass } from "../components/IconButton";
-import { PlanUsageMeter } from "../plan-usage/PlanUsageMeter";
-import { Link, projectPath, projectSettingsPath } from "../shell/router";
+import { Link, projectSettingsPath } from "../shell/router";
 import { ShellNav } from "../shell/ShellNav";
+import { ShellStatus } from "../shell/ShellStatus";
 import { ProjectMenu } from "./ProjectMenu";
-import { ProjectTile } from "./ProjectTile";
 import type { ProjectEntry, StreamConnection } from "./projects-state";
 import { attentionOf } from "./selectors";
 
@@ -21,12 +20,11 @@ type Panel = { visible: boolean; toggle: () => void };
 type Browser = { shown: boolean; toggle: () => void };
 
 /**
- * The top of a project's screens: the sidebar toggle and back/forward, who the project is,
- * then right beside the name its controls as one group: the labelled Overview toggle for the
- * threads panel (with a dot when a thread waits on the person), the AOP Browser (in the desktop
- * app), the project's settings and its menu (the gear is marked while the settings dialog is
- * open), then the stream's state. The far
- * end holds host-wide status, the Claude plan's usage meter first.
+ * The top of a project's screens: back/forward, the project switcher naming the project and the
+ * new-project button, then the project's controls as one group: the labelled Overview toggle for
+ * the threads panel (with a dot when a thread waits on the person), the AOP Browser (in the
+ * desktop app), the project's settings and its menu (the gear is marked while the settings dialog
+ * is open), then the stream's state. The far end holds host-wide status (ShellStatus).
  */
 export const ProjectTopBar = ({
   entry,
@@ -52,29 +50,11 @@ export const ProjectTopBar = ({
     <header
       data-testid="project-topbar"
       className={cn(
-        "@container flex h-pane-header min-w-0 shrink-0 items-center gap-2 px-2 shadow-[inset_0_-1px_0_var(--color-border)]",
+        "@container flex h-pane-header min-w-0 shrink-0 items-center gap-1 px-2 @md:gap-2 shadow-[inset_0_-1px_0_var(--color-border)]",
         className,
       )}
     >
-      <ShellNav />
-      <Link
-        to={projectPath(project.id)}
-        data-testid="project-home-link"
-        className="flex min-w-0 items-center gap-2 rounded-row px-1.5 py-1 hover:bg-hover"
-      >
-        <ProjectTile project={project} />
-        <h1 data-testid="project-title" className="truncate text-title font-semibold text-text">
-          {project.name}
-        </h1>
-      </Link>
-      {project.status !== "active" ? (
-        <span
-          data-testid="project-status-tag"
-          className="shrink-0 rounded-md border border-border-strong px-1.5 text-xs font-medium capitalize text-text-muted"
-        >
-          {project.status}
-        </span>
-      ) : null}
+      <ShellNav current={entry} />
       <div data-testid="project-topbar-actions" className="flex shrink-0 items-center gap-0.5">
         <OverviewToggle panel={panel} waiting={waiting} />
         {browser ? (
@@ -122,9 +102,7 @@ export const ProjectTopBar = ({
           {streamLabel}
         </span>
       ) : null}
-      <div data-testid="project-topbar-status" className="ml-auto flex shrink-0 items-center">
-        <PlanUsageMeter />
-      </div>
+      <ShellStatus testId="project-topbar-status" />
     </header>
   );
 };

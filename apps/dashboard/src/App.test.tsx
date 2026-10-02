@@ -16,6 +16,7 @@ const { act, cleanup, fireEvent, render, screen, waitFor, within } = await impor
   "@testing-library/react"
 );
 const { App } = await import("./App");
+const { resetDialogs } = await import("./shell/dialog-store");
 
 /** The dashboard against a scripted host: REST answers, and one hand-driven event stream per project. */
 class TestEventSource extends FakeEventSource {
@@ -89,6 +90,7 @@ const answerThreadPane = (url: string): Response => {
 };
 
 afterEach(() => {
+  resetDialogs();
   cleanup();
   globalThis.fetch = originalFetch;
   globalThis.EventSource = originalEventSource;
@@ -103,14 +105,15 @@ const streamOf = (projectId: string): TestEventSource => {
 };
 
 describe("App routing", () => {
-  test("opens the projects screen at /, with the sidebar as the only chrome", async () => {
+  test("opens the projects screen at /, under a top bar with no project picked and no sidebar", async () => {
     render(<App />);
 
     expect(await screen.findByTestId("projects-index")).toBeTruthy();
     expect(await screen.findByTestId("project-card")).toBeTruthy();
-    expect(screen.getByTestId("projects-sidebar")).toBeTruthy();
-    expect(screen.getByTestId("sidebar-new-project")).toBeTruthy();
-    expect(screen.getByTestId("sidebar-settings")).toBeTruthy();
+    expect(screen.getByTestId("app-topbar")).toBeTruthy();
+    expect(screen.getByTestId("project-title").textContent).toBe("Select a project");
+    expect(screen.getByTestId("new-project-button")).toBeTruthy();
+    expect(screen.queryByTestId("projects-sidebar")).toBeNull();
     expect(screen.queryByTestId("sessions-page")).toBeNull();
   });
 
@@ -133,10 +136,9 @@ describe("App routing", () => {
       "Blocked · Which database?",
     );
     expect(screen.getByTestId("project-attention").textContent).toBe("1 thread is waiting on you.");
-    expect(
-      within(screen.getByTestId("projects-sidebar")).getByTestId("project-attention-waiting")
-        .textContent,
-    ).toBe("1");
+    fireEvent.click(screen.getByTestId("project-switcher"));
+    const popover = await screen.findByTestId("project-switcher-popover");
+    expect(within(popover).getByTestId("project-attention-waiting").textContent).toBe("1");
   });
 
   test("a card changes in place when the stream delivers a new state, with no reload", async () => {
@@ -200,7 +202,9 @@ describe("App routing", () => {
     render(<App />);
     expect(await screen.findAllByTestId("project-card")).toHaveLength(2);
 
-    fireEvent.click(within(screen.getByTestId("projects-sidebar")).getByText("Storefront"));
+    fireEvent.click(screen.getByTestId("project-switcher"));
+    const popover = await screen.findByTestId("project-switcher-popover");
+    fireEvent.click(within(popover).getByText("Storefront"));
 
     expect(window.location.pathname).toBe("/projects/p2");
     expect((await screen.findByTestId("project-title")).textContent).toBe("Storefront");
@@ -289,7 +293,7 @@ describe("App pairing gate", () => {
     render(<App />);
 
     expect(await screen.findByTestId("pairing-screen")).toBeTruthy();
-    expect(screen.queryByTestId("projects-sidebar")).toBeNull();
+    expect(screen.queryByTestId("project-switcher")).toBeNull();
     const requested = (globalThis.fetch as unknown as ReturnType<typeof mock>).mock.calls.map(
       ([url]) => String(url),
     );

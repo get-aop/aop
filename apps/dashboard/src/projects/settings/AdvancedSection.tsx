@@ -105,7 +105,7 @@ const ArchiveRow = ({ project }: { project: Project }) => {
     return (
       <ActionRow
         label="Restore project"
-        description="Brings the project back to the sidebar."
+        description="Brings the project back among the active ones."
         testId="settings-archive"
         icon={<ArchiveRestoreIcon />}
         action="Restore"

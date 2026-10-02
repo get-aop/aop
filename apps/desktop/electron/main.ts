@@ -289,6 +289,7 @@ function createElectronBrowserHost(log: Logger): BrowserHost {
 function installMenuActions(controller: ReturnType<typeof createDesktopController>): void {
   menuActions = {
     showDashboard: () => void controller.openDashboard(),
+    openSettings: () => void openDashboardSettings(controller),
     reconnect: () => void controller.reconnect(),
     changeHost: () => void controller.showChangeHost(),
     manageHost: () => void controller.showHostMode(),
@@ -299,6 +300,14 @@ function installMenuActions(controller: ReturnType<typeof createDesktopControlle
     quit: () => app.quit(),
   };
   if (lastState) applyChrome(lastState);
+}
+
+// The dashboard opens its settings when told; one that is not showing is loaded first.
+async function openDashboardSettings(
+  controller: ReturnType<typeof createDesktopController>,
+): Promise<void> {
+  if (currentSurface() !== "dashboard") await controller.openDashboard();
+  mainWindow?.webContents.send(IPC_CHANNELS.openSettings);
 }
 
 function installLifecycle(controller: ReturnType<typeof createDesktopController>): void {

@@ -15,6 +15,8 @@ export interface MenuModel {
 
 export interface MenuActions {
   showDashboard: () => void;
+  /** Opens the AOP settings in the dashboard, showing the dashboard first if it is not. */
+  openSettings: () => void;
   reconnect: () => void;
   changeHost: () => void;
   manageHost: () => void;
@@ -31,8 +33,17 @@ export const buildMenuTemplate = (
   actions: MenuActions,
 ): MenuItemConstructorOptions[] => [
   ...(model.platform === "darwin"
-    ? [{ role: "appMenu" as const, submenu: macAppMenu(actions) }]
-    : [{ label: "File", submenu: [{ role: "quit" as const }] }]),
+    ? [{ role: "appMenu" as const, submenu: macAppMenu(model, actions) }]
+    : [
+        {
+          label: "File",
+          submenu: [
+            settingsItem(model, actions),
+            { type: "separator" as const },
+            { role: "quit" as const },
+          ],
+        },
+      ]),
   { label: "Host", submenu: hostMenu(model, actions) },
   ...updateMenu(model.update, actions),
   { role: "editMenu" },
@@ -41,12 +52,15 @@ export const buildMenuTemplate = (
 ];
 
 /**
- * The Mac's app menu, as Electron builds it, except Quit: the native item sends `terminate:` down
- * the responder chain, and with an AOP Browser page in the window it can stall halfway, the
- * window closed and the app still running. Quitting through the app itself always finishes.
+ * The Mac's app menu, as Electron builds it, plus Settings… and except Quit: the native item sends
+ * `terminate:` down the responder chain, and with an AOP Browser page in the window it can stall
+ * halfway, the window closed and the app still running. Quitting through the app itself always
+ * finishes.
  */
-const macAppMenu = (actions: MenuActions): MenuItemConstructorOptions[] => [
+const macAppMenu = (model: MenuModel, actions: MenuActions): MenuItemConstructorOptions[] => [
   { role: "about" },
+  { type: "separator" },
+  settingsItem(model, actions),
   { type: "separator" },
   { role: "services" },
   { type: "separator" },
@@ -56,6 +70,17 @@ const macAppMenu = (actions: MenuActions): MenuItemConstructorOptions[] => [
   { type: "separator" },
   { label: "Quit", accelerator: "Command+Q", click: actions.quit },
 ];
+
+/**
+ * The AOP settings live in the dashboard, so they need a host to talk to. The menu takes ⌘, before
+ * the page sees it, and tells the dashboard to open them.
+ */
+const settingsItem = (model: MenuModel, actions: MenuActions): MenuItemConstructorOptions => ({
+  label: "Settings…",
+  accelerator: "CommandOrControl+,",
+  enabled: model.connection.status === "connected",
+  click: actions.openSettings,
+});
 
 const hostMenu = (model: MenuModel, actions: MenuActions): MenuItemConstructorOptions[] => {
   const { connection } = model;

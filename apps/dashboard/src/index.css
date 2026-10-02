@@ -14,7 +14,7 @@
 @theme {
   /* Surfaces */
   --color-canvas: #0d0d0e; /* main background */
-  --color-surface: #161618; /* sidebar, panels, dialogs base */
+  --color-surface: #161618; /* panels, dialogs base */
   --color-raised: #1b1b1e; /* bubbles, rows, chips */
   --color-input-surface: #19191c; /* composer, fields */
   --color-overlay: #1d1d21; /* menus, popovers, modals */
@@ -69,14 +69,6 @@
   --color-destructive-foreground: var(--color-text);
   --color-input: var(--color-border-strong);
   --color-ring: var(--color-running);
-  --color-sidebar: var(--color-surface);
-  --color-sidebar-foreground: var(--color-text);
-  --color-sidebar-primary: var(--color-primary);
-  --color-sidebar-primary-foreground: var(--color-primary-foreground);
-  --color-sidebar-accent: var(--color-active);
-  --color-sidebar-accent-foreground: var(--color-text);
-  --color-sidebar-border: var(--color-border);
-  --color-sidebar-ring: var(--color-ring);
 
   /* Type */
   --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
@@ -133,8 +125,6 @@
   --z-toast: 70;
 
   /* Chrome dimensions. */
-  --sidebar-width: 16rem;
-  --sidebar-width-icon: 3rem;
   --workspace-topbar-height: 2.75rem;
   --session-chat-topbar-height: 52px;
 

@@ -1,21 +1,19 @@
-import { ArrowLeftIcon, ArrowRightIcon, PanelLeftIcon } from "lucide-react";
-import { useSidebar } from "@/ui/sidebar";
+import { ArrowLeftIcon, ArrowRightIcon, PlusIcon } from "lucide-react";
 import { IconButton } from "../components/IconButton";
-import { useProjectsState } from "../projects/ProjectsProvider";
-import { attentionOf } from "../projects/selectors";
+import type { ProjectEntry } from "../projects/projects-state";
+import { openNewProjectDialog } from "./dialog-store";
+import { ProjectSwitcher } from "./project-switcher/ProjectSwitcher";
 import { useHistoryEnds } from "./router";
 
 /**
- * The top bar's first three buttons, on every screen: the projects sidebar's toggle (with a
- * dot when something waits on the person while the sidebar is out of sight), then back and
- * forward through the pages the person has been on.
+ * The start of every top bar: back and forward through the pages the person has been on, the
+ * project switcher (the open project, or none), and the button that starts a new project.
  */
-export const ShellNav = () => {
+export const ShellNav = ({ current }: { current: ProjectEntry | null }) => {
   const ends = useHistoryEnds();
   return (
-    <div data-testid="shell-nav" className="flex shrink-0 items-center gap-0.5">
-      <SidebarToggle />
-      <span className="hidden items-center gap-0.5 sm:flex">
+    <div data-testid="shell-nav" className="flex min-w-0 items-center gap-0.5">
+      <span className="hidden shrink-0 items-center gap-0.5 sm:flex">
         <IconButton
           testId="nav-back"
           label="Back"
@@ -33,27 +31,15 @@ export const ShellNav = () => {
           <ArrowRightIcon />
         </IconButton>
       </span>
+      <ProjectSwitcher current={current} />
+      <IconButton
+        testId="new-project-button"
+        label="New project (⌘N)"
+        aria-keyshortcuts="Meta+N"
+        onClick={openNewProjectDialog}
+      >
+        <PlusIcon />
+      </IconButton>
     </div>
-  );
-};
-
-const SidebarToggle = () => {
-  const { toggleSidebar, state, isMobile, openMobile } = useSidebar();
-  const projects = useProjectsState();
-  const hidden = isMobile ? !openMobile : state === "collapsed";
-  const waiting = Object.values(projects.byId).some(
-    (entry) => attentionOf(entry.threads).waiting > 0,
-  );
-
-  return (
-    <IconButton
-      testId="sidebar-toggle"
-      label="Toggle sidebar"
-      onClick={toggleSidebar}
-      dot={hidden && waiting}
-      dotTestId="sidebar-toggle-dot"
-    >
-      <PanelLeftIcon />
-    </IconButton>
   );
 };
