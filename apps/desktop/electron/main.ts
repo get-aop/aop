@@ -1,12 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { buildChannel } from "@aop/common";
+import { AOP_BROWSER_PARTITION, buildChannel } from "@aop/common";
 import {
   app,
   BrowserWindow,
+  clipboard,
   ipcMain,
   Menu,
   Notification,
@@ -22,6 +24,7 @@ import { windowTitle } from "../src/backend/connection-label";
 import type { AppUpdateState, DesktopState } from "../src/backend/types";
 import { hostDriftTag, updateLabel } from "../src/backend/update-label";
 import { APP_SCHEME, createAppProtocolHandler, DASHBOARD_HOST, SHELL_HOST } from "./app-protocol";
+import { type BrowserHost, createBrowserHost } from "./browser/browser-host";
 import { IPC_CHANNELS } from "./channels";
 import { buildMenuTemplate } from "./chrome";
 import { createHostClient, type FetchLike } from "./connection/host-client";
@@ -49,7 +52,12 @@ import { createLogger, type Logger } from "./log";
 import { createNotifier } from "./notifications/notifier";
 import { createProjectWatcher } from "./notifications/project-watcher";
 import { resolveDesktopPaths } from "./runtime-paths";
-import { isAllowedNavigation, isSafeExternalUrl, isSafeUpdateUrl } from "./security";
+import {
+  isAllowedNavigation,
+  isDashboardSender,
+  isSafeExternalUrl,
+  isSafeUpdateUrl,
+} from "./security";
 import { type AppUpdater, createAppUpdater } from "./updates/app-updater";
 import { createElectronUpdaterPort } from "./updates/electron-updater-port";
 import { appBundleOf, isDeveloperIdSigned } from "./updates/mac-signature";
@@ -200,6 +208,7 @@ async function start(): Promise<void> {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
     callback(false),
   );
+  browserHost = createElectronBrowserHost(log);
   mainWindow = createMainWindow(paths.preloadPath, log);
   registerDesktopIpc(
     ipcMain,
@@ -225,6 +234,9 @@ async function start(): Promise<void> {
       getUpdateState: () => updateState,
       openUpdateDownload: openDownload,
       restartToUpdate: async () => appUpdater?.restartToUpdate(),
+      browserSetActive: (active) => browserHost?.setActive(active),
+      browserAnswerPrompt: (id, allow) => browserHost?.answerPrompt(id, allow),
+      browserDownloadAction: (id, action) => browserHost?.downloadAction(id, action),
     },
     development,
   );
@@ -248,6 +260,29 @@ let lastState: DesktopState | null = null;
 let appUpdater: AppUpdater | null = null;
 let updateState: AppUpdateState = { status: "idle" };
 let logChrome: Logger = () => {};
+let browserHost: BrowserHost | null = null;
+
+function createElectronBrowserHost(log: Logger): BrowserHost {
+  return createBrowserHost({
+    platform: process.platform,
+    session: session.fromPartition(AOP_BROWSER_PARTITION),
+    send: (event) => mainWindow?.webContents.send(IPC_CHANNELS.browserEvent, event),
+    isDashboardUrl: isDashboardSender,
+    popupMenu: (template, owner) => {
+      const window = BrowserWindow.fromWebContents(owner) ?? mainWindow;
+      Menu.buildFromTemplate(template).popup(window ? { window } : {});
+    },
+    copyText: (text) => clipboard.writeText(text),
+    openExternal: (url) => {
+      if (isSafeExternalUrl(url)) void shell.openExternal(url);
+    },
+    showItemInFolder: (path) => shell.showItemInFolder(path),
+    downloadsDir: () => app.getPath("downloads"),
+    fileExists: existsSync,
+    newId: randomUUID,
+    log,
+  });
+}
 
 function installMenuActions(controller: ReturnType<typeof createDesktopController>): void {
   menuActions = {
@@ -398,6 +433,7 @@ function createMainWindow(preloadPath: string, log?: Logger): BrowserWindow {
     log?.("page loaded", { url: window.webContents.getURL(), title: window.getTitle() }),
   );
   secureNavigation(window.webContents);
+  browserHost?.attachWindow(window.webContents);
   return window;
 }
 

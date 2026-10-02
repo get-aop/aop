@@ -19,6 +19,12 @@ export const IPC_CHANNELS = {
   getUpdateState: "desktop:get-update-state",
   openUpdateDownload: "desktop:open-update-download",
   restartToUpdate: "desktop:restart-to-update",
+  // The bundled dashboard's AOP Browser: whether it is shown, and the person's answers.
+  browserSetActive: "desktop:browser-set-active",
+  browserAnswerPrompt: "desktop:browser-answer-prompt",
+  browserDownloadAction: "desktop:browser-download-action",
+  // The app to the dashboard: what its browser's pages did that only the app sees.
+  browserEvent: "desktop:browser-event",
   // The app to the connect screen: something it shows changed.
   stateChanged: "desktop:state-changed",
   updateStateChanged: "desktop:update-state-changed",

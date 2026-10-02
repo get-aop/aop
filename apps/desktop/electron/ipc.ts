@@ -1,3 +1,4 @@
+import type { BrowserDownloadAction } from "@aop/common";
 import type {
   AppUpdateState,
   ConnectInput,
@@ -39,6 +40,9 @@ export interface DesktopIpcHost {
   getUpdateState: () => AppUpdateState;
   openUpdateDownload: () => Promise<void>;
   restartToUpdate: () => Promise<void>;
+  browserSetActive: (active: boolean) => void;
+  browserAnswerPrompt: (id: string, allow: boolean) => void;
+  browserDownloadAction: (id: string, action: BrowserDownloadAction) => void;
 }
 
 /**
@@ -93,6 +97,29 @@ export const registerDesktopIpc = (
     IPC_CHANNELS.hostRejected,
     fromDashboard(() => host.hostRejected()),
   );
+  // The browser's pages have no preload, so these only ever come from the dashboard itself.
+  register(
+    ipcMain,
+    IPC_CHANNELS.browserSetActive,
+    fromDashboard((active) => host.browserSetActive(requiredBoolean(active))),
+  );
+  register(
+    ipcMain,
+    IPC_CHANNELS.browserAnswerPrompt,
+    fromDashboard((answer) => {
+      const { id, allow } = asRecord(answer);
+      host.browserAnswerPrompt(requiredId(id), requiredBoolean(allow));
+    }),
+  );
+  register(
+    ipcMain,
+    IPC_CHANNELS.browserDownloadAction,
+    fromDashboard((request) => {
+      const { id, action } = asRecord(request);
+      if (action !== "reveal" && action !== "cancel") throw new Error("Invalid download action.");
+      host.browserDownloadAction(requiredId(id), action);
+    }),
+  );
 
   // The app's own update is no secret and changes no host, so either of the app's two pages may use it.
   const fromEitherPage = (operation: () => unknown): IpcHandler => {
@@ -128,11 +155,11 @@ const senderUrl = (event: IpcEventLike): string =>
 
 const MAX_INPUT_LENGTH = 300;
 
+const asRecord = (value: unknown): Record<string, unknown> =>
+  (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
+
 const parseConnectInput = (value: unknown): ConnectInput => {
-  const input = (typeof value === "object" && value !== null ? value : {}) as Record<
-    string,
-    unknown
-  >;
+  const input = asRecord(value);
   return {
     url: requiredString(input.url, "host address"),
     code: requiredString(input.code, "pairing code"),
@@ -144,6 +171,12 @@ const requiredString = (value: unknown, label: string): string => {
   if (typeof value !== "string" || value.length > MAX_INPUT_LENGTH) {
     throw new Error(`Invalid ${label}.`);
   }
+  return value;
+};
+
+// The ids the app gives prompts and downloads: short, and nothing but word characters and dashes.
+const requiredId = (value: unknown): string => {
+  if (typeof value !== "string" || !/^[\w-]{1,64}$/.test(value)) throw new Error("Invalid id.");
   return value;
 };
 

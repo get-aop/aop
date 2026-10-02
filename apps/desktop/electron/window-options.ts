@@ -11,7 +11,7 @@ export interface DesktopWindowOptions {
     contextIsolation: true;
     nodeIntegration: false;
     sandbox: true;
-    webviewTag: false;
+    webviewTag: true;
     /** Chromium's built-in PDF viewer, which the artifact view shows PDFs in. */
     plugins: true;
   };
@@ -30,7 +30,9 @@ export const buildWindowOptions = (preloadPath: string): DesktopWindowOptions =>
     contextIsolation: true,
     nodeIntegration: false,
     sandbox: true,
-    webviewTag: false,
+    // The AOP Browser's pages are <webview> guests of the dashboard. The browser host refuses any
+    // guest that is not on the browser's partition, and pins each one sandboxed with no preload.
+    webviewTag: true,
     plugins: true,
   },
 });

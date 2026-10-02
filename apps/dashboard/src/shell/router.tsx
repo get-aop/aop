@@ -36,6 +36,7 @@ export type ArtifactViewRef =
 interface CoordinatorView {
   pullRequest?: PullRequestViewRef;
   artifact?: ArtifactViewRef;
+  browser?: true;
 }
 
 /**
@@ -43,8 +44,8 @@ interface CoordinatorView {
  * panel on its overview. `thread` is the same screen with one thread open in the panel, and
  * `project-tab` the same screen with another of the panel's tabs showing;
  * `project-settings` is one section of the project's settings, in a dialog over the project screen.
- * Any project screen may name a `pullRequest` or an `artifact` (one at a time), shown where the
- * chat is while the panel stays.
+ * Any project screen may name a `pullRequest`, an `artifact` or the AOP Browser (`browser`, the
+ * desktop app's), one at a time, shown where the chat is while the panel stays.
  */
 export type Route =
   | { name: "projects" }
@@ -69,12 +70,13 @@ export const projectSettingsPath = (
   section: ProjectSettingsSection = "general",
 ): string => `${projectPath(projectId)}/settings${section === "general" ? "" : `/${section}`}`;
 
-/** The address of a project screen, with the pull request or artifact it names, if any. */
+/** The address of a project screen, with the pull request, artifact or browser it names, if any. */
 export const projectScreenPath = (screen: ProjectScreen): string => {
   const base = screenBasePath(screen);
   const pr = screen.pullRequest;
   if (pr) return `${base}/pulls/${encodeURIComponent(pr.repoId)}/${pr.number}`;
-  return screen.artifact ? `${base}${artifactViewPath(screen.artifact)}` : base;
+  if (screen.artifact) return `${base}${artifactViewPath(screen.artifact)}`;
+  return screen.browser ? `${base}/${BROWSER_SEGMENT}` : base;
 };
 
 const artifactViewPath = (ref: ArtifactViewRef): string => {
@@ -108,8 +110,12 @@ export const parseRoute = (pathname: string): Route | null => {
 
 // A pull request is the address's last three segments: `pulls/<repoId>/<number>`.
 const PULL_REQUEST_SEGMENTS = 3;
+// The browser is the address's last segment.
+const BROWSER_SEGMENT = "browser";
 
 const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
+  const browser = rest.at(-1) === BROWSER_SEGMENT ? parseBrowserRoute(projectId, rest) : null;
+  if (browser) return browser;
   const artifact = parseArtifactSegments(projectId, rest);
   if (artifact !== undefined) return artifact;
   const pullRequestAt = rest.length - PULL_REQUEST_SEGMENTS;
@@ -163,6 +169,13 @@ const ARTIFACT_VIEW_PARSERS: Record<
 const parseArtifactVersion = (id: string, version: string | undefined): ArtifactViewRef | null => {
   if (version === undefined) return { kind: "artifact", id };
   return /^[1-9]\d*$/.test(version) ? { kind: "artifact", id, version: Number(version) } : null;
+};
+
+// Not a browser address after all (a thread whose id is "browser") falls through to the others.
+const parseBrowserRoute = (projectId: string, rest: string[]): Route | null => {
+  const before = rest.slice(0, -1);
+  const screen = before[0] === "chat" ? null : parseScreenRoute(projectId, before);
+  return screen && isProjectScreen(screen) ? { ...screen, browser: true } : null;
 };
 
 const parsePullRequest = ([repoId, number]: string[]): PullRequestViewRef | null => {

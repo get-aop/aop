@@ -54,6 +54,17 @@ export {
 } from "./artifacts.ts";
 export type { ChannelConfig, ReleaseChannel } from "./channel.ts";
 export { buildChannel, CHANNELS, channelDefine, parseReleaseChannel } from "./channel.ts";
+export type {
+  BrowserAsk,
+  BrowserDownload,
+  BrowserDownloadAction,
+  BrowserDownloadState,
+  BrowserHostEvent,
+  BrowserPrompt,
+  BrowserShortcut,
+  DesktopBrowserBridge,
+} from "./desktop-browser.ts";
+export { AOP_BROWSER_PARTITION } from "./desktop-browser.ts";
 export { AOP_PORTS, AOP_URLS } from "./env.ts";
 export type { HostHealth } from "./host-api.ts";
 export {
