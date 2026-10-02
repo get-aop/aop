@@ -9,7 +9,9 @@ mock.module("../mermaid", () => ({
   renderMermaid: async (source: string) => {
     rendered.push(source);
     if (source.includes("broken")) throw new Error("Parse error on line 2");
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><text>diagram</text><script>alert(1)</script></svg>';
+    if (source.includes("empty")) return "";
+    // Mermaid's labels are HTML (an open <br>), which an XML parser refuses.
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><foreignObject><div xmlns="http://www.w3.org/1999/xhtml"><p>diagram<br>label</p></div></foreignObject><script>alert(1)</script></svg>';
   },
   lazyMermaidPlugin: {
     name: "mermaid",
@@ -127,8 +129,9 @@ describe("MermaidView", () => {
     render(<MermaidView source="flowchart TD\nA-->B" />);
     await waitFor(() => expect(screen.getByTestId("artifact-mermaid")).toBeTruthy());
     await waitFor(() =>
-      expect(document.querySelector(".artifact-mermaid-svg svg")?.textContent).toContain("diagram"),
+      expect(document.querySelector(".artifact-mermaid-svg svg")?.textContent).toBe("diagramlabel"),
     );
+    expect(document.querySelector(".artifact-mermaid-svg script")).toBeNull();
     fireEvent.click(screen.getByLabelText("Zoom in"));
     expect(screen.getByTestId("mermaid-zoom-reset").textContent).toBe("125%");
   });
@@ -139,6 +142,15 @@ describe("MermaidView", () => {
     expect(screen.getByTestId("artifact-mermaid-error").textContent).toContain(
       "Parse error on line 2",
     );
+  });
+
+  test("a diagram Mermaid drew nothing for says so instead of an empty view", async () => {
+    render(<MermaidView source="empty" />);
+    await waitFor(() => expect(screen.getByTestId("artifact-mermaid-error")).toBeTruthy());
+    expect(screen.getByTestId("artifact-mermaid-error").textContent).toContain(
+      "Mermaid returned no SVG.",
+    );
+    expect(screen.queryByTestId("artifact-mermaid")).toBeNull();
   });
 });
 
