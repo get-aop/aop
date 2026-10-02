@@ -20,6 +20,8 @@ The host has no installer app. One terminal command installs it and starts it:
 curl -fsSL https://getaop.com/install.sh | sh
 ```
 
+AOP Nightly, built from `main` after every merge and published to `getaop.com/nightly/` without a release, has its own workflow, environment and feed: see [NIGHTLY.md](./NIGHTLY.md). Nothing in this document changes for it.
+
 ## Cut a release
 
 From a clean checkout of `main`:
