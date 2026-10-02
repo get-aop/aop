@@ -30,6 +30,7 @@ const WATCH_TABLES = ["pull_request_watch"];
 const SUGGESTION_TABLES = ["suggestion_answers"];
 const KICKOFF_TABLES = ["project_kickoffs"];
 const ROUTINE_TABLES = ["routine_runs", "routines"];
+const LIBRARY_TABLES = ["library_items", "library_settings"];
 
 const listTables = async (db: Kysely<Database>): Promise<string[]> => {
   const { rows } = await sql<{ name: string }>`
@@ -49,7 +50,7 @@ describe("runMigrations", () => {
     await db.destroy();
   });
 
-  test("creates the baseline, projects, usage, watch, suggestion, kickoff and routine tables", async () => {
+  test("creates the baseline, projects, usage, watch, suggestion, kickoff, routine and library tables", async () => {
     await runMigrations(db);
 
     expect(await listTables(db)).toEqual(
@@ -61,6 +62,7 @@ describe("runMigrations", () => {
         ...SUGGESTION_TABLES,
         ...KICKOFF_TABLES,
         ...ROUTINE_TABLES,
+        ...LIBRARY_TABLES,
       ].sort(),
     );
   });

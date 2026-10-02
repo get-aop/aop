@@ -8,6 +8,7 @@ import {
 import { generateTypeId } from "@aop/infra";
 import { chatSessionAttachmentsDir } from "../chat-session/message-images.ts";
 import type { LocalServerContext } from "../context.ts";
+import { createLibraryRepository } from "../library/repository.ts";
 import { sniffImageType } from "./image-type.ts";
 import { findStaged, pruneStaleUploads, removeStaged, stageUpload } from "./staging.ts";
 
@@ -16,7 +17,9 @@ export type AttachmentError =
   | { code: "EMPTY_IMAGE" }
   | { code: "UNSUPPORTED_IMAGE" }
   | { code: "IMAGE_TOO_LARGE"; maxBytes: number }
-  | { code: "IMAGE_NOT_FOUND" };
+  | { code: "IMAGE_NOT_FOUND" }
+  /** The Library removed the file (retention, or the person); the message still names it. */
+  | { code: "IMAGE_REMOVED"; reason: "expired" | "deleted"; removedAt: string };
 
 export type AttachmentResult<T> =
   | ({ success: true } & T)
@@ -50,7 +53,9 @@ export const createAttachmentService = (ctx: LocalServerContext): AttachmentServ
 
   messageImage: async (projectId, fileName) => {
     const found = await findMessageImage(ctx, projectId, fileName);
-    return found ? { success: true, ...found } : fail({ code: "IMAGE_NOT_FOUND" });
+    if (!found) return fail({ code: "IMAGE_NOT_FOUND" });
+    if ("path" in found) return { success: true, ...found };
+    return fail({ code: "IMAGE_REMOVED", reason: found.reason, removedAt: found.at });
   },
 });
 
@@ -60,7 +65,11 @@ const findMessageImage = async (
   ctx: LocalServerContext,
   projectId: string,
   fileName: string,
-): Promise<{ path: string; mimeType: ChatImageMimeType } | null> => {
+): Promise<
+  | { path: string; mimeType: ChatImageMimeType }
+  | { reason: "expired" | "deleted"; at: string }
+  | null
+> => {
   const [, messageId, extension] = MESSAGE_IMAGE.exec(fileName) ?? [];
   const mimeType = MIME_BY_EXTENSION[extension ?? ""];
   if (!messageId || !mimeType) return null;
@@ -68,7 +77,8 @@ const findMessageImage = async (
   const session = message && (await ctx.chatSessionRepository.getById(message.session_id));
   if (!session || session.project_id !== projectId) return null;
   const path = join(chatSessionAttachmentsDir(session.id), fileName);
-  return (await Bun.file(path).exists()) ? { path, mimeType } : null;
+  if (await Bun.file(path).exists()) return { path, mimeType };
+  return createLibraryRepository(ctx.db).chatRemoval(session.id, fileName);
 };
 
 /**

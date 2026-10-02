@@ -4,8 +4,15 @@ export interface ApiCall {
   method: string;
   /** The path after `/api`, with its query string. */
   path: string;
+  /** A JSON body parsed; any other body (an uploaded file) as sent. */
   body: unknown;
 }
+
+const sentHeaders = new WeakMap<ApiCall, Record<string, string>>();
+
+/** The headers a recorded request was sent with (kept off the call, so calls compare as before). */
+export const headersOf = (call: ApiCall | undefined): Record<string, string> =>
+  (call && sentHeaders.get(call)) ?? {};
 
 type Handler = (call: ApiCall) => Response | Promise<Response> | undefined;
 
@@ -21,8 +28,9 @@ export const mockApi = (handler: Handler) => {
     const call: ApiCall = {
       method: init?.method ?? "GET",
       path: `${url.pathname.replace(/^\/api/, "")}${url.search}`,
-      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      body: parseBody(init?.body),
     };
+    sentHeaders.set(call, { ...(init?.headers as Record<string, string> | undefined) });
     calls.push(call);
     const response = await handler(call);
     return (
@@ -38,4 +46,14 @@ export const mockApi = (handler: Handler) => {
       globalThis.fetch = original;
     },
   };
+};
+
+const parseBody = (body: BodyInit | null | undefined): unknown => {
+  if (!body) return undefined;
+  if (typeof body !== "string") return body;
+  try {
+    return JSON.parse(body);
+  } catch {
+    return body;
+  }
 };

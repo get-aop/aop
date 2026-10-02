@@ -1,9 +1,10 @@
 import type { MessageImage } from "@aop/common";
-import { ImageOffIcon } from "lucide-react";
+import { FileXIcon, ImageOffIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/ui/dialog";
 import { Spinner } from "@/ui/spinner";
 import { loadApiImage } from "../../api/attachments";
+import { ApiError } from "../../api/request";
 
 /** The images a person sent with a message, as thumbnails; one opens larger on click. */
 export const MessageImages = ({ images }: { images: readonly MessageImage[] }) => {
@@ -50,17 +51,17 @@ export const MessageImages = ({ images }: { images: readonly MessageImage[] }) =
 
 /** An image the host serves, fetched with this client's credentials (see `loadApiImage`). */
 const ApiImage = ({ path, alt, className }: { path: string; alt: string; className: string }) => {
-  const [state, setState] = useState<{ url: string | null; failed: boolean }>({
+  const [state, setState] = useState<{ url: string | null; failed: Failure | null }>({
     url: null,
-    failed: false,
+    failed: null,
   });
 
   useEffect(() => {
     let current = true;
-    setState({ url: null, failed: false });
+    setState({ url: null, failed: null });
     loadApiImage(path).then(
-      (url) => current && setState({ url, failed: false }),
-      () => current && setState({ url: null, failed: true }),
+      (url) => current && setState({ url, failed: null }),
+      (cause) => current && setState({ url: null, failed: failureOf(cause) }),
     );
     return () => {
       current = false;
@@ -68,6 +69,9 @@ const ApiImage = ({ path, alt, className }: { path: string; alt: string; classNa
   }, [path]);
 
   if (state.url) return <img src={state.url} alt={alt} className={className} />;
+  if (state.failed === "expired" || state.failed === "deleted") {
+    return <RemovedImage reason={state.failed} />;
+  }
   return (
     <span
       data-testid={state.failed ? "message-image-missing" : "message-image-loading"}
@@ -82,3 +86,30 @@ const ApiImage = ({ path, alt, className }: { path: string; alt: string; classNa
     </span>
   );
 };
+
+type Failure = "expired" | "deleted" | "failed";
+
+// The host answers 410 for an image the Library removed, naming why.
+const failureOf = (cause: unknown): Failure =>
+  cause instanceof ApiError && cause.status === 410
+    ? cause.message === "deleted"
+      ? "deleted"
+      : "expired"
+    : "failed";
+
+/** Where an image the Library removed was: the message keeps its place and says what happened. */
+const RemovedImage = ({ reason }: { reason: "expired" | "deleted" }) => (
+  <span
+    data-testid="message-image-removed"
+    data-reason={reason}
+    className="flex size-full min-h-16 min-w-28 flex-col items-center justify-center gap-1 px-3 text-center text-meta text-text-subtle"
+    title={
+      reason === "expired"
+        ? "Removed by the Library's retention. Pin files in the Library to keep them."
+        : "Deleted from the Library"
+    }
+  >
+    <FileXIcon aria-hidden="true" className="size-5" />
+    {reason === "expired" ? "File expired" : "File deleted"}
+  </span>
+);
