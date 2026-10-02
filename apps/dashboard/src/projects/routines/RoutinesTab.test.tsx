@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { Routine, RoutineRun } from "@aop/common";
 import { mockApi } from "../../test/mock-api";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { makeEntry, makeProject, makeState, stubLiveProjects } from "../test-utils";
-import { makeRoutine, makeRun } from "./test-utils";
+import { createFakeRoutineHost, makeRoutine, makeRun } from "./test-utils";
 
 setupDashboardDom();
 
@@ -16,88 +15,12 @@ const { RoutinesTab } = await import("./RoutinesTab");
 const project = makeProject({ id: "p1", name: "Checkout", repoIds: ["repo_1"] });
 
 let api: ReturnType<typeof mockApi>;
-let routines: Routine[];
-let runs: RoutineRun[];
-let owner: boolean;
-let refuse: { status: number; error: string; code: string } | null;
+let host: ReturnType<typeof createFakeRoutineHost>;
 let stub: ReturnType<typeof stubLiveProjects>;
 
-const routinePath = /^\/projects\/p1\/routines\/([^/]+)(\/run|\/runs)?$/;
-
 beforeEach(() => {
-  routines = [];
-  runs = [];
-  owner = true;
-  refuse = null;
-  api = mockApi((call) => {
-    if (call.path === "/auth/me")
-      return Response.json(
-        owner
-          ? { kind: "owner" }
-          : {
-              kind: "device",
-              device: {
-                id: "d1",
-                name: "Phone",
-                createdAt: "2026-06-01T00:00:00.000Z",
-                lastSeenAt: null,
-              },
-            },
-      );
-    if (call.method === "GET" && call.path === "/projects/p1/routines") {
-      return Response.json({
-        routines,
-        timeZone: "UTC",
-        limits: { minIntervalMinutes: 15, maxActive: 10 },
-      });
-    }
-    if (call.path === "/projects/p1/routines/preview") {
-      return Response.json({
-        description: "Weekdays at 09:00",
-        nextRuns: ["2026-06-02T09:00:00.000Z"],
-        timeZone: "UTC",
-        problem: null,
-      });
-    }
-    if (refuse)
-      return Response.json({ error: refuse.error, code: refuse.code }, { status: refuse.status });
-    if (call.method === "POST" && call.path === "/projects/p1/routines") {
-      const made = makeRoutine({
-        id: `rtn_${routines.length + 2}`,
-        ...(call.body as Partial<Routine>),
-      });
-      routines = [...routines, made];
-      return Response.json({ routine: made }, { status: 201 });
-    }
-    const match = call.path.match(routinePath);
-    if (!match) return undefined;
-    const [, id, rest] = match;
-    const routine = routines.find((known) => known.id === id);
-    if (!routine) return Response.json({ error: "Routine not found" }, { status: 404 });
-    if (rest === "/runs") return Response.json({ runs });
-    if (rest === "/run") {
-      const run = makeRun({
-        id: "rrun_now",
-        trigger: "manual",
-        status: "running",
-        threadId: "thr_9",
-      });
-      runs = [run, ...runs];
-      const updated = { ...routine, lastRun: run };
-      routines = routines.map((known) => (known.id === id ? updated : known));
-      return Response.json({ routine: updated, run }, { status: 201 });
-    }
-    if (call.method === "PATCH") {
-      const updated = { ...routine, ...(call.body as Partial<Routine>) };
-      routines = routines.map((known) => (known.id === id ? updated : known));
-      return Response.json({ routine: updated });
-    }
-    if (call.method === "DELETE") {
-      routines = routines.filter((known) => known.id !== id);
-      return new Response(null, { status: 204 });
-    }
-    return undefined;
-  });
+  host = createFakeRoutineHost();
+  api = mockApi(host.handle);
 });
 
 afterEach(() => {
@@ -136,7 +59,7 @@ describe("the Routines tab", () => {
 
   test("lists each routine with its schedule in words, its next run and how its last run went", async () => {
     const now = Date.now();
-    routines = [
+    host.routines = [
       makeRoutine({
         id: "rtn_a",
         name: "Digest",
@@ -195,7 +118,7 @@ describe("the Routines tab", () => {
   });
 
   test("the switch pauses a routine and turns it back on", async () => {
-    routines = [makeRoutine()];
+    host.routines = [makeRoutine()];
     renderTab();
     const digest = await card("Morning digest");
     fireEvent.click(within(digest).getByTestId("routine-switch"));
@@ -210,7 +133,7 @@ describe("the Routines tab", () => {
   });
 
   test("Run now starts a run and opens the history with its thread", async () => {
-    routines = [makeRoutine()];
+    host.routines = [makeRoutine()];
     renderTab();
     const digest = await card("Morning digest");
     fireEvent.click(await within(await openMenu(digest)).findByText("Run now"));
@@ -232,8 +155,8 @@ describe("the Routines tab", () => {
   });
 
   test("the history shows each run's status, why, and what it made", async () => {
-    routines = [makeRoutine()];
-    runs = [
+    host.routines = [makeRoutine()];
+    host.runs = [
       makeRun({
         id: "r3",
         status: "skipped",
@@ -315,7 +238,7 @@ describe("the Routines tab", () => {
     fireEvent.click(await screen.findByTestId("routine-new-empty"));
     fireEvent.change(await screen.findByTestId("routine-name"), { target: { value: "x" } });
     fireEvent.change(screen.getByTestId("routine-prompt"), { target: { value: "y" } });
-    refuse = {
+    host.refuse = {
       status: 409,
       code: "ROUTINE_LIMIT",
       error: "This project already has 10 routines turned on",
@@ -328,7 +251,7 @@ describe("the Routines tab", () => {
   });
 
   test("edit saves the change; duplicate makes a paused copy", async () => {
-    routines = [makeRoutine()];
+    host.routines = [makeRoutine()];
     renderTab();
     fireEvent.click(await within(await openMenu(await card("Morning digest"))).findByText("Edit"));
     const name = (await screen.findByTestId("routine-name")) as HTMLInputElement;
@@ -361,7 +284,7 @@ describe("the Routines tab", () => {
   });
 
   test("delete asks first", async () => {
-    routines = [makeRoutine()];
+    host.routines = [makeRoutine()];
     renderTab();
     fireEvent.click(
       await within(await openMenu(await card("Morning digest"))).findByText("Delete"),
@@ -393,8 +316,8 @@ describe("the Routines tab", () => {
   });
 
   test("a paired device sees routines but cannot change them", async () => {
-    owner = false;
-    routines = [makeRoutine()];
+    host.owner = false;
+    host.routines = [makeRoutine()];
     renderTab();
     const digest = await card("Morning digest");
     expect(await screen.findByTestId("routines-read-only")).toBeTruthy();
