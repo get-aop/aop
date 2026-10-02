@@ -34,7 +34,13 @@ export const usePopupPlacement = (
   const [stored, setStored] = useLocalStorage<string>(CORNER_KEY, DEFAULT_CORNER);
   const corner: Corner = isCorner(stored) ? stored : DEFAULT_CORNER;
   const [dragAt, setDragAt] = useState<Point | null>(null);
-  const press = useRef<{ pointer: Point; origin: Point; dragging: boolean } | null>(null);
+  const press = useRef<{
+    pointer: Point;
+    origin: Point;
+    dragging: boolean;
+    /** Where the press began: once the popup captures the pointer, the release targets the popup. */
+    target: EventTarget;
+  } | null>(null);
 
   const resting = cornerPosition(corner, size, viewport);
   const position = dragAt ? clampToViewport(dragAt, size, viewport) : resting;
@@ -46,6 +52,7 @@ export const usePopupPlacement = (
         pointer: { x: event.clientX, y: event.clientY },
         origin: resting,
         dragging: false,
+        target: event.target,
       };
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
@@ -71,7 +78,7 @@ export const usePopupPlacement = (
       event.currentTarget.releasePointerCapture?.(event.pointerId);
       if (!current) return;
       if (!current.dragging) {
-        onClick(event.target);
+        onClick(current.target);
         return;
       }
       const released = {

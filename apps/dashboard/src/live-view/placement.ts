@@ -9,8 +9,9 @@ export type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export const CORNERS: readonly Corner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 /**
- * Top right, under the top bar: clear of the composers' send buttons (bottom right) and of the
- * top bar's controls, over the threads panel's list or the coordinator column's content.
+ * Top right, under the top bar and a covering view's headers: clear of the composers' send
+ * buttons (bottom right) and of every header's controls, over the threads panel's list or the
+ * content of the PR View, an artifact or the AOP Browser.
  */
 export const DEFAULT_CORNER: Corner = "top-right";
 
@@ -24,8 +25,12 @@ export interface Point {
   y: number;
 }
 
-/** Space kept free around the popup: the top bar above, a margin elsewhere. */
-export const INSETS = { top: 64, right: 12, bottom: 12, left: 12 } as const;
+/**
+ * Space kept free around the popup: a margin at the sides and bottom, and at the top the top bar
+ * (56px) plus the two header rows of a pull request or an artifact shown in the chat's column
+ * (its breadcrumb and its toolbar, down to 145px), so a top corner never covers their controls.
+ */
+export const INSETS = { top: 152, right: 12, bottom: 12, left: 12 } as const;
 
 /** The popup's width: a small square-ish window, narrower on a narrow screen. */
 export const popupWidth = (viewportWidth: number): number =>

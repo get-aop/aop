@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { buildSpawnEnv, getLogger } from "@aop/infra";
 import { resolveRuntimeExecutable } from "@aop/llm-provider";
@@ -39,6 +40,8 @@ export interface ScreenCaptureDeps {
   platform: NodeJS.Platform;
   /** The X display the host's runs (and so CUA Driver) get, or undefined when there is none. */
   display: () => string | undefined;
+  /** Whether a local X display (`:N`) is running; displays on another machine are not checked. */
+  displayRunning: (display: string) => boolean;
   /** The ffmpeg to run, or null when there is none. */
   locateFfmpeg: () => string | null;
   spawn: (argv: string[]) => CaptureProcess;
@@ -59,6 +62,9 @@ export const createScreenCapture =
     }
     const display = deps.display()?.trim();
     if (!display) return { unavailable: "the host has no X display (DISPLAY is not set)." };
+    if (!deps.displayRunning(display)) {
+      return { unavailable: `the X display ${display} is not running.` };
+    }
     const ffmpeg = deps.locateFfmpeg();
     if (!ffmpeg) return { unavailable: "ffmpeg is not installed on the host." };
     return runFfmpeg(deps.spawn(ffmpegArgv(ffmpeg, display)));
@@ -137,6 +143,12 @@ const pump = async (
 const platformName = (platform: NodeJS.Platform): string =>
   platform === "darwin" ? "macOS" : platform === "win32" ? "Windows" : platform;
 
+// A local display `:N` (or `:N.S`) listens on /tmp/.X11-unix/XN; ffmpeg would crash on a missing one.
+const localDisplayRunning = (display: string): boolean => {
+  const local = /^:(\d+)(\.\d+)?$/.exec(display);
+  return local ? existsSync(`/tmp/.X11-unix/X${local[1]}`) : true;
+};
+
 const locateFfmpeg = (): string | null => {
   const resolved = resolveRuntimeExecutable("ffmpeg", buildSpawnEnv().PATH);
   return isAbsolute(resolved) ? resolved : null;
@@ -145,6 +157,7 @@ const locateFfmpeg = (): string | null => {
 const defaultDeps: ScreenCaptureDeps = {
   platform: process.platform,
   display: () => buildSpawnEnv().DISPLAY,
+  displayRunning: localDisplayRunning,
   locateFfmpeg,
   spawn: (argv) => {
     const child = Bun.spawn(argv, {

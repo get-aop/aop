@@ -138,9 +138,14 @@ describe("the popup", () => {
     renderView();
     await popup();
 
+    // With the pointer captured, a browser aims the release at the popup, not the picture.
     const body = screen.getByTestId("live-view-body");
     fireEvent.pointerDown(body, { button: 0, pointerId: 1, clientX: 900, clientY: 150 });
-    fireEvent.pointerUp(body, { pointerId: 1, clientX: 901, clientY: 150 });
+    fireEvent.pointerUp(screen.getByTestId("live-view-popup"), {
+      pointerId: 1,
+      clientX: 901,
+      clientY: 150,
+    });
 
     await waitFor(() => screen.getByTestId("live-view-fullscreen"));
     expect(has("live-view-popup")).toBe(false);

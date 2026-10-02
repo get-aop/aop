@@ -15,7 +15,7 @@ export interface LiveViewState {
   closed: boolean;
   minimized: boolean;
   fullscreen: boolean;
-  /** The thread the person picked in the switcher; the most recently active one otherwise. */
+  /** The thread being watched: picked in the switcher, or followed by `followedThread`. */
   pickedThreadId: string | null;
 }
 
@@ -95,14 +95,39 @@ export const setLiveViewFullscreen = (fullscreen: boolean): void => publish({ fu
 
 export const pickLiveViewThread = (threadId: string): void => publish({ pickedThreadId: threadId });
 
+/**
+ * Which thread the view follows. A thread that just started using CUA takes the view (the newest,
+ * if several did); otherwise the view stays on the thread it shows, so two threads taking turns
+ * on the screen do not flip it back and forth; and when that thread's session ends or is gone,
+ * the most recently active one takes over (an ending one stays only while nothing else is active).
+ */
+export const followedThread = (
+  before: LiveViewStatus | null,
+  after: LiveViewStatus,
+  current: string | null,
+): string | null => {
+  const known = new Set(before?.sessions.map((session) => session.threadId));
+  const started = after.sessions
+    .filter((session) => !session.ending && !known.has(session.threadId))
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  if (before && started[0]) return started[0].threadId;
+  const followed = after.sessions.find((session) => session.threadId === current);
+  // The host lists active sessions first: one that is ending gives way to a thread still at work.
+  const next = after.sessions[0];
+  if (followed && !(followed.ending && next && !next.ending)) return current;
+  return next?.threadId ?? null;
+};
+
 /** Asks the host now. Silent on failure: the view keeps what it had until the next answer. */
 export const refreshLiveView = async (): Promise<void> => {
   const asked = generation;
   try {
     const status = await getLiveViewStatus();
     if (asked !== generation) return;
+    const pickedThreadId = followedThread(state.status, status, state.pickedThreadId);
+    const next = { ...state, status, pickedThreadId };
     // Full screen ends with the last session, so a new one opens as the popup.
-    publish(shownSession({ ...state, status }) ? { status } : { status, fullscreen: false });
+    publish(shownSession(next) ? next : { ...next, fullscreen: false });
   } catch {
     // A host out of reach says so in the top bar; the view just waits.
   }

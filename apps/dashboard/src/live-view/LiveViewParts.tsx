@@ -73,7 +73,7 @@ export const SessionSwitcher = ({
           Threads using computer use
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={current.threadId} onValueChange={pickLiveViewThread}>
-          {sessions.map((session) => (
+          {inStartOrder(sessions).map((session) => (
             <DropdownMenuRadioItem
               key={session.threadId}
               value={session.threadId}
@@ -135,3 +135,8 @@ export const FramePicture = ({
     />
   );
 };
+
+// The host lists sessions most recently active first, which changes while threads take turns;
+// the menu keeps them in the order they started, so an item does not move under the pointer.
+const inStartOrder = (sessions: LiveViewSession[]): LiveViewSession[] =>
+  [...sessions].sort((a, b) => a.startedAt.localeCompare(b.startedAt));

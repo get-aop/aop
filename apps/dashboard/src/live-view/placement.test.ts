@@ -14,9 +14,9 @@ const viewport = { width: 1200, height: 800 };
 const size = { width: 288, height: 212 };
 
 describe("live view placement", () => {
-  test("rests in a corner, clear of the top bar at the top", () => {
+  test("rests in a corner, clear of the top bar and a covering view's headers at the top", () => {
     expect(cornerPosition("top-left", size, viewport)).toEqual({ x: 12, y: INSETS.top });
-    expect(cornerPosition("top-right", size, viewport)).toEqual({ x: 1200 - 12 - 288, y: 64 });
+    expect(cornerPosition("top-right", size, viewport)).toEqual({ x: 1200 - 12 - 288, y: 152 });
     expect(cornerPosition("bottom-left", size, viewport)).toEqual({ x: 12, y: 800 - 12 - 212 });
     expect(cornerPosition("bottom-right", size, viewport)).toEqual({ x: 900, y: 576 });
   });

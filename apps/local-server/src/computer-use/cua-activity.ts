@@ -17,7 +17,7 @@ export interface CuaActivity {
   observeLine: (thread: CuaThread, line: string) => void;
   /** The thread's turn ended: its CUA session, if any, ended with it. */
   runEnded: (threadId: string) => void;
-  /** Most recently active first; drops sessions whose linger is over. */
+  /** Active sessions first, each most recently active first; drops those whose linger is over. */
   sessions: () => LiveViewSession[];
   /** Whether any session is active and not ending. */
   anyActive: () => boolean;
@@ -81,16 +81,23 @@ export const createCuaActivity = (now: () => number = Date.now): CuaActivity => 
     },
     sessions: () => {
       prune();
-      return [...entries.values()]
-        .sort((a, b) => b.lastCallAt - a.lastCallAt)
-        .map((entry) => ({
-          threadId: entry.thread.id,
-          projectId: entry.thread.projectId,
-          title: entry.thread.title,
-          startedAt: new Date(entry.startedAt).toISOString(),
-          lastActivityAt: new Date(entry.lastCallAt).toISOString(),
-          ending: endedAt(entry) !== null,
-        }));
+      return (
+        [...entries.values()]
+          .map((entry) => ({
+            threadId: entry.thread.id,
+            projectId: entry.thread.projectId,
+            title: entry.thread.title,
+            startedAt: new Date(entry.startedAt).toISOString(),
+            lastActivityAt: new Date(entry.lastCallAt).toISOString(),
+            ending: endedAt(entry) !== null,
+          }))
+          // Active sessions before ending ones, each most recent first.
+          .sort(
+            (a, b) =>
+              Number(a.ending) - Number(b.ending) ||
+              b.lastActivityAt.localeCompare(a.lastActivityAt),
+          )
+      );
     },
     anyActive: () => [...entries.values()].some((entry) => endedAt(entry) === null),
   };

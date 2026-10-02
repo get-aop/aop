@@ -88,7 +88,9 @@ const LiveViewPopup = ({
         style={{ height: HEADER_HEIGHT }}
       >
         <LiveDot ending={session.ending} />
-        <ThreadTitle session={session} className="flex-1" />
+        <ThreadTitle session={session} />
+        {/* The header's free space is where it is grabbed: the title takes only its own width. */}
+        <span className="h-full min-w-4 flex-1" />
         <SessionSwitcher sessions={sessions} current={session} />
         <HeaderButton
           testId="live-view-minimize"

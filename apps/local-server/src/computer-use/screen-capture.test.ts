@@ -8,6 +8,7 @@ const linuxHost = (overrides: Partial<ScreenCaptureDeps> = {}) => {
   const deps: ScreenCaptureDeps = {
     platform: "linux",
     display: () => ":99",
+    displayRunning: () => true,
     locateFfmpeg: () => "/usr/bin/ffmpeg",
     spawn: (argv) => {
       spawned.push(argv);
@@ -21,7 +22,10 @@ const linuxHost = (overrides: Partial<ScreenCaptureDeps> = {}) => {
 const settle = () => Bun.sleep(5);
 
 describe("createScreenCapture", () => {
-  test("says why it cannot capture: another system, no display, no ffmpeg", () => {
+  test("says why it cannot capture: another system, no display, a display that is down, no ffmpeg", () => {
+    expect(linuxHost({ displayRunning: (display) => display !== ":99" }).start()).toEqual({
+      unavailable: "the X display :99 is not running.",
+    });
     expect(linuxHost({ platform: "darwin" }).start()).toEqual({
       unavailable: "capturing the screen is not supported on macOS yet.",
     });

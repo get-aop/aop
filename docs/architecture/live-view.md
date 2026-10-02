@@ -36,7 +36,7 @@ The host captures only while both hold: a CUA session is active, and a viewer ha
 
 **macOS and Windows.** Not supported yet. The view shows "Live view unavailable: capturing the screen is not supported on macOS yet." A later version can capture through CUA Driver itself, which holds the Screen Recording grant on a Mac.
 
-**Dependency.** ffmpeg must be on the PATH the host spawns runs with (`apt install ffmpeg`, or CUA Driver's `install_ffmpeg` tool). Without it, or without a display, the view says why instead of a picture: "Live view unavailable: ffmpeg is not installed on the host." or "…the host has no X display (DISPLAY is not set)." If ffmpeg exits (the display went away), the view says so with the last line ffmpeg printed. The host tries again at most every 15 seconds, not on every poll.
+**Dependency.** ffmpeg must be on the PATH the host spawns runs with (`apt install ffmpeg`, or CUA Driver's `install_ffmpeg` tool). Without it, or without a display, the view says why instead of a picture: "Live view unavailable: ffmpeg is not installed on the host.", "…the host has no X display (DISPLAY is not set)." or "…the X display :99 is not running." (a local display is checked by its socket in `/tmp/.X11-unix`, since ffmpeg crashes on a missing one). If ffmpeg exits later (the display went away), the view says so with the last line ffmpeg printed. The host tries again at most every 15 seconds, not on every poll.
 
 ## Transport
 
@@ -58,7 +58,7 @@ Two routes under the existing authenticated API, in `computer-use/routes.ts`:
 `apps/dashboard/src/live-view/`. The shell mounts the view once, over every screen.
 
 - **The popup.** A small window with a header (a red live dot, the thread's title linking to the thread, the switcher when several threads use CUA, Minimize and Close) over the picture. It is about 288 pixels wide, narrower on a narrow window (168 at 400 CSS pixels), and as tall as the screen's aspect ratio makes it.
-- **Moving it.** Drag it by any part but the header's buttons. Let go, and it snaps to the nearest corner of the window; the corner is remembered (local storage), and its place is worked out from the corner on every resize, so it never ends up outside the window. It starts top right under the top bar: clear of the composers' send buttons at the bottom and of the top bar's controls, over the threads panel's list or the column the PR View, an artifact or the AOP Browser uses.
+- **Moving it.** Drag it by any part but the header's buttons. Let go, and it snaps to the nearest corner of the window; the corner is remembered (local storage), and its place is worked out from the corner on every resize, so it never ends up outside the window. It starts top right, below the top bar and below the two header rows (breadcrumb and toolbar) of a pull request or an artifact shown in the chat's column: clear of the composers' send buttons at the bottom and of every header's controls, over the threads panel's list or the content of the PR View, an artifact or the AOP Browser.
 - **Full screen.** A click on the picture (a press that did not move: a press that moved is a drag) opens it full screen over the app, as large as fits with its aspect ratio kept. "Picture in picture" or Escape turns it back into the popup; following the thread's link does too.
 - **Minimize and close.** Minimize folds it to its header and stops fetching frames. Close hides it for this tab's session; while it is closed and a thread uses CUA, the top bar shows a "Live view" button that brings it back.
 

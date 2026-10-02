@@ -77,6 +77,19 @@ describe("CUA activity", () => {
     expect(activity.sessions().map((s) => s.threadId)).toEqual(["thr_1", "thr_2"]);
   });
 
+  test("a thread still using CUA comes before one whose session just ended", () => {
+    const time = clock();
+    const activity = createCuaActivity(time.now);
+    activity.observeLine(THREAD, callLine("mcp__cua-driver__click"));
+    time.advance(1_000);
+    activity.observeLine(OTHER, callLine("mcp__cua-driver__end_session"));
+
+    expect(activity.sessions().map((s) => [s.threadId, s.ending])).toEqual([
+      ["thr_1", false],
+      ["thr_2", true],
+    ]);
+  });
+
   test("end_session ends it, it lingers a few seconds, then it is gone", () => {
     const time = clock();
     const activity = createCuaActivity(time.now);
