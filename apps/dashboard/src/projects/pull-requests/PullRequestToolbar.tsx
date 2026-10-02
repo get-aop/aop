@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { Input } from "@/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@/ui/toggle-group";
 import { IconButton } from "../../components/IconButton";
 import { FacetCombobox } from "./FacetCombobox";
 import {
@@ -164,7 +165,7 @@ const SearchField = ({
   </div>
 );
 
-/** Open, Closed, Merged, All: one of them, like GitHub's tabs over its list. */
+/** Open, Closed, Merged, All: one of them, like GitHub's tabs over its list (arrow keys move). */
 const StatePicker = ({
   value,
   onChange,
@@ -172,42 +173,28 @@ const StatePicker = ({
   value: PullRequestListState;
   onChange: (state: PullRequestListState) => void;
 }) => (
-  <div
-    role="radiogroup"
+  <ToggleGroup
+    type="single"
+    value={value}
+    onValueChange={(next) => {
+      // Radix offers "" when the chosen one is clicked again; a state is always chosen.
+      if (next) onChange(next as PullRequestListState);
+    }}
     aria-label="State"
     data-testid="pr-state"
-    className="grid grid-cols-4 rounded-row border border-border bg-input-surface p-0.5"
+    className="grid w-full grid-cols-4 gap-0.5 rounded-row border border-border bg-input-surface p-0.5"
   >
     {STATES.map((state) => (
-      <button
+      <ToggleGroupItem
         key={state.id}
-        type="button"
-        role="radio"
-        aria-checked={value === state.id}
+        value={state.id}
         data-testid={`pr-state-${state.id}`}
-        onClick={() => onChange(state.id)}
-        onKeyDown={(event) => {
-          const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
-          if (!step) return;
-          event.preventDefault();
-          const index =
-            (STATES.findIndex((one) => one.id === value) + step + STATES.length) % STATES.length;
-          onChange(STATES[index]?.id ?? value);
-          const group = event.currentTarget.parentElement;
-          (group?.children[index] as HTMLElement | undefined)?.focus();
-        }}
-        tabIndex={value === state.id ? 0 : -1}
-        className={cn(
-          "focus-ring h-6 rounded-[6px] text-meta transition-colors duration-[120ms]",
-          value === state.id
-            ? "bg-active font-medium text-text shadow-1"
-            : "text-text-subtle hover:text-text",
-        )}
+        className="h-6 rounded-[6px] px-1 text-meta font-normal text-text-subtle hover:bg-transparent hover:text-text data-[state=on]:bg-active data-[state=on]:font-medium data-[state=on]:text-text data-[state=on]:shadow-1"
       >
         {state.label}
-      </button>
+      </ToggleGroupItem>
     ))}
-  </div>
+  </ToggleGroup>
 );
 
 const InvolvesMe = ({

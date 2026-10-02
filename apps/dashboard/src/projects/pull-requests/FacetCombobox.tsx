@@ -39,11 +39,19 @@ export const FacetCombobox = ({
   kind: "person" | "label";
 }) => {
   const [open, setOpen] = useState(false);
-  const options = optionsOf(facets, selected);
+  // What was chosen when the list opened goes first; ticking more does not move rows under the pointer.
+  const [pinned, setPinned] = useState<readonly string[]>(selected);
+  const options = optionsOf(facets, pinned, selected);
   const testId = `pr-filter-${name.toLowerCase()}`;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setPinned(selected);
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -155,14 +163,20 @@ const triggerText = (name: string, selected: readonly string[]): string => {
   return `${name}: ${selected.length}`;
 };
 
-/** The chosen values first (with a zero count when no pull request has one any more), then the rest. */
-const optionsOf = (
+/**
+ * The values chosen when the list opened first, then the rest, then any chosen since that no pull
+ * request has (a zero count), so every chosen value can still be unticked.
+ */
+export const optionsOf = (
   facets: readonly PullRequestFacet[],
+  pinned: readonly string[],
   selected: readonly string[],
 ): PullRequestFacet[] => {
   const byValue = new Map(facets.map((facet) => [facet.value, facet]));
-  const chosen = selected.map(
-    (value) => byValue.get(value) ?? { value, count: 0, avatarUrl: null, color: null },
-  );
-  return [...chosen, ...facets.filter((facet) => !selected.includes(facet.value))];
+  const facetOf = (value: string): PullRequestFacet =>
+    byValue.get(value) ?? { value, count: 0, avatarUrl: null, color: null };
+  const first = pinned.filter((value) => selected.includes(value) || byValue.has(value));
+  const rest = facets.filter((facet) => !first.includes(facet.value));
+  const missing = selected.filter((value) => !first.includes(value) && !byValue.has(value));
+  return [...first.map(facetOf), ...rest, ...missing.map(facetOf)];
 };
