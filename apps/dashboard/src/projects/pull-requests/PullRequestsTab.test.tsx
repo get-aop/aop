@@ -184,12 +184,12 @@ describe("the Pull requests tab", () => {
   test("arrow keys move between the rows", async () => {
     mount(() => readyList([makePull({ number: 1 }), makePull({ number: 2 })]));
     await waitFor(() => expect(rows()).toHaveLength(2));
-    const [first, second] = screen.getAllByTestId("pr-row-open") as HTMLElement[];
-    first?.focus();
-    fireEvent.keyDown(first as HTMLElement, { key: "ArrowDown" });
-    expect(document.activeElement).toBe(second);
-    fireEvent.keyDown(second as HTMLElement, { key: "ArrowUp" });
-    expect(document.activeElement).toBe(first);
+    const [first, second] = screen.getAllByTestId("pr-row-open") as [HTMLElement, HTMLElement];
+    first.focus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    expect(document.activeElement as Element | null).toBe(second);
+    fireEvent.keyDown(second, { key: "ArrowUp" });
+    expect(document.activeElement as Element | null).toBe(first);
   });
 
   test("Show more loads the next page under the first", async () => {
