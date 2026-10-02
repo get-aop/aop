@@ -52,6 +52,9 @@ export const useChatContext = (): ChatContextValue => {
   return value;
 };
 
+/** The chat's context where there may be none (markdown drawn on its own, in a test). */
+export const useOptionalChatContext = (): ChatContextValue | null => useContext(ChatContext);
+
 /**
  * One thread by id, whether it could still turn up (the project's threads are still loading),
  * and why they did not load when fetching them failed.

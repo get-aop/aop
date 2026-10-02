@@ -41,7 +41,7 @@ export const createArtifactRoutes = (artifacts: ArtifactService, visualize: Visu
   routes.get("/:projectId/workspace-files", async (c) => {
     const result = await artifacts.workspaceFile(
       c.req.param("projectId"),
-      c.req.query("sessionId") ?? "",
+      c.req.query("threadId") || null,
       c.req.query("path") ?? "",
     );
     if (!result.success) return artifactError(c, result.error);
@@ -50,17 +50,14 @@ export const createArtifactRoutes = (artifacts: ArtifactService, visualize: Visu
 
   routes.post("/:projectId/workspace-files/save", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
-      sessionId?: unknown;
+      threadId?: unknown;
       path?: unknown;
     } | null;
-    if (typeof body?.sessionId !== "string" || typeof body.path !== "string") {
-      return artifactError(c, { code: "INVALID_INPUT", message: "Give a sessionId and a path" });
+    if (typeof body?.path !== "string") {
+      return artifactError(c, { code: "INVALID_INPUT", message: "Give the file's path" });
     }
-    const result = await artifacts.saveWorkspaceFile(
-      c.req.param("projectId"),
-      body.sessionId,
-      body.path,
-    );
+    const threadId = typeof body.threadId === "string" ? body.threadId : null;
+    const result = await artifacts.saveWorkspaceFile(c.req.param("projectId"), threadId, body.path);
     return result.success
       ? c.json({ artifact: result.artifact }, 201)
       : artifactError(c, result.error);

@@ -6,6 +6,10 @@ import { defaultRemarkPlugins, Streamdown } from "streamdown";
 import { openExternalUrl } from "../../api/client";
 import { lazyCodeHighlighter } from "../../components/lazy-code-highlighter";
 import { isDesktopApp } from "../../utils/desktop-runtime";
+import { openArtifactView } from "../artifact-view/open-artifact-view";
+import { ArtifactCard } from "./ArtifactCard";
+import { artifactLinkOf, fileLinkOf, useChatOrigin, withArtifactLinks } from "./artifact-links";
+import { useOptionalChatContext } from "./chat-context";
 import { chipIndexOf, threadChipOf, withThreadChips } from "./inline-run";
 import { remarkLiteralHtml } from "./literal-html";
 import { ThreadChip } from "./ThreadChip";
@@ -59,7 +63,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
           components={components}
           remarkPlugins={remarkPlugins}
         >
-          {withThreadChips(content)}
+          {withArtifactLinks(withThreadChips(content))}
         </Streamdown>
       </div>
     </ChatLinkContext.Provider>
@@ -90,6 +94,8 @@ function ChatLink({
   if (thread !== null) return <ThreadChip threadId={thread} />;
   const chip = chipIndexOf(href);
   if (chip !== null) return <>{chips[chip] ?? null}</>;
+  const local = <LocalLink href={href}>{children}</LocalLink>;
+  if (artifactLinkOf(href) !== null || fileLinkOf(href) !== null) return local;
   return (
     <a
       href={href}
@@ -102,6 +108,44 @@ function ChatLink({
     </a>
   );
 }
+
+/** A link to an artifact (a pill) or to a file in the chat's workspace: both open the artifact view. */
+function LocalLink({ href, children }: { href: string | undefined; children?: ReactNode }) {
+  const chat = useOptionalChatContext();
+  const { threadId } = useChatOrigin();
+  const artifactId = artifactLinkOf(href);
+  const path = fileLinkOf(href);
+  if (!chat) return <span>{children}</span>;
+  if (artifactId) {
+    return (
+      <ArtifactCard
+        inline
+        artifactId={artifactId}
+        title={textOf(children) || "Artifact"}
+        kind="text"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      data-testid="chat-file-link"
+      data-path={path ?? undefined}
+      title={path ?? undefined}
+      onClick={() => path && openArtifactView(chat.projectId, { kind: "file", threadId, path })}
+      className="chat-file-link cursor-pointer text-running underline decoration-running/40 underline-offset-2 hover:decoration-running"
+    >
+      {children}
+    </button>
+  );
+}
+
+const textOf = (children: ReactNode): string =>
+  typeof children === "string"
+    ? children
+    : Array.isArray(children)
+      ? children.map(textOf).join("")
+      : "";
 
 function ChatCode({ children, className, ...props }: HTMLAttributes<HTMLElement> & ChildrenProps) {
   return (

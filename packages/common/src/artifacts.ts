@@ -195,8 +195,9 @@ export const ArtifactDetailSchema = z.object({
   /** Oldest first. */
   versions: z.array(ArtifactVersionSchema),
   versioned: z.boolean(),
-  /** The reply a diagram was made from (Visualize). */
+  /** The reply a diagram was made from (Visualize), and the type it was last drawn as. */
   originMessageId: z.string().nullable(),
+  originType: z.string().nullable(),
   expiresAt: z.string().nullable(),
 });
 export type ArtifactDetail = z.infer<typeof ArtifactDetailSchema>;

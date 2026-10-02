@@ -309,7 +309,7 @@ describe("workspace files", () => {
     mkdirSync(join(workspace, "docs"), { recursive: true });
     writeFileSync(join(workspace, "docs", "plan.md"), "# Plan");
     const url = (path: string) =>
-      `/api/projects/${projectId}/workspace-files?sessionId=${coordinator.id}&path=${encodeURIComponent(path)}`;
+      `/api/projects/${projectId}/workspace-files?path=${encodeURIComponent(path)}`;
 
     const read = await s.app.request(url("docs/plan.md"));
     expect(await read.text()).toBe("# Plan");
@@ -319,7 +319,7 @@ describe("workspace files", () => {
     const saved = await s.api<{ artifact: ArtifactDetail }>(
       "POST",
       `/api/projects/${projectId}/workspace-files/save`,
-      { sessionId: coordinator.id, path: "docs/plan.md" },
+      { path: "docs/plan.md" },
     );
     expect(saved.status).toBe(201);
     expect(saved.body.artifact).toMatchObject({

@@ -91,17 +91,22 @@ type Change = LiveOp | null | "reset";
 // What changed in one part: an op, nothing (null), or something no op can say ("reset").
 const partChange = (held: TurnPart, next: TurnPart, index: number): Change => {
   if (held.type === "tool" && next.type === "tool") return toolChange(held, next, index);
-  if (held.type === "steer" && next.type === "steer") {
-    return held.messageId === next.messageId ? null : "reset";
-  }
-  // An artifact's card is written once, whole.
-  if (held.type === "artifact" && next.type === "artifact") {
-    return held.toolId === next.toolId && held.version === next.version ? null : "reset";
-  }
+  if (!isProse(held) && !isProse(next)) return wholePartChange(held, next);
   if (!isProse(held) || !isProse(next) || held.type !== next.type) return "reset";
   if (!next.text.startsWith(held.text)) return "reset";
   const added = next.text.slice(held.text.length);
   return added ? { op: "append", index, text: added } : null;
+};
+
+// A steer, and an artifact's card, are written once, whole: the same part, or something else.
+const wholePartChange = (held: TurnPart, next: TurnPart): Change => {
+  if (held.type === "steer" && next.type === "steer") {
+    return held.messageId === next.messageId ? null : "reset";
+  }
+  if (held.type === "artifact" && next.type === "artifact") {
+    return held.toolId === next.toolId && held.version === next.version ? null : "reset";
+  }
+  return "reset";
 };
 
 const toolChange = (held: ToolPart, next: ToolPart, index: number): Change => {

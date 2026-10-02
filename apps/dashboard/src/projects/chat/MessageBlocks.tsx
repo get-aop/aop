@@ -1,6 +1,7 @@
 import type { MessageBlock, ThreadCardVariant } from "@aop/common";
 import { memo, type ReactNode, useMemo } from "react";
 import { PullRequestChip } from "../PullRequestChip";
+import { ArtifactCard } from "./ArtifactCard";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ChatThreadCard } from "./ChatThreadCard";
 import {
@@ -100,6 +101,16 @@ const GroupView = ({
       return <QuoteForwarded text={block.text} />;
     case "steer":
       return renderSteer?.(block.messageId) ?? null;
+    case "artifact":
+      return (
+        <ArtifactCard
+          artifactId={block.artifactId}
+          title={block.title}
+          kind={block.kind}
+          version={block.version}
+          action={block.action}
+        />
+      );
   }
 };
 

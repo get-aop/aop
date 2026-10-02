@@ -63,6 +63,7 @@ export const toArtifactDetail = (
     versions: shown,
     versioned: artifact !== null,
     originMessageId: artifact?.origin_message_id ?? null,
+    originType: artifact?.origin_type ?? null,
     expiresAt: expiresAtOf(row, retentionDays),
   };
 };

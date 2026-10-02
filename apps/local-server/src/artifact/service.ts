@@ -83,18 +83,19 @@ export interface ArtifactService {
   /** The diagram Visualize drew from a reply, if one is still in the Library. */
   byOriginMessage: (projectId: string, messageId: string) => Promise<ArtifactDetail | null>;
   /**
-   * A file in the workspace of one of the project's chats (a path a reply linked), read under the
+   * A file in the workspace of one of the project's chats (a path a reply linked): a thread's, or
+   * the coordinator's for no thread. Read under the
    * rules an agent's save follows: inside the workspace, never `.git`, within the size limit.
    */
   workspaceFile: (
     projectId: string,
-    sessionId: string,
+    threadId: string | null,
     path: string,
   ) => Promise<ArtifactResult<{ bytes: Uint8Array; mimeType: string; name: string }>>;
   /** Keeps a linked workspace file in the Library, as an artifact. */
   saveWorkspaceFile: (
     projectId: string,
-    sessionId: string,
+    threadId: string | null,
     path: string,
   ) => Promise<ArtifactResult<ArtifactSaved>>;
 }
@@ -121,8 +122,8 @@ export const createArtifactService = (
       const row = await env.artifacts.byOriginMessage(projectId, messageId);
       return row ? detailOf(env, projectId, row.item_id) : null;
     },
-    workspaceFile: async (projectId, sessionId, path) => {
-      const session = await sessionOf(env, projectId, sessionId);
+    workspaceFile: async (projectId, threadId, path) => {
+      const session = await sessionOf(env, projectId, threadId);
       if (!session) return fail({ code: "NO_WORKSPACE" });
       const read = await readAgentFile(session.workspace_path, path);
       if (!read.success) return fail(read.error);
@@ -134,8 +135,8 @@ export const createArtifactService = (
         name,
       };
     },
-    saveWorkspaceFile: async (projectId, sessionId, path) => {
-      const session = await sessionOf(env, projectId, sessionId);
+    saveWorkspaceFile: async (projectId, threadId, path) => {
+      const session = await sessionOf(env, projectId, threadId);
       if (!session) return fail({ code: "NO_WORKSPACE" });
       return create(env, session, {
         title: baseName(path).slice(0, ARTIFACT_LIMITS.titleMaxLength),
@@ -145,12 +146,16 @@ export const createArtifactService = (
   };
 };
 
+// A thread is its chat session; the coordinator's is the project's.
 const sessionOf = async (
   env: Env,
   projectId: string,
-  sessionId: string,
+  threadId: string | null,
 ): Promise<ChatSession | null> => {
-  const session = await env.ctx.chatSessionRepository.getById(sessionId);
+  const sessions = env.ctx.chatSessionRepository;
+  const session = threadId
+    ? await sessions.getById(threadId)
+    : await sessions.getCoordinator(projectId);
   return session?.project_id === projectId ? session : null;
 };
 

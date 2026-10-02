@@ -1,8 +1,10 @@
-import { CheckIcon, CopyIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, WorkflowIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/tooltip";
+import { openArtifactView } from "../artifact-view/open-artifact-view";
+import { startVisualize } from "../artifact-view/visualize/visualize-store";
 import { formatAgo } from "../selectors";
 import { useSharedNow } from "../use-now";
 import { formatTimestampTooltip } from "./chat-time";
@@ -15,10 +17,13 @@ export const MessageMeta = ({
   timestamp,
   copyText,
   align = "start",
+  visualize,
 }: {
   timestamp: string;
   copyText?: string | null;
   align?: "start" | "end";
+  /** An agent's reply: a button that draws a diagram of it in the artifact view. */
+  visualize?: { projectId: string; messageId: string };
 }) => (
   <div
     data-testid="message-meta"
@@ -28,9 +33,35 @@ export const MessageMeta = ({
     )}
   >
     {align === "start" && copyText ? <CopyMessageButton text={copyText} /> : null}
+    {visualize ? <VisualizeButton {...visualize} /> : null}
     <MessageTime timestamp={timestamp} />
     {align === "end" && copyText ? <CopyMessageButton text={copyText} /> : null}
   </div>
+);
+
+/**
+ * "Visualize": a diagram of this reply, made by a small separate model run and shown in the
+ * artifact view; a reply drawn before opens its diagram without a new run.
+ */
+const VisualizeButton = ({ projectId, messageId }: { projectId: string; messageId: string }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        type="button"
+        size="icon-xs"
+        variant="ghost"
+        aria-label="Visualize as a diagram"
+        data-testid="message-visualize"
+        onClick={() => {
+          startVisualize(projectId, messageId);
+          openArtifactView(projectId, { kind: "visualize", messageId });
+        }}
+      >
+        <WorkflowIcon className="size-3" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>Visualize as a diagram</TooltipContent>
+  </Tooltip>
 );
 
 // Its own component so the clock's tick redraws only the time, not the memoised message row.
