@@ -188,8 +188,8 @@ export interface PullRequestViewDetail {
   checks: PullRequestViewChecks;
   commits: PullRequestViewCommit[];
   timeline: PullRequestViewTimelineItem[];
-  /** How many timeline entries GitHub holds; the view shows the latest ones. */
-  timelineTotal: number;
+  /** How many older timeline entries GitHub holds beyond the latest ones read. */
+  timelineOmitted: number;
   reviewThreads: PullRequestViewReviewThread[];
   merge: PullRequestViewMergeBox;
   viewer: PullRequestViewViewer;

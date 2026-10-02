@@ -227,6 +227,21 @@ describe("detailOf", () => {
     ]);
   });
 
+  test("counts only the timeline entries GitHub holds beyond those read, however they fold", () => {
+    const commits = Array.from({ length: 3 }, (_, index) => ({
+      __typename: "PullRequestCommit",
+      commit: rawCommit(`${index}`.repeat(7)),
+    }));
+    expect(
+      detailOf(rawPullRequest({ timelineItems: { totalCount: 3, nodes: commits } }), context)
+        .timelineOmitted,
+    ).toBe(0);
+    expect(
+      detailOf(rawPullRequest({ timelineItems: { totalCount: 150, nodes: commits } }), context)
+        .timelineOmitted,
+    ).toBe(147);
+  });
+
   test("the polled part computes the same merge box as the full page", () => {
     const pr = rawPullRequest({ mergeStateStatus: "BEHIND" });
     const part = checksPartOf(pr, context);

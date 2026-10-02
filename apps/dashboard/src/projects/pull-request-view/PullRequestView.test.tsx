@@ -11,6 +11,7 @@ const { act, cleanup, fireEvent, render, screen, within } = await import("@testi
 const { PullRequestView } = await import("./PullRequestView");
 const { ConfirmationHost } = await import("../../components/ConfirmationHost");
 const { coordinatorMessage } = await import("./AskCoordinator");
+const { checkCounts } = await import("./PullRequestHeader");
 
 let host: ReturnType<typeof mockHost>;
 
@@ -127,6 +128,16 @@ describe("the PR View", () => {
     expect(screen.getByTestId("pr-header").getAttribute("data-compact")).toBe("true");
   });
 
+  test("says how many older events are only on GitHub, and nothing when none are", async () => {
+    await mount();
+    expect(screen.queryByTestId("pr-timeline-omitted")).toBeNull();
+    cleanup();
+    await mount(makeDetail({ timelineOmitted: 40 }));
+    expect(screen.getByTestId("pr-timeline-omitted").textContent).toContain(
+      "40 earlier events are only on GitHub.",
+    );
+  });
+
   test("the sidebar: the AOP thread that opened it, reviewers, assignees, labels, milestone, issues", async () => {
     const owner = makeThread({
       id: "t1",
@@ -166,6 +177,24 @@ describe("the PR View", () => {
       answerPullRequests(host, { detail: makeDetail() });
       await click(screen.getByTestId("pull-request-view-retry"));
       expect(screen.getByTestId("pr-title")).toBeTruthy();
+    });
+
+    test("a queued check is counted apart from one in progress", async () => {
+      expect(
+        checkCounts({
+          state: "pending",
+          total: 3,
+          successful: 1,
+          failing: 0,
+          pending: 2,
+          skipped: 0,
+          items: [
+            makeCheck({ status: "queued" }),
+            makeCheck({ status: "in_progress" }),
+            makeCheck(),
+          ],
+        }),
+      ).toBe("1 in progress, 1 queued, 1 successful checks");
     });
 
     test("a pull request GitHub does not have", async () => {

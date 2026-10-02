@@ -46,8 +46,8 @@ export const mergeBoxOf = (input: MergeBoxInput): PullRequestViewMergeBox => {
   if (blockers.length === 0 && head.mergeStateStatus === "BLOCKED") {
     blockers.push({
       kind: "rules",
-      title: "Merging is blocked",
-      detail: "The base branch's protection rules don't allow this merge yet.",
+      title: "Required by the base branch's rules",
+      detail: "GitHub reports that branch protection or a ruleset doesn't allow this merge yet.",
     });
   }
   return {

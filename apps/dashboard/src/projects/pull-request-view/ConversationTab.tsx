@@ -30,16 +30,17 @@ export const ConversationTab = ({
       }}
       verb="opened this"
     />
-    {detail.timelineTotal > detail.timeline.length ? (
-      <p className="pl-[52px] text-meta text-text-subtle">
-        Showing the latest {detail.timeline.length} of {detail.timelineTotal} events.{" "}
+    {detail.timelineOmitted > 0 ? (
+      <p data-testid="pr-timeline-omitted" className="pl-[52px] text-meta text-text-subtle">
+        {detail.timelineOmitted.toLocaleString()} earlier{" "}
+        {detail.timelineOmitted === 1 ? "event is" : "events are"} only on GitHub.{" "}
         <a
           href={detail.url}
           target="_blank"
           rel="noreferrer noopener"
           className="text-running hover:underline"
         >
-          See the rest on GitHub
+          See them on GitHub
         </a>
       </p>
     ) : null}

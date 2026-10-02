@@ -88,7 +88,7 @@ export const makeDetail = (
       url: null,
     },
   ],
-  timelineTotal: 1,
+  timelineOmitted: 0,
   reviewThreads: [],
   merge: {
     status: "ready",

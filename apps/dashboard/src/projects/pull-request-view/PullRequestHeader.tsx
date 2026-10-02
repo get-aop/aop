@@ -205,12 +205,19 @@ export const ChecksSummary = ({ detail }: { detail: Pick<PullRequestViewDetail, 
   );
 };
 
-export const checksSentence = (checks: PullRequestViewDetail["checks"]): string => {
-  if (checks.state === "success")
-    return `All checks have passed (${plural(checks.successful, "successful check")})`;
+export const checksSentence = (checks: PullRequestViewDetail["checks"]): string =>
+  checks.state === "success"
+    ? `All checks have passed (${checkCounts(checks)})`
+    : checkCounts(checks);
+
+/** "2 failing, 1 in progress, 5 successful checks": what the checks add up to, without a verdict. */
+export const checkCounts = (checks: PullRequestViewDetail["checks"]): string => {
+  const queued = checks.items.filter((check) => check.status === "queued").length;
+  const running = checks.pending - queued;
   const parts = [
     checks.failing > 0 ? `${checks.failing} failing` : null,
-    checks.pending > 0 ? `${checks.pending} in progress` : null,
+    running > 0 ? `${running} in progress` : null,
+    queued > 0 ? `${queued} queued` : null,
     checks.successful > 0 ? `${checks.successful} successful` : null,
     checks.skipped > 0 ? `${checks.skipped} skipped` : null,
   ].filter(Boolean);

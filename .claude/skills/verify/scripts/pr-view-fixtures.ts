@@ -189,7 +189,7 @@ export const fixturePullRequests = (): FixturePullRequest[] => [
       {
         path: "src/checkout.ts",
         line: 6,
-        resolved: false,
+        resolved: true,
         comments: [
           { author: "carol", body: "Key this by cart version too?" },
           { author: "ada", body: "Good call, will do." },

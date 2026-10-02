@@ -68,27 +68,9 @@ describe("the PR View routes", () => {
       write: () => ok("{}"),
     };
     gh = scriptedCommand((args) => {
-      if (args[0] === "api" && args[1] === "user")
-        return answers.signedIn
-          ? ok("ada\n")
-          : fail("To get started with GitHub CLI, please run:  gh auth login");
+      if (args[0] === "api" && args[1] === "user") return userAnswer();
       if (args[1] === "graphql") return answers.graphql();
-      const path = args.find((arg) => arg.startsWith("repos/")) ?? "";
-      const etag = args.find((arg) => arg.startsWith("If-None-Match: "))?.slice(15) ?? null;
-      if (args[1] === "-i" && path.includes("/rules/branches/")) {
-        return httpAnswer(
-          200,
-          [
-            {
-              type: "required_status_checks",
-              parameters: { required_status_checks: [{ context: "test" }] },
-            },
-          ],
-          { ETag: '"rules"' },
-        );
-      }
-      if (args[1] === "-i" && path.includes("/files"))
-        return answers.files(new URL(`https://x/${path}`).searchParams.get("page") ?? "", etag);
+      if (args[1] === "-i") return restAnswer(args);
       return answers.write(args);
     });
     const github = createGithubService(ctx, {
@@ -106,6 +88,25 @@ describe("the PR View routes", () => {
   afterEach(async () => {
     await db.destroy();
   });
+
+  const userAnswer = () =>
+    answers.signedIn
+      ? ok("ada\n")
+      : fail("To get started with GitHub CLI, please run:  gh auth login");
+
+  const RULES = [
+    {
+      type: "required_status_checks",
+      parameters: { required_status_checks: [{ context: "test" }] },
+    },
+  ];
+
+  const restAnswer = (args: string[]) => {
+    const path = args.find((arg) => arg.startsWith("repos/")) ?? "";
+    const etag = args.find((arg) => arg.startsWith("If-None-Match: "))?.slice(15) ?? null;
+    if (path.includes("/rules/branches/")) return httpAnswer(200, RULES, { ETag: '"rules"' });
+    return answers.files(new URL(`https://x/${path}`).searchParams.get("page") ?? "", etag);
+  };
 
   const local = (path: string, init: RequestInit = {}) =>
     app.request(`http://127.0.0.1:25150${path}`, init, LOOPBACK_PEER);
@@ -221,6 +222,30 @@ describe("the PR View routes", () => {
         deletions: 0,
         patch: null,
       });
+    });
+
+    test("a files page GitHub answered with something other than a list fails the read, instead of hiding files", async () => {
+      answers.files = (page) =>
+        httpAnswer(
+          200,
+          page === "1"
+            ? [{ filename: "a.ts", status: "added", additions: 1, deletions: 0 }]
+            : { truncated: "garbage" },
+          {},
+        );
+      answers.graphql = () =>
+        ok(
+          JSON.stringify({
+            data: {
+              repository: { ...rawRepo(), pullRequest: rawPullRequest({ changedFiles: 150 }) },
+            },
+          }),
+        );
+      const res = await local(`${PR}/files`);
+      expect(res.status).toBe(502);
+      expect(((await res.json()) as AnyJson).error).toBe(
+        "GitHub sent a list of files AOP could not read",
+      );
     });
 
     test("a paired device reads the page, read-only", async () => {

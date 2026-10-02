@@ -304,7 +304,7 @@ export const ReviewThreads = ({ threads }: { threads: PullRequestViewReviewThrea
   return (
     <section data-testid="pr-review-threads" className="flex flex-col gap-3 pl-[52px]">
       <h3 className="text-meta font-medium text-text">
-        Review conversations · {plural(open, "unresolved")}
+        Review conversations · {open} unresolved
         {threads.length > open ? `, ${threads.length - open} resolved` : ""}
       </h3>
       {threads.map((thread) => (

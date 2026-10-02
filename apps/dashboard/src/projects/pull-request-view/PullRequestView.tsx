@@ -50,7 +50,15 @@ export const PullRequestView = ({
   const actions = usePullRequestActions(key, view.detail, view.act);
   const [tab, setTab] = useState<PullRequestTab>("conversation");
 
-  if (view.error) return <LoadError error={view.error} onRetry={() => void view.refresh()} />;
+  if (view.error) {
+    return (
+      <LoadError
+        error={view.error}
+        retrying={view.refreshing}
+        onRetry={() => void view.refresh()}
+      />
+    );
+  }
   if (!view.detail) return <Loading />;
   const { detail } = view;
   const owner = threadOwningPullRequest(entry.threads, pullRequest);
@@ -205,7 +213,15 @@ const ERROR_HINT: Record<string, string> = {
   GITHUB_RATE_LIMITED: "Wait a few minutes, then try again.",
 };
 
-const LoadError = ({ error, onRetry }: { error: Error; onRetry: () => void }) => {
+const LoadError = ({
+  error,
+  retrying,
+  onRetry,
+}: {
+  error: Error;
+  retrying: boolean;
+  onRetry: () => void;
+}) => {
   const code = error instanceof ApiError ? error.code : "UNKNOWN";
   return (
     <div
@@ -226,9 +242,10 @@ const LoadError = ({ error, onRetry }: { error: Error; onRetry: () => void }) =>
         size="sm"
         className="mt-2"
         data-testid="pull-request-view-retry"
+        disabled={retrying}
         onClick={onRetry}
       >
-        Try again
+        {retrying ? "Trying…" : "Try again"}
       </Button>
     </div>
   );

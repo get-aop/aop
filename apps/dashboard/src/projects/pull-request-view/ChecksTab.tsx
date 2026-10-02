@@ -98,15 +98,20 @@ const CheckRow = ({ check, compact }: { check: PullRequestViewCheck; compact: bo
 export const EmptyTab = ({
   testId,
   title,
+  className,
   children,
 }: {
   testId: string;
   title: string;
+  className?: string;
   children: React.ReactNode;
 }) => (
   <div
     data-testid={testId}
-    className="flex flex-col items-center gap-1 rounded-card border border-dashed border-border-strong px-6 py-10 text-center"
+    className={cn(
+      "flex flex-col items-center gap-1 rounded-card border border-dashed border-border-strong px-6 py-10 text-center",
+      className,
+    )}
   >
     <p className="text-body font-medium text-text">{title}</p>
     <p className="text-meta text-text-muted">{children}</p>

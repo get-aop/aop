@@ -43,7 +43,7 @@ export const FilesTab = ({
 
   if (files.error) {
     return (
-      <EmptyTab testId="pr-files-error" title="Could not load the files">
+      <EmptyTab testId="pr-files-error" title="Could not load the files" className="m-6">
         {files.error}{" "}
         <button type="button" onClick={files.reload} className="text-running hover:underline">
           Try again

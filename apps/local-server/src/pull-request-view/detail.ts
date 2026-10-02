@@ -64,7 +64,7 @@ export const detailOf = (pr: RawPullRequest, context: DetailContext): PullReques
     checks,
     commits: itemsOf(pr.commits).map((node) => commitOf(node.commit)),
     timeline: timelineOf(itemsOf(pr.timelineItems)),
-    timelineTotal: pr.timelineItems.totalCount,
+    timelineOmitted: Math.max(0, pr.timelineItems.totalCount - itemsOf(pr.timelineItems).length),
     reviewThreads: reviewThreadsOf(pr),
     merge,
     viewer: context.viewer,

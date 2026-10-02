@@ -37,12 +37,13 @@ const load = (): FixturePullRequest[] =>
 const save = (prs: FixturePullRequest[]) => writeFileSync(statePath, JSON.stringify(prs));
 const flag = (name: string) => existsSync(join(dir, name));
 
+// Written synchronously: process.exit right after an async write to a pipe cuts it at 64 KB.
 const out = (text: string, code = 0): never => {
-  process.stdout.write(text);
+  writeFileSync(1, text);
   process.exit(code);
 };
 const fail = (message: string, code = 1): never => {
-  process.stderr.write(`${message}\n`);
+  writeFileSync(2, `${message}\n`);
   process.exit(code);
 };
 const field = (name: string): string | undefined => {

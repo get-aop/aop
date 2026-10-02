@@ -25,7 +25,7 @@ import {
 import { useLocalStorage } from "../../hooks/use-local-storage";
 import { CheckStatusIcon } from "./bits";
 import { CheckList } from "./ChecksTab";
-import { checksSentence } from "./PullRequestHeader";
+import { checkCounts } from "./PullRequestHeader";
 import { MERGE_LABEL, type PullRequestActions } from "./use-pull-request-actions";
 
 /**
@@ -200,7 +200,7 @@ const ChecksSection = ({ detail }: { detail: PullRequestViewDetail }) => {
           ) : null
         }
       >
-        {checks.total > 0 ? checksSentence(checks) : "This commit has no checks."}
+        {checks.total > 0 ? checkCounts(checks) : "This commit has no checks."}
       </Row>
       {open && checks.total > 0 ? (
         <div className="max-h-72 overflow-auto border-t border-border px-2 py-1">

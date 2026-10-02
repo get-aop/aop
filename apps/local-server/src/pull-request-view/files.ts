@@ -1,5 +1,5 @@
 import type { PullRequestViewFile, PullRequestViewFilesResponse } from "@aop/common";
-import type { GhRead } from "../github-cli/read.ts";
+import { type GhRead, ghFailure } from "../github-cli/read.ts";
 import type { EtagReads } from "./etag-reads.ts";
 
 const PAGE_SIZE = 100;
@@ -27,7 +27,10 @@ export const readPullRequestFiles = async (
   const files: PullRequestViewFile[] = [];
   for (const read of pageReads) {
     if (!read.ok) return read;
-    if (Array.isArray(read.value)) files.push(...read.value.map(fileOf));
+    // A page that is not a list is a broken answer; showing the rest would hide files silently.
+    if (!Array.isArray(read.value))
+      return ghFailure("GitHub sent a list of files AOP could not read");
+    files.push(...read.value.map(fileOf));
   }
   return { ok: true, value: { files, truncated: changedFiles > files.length } };
 };
