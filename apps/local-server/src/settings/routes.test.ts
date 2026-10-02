@@ -42,6 +42,9 @@ describe("settings/routes", () => {
         { key: "agent_cli_skip_permissions", value: "false" },
         { key: "chat_global_instructions", value: "" },
         { key: "display_name", value: "" },
+        { key: "library_retention_days", value: "30" },
+        { key: "library_project_cap_mb", value: "1024" },
+        { key: "library_host_cap_mb", value: "5120" },
         { key: "max_concurrent_runs", value: "4" },
         { key: "update_check", value: "true" },
       ]);

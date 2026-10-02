@@ -5,6 +5,7 @@ import {
   type TurnPart,
   threadCardVariant,
 } from "@aop/common";
+import { getLogger } from "@aop/infra";
 import { z } from "zod";
 import { parseMessageOrigin } from "../chat-session/message-origin.ts";
 import type {
@@ -15,6 +16,7 @@ import type {
 } from "../chat-session/session-hooks.ts";
 import type { ChatMessage, ChatSession } from "../db/schema.ts";
 import type { EventPublisher, PublisherTransaction } from "../event-log/publisher.ts";
+import { indexSentAttachments } from "../library/chat-index.ts";
 import { holdCoordinator, releaseCoordinator } from "../scheduling/hold.ts";
 import { createThreadRepository } from "../thread/repository.ts";
 import { statusAfterSchedule, type TurnEnd } from "../thread/state.ts";
@@ -56,6 +58,7 @@ export const createProjectSessionHooks = (publisher: EventPublisher): ProjectSes
     onUserMessageStored: async (tx, message) => {
       const session = await loadProjectSession(tx, message.session_id);
       if (!session) return;
+      await indexInLibrary(tx, session, message);
       if (session.kind === "thread") await startThreadWork(tx, session, message);
       // A person's message to a coordinator ends its wait on a rate limit: sending it is a retry.
       else await releaseCoordinator(tx.db, session.id);
@@ -116,6 +119,25 @@ const hear = (
   parts: readonly TurnPart[],
 ): void => {
   for (const listener of listeners) listener(session, parts);
+};
+
+const logger = getLogger("project", "session-hooks");
+
+// The Library's copy of what the person sent is a convenience: failing it must never refuse the
+// message. The daily cleanup indexes whatever this missed.
+const indexInLibrary = async (
+  tx: PublisherTransaction,
+  session: ChatSession,
+  message: ChatMessage,
+): Promise<void> => {
+  try {
+    await indexSentAttachments(tx.db, session, message);
+  } catch (error) {
+    logger.warn("Indexing message {messageId} in the Library failed: {error}", {
+      messageId: message.id,
+      error: String(error),
+    });
+  }
 };
 
 const loadProjectSession = async (

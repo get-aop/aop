@@ -53,6 +53,19 @@ const attachmentError = (c: Context, error: AttachmentError): Response => {
       return c.json({ error: "Project not found", code: error.code }, 404);
     case "IMAGE_NOT_FOUND":
       return c.json({ error: "Image not found", code: error.code }, 404);
+    case "IMAGE_REMOVED":
+      return c.json(
+        {
+          error:
+            error.reason === "expired"
+              ? "This file expired and was removed from the Library"
+              : "This file was deleted from the Library",
+          code: error.code,
+          reason: error.reason,
+          removedAt: error.removedAt,
+        },
+        410,
+      );
     case "EMPTY_IMAGE":
       return c.json({ error: "The image is empty", code: error.code }, 400);
     case "UNSUPPORTED_IMAGE":

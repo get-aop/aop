@@ -1,9 +1,14 @@
 import {
   DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   DEFAULT_MAX_CONCURRENT_RUNS,
+  LIBRARY_CAP_MB_MAX,
+  LIBRARY_DEFAULTS,
+  LIBRARY_RETENTION_DAYS_MAX,
   MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   MAX_CONCURRENT_RUNS_LIMIT,
   parseAgentCliCheckInterval,
+  parseLibraryCapMb,
+  parseLibraryRetentionDays,
   parseMaxConcurrentRuns,
 } from "@aop/common";
 import type { Setting } from "../db/schema.ts";
@@ -40,6 +45,15 @@ export const SettingKey = {
    */
   DISPLAY_NAME: "display_name",
   /**
+   * The Library's host-wide defaults (see library/retention.ts). Days an automatic item (a chat
+   * attachment, an agent's artifact) stays, 0 keeping it; a project may set its own.
+   */
+  LIBRARY_RETENTION_DAYS: "library_retention_days",
+  /** MB a project's Library may hold before its least recently used automatic items go; 0 is no cap. */
+  LIBRARY_PROJECT_CAP_MB: "library_project_cap_mb",
+  /** MB every project's Library together may hold, enforced the same way; 0 is no cap. */
+  LIBRARY_HOST_CAP_MB: "library_host_cap_mb",
+  /**
    * How many thread turns this host runs at once, a whole number from 1 to
    * `MAX_CONCURRENT_RUNS_LIMIT`. Turns beyond it wait in order (see scheduling/).
    */
@@ -59,6 +73,9 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.AGENT_CLI_SKIP_PERMISSIONS]: "false",
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
   [SettingKey.DISPLAY_NAME]: "",
+  [SettingKey.LIBRARY_RETENTION_DAYS]: String(LIBRARY_DEFAULTS.retentionDays),
+  [SettingKey.LIBRARY_PROJECT_CAP_MB]: String(LIBRARY_DEFAULTS.projectCapMb),
+  [SettingKey.LIBRARY_HOST_CAP_MB]: String(LIBRARY_DEFAULTS.hostCapMb),
   [SettingKey.MAX_CONCURRENT_RUNS]: String(DEFAULT_MAX_CONCURRENT_RUNS),
   [SettingKey.UPDATE_CHECK]: "true",
 };
@@ -87,6 +104,11 @@ const BOOLEAN_KEYS: readonly SettingKey[] = [
   SettingKey.AGENT_CLI_SKIP_PERMISSIONS,
 ];
 
+const LIBRARY_CAP_KEYS: readonly SettingKey[] = [
+  SettingKey.LIBRARY_PROJECT_CAP_MB,
+  SettingKey.LIBRARY_HOST_CAP_MB,
+];
+
 /** Why `value` cannot be saved under `key`, or null when it can. Free-text keys take any value. */
 export const validateSettingValue = (key: SettingKey, value: string): string | null => {
   if (key === SettingKey.MAX_CONCURRENT_RUNS && parseMaxConcurrentRuns(value) === null) {
@@ -94,6 +116,12 @@ export const validateSettingValue = (key: SettingKey, value: string): string | n
   }
   if (key === SettingKey.AGENT_CLI_CHECK_INTERVAL && parseAgentCliCheckInterval(value) === null) {
     return `${key} must be a whole number of minutes from 0 to ${MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES}`;
+  }
+  if (key === SettingKey.LIBRARY_RETENTION_DAYS && parseLibraryRetentionDays(value) === null) {
+    return `${key} must be a whole number of days from 0 to ${LIBRARY_RETENTION_DAYS_MAX}`;
+  }
+  if (LIBRARY_CAP_KEYS.includes(key) && parseLibraryCapMb(value) === null) {
+    return `${key} must be a whole number of MB from 0 to ${LIBRARY_CAP_MB_MAX}`;
   }
   if (BOOLEAN_KEYS.includes(key) && value !== "true" && value !== "false") {
     return `${key} must be "true" or "false"`;

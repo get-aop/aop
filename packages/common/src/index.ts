@@ -28,6 +28,7 @@ export {
 } from "./host-api.ts";
 export type { FieldLabels, ValidationIssue } from "./issues.ts";
 export { describeFirstIssue, describeIssue, describeIssuesByField } from "./issues.ts";
+export * from "./library.ts";
 export type { PlanUsage, PlanUsageResponse, PlanWindow } from "./plan-usage.ts";
 export { PlanUsageResponseSchema, PlanUsageSchema, PlanWindowSchema } from "./plan-usage.ts";
 export * from "./projects/index.ts";
