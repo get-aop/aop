@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseGithubRelease, parseReleaseFeed, ReleaseFeedSchema } from "@aop/common";
 import { generateReleaseChecksums } from "./checksums.ts";
+import { writeLatestMacYml } from "./macos-updater.ts";
 import {
   absoluteUpdaterUrls,
   buildFeedDocuments,
@@ -155,6 +156,27 @@ describe("buildFeedDocuments", () => {
     const docs = await buildFeedDocuments(input(dir));
 
     expect(Object.keys(docs.pointers)).not.toContain("latest/latest.yml");
+  });
+
+  test("the macOS latest-mac.yml under latest/ names the versioned zips of both architectures", async () => {
+    const dir = await releaseDir();
+    await writeFile(join(dir, "aop-macos-x64.zip"), "intel app");
+    await writeFile(join(dir, "aop-macos-arm64.zip"), "apple silicon app");
+    await writeLatestMacYml(dir, "0.10.5");
+
+    const docs = await buildFeedDocuments(input(dir));
+    const yml = docs.pointers["latest/latest-mac.yml"] ?? "";
+
+    expect(yml).toContain(`  - url: ${ORIGIN}/v0.10.5/aop-macos-x64.zip\n`);
+    expect(yml).toContain(`  - url: ${ORIGIN}/v0.10.5/aop-macos-arm64.zip\n`);
+    expect(yml).toContain(`path: ${ORIGIN}/v0.10.5/aop-macos-x64.zip\n`);
+    expect(yml).toStartWith("version: 0.10.5\n");
+  });
+
+  test("a release without the macOS zips has no latest-mac.yml pointer", async () => {
+    const docs = await buildFeedDocuments(input(await releaseDir()));
+
+    expect(Object.keys(docs.pointers)).not.toContain("latest/latest-mac.yml");
   });
 });
 

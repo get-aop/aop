@@ -4,9 +4,10 @@ name: Release
 #   - the host for macOS and Linux: aop-{linux,darwin}-{x64,arm64} plus runtime-assets.tar.gz,
 #     installed by scripts/installer/install.sh (one terminal command, no installer app);
 #   - the desktop app, a client of a host that launches no server on Windows: aop-macos-*.dmg and
-#     aop-windows-x64-setup.exe, with the two files the installed Windows app updates itself from:
-#     latest.yml and aop-windows-x64-setup.exe.blockmap (electron-updater reads them from
-#     getaop.com/latest/; the macOS app only shows a notice until it is signed);
+#     aop-windows-x64-setup.exe, with the files the installed apps update themselves from:
+#     latest.yml and aop-windows-x64-setup.exe.blockmap for Windows, aop-macos-*.zip and
+#     latest-mac.yml for macOS (electron-updater reads them from getaop.com/latest/; a macOS app
+#     updates itself only when it is Developer ID signed, and shows a notice otherwise);
 #   - the release feed on getaop.com (releases/latest.json and releases/vX.Y.Z.json), which every
 #     updater reads because this repository is private (scripts/release/release-feed.ts).
 # Windows has no host, CLI or server build.
@@ -155,6 +156,9 @@ jobs:
           path: |
             dist/release/aop-macos-x64.dmg
             dist/release/aop-macos-arm64.dmg
+            dist/release/aop-macos-x64.zip
+            dist/release/aop-macos-arm64.zip
+            dist/release/latest-mac.yml
           retention-days: 1
 
   # The Windows app is a client of a host: it bundles the dashboard and carries no server, so this
@@ -228,7 +232,8 @@ jobs:
         run: |
           for name in aop-linux-x64 aop-linux-arm64 aop-darwin-x64 aop-darwin-arm64 \
             aop-macos-x64.dmg aop-macos-arm64.dmg aop-windows-x64-setup.exe runtime-assets.tar.gz \
-            latest.yml aop-windows-x64-setup.exe.blockmap; do
+            latest.yml aop-windows-x64-setup.exe.blockmap \
+            aop-macos-x64.zip aop-macos-arm64.zip latest-mac.yml; do
             if [ ! -s "dist/release/$name" ]; then
               echo "Missing or empty release artifact: $name" >&2
               exit 1
@@ -261,6 +266,11 @@ jobs:
           [ "$expected" = "$actual" ] || fail "sha512 does not match the installer in this run"
           echo "latest.yml matches aop-windows-x64-setup.exe ${EXPECTED_VERSION}"
 
+      # The same for the macOS app: latest-mac.yml must name both zips of this run with their
+      # sha512 and size, for this version. The file is printed so the log shows the config.
+      - name: Check the macOS updater config
+        run: bun run ./scripts/release/macos-updater.ts check --dir dist/release --version "${{ needs.build.outputs.version }}"
+
       - name: Generate release checksums
         run: bun run ./scripts/release/checksums.ts dist/release
 
@@ -282,6 +292,9 @@ jobs:
             dist/release/aop-windows-x64-setup.exe
             dist/release/latest.yml
             dist/release/aop-windows-x64-setup.exe.blockmap
+            dist/release/aop-macos-x64.zip
+            dist/release/aop-macos-arm64.zip
+            dist/release/latest-mac.yml
             dist/release/runtime-assets.tar.gz
             dist/release/checksums.sha256
           retention-days: 1
@@ -333,6 +346,9 @@ jobs:
             dist/release/aop-windows-x64-setup.exe
             dist/release/latest.yml
             dist/release/aop-windows-x64-setup.exe.blockmap
+            dist/release/aop-macos-x64.zip
+            dist/release/aop-macos-arm64.zip
+            dist/release/latest-mac.yml
             dist/release/runtime-assets.tar.gz
             dist/release/checksums.sha256
 

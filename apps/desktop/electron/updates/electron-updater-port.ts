@@ -4,9 +4,10 @@ import type { AutoUpdaterPort } from "./app-updater";
 
 /**
  * electron-updater behind the app's port. The only file that imports it, and only a packaged app
- * builds it. The feed is `latest.yml` under getaop.com/latest/, which names the versioned
- * installer and its blockmap (deploy-r2.sh); it is set here as well as in `app-update.yml`, so
- * an app built before the repository's GitHub Releases stopped being the feed still finds it.
+ * builds it. The feed is getaop.com/latest/: `latest.yml` there names the versioned Windows
+ * installer and its blockmap, `latest-mac.yml` the versioned macOS zips (deploy-r2.sh). It is set
+ * here as well as in `app-update.yml`, so an app built before the repository's GitHub Releases
+ * stopped being the feed still finds it.
  */
 export const createElectronUpdaterPort = (feedOrigin?: string): AutoUpdaterPort => {
   autoUpdater.setFeedURL({ provider: "generic", url: desktopUpdaterFeedUrl(feedOrigin) });

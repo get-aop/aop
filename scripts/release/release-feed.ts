@@ -13,6 +13,7 @@ import {
 } from "@aop/common";
 import cac from "cac";
 import { RELEASE_CHECKSUM_ARTIFACTS } from "./checksums.ts";
+import { MAC_UPDATER_CONFIG } from "./macos-updater.ts";
 
 const CHECKSUMS_NAME = "checksums.sha256";
 const WINDOWS_UPDATER_CONFIG = "latest.yml";
@@ -32,8 +33,9 @@ export interface FeedInput {
 
 /**
  * Every feed document of one release, keyed by its path in the bucket (and on getaop.com). The
- * versioned ones never change; `releases/latest.json`, the GitHub-shaped copy and the Windows
- * `latest/latest.yml` are the pointers deploy-r2.sh flips last.
+ * versioned ones never change; `releases/latest.json`, the GitHub-shaped copy and the desktop
+ * apps' `latest/latest.yml` (Windows) and `latest/latest-mac.yml` (macOS) are the pointers
+ * deploy-r2.sh flips last.
  */
 export interface FeedDocuments {
   versioned: Record<string, string>;
@@ -85,10 +87,11 @@ export const buildFeedDocuments = async (input: FeedInput): Promise<FeedDocument
     "releases/latest.json": json,
     [githubCompatKey()]: `${JSON.stringify(githubShaped(feed), null, 2)}\n`,
   };
-  const windows = Bun.file(join(input.releaseDir, WINDOWS_UPDATER_CONFIG));
-  if (await windows.exists()) {
-    pointers[`latest/${WINDOWS_UPDATER_CONFIG}`] = absoluteUpdaterUrls(
-      await windows.text(),
+  for (const name of [WINDOWS_UPDATER_CONFIG, MAC_UPDATER_CONFIG]) {
+    const config = Bun.file(join(input.releaseDir, name));
+    if (!(await config.exists())) continue;
+    pointers[`latest/${name}`] = absoluteUpdaterUrls(
+      await config.text(),
       `${origin}/v${input.version}/`,
     );
   }
@@ -124,9 +127,10 @@ export const githubShaped = (feed: ReleaseFeed) => ({
 });
 
 /**
- * electron-updater resolves `latest.yml`'s relative file names against the folder it read it
- * from. The copy under `latest/` names the versioned files instead, so the installer it downloads
- * (and the blockmaps it compares) always belong to this release, whatever a cache still holds.
+ * electron-updater resolves the relative file names of `latest.yml` and `latest-mac.yml` against
+ * the folder it read them from. The copy under `latest/` names the versioned files instead, so the
+ * installer or zip it downloads (and the blockmaps it compares) always belong to this release,
+ * whatever a cache still holds.
  */
 export const absoluteUpdaterUrls = (yml: string, versionedBase: string): string =>
   yml.replace(

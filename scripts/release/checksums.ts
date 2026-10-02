@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import { basename, isAbsolute, join, resolve } from "node:path";
-
-const MAC_ARCHES = ["x64", "arm64"] as const;
+import { MAC_ARCHES, MAC_UPDATER_FILES } from "./macos-updater.ts";
 
 /**
  * The full set of release artifacts the central release job checksums. The host binaries are macOS
@@ -21,13 +20,19 @@ export const RELEASE_CHECKSUM_ARTIFACTS = [
 ];
 
 /**
- * Published with the release but not in checksums.sha256: electron-updater reads them from the
- * release to update the installed Windows app. `latest.yml` carries the installer's own sha512,
- * which the updater checks, and install.sh never looks at either file. deploy-r2.sh publishes
- * the blockmap beside the installer and a copy of latest.yml under `latest/`, which names the
- * versioned installer (release-feed.ts).
+ * Published with the release but not in checksums.sha256: electron-updater reads them to update
+ * the installed Windows app. `latest.yml` carries the installer's own sha512, which the updater
+ * checks, and install.sh never looks at either file. deploy-r2.sh publishes the blockmap beside
+ * the installer and a copy of latest.yml under `latest/`, which names the versioned installer
+ * (release-feed.ts).
  */
-export const RELEASE_UPDATER_FILES = ["latest.yml", "aop-windows-x64-setup.exe.blockmap"];
+export const WINDOWS_UPDATER_FILES = ["latest.yml", "aop-windows-x64-setup.exe.blockmap"];
+
+/**
+ * Every updater file of the release: the Windows ones and the macOS app's zips with their
+ * `latest-mac.yml` (macos-updater.ts), which likewise carries the zips' own sha512.
+ */
+export const RELEASE_UPDATER_FILES = [...WINDOWS_UPDATER_FILES, ...MAC_UPDATER_FILES];
 
 export const generateChecksumFile = async (
   files: string[],

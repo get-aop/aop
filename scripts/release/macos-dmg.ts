@@ -8,12 +8,12 @@ import {
   buildElectronResourcePlan,
   prepareElectronResources,
 } from "../desktop/prepare-electron-resources";
+import { MAC_ARCHES, type MacArch, macUpdateZipName, writeLatestMacYml } from "./macos-updater";
+
+export type { MacArch } from "./macos-updater";
 
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
 const DEFAULT_RELEASE_DIR = "dist/release";
-const MAC_ARCHES = ["x64", "arm64"] as const;
-
-export type MacArch = (typeof MAC_ARCHES)[number];
 
 export interface MacDmgPlan {
   appName: string;
@@ -21,6 +21,8 @@ export interface MacDmgPlan {
   binaryPath: string;
   builderDmgPath: string;
   builderOutputDir: string;
+  /** The zip of the app the installed macOS app updates itself from (macos-updater.ts). */
+  builderZipPath: string;
   dmgPath: string;
   releaseDir: string;
   resourcesDir: string;
@@ -28,6 +30,7 @@ export interface MacDmgPlan {
   version: string;
   volumeName: string;
   workspaceRoot: string;
+  zipPath: string;
 }
 
 export type MacSigningConfig =
@@ -84,6 +87,7 @@ export const buildMacDmgPlan = ({
     binaryPath: join(resolvedReleaseDir, `aop-darwin-${arch}`),
     builderDmgPath: join(builderOutputDir, `aop-macos-${arch}.dmg`),
     builderOutputDir,
+    builderZipPath: join(builderOutputDir, macUpdateZipName(arch)),
     dmgPath: join(resolvedReleaseDir, `aop-macos-${arch}.dmg`),
     releaseDir: resolvedReleaseDir,
     resourcesDir: join(root, "apps/desktop/resources"),
@@ -91,6 +95,7 @@ export const buildMacDmgPlan = ({
     version,
     volumeName: `AOP ${version} ${arch}`,
     workspaceRoot: root,
+    zipPath: join(resolvedReleaseDir, macUpdateZipName(arch)),
   };
 };
 
@@ -130,16 +135,17 @@ export const buildMacDmgArtifacts = async ({
 }: BuildMacDmgArtifactsOptions = {}): Promise<string[]> => {
   ensureMacHost();
   const buildVersion = version ?? (await readPackageVersion(workspaceRoot));
+  const plans = (arch ? [arch] : MAC_ARCHES).map((currentArch) =>
+    buildMacDmgPlan({ arch: currentArch, releaseDir, version: buildVersion, workspaceRoot }),
+  );
   const outputs: string[] = [];
-  for (const currentArch of arch ? [arch] : MAC_ARCHES) {
-    const plan = buildMacDmgPlan({
-      arch: currentArch,
-      releaseDir,
-      version: buildVersion,
-      workspaceRoot,
-    });
+  for (const plan of plans) {
     await buildSingleDmg(plan, signingConfig);
-    outputs.push(plan.dmgPath);
+    outputs.push(plan.dmgPath, plan.zipPath);
+  }
+  // It names the zip of every architecture, so a one-architecture build cannot write it.
+  if (!arch && plans[0]) {
+    outputs.push(await writeLatestMacYml(plans[0].releaseDir, buildVersion));
   }
   return outputs;
 };
@@ -209,6 +215,7 @@ const buildSingleDmg = async (plan: MacDmgPlan, signingConfig: MacSigningConfig)
       plan.workspaceRoot,
       "--mac",
       "dmg",
+      "zip",
       `--${plan.arch}`,
       "--publish",
       "never",
@@ -218,6 +225,11 @@ const buildSingleDmg = async (plan: MacDmgPlan, signingConfig: MacSigningConfig)
   );
   await assertFile(plan.builderDmgPath, "Electron Builder did not produce the expected DMG.");
   await cp(plan.builderDmgPath, plan.dmgPath);
+  await assertFile(
+    plan.builderZipPath,
+    "Electron Builder did not produce the expected update zip.",
+  );
+  await cp(plan.builderZipPath, plan.zipPath);
 
   for (const command of buildDmgNotarizationCommands(plan.dmgPath, signingConfig)) {
     await runCommand(

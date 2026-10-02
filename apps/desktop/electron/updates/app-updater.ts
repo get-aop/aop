@@ -47,9 +47,10 @@ const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Keeps the app current. In `auto` mode electron-updater downloads a release in the background
- * and installs it when the app restarts (Windows). In `notice` mode the app only looks at the
- * published release and says a newer one exists, with a link, because the macOS app is not
- * signed yet and Squirrel.Mac would refuse to install it. A failed look is logged, never shown.
+ * and installs it when the app restarts (Windows, and a Developer ID signed macOS app). In
+ * `notice` mode the app only looks at the published release and says a newer one exists, with a
+ * link, because the macOS app is not signed and Squirrel.Mac would refuse to install it. A failed
+ * look is logged, never shown.
  */
 export const createAppUpdater = (deps: AppUpdaterDeps): AppUpdater => {
   let state: AppUpdateState = { status: "idle" };

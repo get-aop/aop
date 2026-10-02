@@ -30,10 +30,11 @@ export const createElectronBuilderConfig = ({
     description: "AOP desktop app for running local coding-agent workflows.",
   },
   // The feed the installed app updates from: getaop.com/latest/, where deploy-r2.sh puts
-  // `latest.yml` (the repository is private, so its GitHub Releases cannot be read). This makes
-  // the Windows build write `latest.yml` and the installer's blockmap beside the installer, and
-  // `app-update.yml` into the app's resources (what electron-updater reads). The workflow still
-  // passes `--publish never`: nothing is uploaded from the build, the release job does that.
+  // `latest.yml` and `latest-mac.yml`. This makes the Windows build write `latest.yml` and the
+  // installer's blockmap beside the installer, and `app-update.yml` into the app's resources
+  // (what electron-updater reads). The macOS `latest-mac.yml` that ships is written by
+  // macos-updater.ts, because each architecture is a separate build. The workflow still passes
+  // `--publish never`: nothing is uploaded from the build, the release job does that.
   publish: [{ provider: "generic" as const, url: desktopUpdaterFeedUrl() }],
   files: ["dist/**/*", "dist-electron/**/*", "package.json"],
   extraResources: [
@@ -68,7 +69,11 @@ export const createElectronBuilderConfig = ({
     hardenedRuntime: signed,
     icon: "apps/desktop/build/icon.icns",
     notarize,
-    target: [{ target: "dmg", arch: ["x64", "arm64"] }],
+    // The DMG is what people install; the zip is what an installed, signed app updates from.
+    target: [
+      { target: "dmg", arch: ["x64", "arm64"] },
+      { target: "zip", arch: ["x64", "arm64"] },
+    ],
   },
   dmg: {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Electron Builder expands artifact placeholders.
