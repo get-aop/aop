@@ -36,6 +36,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - [Projects chat](./projects-chat.md) covers the coordinator chat (the middle pane): typing to the coordinator, live text, thread cards and chips, suggested threads, reload and restart catch-up, the "New" line for unseen replies, and a paused project.
 - [Projects thread pane and Overview](./projects-thread.md) covers a project's Overview (counters, groups, ordering) and a thread's screen: transcript with live text and tool calls, answering a question, steering, Stop, Resume, Resolve, Delete, the pull request bar with its honest refusals, the changes view, usage, and the run cap it depends on.
 - [Projects](./projects.md) covers the project, coordinator and thread API, driven with the fake runtime; the shell shows the result.
+- [Pull requests tab](./pull-requests.md) covers the threads panel's tab strip ("+" menu) and the Pull requests tab: rows, filters, search, sort, paging, refresh, not-signed-in and no-repository states, and opening a pull request in the PR View, against the fake `gh`.
 - [Project event stream](./project-stream.md) covers `GET /api/projects/:id/stream`: live entries, resume, restart, removal.
 - [Issues tab](./issues.md) covers the panel's Issues tab: GitHub and Linear issues against a fake `gh` and a fake Linear, grouping, filters, pull request chips, Start thread, the Linear connection, and every empty, error and not-connected state.
 - [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the attach dialog.
