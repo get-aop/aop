@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type ArtifactViewRef, parseRoute, projectScreenPath, type ProjectScreen } from "./router";
+import { type ArtifactViewRef, type ProjectScreen, parseRoute, projectScreenPath } from "./router";
 
 const roundTrip = (screen: ProjectScreen) => parseRoute(projectScreenPath(screen));
 
@@ -29,14 +29,19 @@ describe("artifact view addresses", () => {
   });
 
   test("addresses as written", () => {
-    expect(projectScreenPath({ name: "project", projectId: "p1", artifact: refs[1] as ArtifactViewRef })).toBe(
-      "/projects/p1/artifacts/lib_1/3",
-    );
-    expect(projectScreenPath({ name: "project", projectId: "p1", artifact: refs[2] as ArtifactViewRef })).toBe(
-      "/projects/p1/files/coordinator/docs%2Fplan.md",
-    );
     expect(
-      projectScreenPath({ name: "thread", projectId: "p1", threadId: "t1", artifact: refs[4] as ArtifactViewRef }),
+      projectScreenPath({ name: "project", projectId: "p1", artifact: refs[1] as ArtifactViewRef }),
+    ).toBe("/projects/p1/artifacts/lib_1/3");
+    expect(
+      projectScreenPath({ name: "project", projectId: "p1", artifact: refs[2] as ArtifactViewRef }),
+    ).toBe("/projects/p1/files/coordinator/docs%2Fplan.md");
+    expect(
+      projectScreenPath({
+        name: "thread",
+        projectId: "p1",
+        threadId: "t1",
+        artifact: refs[4] as ArtifactViewRef,
+      }),
     ).toBe("/projects/p1/threads/t1/visualize/smsg_1");
   });
 

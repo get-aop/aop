@@ -8,7 +8,12 @@ describe("withArtifactLinks", () => {
     );
     const targets = [...out.matchAll(/\]\(([^)]+)\)/g)].map((match) => match[1]);
     expect(targets.map((href) => artifactLinkOf(href))).toEqual(["lib_01abc", null, null, null]);
-    expect(targets.map((href) => fileLinkOf(href))).toEqual([null, "docs/plan.md", "/Users/me/x.json", null]);
+    expect(targets.map((href) => fileLinkOf(href))).toEqual([
+      null,
+      "docs/plan.md",
+      "/Users/me/x.json",
+      null,
+    ]);
   });
 
   test("leaves code, anchors, folders and malformed ids alone", () => {

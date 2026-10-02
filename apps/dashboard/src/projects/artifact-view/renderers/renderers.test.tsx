@@ -11,7 +11,12 @@ mock.module("../mermaid", () => ({
     if (source.includes("broken")) throw new Error("Parse error on line 2");
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><text>diagram</text><script>alert(1)</script></svg>';
   },
-  lazyMermaidPlugin: { name: "mermaid", type: "diagram", language: "mermaid", getMermaid: () => ({}) },
+  lazyMermaidPlugin: {
+    name: "mermaid",
+    type: "diagram",
+    language: "mermaid",
+    getMermaid: () => ({}),
+  },
   checkMermaid: async () => ({ valid: true }),
   loadMermaid: async () => ({}),
 }));
@@ -32,8 +37,17 @@ const value = { release: "0.11", checks: { tests: { pass: 4849, fail: 0 } }, lis
 describe("JsonTree", () => {
   test("opens two levels, folds and unfolds, and searches with a count", () => {
     render(<JsonTree value={value} />);
-    const paths = () => screen.getAllByTestId("json-row").map((row) => row.getAttribute("data-path"));
-    expect(paths()).toEqual(["$", "$.release", "$.checks", "$.checks.tests", "$.list", "$.list[0]", "$.list[1]"]);
+    const paths = () =>
+      screen.getAllByTestId("json-row").map((row) => row.getAttribute("data-path"));
+    expect(paths()).toEqual([
+      "$",
+      "$.release",
+      "$.checks",
+      "$.checks.tests",
+      "$.list",
+      "$.list[0]",
+      "$.list[1]",
+    ]);
 
     fireEvent.change(screen.getByTestId("json-search"), { target: { value: "4849" } });
     expect(screen.getByTestId("json-search-count").textContent).toBe("1 match");
@@ -54,7 +68,9 @@ describe("JsonTree", () => {
       value: { writeText: async (text: string) => void copied.push(text) },
     });
     render(<JsonTree value={value} />);
-    const row = screen.getAllByTestId("json-row").find((r) => r.getAttribute("data-path") === "$.checks.tests");
+    const row = screen
+      .getAllByTestId("json-row")
+      .find((r) => r.getAttribute("data-path") === "$.checks.tests");
     await act(async () => {
       fireEvent.click(row?.querySelector('[data-testid="json-copy-path"]') as Element);
       fireEvent.click(row?.querySelector('[data-testid="json-copy-value"]') as Element);
@@ -66,7 +82,11 @@ describe("JsonTree", () => {
 describe("CsvTable", () => {
   test("draws a header, numbered rows and says how big it is", () => {
     render(<CsvTable text={'name,size\n"a, b",1\nc,2'} />);
-    expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["#", "name", "size"]);
+    expect(screen.getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
+      "#",
+      "name",
+      "size",
+    ]);
     expect(screen.getAllByRole("row")[1]?.textContent).toBe("1a, b1");
     expect(screen.getByTestId("artifact-csv-summary").textContent).toBe("2 rows · 2 columns");
   });
@@ -95,7 +115,9 @@ describe("DiffView", () => {
   test("counts and marks what changed between two versions", () => {
     render(<DiffView before={"a\nb"} after={"a\nc"} beforeLabel="v1" afterLabel="v2" />);
     expect(screen.getByTestId("artifact-diff-summary").textContent).toContain("+1");
-    const kinds = [...document.querySelectorAll("[data-diff]")].map((row) => row.getAttribute("data-diff"));
+    const kinds = [...document.querySelectorAll("[data-diff]")].map((row) =>
+      row.getAttribute("data-diff"),
+    );
     expect(kinds).toEqual(["same", "removed", "added"]);
   });
 });
@@ -114,12 +136,18 @@ describe("MermaidView", () => {
   test("a diagram that does not parse says why and shows its source", async () => {
     render(<MermaidView source="broken" />);
     await waitFor(() => expect(screen.getByTestId("artifact-mermaid-error")).toBeTruthy());
-    expect(screen.getByTestId("artifact-mermaid-error").textContent).toContain("Parse error on line 2");
+    expect(screen.getByTestId("artifact-mermaid-error").textContent).toContain(
+      "Parse error on line 2",
+    );
   });
 });
 
 describe("ArtifactBody", () => {
-  const content = (kind: Parameters<typeof ArtifactBody>[0]["content"]["kind"], text: string | null, mimeType = "text/plain") => ({
+  const content = (
+    kind: Parameters<typeof ArtifactBody>[0]["content"]["kind"],
+    text: string | null,
+    mimeType = "text/plain",
+  ) => ({
     kind,
     blob: new Blob([text ?? "x"], { type: mimeType }),
     mimeType,
@@ -141,7 +169,9 @@ describe("ArtifactBody", () => {
       ["pdf", null, "artifact-pdf", "application/pdf"],
     ];
     for (const [kind, text, testId, mimeType] of cases) {
-      const { unmount } = render(<ArtifactBody content={content(kind, text, mimeType)} raw={false} />);
+      const { unmount } = render(
+        <ArtifactBody content={content(kind, text, mimeType)} raw={false} />,
+      );
       await waitFor(() => expect(screen.getByTestId(testId)).toBeTruthy());
       unmount();
     }

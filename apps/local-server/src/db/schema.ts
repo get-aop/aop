@@ -1,7 +1,7 @@
 import type { ChatRuntimeAccessMode, PullRequestState, ThreadStatus } from "@aop/common";
 import type { Generated, Insertable, Selectable, Updateable } from "kysely";
-import type { ChatHistoryDatabase } from "./chat-history-schema.ts";
 import type { ArtifactsDatabase } from "./artifacts-schema.ts";
+import type { ChatHistoryDatabase } from "./chat-history-schema.ts";
 import type { LibraryDatabase } from "./library-schema.ts";
 import type { ProjectsDatabase } from "./projects-schema.ts";
 import type { UsageDatabase } from "./usage-schema.ts";

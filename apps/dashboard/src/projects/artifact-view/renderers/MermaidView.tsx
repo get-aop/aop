@@ -112,7 +112,9 @@ const SvgMarkup = ({ svg, zoom }: { svg: string; zoom: number }) => {
   useEffect(() => {
     const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
     if (root.nodeName !== "svg") return;
-    const [, , width = 0, height = 0] = (root.getAttribute("viewBox") ?? "").split(/[\s,]+/).map(Number);
+    const [, , width = 0, height = 0] = (root.getAttribute("viewBox") ?? "")
+      .split(/[\s,]+/)
+      .map(Number);
     root.removeAttribute("height");
     root.setAttribute("width", "100%");
     root.style.maxWidth = "none";

@@ -26,7 +26,13 @@ const inChat = (node: React.ReactNode, threadId: string | null = null) => (
 
 const blocks: MessageBlock[] = [
   { type: "text", text: "Making the plan." },
-  { type: "tool", id: "toolu_1", name: "mcp aop aop artifact create", detail: null, status: "done" },
+  {
+    type: "tool",
+    id: "toolu_1",
+    name: "mcp aop aop artifact create",
+    detail: null,
+    status: "done",
+  },
   { type: "tool", id: "toolu_2", name: "Bash", detail: "ls", status: "done" },
   {
     type: "artifact",
@@ -72,7 +78,9 @@ describe("an artifact in the conversation", () => {
     const link = screen.getByTestId("chat-file-link");
     expect(link.getAttribute("data-path")).toBe("docs/plan.md");
     fireEvent.click(link);
-    expect(window.location.pathname).toBe("/projects/prj_1/threads/thr_1/files/thr_1/docs%2Fplan.md");
+    expect(window.location.pathname).toBe(
+      "/projects/prj_1/threads/thr_1/files/thr_1/docs%2Fplan.md",
+    );
   });
 });
 

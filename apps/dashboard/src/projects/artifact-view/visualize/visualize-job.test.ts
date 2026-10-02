@@ -36,10 +36,14 @@ const steps = (overrides: Partial<VisualizeSteps> = {}) => {
     generate: async () => record("generate", drawn(mermaid("flowchart TD\nA-->B"))),
     repair: async () => record("repair", drawn(mermaid("flowchart TD\nA-->C"))),
     check: async (source) =>
-      record(`check:${source}`, source.includes("-->") && !source.endsWith("-->")
-        ? { valid: true as const }
-        : { valid: false as const, error: "Parse error" }),
-    saveDiagram: async (_type, candidate) => record(`saveDiagram:${candidate.source}`, artifact("a1")),
+      record(
+        `check:${source}`,
+        source.includes("-->") && !source.endsWith("-->")
+          ? { valid: true as const }
+          : { valid: false as const, error: "Parse error" },
+      ),
+    saveDiagram: async (_type, candidate) =>
+      record(`saveDiagram:${candidate.source}`, artifact("a1")),
     saveOutline: async () => record("saveOutline", artifact("a2")),
     ...overrides,
   };
@@ -49,7 +53,10 @@ const steps = (overrides: Partial<VisualizeSteps> = {}) => {
 const run = async (s: VisualizeSteps, fresh = false, type: "auto" | "table" = "auto") => {
   const reported: VisualizeJob[] = [];
   const result = await runVisualize(s, type, fresh, (job) => reported.push(job));
-  return { result, phases: reported.map((job) => (job.status === "running" ? job.phase : job.status)) };
+  return {
+    result,
+    phases: reported.map((job) => (job.status === "running" ? job.phase : job.status)),
+  };
 };
 
 describe("runVisualize", () => {
@@ -64,8 +71,18 @@ describe("runVisualize", () => {
     const s = steps();
     const { result, phases } = await run(s.all);
     expect(phases).toEqual(["cache", "drawing", "checking", "saving"]);
-    expect(s.calls).toEqual(["existing", "generate", "check:flowchart TD\nA-->B", "saveDiagram:flowchart TD\nA-->B"]);
-    expect(result).toMatchObject({ status: "done", fallback: false, cached: false, costUsd: 0.001 });
+    expect(s.calls).toEqual([
+      "existing",
+      "generate",
+      "check:flowchart TD\nA-->B",
+      "saveDiagram:flowchart TD\nA-->B",
+    ]);
+    expect(result).toMatchObject({
+      status: "done",
+      fallback: false,
+      cached: false,
+      costUsd: 0.001,
+    });
   });
 
   test("repairs a diagram that does not parse, once, with the parser's words", async () => {
@@ -89,7 +106,11 @@ describe("runVisualize", () => {
       generate: async () => drawn(mermaid("flowchart TD\nA-->")),
       repair: async () => drawn(mermaid("still -->")),
     });
-    expect((await run(broken.all, true)).result).toMatchObject({ status: "done", fallback: true, artifact: { id: "a2" } });
+    expect((await run(broken.all, true)).result).toMatchObject({
+      status: "done",
+      fallback: true,
+      artifact: { id: "a2" },
+    });
     expect(broken.calls.at(-1)).toBe("saveOutline");
 
     const silent = steps({ generate: async () => Promise.reject(new Error("502")) });
@@ -98,12 +119,17 @@ describe("runVisualize", () => {
   });
 
   test("a table needs no check; a save that fails is a failed run", async () => {
-    const table = steps({ generate: async () => drawn({ kind: "markdown", source: "| a |\n| - |" }) });
+    const table = steps({
+      generate: async () => drawn({ kind: "markdown", source: "| a |\n| - |" }),
+    });
     const { phases } = await run(table.all, true, "table");
     expect(phases).toEqual(["drawing", "saving"]);
     expect(table.calls).toEqual(["saveDiagram:| a |\n| - |"]);
 
     const failing = steps({ saveDiagram: async () => Promise.reject(new Error("Library full")) });
-    expect((await run(failing.all, true)).result).toMatchObject({ status: "failed", error: "Library full" });
+    expect((await run(failing.all, true)).result).toMatchObject({
+      status: "failed",
+      error: "Library full",
+    });
   });
 });

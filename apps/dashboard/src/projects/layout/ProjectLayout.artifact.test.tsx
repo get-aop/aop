@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../../test/setup-dom";
-import { mockEmptyThreadHost, silentChatHost } from "./test-utils";
 import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "../test-utils";
+import { mockEmptyThreadHost, silentChatHost } from "./test-utils";
 
 setupDashboardDom();
 
@@ -26,7 +26,13 @@ afterEach(() => {
 });
 
 const project = makeProject({ id: "p1", name: "Checkout", repoIds: ["repo_1"] });
-const thread = makeThread({ id: "t1", projectId: "p1", title: "Audit", repoId: "repo_1", status: "idle" });
+const thread = makeThread({
+  id: "t1",
+  projectId: "p1",
+  title: "Audit",
+  repoId: "repo_1",
+  status: "idle",
+});
 
 const Routed = () => {
   const route = useRoute();
