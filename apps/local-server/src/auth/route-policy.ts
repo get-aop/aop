@@ -49,6 +49,12 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
   ["PUT", /^\/api\/projects\/[^/]+\/linear\/?$/],
   ["DELETE", /^\/api\/projects\/[^/]+\/linear\/?$/],
   ["POST", /^\/api\/projects\/[^/]+\/linear\/catalog\/?$/],
+  // Acts on GitHub as the host's `gh` login: comment, review, merge, rename, close, draft.
+  [
+    "POST",
+    /^\/api\/projects\/[^/]+\/github\/repos\/[^/]+\/pulls\/\d+\/(comments|reviews|merge)\/?$/,
+  ],
+  ["PATCH", /^\/api\/projects\/[^/]+\/github\/repos\/[^/]+\/pulls\/\d+\/?$/],
 ];
 
 export const routeAccess = (method: string, pathname: string): RouteAccess => {

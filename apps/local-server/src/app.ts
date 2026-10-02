@@ -31,6 +31,11 @@ import { createProjectRoutes } from "./project/routes.ts";
 import { createProjectServices, type ProjectServices } from "./project/services.ts";
 import { createPullRequestListRoutes } from "./pull-request-list/routes.ts";
 import { createPullRequestListService } from "./pull-request-list/service.ts";
+import { createPullRequestViewRoutes } from "./pull-request-view/routes.ts";
+import {
+  createPullRequestViewService,
+  type PullRequestViewService,
+} from "./pull-request-view/service.ts";
 import { createPullRequestWatchRoutes } from "./pull-request-watch/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
@@ -71,6 +76,8 @@ export interface AppDependencies {
   github?: GithubService;
   /** The Issues tab's GitHub and Linear reads; tests pass one over a fake `gh` and Linear. */
   issues?: IssueService;
+  /** The PR View's reads and writes; tests pass one over a fake `gh`. */
+  pullRequestView?: PullRequestViewService;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -148,6 +155,10 @@ export const createApp = (deps: AppDependencies) => {
   app.route(
     "/api/projects",
     createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
+  );
+  app.route(
+    "/api/projects",
+    createPullRequestViewRoutes(deps.pullRequestView ?? createPullRequestViewService({ github })),
   );
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
