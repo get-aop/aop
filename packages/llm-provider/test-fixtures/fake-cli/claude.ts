@@ -183,6 +183,8 @@ function renderBeat(beat: Beat, index: number, ctx: TurnContext): JsonLine[] {
       return block(ctx, { type: "thinking", thinking: beat.text, signature: "fake" });
     case "shell":
       return toolRound(ctx, toolUseId, "Bash", { command: beat.command }, beat.output, false);
+    case "tool":
+      return toolRound(ctx, toolUseId, beat.name, {}, "ok", false);
     case "ask":
       return renderAsk(ctx, toolUseId, beat.ask);
     case "mcp": {

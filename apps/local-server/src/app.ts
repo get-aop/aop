@@ -1,4 +1,5 @@
 import { extname } from "node:path";
+import { parseLiveViewMode } from "@aop/common";
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { type Context, Hono } from "hono";
@@ -13,7 +14,10 @@ import { createApiCors } from "./auth/cross-origin.ts";
 import { createOriginGuard } from "./auth/origin-guard.ts";
 import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
+import { cuaActivity } from "./computer-use/cua-activity.ts";
+import { createLiveViewService, type LiveViewService } from "./computer-use/live-view.ts";
 import { createComputerUseRoutes } from "./computer-use/routes.ts";
+import { createScreenCapture } from "./computer-use/screen-capture.ts";
 import { type ComputerUseService, computerUse } from "./computer-use/service.ts";
 import type { LocalServerContext } from "./context.ts";
 import { createEventStreamRoutes } from "./event-log/routes.ts";
@@ -43,6 +47,7 @@ import { createRoutineRoutes } from "./routine/routes.ts";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
+import { SettingKey } from "./settings/types.ts";
 import { createSuggestionRoutes } from "./suggestion/routes.ts";
 import { createThreadRoutes } from "./thread/routes.ts";
 import { createHostUpdateService } from "./update/host-update-service.ts";
@@ -72,6 +77,8 @@ export interface AppDependencies {
   agentClis?: AgentCliService;
   /** CUA Driver's status; tests pass one that probes a fake driver. */
   computerUse?: ComputerUseService;
+  /** The live view of the host's screen; tests pass one over a fake capture. */
+  liveView?: LiveViewService;
   /** The host's GitHub access; tests pass one over a fake `gh`. */
   github?: GithubService;
   /** The Issues tab's GitHub and Linear reads; tests pass one over a fake `gh` and Linear. */
@@ -104,10 +111,11 @@ export const createApp = (deps: AppDependencies) => {
     c.res = await maybeCompressJsonResponse(c.req.raw, c.res);
   });
 
-  // Request logging middleware — skip the noisy health endpoint
+  // Request logging middleware — skip the endpoints clients poll: health, and the live view's
+  // status and frames, which a watching viewer asks for several times a second
   app.use("/api/*", async (c, next) => {
     const path = new URL(c.req.url).pathname;
-    if (path.startsWith("/api/health")) {
+    if (path.startsWith("/api/health") || path.startsWith("/api/computer-use/live")) {
       return next();
     }
 
@@ -166,7 +174,13 @@ export const createApp = (deps: AppDependencies) => {
     "/api/agent-clis",
     createAgentCliRoutes(deps.agentClis ?? createHostAgentCliService(ctx)),
   );
-  app.route("/api/computer-use", createComputerUseRoutes(deps.computerUse ?? computerUse));
+  app.route(
+    "/api/computer-use",
+    createComputerUseRoutes(
+      deps.computerUse ?? computerUse,
+      deps.liveView ?? createHostLiveView(ctx),
+    ),
+  );
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
@@ -229,6 +243,14 @@ const createGithubBackedRoutes = (deps: AppDependencies, projects: ProjectServic
   );
   return routes;
 };
+
+/** The live view over the host's own capture and the activity every run's log tail reports to. */
+const createHostLiveView = (ctx: LocalServerContext): LiveViewService =>
+  createLiveViewService({
+    activity: cuaActivity,
+    startCapture: createScreenCapture(),
+    readMode: async () => parseLiveViewMode(await ctx.settingsRepository.get(SettingKey.LIVE_VIEW)),
+  });
 
 const NO_OAUTH =
   "This AOP host has no OAuth server. Its MCP endpoint refused the token in the URL: the session ended, or the host's MCP secret was rotated. The next turn gets a new token.";

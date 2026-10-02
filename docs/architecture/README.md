@@ -66,5 +66,6 @@ The desktop app also has the AOP Browser: a Chromium browser shown in the coordi
 ## Related guides
 
 - [The Issues tab](./issues-tab.md)
+- [The live view of the host's screen](./live-view.md)
 - [Runtimes](../RUNTIMES.md)
 - [MCP](../MCP.md)

@@ -84,6 +84,15 @@ describe("contentSecurityPolicy", () => {
     expect(policy).not.toContain("unsafe-eval");
   });
 
+  test("lets the live view fetch the host's frames and show them from memory, with nothing new", () => {
+    const directives = contentSecurityPolicy("dashboard", "http://100.64.0.7:25650").split("; ");
+
+    // The frames come from the host's API like any other request, then show as blob: URLs.
+    expect(directives).toContain("connect-src 'self' http://100.64.0.7:25650");
+    expect(directives.find((d) => d.startsWith("img-src"))?.split(" ")).toContain("blob:");
+    expect(directives.find((d) => d.startsWith("media-src"))).toBeUndefined();
+  });
+
   test("lets the dashboard show GitHub and Linear avatars but no other outside image", () => {
     const imgSrc = contentSecurityPolicy("dashboard", null)
       .split("; ")

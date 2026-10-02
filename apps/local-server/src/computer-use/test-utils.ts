@@ -1,4 +1,5 @@
 import type { CuaProbeDeps } from "./cua-driver.ts";
+import type { CaptureProcess, Frame, StartCapture } from "./screen-capture.ts";
 
 export const CUA_PATH = "/Applications/CuaDriver.app/Contents/MacOS/cua-driver";
 export const CHECKED_AT = "2026-10-01T12:00:00.000Z";
@@ -45,5 +46,98 @@ export const fakeCua = (
       return answer(options.permissions ?? GRANTED);
     },
     ...overrides,
+  };
+};
+
+/** One part of ffmpeg's `mpjpeg` output carrying `jpeg`. */
+export const mpjpegPart = (jpeg: Uint8Array): Uint8Array => {
+  const head = new TextEncoder().encode(
+    `--ffmpeg\r\nContent-type: image/jpeg\r\nContent-length: ${jpeg.length}\r\n\r\n`,
+  );
+  return new Uint8Array([...head, ...jpeg, 0x0d, 0x0a]);
+};
+
+/** A stand-in ffmpeg: the test writes frames and stderr to it, and ends it with an exit code. */
+export const fakeCaptureProcess = () => {
+  let stdout!: ReadableStreamDefaultController<Uint8Array>;
+  let stderr!: ReadableStreamDefaultController<Uint8Array>;
+  let exit!: (code: number) => void;
+  const state = { killed: false };
+  const process: CaptureProcess = {
+    stdout: new ReadableStream({
+      start(controller) {
+        stdout = controller;
+      },
+    }),
+    stderr: new ReadableStream({
+      start(controller) {
+        stderr = controller;
+      },
+    }),
+    exited: new Promise<number>((resolve) => {
+      exit = resolve;
+    }),
+    kill: () => {
+      state.killed = true;
+      exit(143);
+    },
+  };
+  return {
+    process,
+    state,
+    frame: (bytes: number[]) => stdout.enqueue(mpjpegPart(new Uint8Array(bytes))),
+    fail: (message: string, code = 1) => {
+      stderr.enqueue(new TextEncoder().encode(`${message}\n`));
+      stderr.close();
+      exit(code);
+    },
+  };
+};
+
+/**
+ * A capture the test controls: `start` counts starts, `frames` is what `latest` returns next,
+ * and `unavailable` makes every start answer that reason instead.
+ */
+export const fakeCapture = () => {
+  const control = {
+    starts: 0,
+    stops: 0,
+    running: false,
+    frame: null as Frame | null,
+    failure: null as string | null,
+    unavailable: null as string | null,
+  };
+  const start: StartCapture = () => {
+    if (control.unavailable) return { unavailable: control.unavailable };
+    control.starts += 1;
+    control.running = true;
+    return {
+      latest: () => control.frame,
+      failure: () => control.failure,
+      stop: () => {
+        control.stops += 1;
+        control.running = false;
+      },
+    };
+  };
+  return { control, start };
+};
+
+/** A clock and a hand-driven ticker for the live view. */
+export const manualTime = () => {
+  let at = Date.parse("2026-10-02T12:00:00.000Z");
+  const ticks = new Set<() => void>();
+  return {
+    now: () => at,
+    every: (_ms: number, run: () => void) => {
+      ticks.add(run);
+      return () => ticks.delete(run);
+    },
+    /** Moves the clock and runs the scheduled checks once. */
+    advance: (ms: number) => {
+      at += ms;
+      for (const run of [...ticks]) run();
+    },
+    tickers: () => ticks.size,
   };
 };

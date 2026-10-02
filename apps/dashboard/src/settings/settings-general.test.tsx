@@ -62,6 +62,22 @@ describe("SettingsGeneral", () => {
     expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
   });
 
+  test("offers the live view's three modes under Computer use", () => {
+    const values = { ...saved, live_view: "remote" };
+    render(
+      <SettingsGeneral
+        savedValues={values}
+        editedValues={values}
+        onChange={() => undefined}
+        onSaved={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Computer use")).toBeTruthy();
+    const select = screen.getByRole("combobox", { name: "Live view of the host's screen" });
+    expect(select.textContent).toBe("Remote viewers only");
+  });
+
   test("auto-saves an edited value after the debounce, not on the keystroke", async () => {
     const onSaved = mock(() => undefined);
     const edited = { ...saved, chat_global_instructions: "Be concise. No jargon." };

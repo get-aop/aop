@@ -1,12 +1,14 @@
 import {
   buildChannel,
   DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
+  DEFAULT_LIVE_VIEW_MODE,
   DEFAULT_MAX_CONCURRENT_RUNS,
   DEFAULT_ROUTINE_MAX_ACTIVE,
   DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES,
   LIBRARY_CAP_MB_MAX,
   LIBRARY_DEFAULTS,
   LIBRARY_RETENTION_DAYS_MAX,
+  LiveViewModeSchema,
   MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   MAX_CONCURRENT_RUNS_LIMIT,
   MAX_ROUTINE_MAX_ACTIVE,
@@ -61,6 +63,11 @@ export const SettingKey = {
   /** MB every project's Library together may hold, enforced the same way; 0 is no cap. */
   LIBRARY_HOST_CAP_MB: "library_host_cap_mb",
   /**
+   * When the dashboard shows the live view of the host's screen while a thread uses CUA:
+   * "off", "remote" (only to a paired device, the default) or "always" (see computer-use/live-view.ts).
+   */
+  LIVE_VIEW: "live_view",
+  /**
    * How many thread turns this host runs at once, a whole number from 1 to
    * `MAX_CONCURRENT_RUNS_LIMIT`. Turns beyond it wait in order (see scheduling/).
    */
@@ -100,6 +107,7 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.LIBRARY_RETENTION_DAYS]: String(LIBRARY_DEFAULTS.retentionDays),
   [SettingKey.LIBRARY_PROJECT_CAP_MB]: String(LIBRARY_DEFAULTS.projectCapMb),
   [SettingKey.LIBRARY_HOST_CAP_MB]: String(LIBRARY_DEFAULTS.hostCapMb),
+  [SettingKey.LIVE_VIEW]: DEFAULT_LIVE_VIEW_MODE,
   [SettingKey.MAX_CONCURRENT_RUNS]: String(DEFAULT_MAX_CONCURRENT_RUNS),
   [SettingKey.ROUTINE_MAX_ACTIVE]: String(DEFAULT_ROUTINE_MAX_ACTIVE),
   [SettingKey.ROUTINE_MIN_INTERVAL]: String(DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES),
@@ -185,6 +193,11 @@ const VALUE_RULES: readonly {
     keys: LIBRARY_CAP_KEYS,
     valid: (value) => parseLibraryCapMb(value) !== null,
     message: (key) => `${key} must be a whole number of MB from 0 to ${LIBRARY_CAP_MB_MAX}`,
+  },
+  {
+    keys: [SettingKey.LIVE_VIEW],
+    valid: (value) => LiveViewModeSchema.safeParse(value).success,
+    message: (key) => `${key} must be "off", "remote" or "always"`,
   },
   {
     keys: BOOLEAN_KEYS,
