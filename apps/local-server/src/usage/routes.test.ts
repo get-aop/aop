@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ProjectUsageSchema, RunUsageSchema, ThreadUsageSchema } from "@aop/common";
+import {
+  PlanUsageResponseSchema,
+  ProjectUsageSchema,
+  RunUsageSchema,
+  ThreadUsageSchema,
+} from "@aop/common";
 import { Hono } from "hono";
 import type { Kysely } from "kysely";
 import { createApp } from "../app.ts";
@@ -118,6 +123,21 @@ describe("usage routes behind the host's auth", () => {
 
   afterEach(async () => {
     await db.destroy();
+  });
+
+  test("/plan needs a device token from a remote client but not from the host itself", async () => {
+    const deps = { ctx: createCommandContext(db), startTimeMs: Date.now() };
+
+    const remote = await createApp(deps).request(
+      "http://mac.tail1234.ts.net/api/usage/plan",
+      {},
+      REMOTE_PEER,
+    );
+    const local = await createLoopbackApp(deps).request("/api/usage/plan");
+
+    expect(remote.status).toBe(401);
+    expect(local.status).toBe(200);
+    expect(PlanUsageResponseSchema.safeParse(await local.json()).success).toBe(true);
   });
 
   test.each(["/runs/x", "/threads/x", "/projects/x"])(

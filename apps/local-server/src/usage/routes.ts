@@ -2,16 +2,20 @@ import { UsageWindowSchema } from "@aop/common";
 import { Hono } from "hono";
 import type { LocalServerContext } from "../context.ts";
 import { createThreadChanges } from "../thread/changes.ts";
+import { getPlanUsage } from "./plan-usage.ts";
 import { createUsageService } from "./service.ts";
 
 /**
  * Read-only usage totals. A thread is a chat session, so `:threadId` is a session id (a
  * project's coordinator answers too). `since` (inclusive) and `until` (exclusive) are
- * ISO-8601 instants that bound when the runs finished; both are optional.
+ * ISO-8601 instants that bound when the runs finished; both are optional. `/plan` is the Claude
+ * plan's usage against its 5-hour and 7-day limits, the same for every project.
  */
 export const createUsageRoutes = (ctx: LocalServerContext) => {
   const usage = createUsageService(ctx.db, { threadChanges: createThreadChanges(ctx) });
   const routes = new Hono();
+
+  routes.get("/plan", async (c) => c.json({ usage: await getPlanUsage() }));
 
   routes.get("/runs/:runId", async (c) => {
     const result = await usage.getRunUsage(c.req.param("runId"));
