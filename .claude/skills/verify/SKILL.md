@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Launch an isolated AOP stack (Hono local-server + React dashboard + `aop` CLI) on free ports with a scratch AOP_HOME, drive it in Chrome or the CLI, and capture screenshots, command output, and DB/git state as proof. Use to confirm a change to apps/dashboard, apps/local-server, or apps/cli works in the running app, beyond unit tests.
+description: Launch an isolated AOP stack (Hono local-server + React dashboard + `aop` CLI) on free ports with a scratch AOP_HOME, drive it with the CLI or, when the task needs a browser check, with the session's computer-use tools (set by the AOP project's Computer Use setting), and capture screenshots, command output, and DB/git state as proof. Use to confirm a change to apps/dashboard, apps/local-server, or apps/cli works in the running app, beyond unit tests.
 ---
 
 # Verify AOP in the running app
@@ -9,7 +9,7 @@ AOP is a local control plane: `apps/local-server` (Bun + Hono + SQLite) is the s
 
 Read `features/README.md` before driving; the matching feature file is the recipe. A proof that drives one convenient entry point is incomplete when the map lists others.
 
-Surface: the dashboard (`/` lists projects, a project opens its thread grid, Settings is a dialog) and the CLI. The Electron app in `apps/desktop` is covered by [Desktop app](features/desktop.md): Claude in Chrome cannot drive its window, so that recipe drives it over the DevTools protocol (`scripts/desktop-cdp.ts`) and proves its cross-origin transport in Chrome.
+Surface: the dashboard (`/` lists projects, a project opens its thread grid, Settings is a dialog) and the CLI. The Electron app in `apps/desktop` is covered by [Desktop app](features/desktop.md): browser tools cannot drive its window, so that recipe drives it over the DevTools protocol (`scripts/desktop-cdp.ts`) and proves its cross-origin transport in a browser (Drive, below).
 
 All commands run from the repo root. `S=.claude/skills/verify/scripts`.
 
@@ -47,11 +47,19 @@ bun $S/verify-stack.ts aop --name <run> -- repo:init <path>
 bun $S/verify-stack.ts env --name <run>          # exports, to run other commands against the stack
 ```
 
-**Dashboard: Claude in Chrome, required for every finished task.** The user requires the agent to test each finished task in the real browser, and there is no scripted fallback. Load the tools in one call with ToolSearch (`select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__find,mcp__claude-in-chrome__read_console_messages,mcp__claude-in-chrome__browser_batch,mcp__claude-in-chrome__tabs_close_mcp`), call `tabs_context_mcp` first, and work in a NEW tab on the run's dashboard URL (`env.AOP_DASHBOARD_URL` in `.work/verify/<run>/state.json`). Batch the predictable steps with `browser_batch`. Prefer `find` or `read_page` with the `data-testid` names listed in the feature files over pixel coordinates. After each flow run `read_console_messages` with `onlyErrors: true`, and take screenshots with `save_to_disk: true`. Report the steps and what you saw. Close the tab you opened when done.
+**Dashboard: only when the task needs a browser check, or the person asks for one.** A task needs one when its change is in what the dashboard shows or does and the API, the CLI and the tests cannot prove it. Server, CLI, docs and test-only changes do not; prove those with the CLI, `curl` and the tests.
 
-Typing: the tab you drive is usually not the one in front (`document.visibilityState` is `hidden`, and other agents' tabs share the group), and then the `computer` tool's `type` and `key` actions can deliver no key events at all: the field keeps focus and stays empty, with no error. Fill fields with a native value setter and a bubbling `input` event in `javascript_tool` (`Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, text); el.dispatchEvent(new Event('input', {bubbles: true}))`, `HTMLInputElement` for inputs), read the value back, then click or press the real control. Clicks and `find` refs are not affected. A hidden tab also throttles timers, so keep a `javascript_tool` call under about 30 seconds (it times out at 45).
+Drive the dashboard only with the computer-use tools this session was given. In an AOP thread, the project's Computer Use setting decides them: **CUA** gives the `mcp__cua-driver__*` tools; **Model default** gives none. Never start a browser driver of your own (Playwright, headless Chrome over CDP, AppleScript; the desktop recipe's `desktop-cdp.ts` drives the Electron app, not a browser, and stays allowed), never hand the test to another agent CLI such as `codex`, and never drive the person's own Chrome profile. Without the tools, skip the dashboard drive, prove what you can through the CLI and the API, and say in the report that the dashboard was not driven and why.
 
-If Chrome shows an error page for a stack that `curl` reaches (`Frame with ID 0 is showing error page`), the tools are almost certainly driving a Chrome on a different computer. Call `list_connected_browsers`. If a browser with `isLocal: false` (for example a Windows Chrome) is `inUse`, ask the user which browser to use with AskUserQuestion, one option per browser, then call `select_browser`. Never pick a browser yourself. Do not work around it with another browser driver.
+With CUA, read `skill://cua-driver/SKILL.md` first (with ReadMcpResourceTool), and repeat one `session` label (`verify-<run>`) on every call:
+
+1. Launch a throwaway browser: `browser_prepare` with `allow_launch: true` and `profile: {mode: "isolated_new"}`. It starts a separate Chromium on a fresh profile and never touches the person's profiles.
+2. Bind it: `list_windows` for that browser's pid, then `get_browser_state` with the `pid` and `window_id`. It returns the `target_id` and the tab ids.
+3. `browser_navigate` to the run's dashboard URL (`env.AOP_DASHBOARD_URL` in `.work/verify/<run>/state.json`).
+4. Read the page with `get_browser_state` (`snapshot_format: "semantic_v2"`, a `query` with the `data-testid` name or the visible label from the feature file), act with `browser_click` and `browser_type` on the refs it returns (`replace: true` sets a field), and read the state again after each action: a newer snapshot or a navigation invalidates the old refs. Ask for `include_screenshot: true` at each checkpoint.
+5. When done, `end_session`; if the browser you launched is still running, `kill_app` with its pid only.
+
+The feature files were written for Claude in Chrome. Read their steps as intent: `find` and `read_page` are `get_browser_state` with a `query`; a "native value setter" fill is `browser_type` with `replace: true`; `javascript_tool` reads are `page` with `get_text` or `query_dom` (the mutating `page` actions are off by default; do not turn them on). The CUA tools read no browser console, so say in the report that it was not read.
 
 **Sending chat messages runs the real runtime.** A chat, coordinator or thread message on a `claude-code` session spawns that CLI with the user's own auth, including unknown slash commands like `/status`, which are forwarded to it. Only `/clear` and `/alias` are handled by AOP; `/workflow` now reaches the runtime. Do not send chat text unless the feature file says to, or the user has agreed to that runtime spend.
 
@@ -59,14 +67,14 @@ The exception is a stack seeded with `--fake-runtime` (`bun $S/seed.ts --name <r
 
 ## Evidence
 
-Everything goes to `.work/verify/<run>/evidence/` (the paths `save_to_disk` returns for screenshots, a `console.log` you write from `read_console_messages`, anything else you save). Server and dashboard logs are in `.work/verify/<run>/logs/`. Record the feature ID and entry point beside each artifact.
+Everything goes to `.work/verify/<run>/evidence/` (command output, API and DB reads, and a note of what each screenshot showed: CUA returns screenshots inline, not as files). Server and dashboard logs are in `.work/verify/<run>/logs/`. Record the feature ID and entry point beside each artifact.
 
 Proof standards:
 
 - Drive the real user path: the dashboard control, or the `aop` command a user types. Do not use test-only endpoints as the proof. The seed script uses HTTP and disk writes only to build baseline state.
 - Capture the action and the resulting state, not only the final screen: the command and its exit code, then a second view of the result.
 - Verify side effects next to what is visible: rows through the API (`/api/status` lists repos, `/api/chat-sessions` lists sessions), branches and files in the fixture repo with `git -C <repoPath>`.
-- A screenshot is not proof until you have looked at it. Read the browser console after every flow and report new errors.
+- A screenshot is not proof until you have looked at it. Where the tools can read the browser console, read it after every flow and report new errors.
 - `--fake-runtime` fakes the CLI only. The adapter, spawn, logs, git, SQLite, SSE, and the dashboard are real. Say so in the report; it does not verify a real model.
 
 ## Cleanup
