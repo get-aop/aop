@@ -9,8 +9,10 @@ name: Release
 #     latest-mac.yml for macOS (electron-updater reads them from getaop.com/latest/; a macOS app
 #     updates itself only when it is Developer ID signed, and shows a notice otherwise);
 #   - the release feed on getaop.com (releases/latest.json and releases/vX.Y.Z.json), which every
-#     updater reads because this repository is private (scripts/release/release-feed.ts).
+#     updater reads (scripts/release/release-feed.ts).
 # Windows has no host, CLI or server build.
+#
+# Actions are pinned to commit SHAs (version in the comment); Dependabot keeps them current.
 #
 # On a pull request, and on a manual dispatch with "publish" off (the default), the workflow builds
 # and checks every artifact and stops there: nothing is published, nothing is signed, and the
@@ -20,7 +22,13 @@ name: Release
 # Builds are UNSIGNED for now (decided for issue 342; signing is not settled). The signing secrets
 # are only read when the repository variable AOP_SIGN_RELEASES is "true" AND the run publishes (a
 # tag push or a dispatch with publish on; never a pull request or a build-only dispatch), so
-# setting a secret alone does not turn signing on. To sign, set the variable and make sure these secrets exist; no workflow change is needed:
+# setting a secret alone does not turn signing on. AOP_SIGN_RELEASES must be a repository variable,
+# not an environment one: it decides whether the packaging jobs enter the release environment.
+#
+# Every secret lives in the `release` environment: only v* tags may deploy to it, and each run
+# waits for the maintainer's approval there. Only the release job always enters it; the packaging
+# jobs enter it only when they sign. A publishing dispatch must therefore run from a v* tag.
+# To sign, set the variable and make sure these environment secrets exist; no workflow change is needed:
 #   macOS:   AOP_MACOS_CERTIFICATE_P12_BASE64, AOP_MACOS_CERTIFICATE_PASSWORD,
 #            AOP_MACOS_SIGN_IDENTITY, AOP_MACOS_NOTARIZE, APPLE_ID, APPLE_TEAM_ID,
 #            APPLE_APP_SPECIFIC_PASSWORD
@@ -61,11 +69,12 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.CHECKOUT_REF }}
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
 
@@ -86,7 +95,7 @@ jobs:
       # Cross-compiles the 4 host binaries (linux/darwin x x64/arm64) + runtime-assets.tar.gz.
       - run: bun run build:release
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-binaries
           path: dist/release
@@ -95,20 +104,23 @@ jobs:
   package-macos:
     needs: build
     runs-on: macos-latest
+    # Signing secrets live in the release environment; an unsigned or pull request run enters none.
+    environment: ${{ ((github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && vars.AOP_SIGN_RELEASES == 'true') && 'release' || '' }}
     env:
       SIGN_RELEASE: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && vars.AOP_SIGN_RELEASES == 'true' }}
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.CHECKOUT_REF }}
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
 
       - run: bun install --frozen-lockfile
 
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-binaries
           path: dist/release
@@ -150,7 +162,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ env.SIGN_RELEASE == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
         run: bun run package:macos-dmg -- --version "${{ needs.build.outputs.version }}"
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-macos
           path: |
@@ -166,14 +178,17 @@ jobs:
   package-windows:
     needs: build
     runs-on: windows-latest
+    # Signing secrets live in the release environment; an unsigned or pull request run enters none.
+    environment: ${{ ((github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && vars.AOP_SIGN_RELEASES == 'true') && 'release' || '' }}
     env:
       SIGN_RELEASE: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && vars.AOP_SIGN_RELEASES == 'true' }}
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.CHECKOUT_REF }}
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
 
@@ -188,7 +203,7 @@ jobs:
           AOP_WINDOWS_PFX_PASSWORD: ${{ env.SIGN_RELEASE == 'true' && secrets.AOP_WINDOWS_PFX_PASSWORD || '' }}
         run: bun run package:windows -- --version "${{ needs.build.outputs.version }}"
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-windows
           path: |
@@ -203,27 +218,28 @@ jobs:
     needs: [build, package-macos, package-windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.CHECKOUT_REF }}
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
 
       - run: bun install --frozen-lockfile
 
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-binaries
           path: dist/release
 
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-macos
           path: dist/release
 
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-windows
           path: dist/release
@@ -279,7 +295,7 @@ jobs:
           ls -l dist/release
           cat dist/release/checksums.sha256
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-all
           path: |
@@ -304,20 +320,24 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     needs: [build, assemble]
     runs-on: ubuntu-latest
+    # The Cloudflare secrets live in the release environment, which only v* tags may enter and which
+    # waits for the maintainer's approval.
+    environment: release
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ env.CHECKOUT_REF }}
+          persist-credentials: false
 
-      - uses: oven-sh/setup-bun@v2.2.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
 
       - run: bun install --frozen-lockfile
 
-      - uses: actions/download-artifact@v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-all
           path: dist/release
@@ -331,7 +351,7 @@ jobs:
         run: bun run ./scripts/release/release-notes.ts "${{ needs.build.outputs.tag }}" "${{ github.repository }}" dist/release-notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3.0.1
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           tag_name: ${{ needs.build.outputs.tag }}
           name: AOP ${{ needs.build.outputs.tag }}

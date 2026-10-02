@@ -9,6 +9,8 @@ import { writeLatestMacYml } from "./macos-updater.ts";
 const SCRIPT = join(import.meta.dir, "deploy-r2.sh");
 const VERSION = "9.9.9";
 const BUCKET = "test-bucket";
+// The exact wrangler the script pins, so bumping it needs no test change.
+const WRANGLER = (await Bun.file(SCRIPT).text()).match(/^WRANGLER="(.+)"$/m)?.[1];
 const PUBLIC_BASE = "https://releases.invalid";
 
 const REQUIRED_ARTIFACTS = [
@@ -139,7 +141,7 @@ describe("deploy-r2.sh release commit point", () => {
 
     const lines = await harness.readCallLog();
     expect(lines.filter((line) => line.includes("latest/version"))).toEqual([
-      `npx --yes wrangler@4 r2 object delete ${BUCKET}/latest/version --remote`,
+      `npx --yes ${WRANGLER} r2 object delete ${BUCKET}/latest/version --remote`,
     ]);
     expect(lines.some((line) => line.includes("install.ps1"))).toBe(false);
     expect(lines.some((line) => line.includes("aop-windows-x64.exe"))).toBe(false);
@@ -320,7 +322,7 @@ const artifactUrl = (name: string): string => `${PUBLIC_BASE}/v${VERSION}/${name
 
 const uploadIndex = (lines: string[], key: string): number =>
   lines.findIndex((line) =>
-    line.startsWith(`npx --yes wrangler@4 r2 object put ${BUCKET}/${key} `),
+    line.startsWith(`npx --yes ${WRANGLER} r2 object put ${BUCKET}/${key} `),
   );
 
 const verifyIndex = (lines: string[], name: string): number => lines.indexOf(probeLine(name));

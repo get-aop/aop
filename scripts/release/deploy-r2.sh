@@ -11,6 +11,8 @@ PUBLIC_BASE="${AOP_RELEASES_PUBLIC_BASE_URL:-https://getaop.com}"
 # so 24 x 15s (~6 minutes) guarantees at least one probe after that cache expires.
 VERIFY_ATTEMPTS="${AOP_RELEASES_VERIFY_ATTEMPTS:-24}"
 VERIFY_DELAY_SECONDS="${AOP_RELEASES_VERIFY_DELAY_SECONDS:-15}"
+# Exact version: this runs with the Cloudflare token, so a new wrangler release must not run unreviewed.
+WRANGLER="wrangler@4.146.0"
 
 if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] || [ -z "$BUCKET" ]; then
   echo "Missing Cloudflare R2 deploy env: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, AOP_RELEASES_R2_BUCKET" >&2
@@ -38,7 +40,7 @@ upload_artifact() {
   fi
 
   echo "Uploading ${name} to R2 bucket ${BUCKET}/v${VERSION}/"
-  npx --yes wrangler@4 r2 object put "${BUCKET}/v${VERSION}/${name}" \
+  npx --yes "$WRANGLER" r2 object put "${BUCKET}/v${VERSION}/${name}" \
     --file "$source_path" \
     --remote \
     --content-type "$content_type" \
@@ -81,7 +83,7 @@ upload_object() {
   local cache_control="$4"
 
   echo "Uploading ${key} to R2 bucket ${BUCKET}/"
-  npx --yes wrangler@4 r2 object put "${BUCKET}/${key}" \
+  npx --yes "$WRANGLER" r2 object put "${BUCKET}/${key}" \
     --file "$source_path" \
     --remote \
     --content-type "$content_type" \
@@ -169,7 +171,7 @@ upload_feed_document "releases/latest.json" "application/json"
 # AOP 0.9 read this file and nothing has written it since; a stale version there misleads
 # whoever reads it, so it goes. Deleting a key that is already gone is not an error.
 echo "Removing the retired latest/version pointer"
-npx --yes wrangler@4 r2 object delete "${BUCKET}/latest/version" --remote || true
+npx --yes "$WRANGLER" r2 object delete "${BUCKET}/latest/version" --remote || true
 
 # The host install script is this release's commit point. It carries the release's own version, so
 # `curl .../install.sh | sh` installs exactly this release and no "latest version" file is needed.
