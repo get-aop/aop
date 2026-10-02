@@ -4,9 +4,12 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
+  CHANNELS,
   describeReleaseFile,
   latestReleaseApiUrl,
   RELEASE_FEED_ORIGIN,
+  parseReleaseChannel,
+  type ReleaseChannel,
   type ReleaseFeed,
   type ReleaseFeedFile,
   releaseNotesUrl,
@@ -29,6 +32,13 @@ export interface FeedInput {
   publishedAt: string;
   /** The public origin the files are served from, `https://getaop.com`. */
   origin?: string;
+  /**
+   * `nightly` describes an AOP Nightly build (docs/NIGHTLY.md): it carries its channel and
+   * commit, and has no GitHub-shaped copy, because no nightly is a GitHub release.
+   */
+  channel?: ReleaseChannel;
+  /** The commit the build was made from. */
+  commit?: string;
 }
 
 /**
@@ -75,6 +85,8 @@ export const buildReleaseFeed = async (input: FeedInput): Promise<ReleaseFeed> =
     notes: input.notes,
     notesUrl: releaseNotesUrl(input.version, origin),
     files,
+    ...(input.commit ? { commit: input.commit } : {}),
+    ...(input.channel === "nightly" ? { channel: "nightly" } : {}),
   };
 };
 
@@ -83,10 +95,10 @@ export const buildFeedDocuments = async (input: FeedInput): Promise<FeedDocument
   const feed = await buildReleaseFeed(input);
   const json = `${JSON.stringify(feed, null, 2)}\n`;
   const origin = (input.origin ?? RELEASE_FEED_ORIGIN).replace(/\/+$/, "");
-  const pointers: Record<string, string> = {
-    "releases/latest.json": json,
-    [githubCompatKey()]: `${JSON.stringify(githubShaped(feed), null, 2)}\n`,
-  };
+  const pointers: Record<string, string> = { "releases/latest.json": json };
+  if (input.channel !== "nightly") {
+    pointers[githubCompatKey()] = `${JSON.stringify(githubShaped(feed), null, 2)}\n`;
+  }
   for (const name of [WINDOWS_UPDATER_CONFIG, MAC_UPDATER_CONFIG]) {
     const config = Bun.file(join(input.releaseDir, name));
     if (!(await config.exists())) continue;
@@ -170,7 +182,9 @@ const main = async (): Promise<void> => {
     .option("--version <version>", "The release version, x.y.z")
     .option("--notes-file <path>", "Markdown notes; missing means empty notes")
     .option("--published-at <iso>", "When the release was published")
-    .option("--origin <url>", "The public origin", { default: RELEASE_FEED_ORIGIN })
+    .option("--origin <url>", "The public origin; the channel's own by default")
+    .option("--channel <channel>", "stable, or nightly for AOP Nightly", { default: "stable" })
+    .option("--commit <sha>", "The commit the build was made from")
     .option("--out <path>", "Where to write the documents, by bucket key");
   const { options } = cli.parse();
   if (!options.version || !options.out) {
@@ -179,12 +193,15 @@ const main = async (): Promise<void> => {
   const notesFile = options.notesFile ? Bun.file(String(options.notesFile)) : null;
   const notes = notesFile && (await notesFile.exists()) ? (await notesFile.text()).trim() : "";
   if (!notes) console.warn("No release notes found; the feed carries empty notes");
+  const channel = parseReleaseChannel(String(options.channel));
   const docs = await buildFeedDocuments({
     releaseDir: String(options.dir),
     version: String(options.version),
     notes,
     publishedAt: String(options.publishedAt ?? new Date().toISOString()),
-    origin: String(options.origin),
+    origin: String(options.origin ?? CHANNELS[channel].feedOrigin),
+    channel,
+    commit: options.commit ? String(options.commit) : undefined,
   });
   await writeFeedDocuments(docs, String(options.out));
   console.log(
