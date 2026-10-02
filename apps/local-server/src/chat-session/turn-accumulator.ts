@@ -10,6 +10,7 @@ import type { ProgressChunk } from "./stream-progress-parse.ts";
 import { clip } from "./turn-parts.ts";
 
 type CommandChunk = Extract<ProgressChunk, { kind: "command" }>;
+type ArtifactChunk = Extract<ProgressChunk, { kind: "artifact" }>;
 type ToolChunk = Extract<ProgressChunk, { kind: "tool" }>;
 type StreamStart = Extract<ProgressChunk, { kind: "stream-start" }>;
 type StreamDelta = Extract<ProgressChunk, { kind: "stream-delta" }>;
@@ -24,6 +25,12 @@ interface ToolUpdate {
   /** For runtimes with no call ids: the detail that identifies the running call. */
   matchDetail?: string;
 }
+
+/** The AOP tools that make artifacts, as a turn's parts name them (see humanizeToolName). */
+const ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "mcp aop aop artifact create",
+  "mcp aop aop artifact update",
+]);
 
 /** A shell command runs as a tool call of this name, with the command line as its detail. */
 const SHELL_TOOL_NAME = "Shell";
@@ -75,6 +82,9 @@ export const createTurnAccumulator = ({ promptUuid }: { promptUuid?: string } = 
       case "user-message":
         applySteer(chunk.uuid);
         break;
+      case "artifact":
+        applyArtifact(chunk);
+        break;
       default:
         applyStream(chunk);
     }
@@ -122,6 +132,16 @@ export const createTurnAccumulator = ({ promptUuid }: { promptUuid?: string } = 
     if (!messageId) return;
     if (parts.some((part) => part.type === "steer" && part.messageId === messageId)) return;
     parts.push({ type: "steer", messageId });
+  }
+
+  // The card follows the call that made it; any other tool's result naming an artifact is ignored.
+  function applyArtifact(chunk: ArtifactChunk): void {
+    const tool = parts.find(
+      (part): part is ToolPart => part.type === "tool" && part.id === chunk.itemId,
+    );
+    if (!tool || !ARTIFACT_TOOL_NAMES.has(tool.name)) return;
+    if (parts.some((part) => part.type === "artifact" && part.toolId === chunk.itemId)) return;
+    parts.push({ type: "artifact", toolId: chunk.itemId, ...chunk.ref });
   }
 
   // Claude writes a block's finished copy before it closes the block, so a block that closes

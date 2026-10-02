@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { TurnPart } from "@aop/common";
+import { type ArtifactResultRef, formatArtifactMarker, type TurnPart } from "@aop/common";
 import { generateTypeId, typeIdToUuid } from "@aop/infra";
 import type { ProgressChunk } from "./stream-progress-parse.ts";
 import { parseStreamProgressLines } from "./stream-progress-parse.ts";
@@ -190,6 +190,58 @@ describe("createTurnAccumulator", () => {
     expect(parts).toEqual([
       tool({ id: "toolu_1", name: "Bash", detail: "bun test", status: "failed" }),
       tool({ id: "toolu_2", name: "Task", detail: "Inspect", status: "done" }),
+    ]);
+  });
+
+  test("an AOP artifact tool's result becomes an artifact card after its call", () => {
+    const ref = {
+      artifactId: "lib_1",
+      version: 1,
+      title: "Release plan",
+      kind: "markdown",
+      action: "created",
+    };
+    const result = (id: string, text: string, isError = false) => ({
+      type: "tool_result",
+      tool_use_id: id,
+      content: [{ type: "text", text }],
+      is_error: isError,
+    });
+    const marker = `Saved.\n${formatArtifactMarker(ref as ArtifactResultRef)}`;
+    const parts = turnOfEvents(
+      {
+        type: "assistant",
+        message: {
+          content: [
+            { id: "toolu_1", type: "tool_use", name: "mcp__aop__aop_artifact_create", input: {} },
+            { id: "toolu_2", type: "tool_use", name: "Bash", input: { command: "cat x" } },
+            { id: "toolu_3", type: "tool_use", name: "mcp__aop__aop_artifact_update", input: {} },
+          ],
+        },
+      },
+      {
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            result("toolu_1", marker),
+            // A marker another tool printed is not an artifact the turn made.
+            result("toolu_2", marker),
+            // Nor is a failed call's.
+            result("toolu_3", marker, true),
+          ],
+        },
+      },
+      {
+        type: "user",
+        message: { role: "user", content: [result("toolu_1", marker)] },
+      },
+    );
+    expect(parts).toEqual([
+      tool({ id: "toolu_1", name: "mcp aop aop artifact create", detail: null, status: "done" }),
+      tool({ id: "toolu_2", name: "Bash", detail: "cat x", status: "done" }),
+      tool({ id: "toolu_3", name: "mcp aop aop artifact update", detail: null, status: "failed" }),
+      { type: "artifact", toolId: "toolu_1", ...ref } as TurnPart,
     ]);
   });
 

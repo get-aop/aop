@@ -1,5 +1,6 @@
 /** Provider-agnostic JSONL → stream chunks. */
 
+import { ARTIFACT_RESULT_MARKER, type ArtifactResultRef, parseArtifactMarker } from "@aop/common";
 import { formatToolInput, replayedUuid } from "@aop/llm-provider";
 
 type StreamedBlock = "text" | "thinking";
@@ -39,7 +40,9 @@ export type ProgressChunk =
       failed?: boolean;
     }
   /** Claude echoed a user message where the model took it (`--replay-user-messages`). */
-  | { kind: "user-message"; uuid: string };
+  | { kind: "user-message"; uuid: string }
+  /** A tool call's result named an artifact it made (the AOP artifact tools' marker line). */
+  | { kind: "artifact"; itemId: string; ref: ArtifactResultRef };
 
 /**
  * Parse one JSONL line from a chat runtime log into a progressive chunk.
@@ -237,8 +240,24 @@ const extractClaudeToolResults = (content: unknown): ProgressChunk[] => {
     if (!isRecord(block) || block.type !== "tool_result") return [];
     const itemId = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
     if (!itemId) return [];
-    return [{ kind: "tool", phase: "done", name: "Tool", itemId, failed: block.is_error === true }];
+    const failed = block.is_error === true;
+    const done: ProgressChunk = { kind: "tool", phase: "done", name: "Tool", itemId, failed };
+    const ref = failed ? null : artifactOfResult(block.content);
+    return ref ? [done, { kind: "artifact", itemId, ref }] : [done];
   });
+};
+
+// Only an MCP result (text blocks) is read, and only for the marker: what tools return is
+// otherwise never kept. The accumulator still checks the call was an AOP artifact tool's.
+const artifactOfResult = (content: unknown): ArtifactResultRef | null => {
+  if (!Array.isArray(content)) return null;
+  for (const block of content) {
+    if (!isRecord(block) || block.type !== "text" || typeof block.text !== "string") continue;
+    if (!block.text.includes(ARTIFACT_RESULT_MARKER)) continue;
+    const ref = parseArtifactMarker(block.text);
+    if (ref) return ref;
+  }
+  return null;
 };
 
 const isShellToolName = (tool: string): boolean => {

@@ -19,6 +19,7 @@ import { createEventStreamRoutes } from "./event-log/routes.ts";
 import { createFsRoutes } from "./fs/routes.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
+import { createArtifactRoutes } from "./artifact/routes.ts";
 import { createLibraryRoutes } from "./library/routes.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
 import { createMcpSecretRoutes } from "./mcp/secret-routes.ts";
@@ -131,6 +132,7 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createLibraryRoutes(projects.library));
+  app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
   app.route("/api", createThreadRoutes(projects));
   app.route("/api", createSuggestionRoutes(projects));
   app.route("/api", createPullRequestWatchRoutes(projects));

@@ -65,3 +65,25 @@ describe("appendSystemPrompt", () => {
     expect(valueAfter(cmd, "--append-system-prompt")).toBe(text);
   });
 });
+
+describe("systemPrompt and noSessionPersistence", () => {
+  test("replace the CLI's prompt and keep no session, before the prompt and its variadic flags", () => {
+    const cmd = build({
+      prompt: "draw it",
+      systemPrompt: "Answer with Mermaid only.",
+      noSessionPersistence: true,
+      builtInTools: [],
+    });
+
+    expect(valueAfter(cmd, "--system-prompt")).toBe("Answer with Mermaid only.");
+    expect(cmd).toContain("--no-session-persistence");
+    expect(cmd.indexOf("--system-prompt")).toBeLessThan(cmd.indexOf("draw it"));
+    expect(cmd.indexOf("draw it")).toBeLessThan(cmd.indexOf("--tools"));
+  });
+
+  test("are absent unless asked for", () => {
+    const cmd = build({ prompt: "hello", systemPrompt: "  " });
+    expect(cmd).not.toContain("--system-prompt");
+    expect(cmd).not.toContain("--no-session-persistence");
+  });
+});

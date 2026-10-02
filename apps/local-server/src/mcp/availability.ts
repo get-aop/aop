@@ -19,6 +19,9 @@ export const LIBRARY_TOOL_NAMES = [
   "aop_library_save",
   "aop_library_list",
   "aop_library_read",
+  // Artifacts live in the Library, so whoever saves files there makes them too.
+  "aop_artifact_create",
+  "aop_artifact_update",
 ] as const;
 
 export const COORDINATOR_TOOL_NAMES = [

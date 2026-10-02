@@ -83,6 +83,7 @@ const ARGV_SPEC = {
     "--model",
     "--effort",
     "--append-system-prompt",
+    "--system-prompt",
     "--system-prompt-snapshot",
   ],
   // The real parser treats these as `<values...>`, so each one swallows a prompt placed after it.

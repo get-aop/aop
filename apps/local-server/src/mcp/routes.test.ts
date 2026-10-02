@@ -120,6 +120,8 @@ describe("MCP HTTP routes", () => {
     await s.settle();
 
     expect(await toolNames(s, coordinator.id)).toEqual([
+      "aop_artifact_create",
+      "aop_artifact_update",
       "aop_library_list",
       "aop_library_read",
       "aop_library_save",
@@ -139,6 +141,8 @@ describe("MCP HTTP routes", () => {
       "thread_stop",
     ]);
     expect(await toolNames(s, spawned.thread.id)).toEqual([
+      "aop_artifact_create",
+      "aop_artifact_update",
       "aop_ask_user",
       "aop_library_list",
       "aop_library_read",

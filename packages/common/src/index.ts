@@ -17,6 +17,41 @@ export {
   PermissionBypassSchema,
   parseAgentCliCheckInterval,
 } from "./agent-clis.ts";
+export type {
+  ArtifactDetail,
+  ArtifactKind,
+  ArtifactPart,
+  ArtifactResultRef,
+  ArtifactVersion,
+  VisualizeCandidate,
+  VisualizeGenerateInput,
+  VisualizeRepairInput,
+  VisualizeSaveInput,
+  VisualizeType,
+} from "./artifacts.ts";
+export {
+  ARTIFACT_EXTENSIONS,
+  ARTIFACT_KINDS,
+  ARTIFACT_LIMITS,
+  ARTIFACT_RESULT_MARKER,
+  ArtifactDetailSchema,
+  ArtifactKindSchema,
+  ArtifactPartSchema,
+  ArtifactVersionSchema,
+  artifactKindOf,
+  codeLanguageOf,
+  extensionOf,
+  formatArtifactMarker,
+  parseArtifactMarker,
+  TEXT_ARTIFACT_KINDS,
+  VISUALIZE_LIMITS,
+  VISUALIZE_TYPES,
+  VisualizeCandidateSchema,
+  VisualizeGenerateInputSchema,
+  VisualizeRepairInputSchema,
+  VisualizeSaveInputSchema,
+  VisualizeTypeSchema,
+} from "./artifacts.ts";
 export { AOP_PORTS, AOP_URLS } from "./env.ts";
 export type { HostHealth } from "./host-api.ts";
 export {

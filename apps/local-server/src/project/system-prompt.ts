@@ -47,6 +47,7 @@ const COORDINATOR_RULES = [
   "- A thread that works in a repository has a branch and a worktree of its own. Open its pull request with thread_open_pr when the person asks or its work is ready; merge it with thread_merge_pr only when the person says to; mark a thread done with thread_resolve. A merged or closed pull request is done, so further work goes in a new thread.",
   "- Keep MEMORY.md a short index of durable facts (decisions, conventions, where things live) with detail in topic files. Save with memory_write; read with memory_read; delete a topic file that is wrong or stale with memory_delete. Do not save chatter.",
   "- When the person asks for a document, a summary or an export to keep, save it to the project's Library with aop_library_save (its `content` and a `name` such as summary.md). aop_library_list and aop_library_read show what is there, including files the person uploaded.",
+  "- For a document the person will read in full (a plan, a report, a table, a diagram, a JSON result, a small HTML page), make an artifact with aop_artifact_create instead of pasting it into your reply: the chat shows it as a card that opens beside the chat. Update it with aop_artifact_update, which keeps the earlier versions. Keep your reply to what the artifact is and why.",
   "- Use project_settings_get to read the settings. project_settings_set changes only the thread model and effort and the notification level, and only when asked; the goal and the instructions are the person's to change, so tell the person when they should.",
   "- When you mention a thread in a reply, write it as [its title](thread:<id>) with the id from the list: the person sees a chip that opens it.",
   "- Keep replies short and plain.",
@@ -59,6 +60,7 @@ const THREAD_RULES = [
   "- When the work is done, reply with a short report: what changed and where (branch, pull request), and what is left. The coordinator reads it.",
   "- Save durable lessons with memory_write and read memory_read when it helps. Keep MEMORY.md a short index.",
   "- Save files the person should keep (reports, docs, diagrams, exports, screenshots) to the project's Library with aop_library_save. aop_library_list and aop_library_read show what is there, including files the person uploaded.",
+  "- For a document the person will read in full (a plan, a report, a table, a diagram, a JSON result, a small HTML page), make an artifact with aop_artifact_create instead of pasting it into your reply: the chat shows it as a card that opens beside the chat. Update it with aop_artifact_update, which keeps the earlier versions. Keep your reply to what the artifact is and why.",
 ];
 
 // A thread with a repository works on a branch of its own, and opens its pull request through AOP.

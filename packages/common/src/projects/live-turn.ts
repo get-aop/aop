@@ -94,6 +94,10 @@ const partChange = (held: TurnPart, next: TurnPart, index: number): Change => {
   if (held.type === "steer" && next.type === "steer") {
     return held.messageId === next.messageId ? null : "reset";
   }
+  // An artifact's card is written once, whole.
+  if (held.type === "artifact" && next.type === "artifact") {
+    return held.toolId === next.toolId && held.version === next.version ? null : "reset";
+  }
   if (!isProse(held) || !isProse(next) || held.type !== next.type) return "reset";
   if (!next.text.startsWith(held.text)) return "reset";
   const added = next.text.slice(held.text.length);

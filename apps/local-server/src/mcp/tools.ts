@@ -20,6 +20,7 @@ import {
   threadSteerTool,
   threadStopTool,
 } from "./tools-coordinator.ts";
+import { artifactCreateTool, artifactUpdateTool } from "./tools-artifact.ts";
 import { libraryListTool, libraryReadTool, librarySaveTool } from "./tools-library.ts";
 import { memoryDeleteTool, memoryReadTool, memoryWriteTool } from "./tools-memory.ts";
 import { listReposTool, setChatWorkspaceTool } from "./tools-platform.ts";
@@ -50,6 +51,8 @@ const TOOLS: readonly McpTool[] = [
   librarySaveTool,
   libraryListTool,
   libraryReadTool,
+  artifactCreateTool,
+  artifactUpdateTool,
 ];
 
 export interface McpToolDefinition {

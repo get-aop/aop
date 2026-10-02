@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ArtifactPartSchema } from "../artifacts.ts";
 import { PullRequestRefSchema } from "./artifact.ts";
 import { IdSchema } from "./primitives.ts";
 import type { ThreadStatus } from "./thread.ts";
@@ -62,7 +63,7 @@ const SteerBlockSchema = z.object({ type: z.literal("steer"), messageId: IdSchem
 
 /**
  * One part of what an agent's turn produced, in the order it produced them: prose, a tool call,
- * reasoning, or a message the turn took in as it went. A reply is its parts followed by the
+ * reasoning, a message the turn took in as it went, or an artifact one of its tools made. A reply is its parts followed by the
  * blocks its tools posted (cards, receipts, proposals), and a turn being written is the same
  * parts, growing.
  */
@@ -71,6 +72,7 @@ export const TurnPartSchema = z.discriminatedUnion("type", [
   ToolBlockSchema,
   ThinkingBlockSchema,
   SteerBlockSchema,
+  ArtifactPartSchema,
 ]);
 export type TurnPart = z.infer<typeof TurnPartSchema>;
 export type ToolPart = Extract<TurnPart, { type: "tool" }>;
@@ -168,6 +170,7 @@ export const MessageBlockSchema = z.discriminatedUnion("type", [
   ToolBlockSchema,
   ThinkingBlockSchema,
   SteerBlockSchema,
+  ArtifactPartSchema,
   ThreadChipBlockSchema,
   PrChipBlockSchema,
   ThreadCardBlockSchema,
