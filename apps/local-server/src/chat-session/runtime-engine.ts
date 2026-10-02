@@ -19,6 +19,7 @@ import { waitForSpawnGate } from "../agent-cli/spawn-gate.ts";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
 import { runAndReap } from "../process/reaper.ts";
 import { detectRateLimit, type RateLimitHit } from "../scheduling/rate-limit.ts";
+import { observePlanUsage } from "../usage/plan-usage.ts";
 import { isProviderFailureEvent } from "./provider-event-classifier.ts";
 import { buildRunOptions } from "./run-options.ts";
 import type { HostRunAccess } from "./run-profile.ts";
@@ -491,6 +492,7 @@ const executeProviderRun = async (
         logFilePath,
         promptUuid: runInput?.channel.promptUuid,
         onLine: async (line) => {
+          void observePlanUsage(line);
           await inspectSessionLine(line);
           if (runInput && isResultLine(line)) runInput.onResult();
         },

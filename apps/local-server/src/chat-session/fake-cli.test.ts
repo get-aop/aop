@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync }
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { TurnPart } from "@aop/common";
-import { RunUsageSchema, ThreadUsageSchema } from "@aop/common";
+import { PlanUsageResponseSchema, RunUsageSchema, ThreadUsageSchema } from "@aop/common";
 import { aopPaths, generateTypeId, typeIdToUuid } from "@aop/infra";
 import { ClaudeCodeProvider, type LLMProvider } from "@aop/llm-provider";
 import { FAKE_CLI_PATH } from "@aop/llm-provider/test-fixtures";
@@ -12,6 +12,7 @@ import { createCommandContext } from "../context.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { isAgentProcess, isProcessAlive } from "../process/liveness.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import { resetPlanUsageForTests } from "../usage/plan-usage.ts";
 import { createUsageRoutes } from "../usage/routes.ts";
 import { createChatSessionRoutes } from "./routes.ts";
 import { waitForPendingChatReplies } from "./service.ts";
@@ -514,6 +515,34 @@ describe("usage accounting against the fake CLI", () => {
     // The session takes the next message like any other after a failed run.
     const next = await sendAndSettle("try again");
     expect(lastAssistant(next)?.content).toContain("turn 2");
+    await db.destroy();
+  });
+
+  test("the plan's 5-hour and 7-day usage comes from the turn's rate_limit_event", async () => {
+    // Earlier turns of this file (the usage limit above) have reported the plan already.
+    rmSync(join(aopHome, "plan-usage.json"), { force: true });
+    resetPlanUsageForTests();
+    const { db, sendAndSettle } = await setup();
+    const read = usageApi(db);
+    expect(PlanUsageResponseSchema.parse(await read("/plan")).usage).toBeNull();
+
+    await sendAndSettle("hello [fake: usagewarn]");
+
+    const { usage } = PlanUsageResponseSchema.parse(await read("/plan"));
+    expect(usage?.fiveHour?.usedPercent).toBe(6);
+    expect(usage?.sevenDay?.usedPercent).toBe(86);
+    const resetsIn = Date.parse(usage?.fiveHour?.resetsAt ?? "") - Date.now();
+    expect(resetsIn).toBeGreaterThan(4.9 * 3_600_000);
+    expect(resetsIn).toBeLessThanOrEqual(5 * 3_600_000 + 1_000);
+    // A restarted host still knows it.
+    resetPlanUsageForTests();
+    expect(PlanUsageResponseSchema.parse(await read("/plan")).usage).toEqual(usage);
+
+    // A refusal fills its window and leaves the other one as it was.
+    await sendAndSettle("go [fake: ratelimit=60]");
+    const limited = PlanUsageResponseSchema.parse(await read("/plan")).usage;
+    expect(limited?.fiveHour?.usedPercent).toBe(100);
+    expect(limited?.sevenDay).toEqual(usage?.sevenDay ?? null);
     await db.destroy();
   });
 

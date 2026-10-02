@@ -1,6 +1,7 @@
 import { EllipsisIcon, ListChecksIcon, SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { iconButtonClass } from "../components/IconButton";
+import { PlanUsageMeter } from "../plan-usage/PlanUsageMeter";
 import { Link, projectPath, projectSettingsPath } from "../shell/router";
 import { ShellNav } from "../shell/ShellNav";
 import { ProjectMenu } from "./ProjectMenu";
@@ -21,7 +22,8 @@ type Panel = { visible: boolean; toggle: () => void };
  * The top of a project's screens: the sidebar toggle and back/forward, who the project is,
  * then right beside the name its controls as one group: the labelled Overview toggle for the
  * threads panel (with a dot when a thread waits on the person), the project's settings and its
- * menu (the gear is marked while the settings dialog is open). The stream's state comes last.
+ * menu (the gear is marked while the settings dialog is open), then the stream's state. The far
+ * end holds host-wide status, the Claude plan's usage meter first.
  */
 export const ProjectTopBar = ({
   entry,
@@ -103,6 +105,9 @@ export const ProjectTopBar = ({
           {streamLabel}
         </span>
       ) : null}
+      <div data-testid="project-topbar-status" className="ml-auto flex shrink-0 items-center">
+        <PlanUsageMeter />
+      </div>
     </header>
   );
 };
