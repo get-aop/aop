@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { mockEmptyThreadHost, silentChatHost } from "../layout/test-utils";
 import type { ProjectsState } from "../projects-state";
@@ -238,6 +238,37 @@ describe("the AOP Browser in the chat's place", () => {
     fireEvent.click(screen.getByTestId("panel-expand"));
     await settle();
     expect(column()?.getAttribute("data-shown")).toBe("false");
+  });
+});
+
+describe("under an overlay panel", () => {
+  test("stays in its column beside the panel, and parks when the panel expands over it", async () => {
+    const rect = spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 700,
+      height: 800,
+      top: 0,
+      left: 0,
+      right: 700,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    try {
+      window.history.pushState({}, "", "/projects/p1/browser");
+      mount();
+      expect(screen.getByTestId("project-layout").getAttribute("data-mode")).toBe("overlay");
+      fireEvent.click(screen.getByTestId("panel-toggle"));
+      await settle();
+      expect(column()?.getAttribute("data-shown")).toBe("true");
+
+      fireEvent.click(screen.getByTestId("panel-expand"));
+      await settle();
+      expect(column()?.getAttribute("data-shown")).toBe("false");
+      expect(column()?.hasAttribute("inert")).toBe(true);
+    } finally {
+      rect.mockRestore();
+    }
   });
 });
 

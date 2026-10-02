@@ -122,7 +122,7 @@ export const ProjectLayout = ({
           key={project.id}
           projectId={project.id}
           shown={browser === true}
-          coveredByPanel={layout.chatHidden}
+          coveredByPanel={panelCoversColumn(layout)}
         />
         {layout.visible && layout.mode === "side" && !layout.expanded ? (
           <PanelDivider
@@ -184,6 +184,9 @@ const CoveringView = ({
     </section>
   );
 };
+
+// An overlay panel expanded over the column covers it too, though the chat stays put under it.
+const panelCoversColumn = (layout: PanelLayout): boolean => layout.chatHidden || layout.expanded;
 
 /**
  * A pull request or an artifact opened from a panel that covers the chat's column (expanded,
