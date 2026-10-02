@@ -39,6 +39,8 @@ Pairing needs the host owner, so run the first command on the host.
    # {"code":"K7QM-4XNP","expiresAt":"..."}
    ```
 
+   Use the port the host listens on: 25150 by default, 25650 for AOP Nightly. The pairing screen on the new device shows this command with the host's own port, which it reads from `GET /api/health`.
+
 2. On the new device, trade the code for a token. In a browser, open the host's address: the dashboard shows a pairing screen, where you enter the code and a name for the device, and the cookie in the next paragraph is all it needs. From a program, use the host's address as the client sees it, such as the `tailscale serve` URL.
 
    ```bash
@@ -66,7 +68,7 @@ The dashboard the host serves is same-origin and uses the cookie. A client serve
 
 - **Bearer token on every request.** The client sends `Authorization: Bearer aop_...`. A browser only lets a page from another origin do that if the host answers its preflight, so the host lists the origins it accepts. `app://aop`, the desktop app's origin, is always accepted: only the desktop app can produce it, since a web page cannot claim another scheme's origin. Add others with `AOP_ALLOWED_ORIGINS`. Any other origin gets `403` before it is looked at. An origin you list is trusted as far as you trust yourself: a page from it that runs in a browser on the host's own machine reads the API as the host owner, with no token.
 - **Event streams with `fetch`.** An `EventSource` cannot set a header, and the session cookie is `SameSite=Strict`, so a browser never sends it across origins: an `EventSource` from another origin ends `CLOSED` at once. A client that holds a token reads the stream with `fetch` and the bearer header instead, and resumes with `?after=<last event id>` as it always does. No token goes in a URL, and the stream closes when the device is revoked, as any other does.
-- **Version handshake.** `GET /api/health` reports `version`, `apiVersion` and `minClientApiVersion` without credentials. A client compares its own API version with them before it pairs and on every check afterwards: a client older than `minClientApiVersion` needs an app update, and one newer than `apiVersion` needs a host update. Raise `API_VERSION` in `packages/common/src/host-api.ts` for a change that would break a client one release behind.
+- **Version handshake.** `GET /api/health` reports `version`, `apiVersion` and `minClientApiVersion` without credentials, along with the `channel` and the `port` the host listens on. A client compares its own API version with them before it pairs and on every check afterwards: a client older than `minClientApiVersion` needs an app update, and one newer than `apiVersion` needs a host update. Raise `API_VERSION` in `packages/common/src/host-api.ts` for a change that would break a client one release behind.
 
 ## The desktop app
 

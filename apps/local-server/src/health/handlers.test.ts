@@ -33,6 +33,10 @@ describe("health handlers", () => {
       expect(result.db).toEqual({ connected: true });
     });
 
+    test("reports the port the host listens on, for a client behind a proxy", async () => {
+      expect((await getHealth(makeDeps({ port: 25650 }))).port).toBe(25650);
+    });
+
     test("reports uptime in whole seconds", async () => {
       const result = await getHealth(makeDeps({ startTimeMs: Date.now() - 5_500 }));
 

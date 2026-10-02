@@ -25,6 +25,8 @@ export const HostHealthSchema = z.object({
   version: z.string().min(1),
   /** `stable` or `nightly` (docs/NIGHTLY.md); hosts before channels existed leave it out. */
   channel: z.string().optional(),
+  /** The port the host listens on, on the host machine; older hosts leave it out. */
+  port: z.number().int().positive().optional(),
   apiVersion: z.number().int().positive(),
   minClientApiVersion: z.number().int().positive(),
 });

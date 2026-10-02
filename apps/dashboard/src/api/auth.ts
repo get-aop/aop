@@ -1,6 +1,7 @@
 import type {
   AuthPrincipal,
   Device,
+  HostHealth,
   PairDeviceRequest,
   PairedDevice,
   PairingCode,
@@ -13,6 +14,10 @@ export const getPrincipal = (): Promise<AuthPrincipal> => request<AuthPrincipal>
 /** Trades the code shown on the host for a device. The response also sets the `aop_device` cookie. */
 export const pairDevice = (input: PairDeviceRequest): Promise<PairedDevice> =>
   request<PairedDevice>("/auth/pair", { method: "POST", body: JSON.stringify(input) });
+
+/** The port the host listens on, as it tells a client that is not paired yet; null from an older host. */
+export const getHostPort = async (): Promise<number | null> =>
+  (await request<Pick<HostHealth, "port">>("/health")).port ?? null;
 
 /** Host owner only. A new code replaces the one before it and works once. */
 export const createPairingCode = (): Promise<PairingCode> =>

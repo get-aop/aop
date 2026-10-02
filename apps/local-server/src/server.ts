@@ -68,6 +68,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     updates,
     agentClis,
     startTimeMs,
+    port,
     dashboardStaticPath: options?.dashboardStaticPath ?? getDashboardStaticPath(),
     dashboardDevOrigin: getDashboardDevOrigin(),
     allowedOrigins,

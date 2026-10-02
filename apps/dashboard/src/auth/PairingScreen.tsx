@@ -1,9 +1,9 @@
 import { buildChannel, type ChannelConfig } from "@aop/common";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
-import { pairDevice } from "../api/auth";
+import { getHostPort, pairDevice } from "../api/auth";
 import { getHostConfig, isRemoteHost, setHostConfig } from "../api/host";
 import { AopLogoMark } from "../components/brand/AopLogoMark";
 import { defaultDeviceName } from "./device-name";
@@ -28,6 +28,18 @@ export const PairingScreen = ({
   const [deviceName, setDeviceName] = useState(() => defaultDeviceName());
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [reportedPort, setReportedPort] = useState<number | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    // Without it, the command falls back to what the address and the channel suggest.
+    getHostPort()
+      .then((port) => current && setReportedPort(port))
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -73,7 +85,7 @@ export const PairingScreen = ({
             data-testid="pairing-command"
             className="block rounded-md border border-border bg-input-surface px-2.5 py-2 text-[11.5px] break-all text-text select-all"
           >
-            {pairingCodeCommand(pairingHostPort(channel, apiOrigin))}
+            {pairingCodeCommand(pairingHostPort({ reportedPort, apiOrigin, channel }))}
           </code>
           <p data-testid="pairing-port-hint" className="text-text-subtle">
             Use the port the host listens on; {channel.productName}'s default is {channel.hostPort}.
