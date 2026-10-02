@@ -12,6 +12,8 @@ export interface DesktopWindowOptions {
     nodeIntegration: false;
     sandbox: true;
     webviewTag: false;
+    /** Chromium's built-in PDF viewer, which the artifact view shows PDFs in. */
+    plugins: true;
   };
 }
 
@@ -29,5 +31,6 @@ export const buildWindowOptions = (preloadPath: string): DesktopWindowOptions =>
     nodeIntegration: false,
     sandbox: true,
     webviewTag: false,
+    plugins: true,
   },
 });

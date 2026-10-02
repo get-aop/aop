@@ -22,8 +22,9 @@ export const PHASES: { phase: VisualizePhase; label: string }[] = [
   { phase: "saving", label: "Saving it to the Library" },
 ];
 
-/** What a run cost at list price, as the person reads it: on a Claude plan it counts toward usage. */
-export const formatCost = (costUsd: number): string =>
-  costUsd === 0
-    ? "no model call"
-    : `about $${costUsd < 0.01 ? costUsd.toFixed(4) : costUsd.toFixed(2)}`;
+/**
+ * What a run cost at list price, as the person reads it (on a Claude plan it counts toward usage);
+ * null when the runtime did not say.
+ */
+export const formatCost = (costUsd: number): string | null =>
+  costUsd > 0 ? `about $${costUsd < 0.01 ? costUsd.toFixed(4) : costUsd.toFixed(2)}` : null;

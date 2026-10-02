@@ -55,8 +55,9 @@ const nextStep = (
   common: (i: number, j: number) => number,
 ): DiffLine["type"] => {
   if (i < a.length && j < b.length && a[i] === b[j]) return "same";
-  if (j < b.length && (i === a.length || common(i, j + 1) >= common(i + 1, j))) return "added";
-  return "removed";
+  // A changed line reads as the old one going, then the new one coming.
+  if (i < a.length && (j === b.length || common(i + 1, j) >= common(i, j + 1))) return "removed";
+  return "added";
 };
 
 const splitLines = (text: string): string[] =>

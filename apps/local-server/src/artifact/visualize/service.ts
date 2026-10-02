@@ -95,6 +95,7 @@ export const createVisualizeService = (
             folder: "Artifacts/Diagrams",
             description: "Made with Visualize from a reply",
             originMessageId: input.messageId,
+            note: result.note,
             originType: input.type,
           });
       return saved.success ? { success: true, artifact: saved.artifact } : saved;

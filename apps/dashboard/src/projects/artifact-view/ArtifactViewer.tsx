@@ -63,7 +63,9 @@ export const ArtifactViewer = ({
             onClose={() => setCompareWith(null)}
           />
         ) : (
-          <ArtifactBody content={state.content} raw={raw} />
+          // Streamdown keeps a rendered cell where one was before, whatever it now says: each
+          // version gets a renderer of its own.
+          <ArtifactBody key={state.version} content={state.content} raw={raw} />
         )}
       </div>
     </>

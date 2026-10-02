@@ -17,7 +17,7 @@ An artifact is a Library item (`library_items`, `source = 'artifact'`) with vers
 
 The Library's cleanup treats every `sha256` in `library_artifact_versions` as still used, so it never deletes an old version's blob while the artifact exists. Retention applies to the artifact as a whole: it keeps the Library's rules (30 days for what agents save, unless pinned), and a card whose artifact is gone shows "No longer in the Library".
 
-A Library item that is not an artifact, such as an uploaded `.md` or a `.json` an agent saved with `aop_library_save`, opens in the same view as a single version. Files in a chat's workspace that a reply links to (`docs/plan.md`) open there too, read only, with a "Save to Library" action.
+A Library item that is not an artifact, such as an uploaded `.md` or a `.json` an agent saved with `aop_library_save`, opens in the same view as a single version. Files in a chat's workspace that a reply links to (`[plan](docs/plan.md)`, or an absolute path) open there too, read only, with a "Save to Library" action. They are read from that chat's workspace (a thread's worktree, or the coordinator's folder) under the same rules as an agent's save.
 
 ## How agents create artifacts
 
@@ -26,7 +26,9 @@ Two MCP tools, offered to the coordinator and to threads, sit beside the Library
 - `aop_artifact_create {title, content | path, kind?, language?, name?, folder?}` creates the item and version 1.
 - `aop_artifact_update {artifactId, content | path, note?}` adds a version. The title and kind stay unless they are given.
 
-They validate like `aop_library_save`. Content and path are exclusive, a path must stay inside the caller's workspace, and the Library's size limit applies. Each `kind` is checked as well: JSON must parse, CSV must have a header row, and mermaid must not be empty. The result is plain text for the model, followed by one marker line, `aop-artifact: {"id":…,"version":…,"title":…,"kind":…}`.
+They validate like `aop_library_save`. Content and path are exclusive, a path must stay inside the caller's workspace, and the Library's size limit applies. Each `kind` is checked as well: JSON must parse, CSV must have a header row, Mermaid must start with its diagram type (no fence), SVG must hold an `<svg>` element, and images and PDFs must be the files they say. A refused call is an error the model reads, and no card is drawn. The result is plain text for the model, followed by one marker line, `aop-artifact: {"artifactId":…,"version":…,"title":…,"kind":…,"action":…}`.
+
+`aop_artifact_update` also takes any Library file id: the file becomes an artifact, its content version 1.
 
 **The card is a turn part.** `TurnPartSchema` gains an `artifact` part, `{type: "artifact", toolId, artifactId, version, title, kind, action: "created" | "updated"}`. The stream parser keeps the text of a tool result only for the AOP artifact tools. The turn accumulator turns its marker into an artifact part placed right after the tool call, which the chat then shows as the card instead of the tool row. Because it is an ordinary part, it streams live through the existing `start` op, persists in `chat_messages.parts`, and renders from history with no lookup. This works the same in the coordinator chat and in thread chats. Prose can also link an artifact as `[title](artifact:<id>)`, which renders as the same card inline, the same way `thread:` links render as chips.
 
@@ -34,7 +36,7 @@ They validate like `aop_library_save`. Content and path are exclusive, a path mu
 
 `openArtifactView({projectId, artifactId, version?})` follows the shape of the PR View's `openPullRequestView` (get-aop/aop#46):
 
-- Routes: `/projects/:p[/threads/:t]/artifacts/:id[/:version]`. `Route` gains `artifact?: {id, version?}`, a sibling of `pullRequest`. They are exclusive: opening one replaces the other.
+- Routes: `/projects/:p[/threads/:t]/artifacts/:id[/:version]`, `…/files/:threadId|coordinator/:path` for a linked workspace file, and `…/visualize/:messageId` while a diagram is being drawn. `Route` gains `artifact?: ArtifactViewRef`, a sibling of `pullRequest`. They are exclusive: opening one replaces the other.
 - The view takes the coordinator column under the breadcrumb **Coordinator › title** with ×, and Escape closes it. The chat stays mounted and hidden, keeping its scroll and draft. The threads panel stays as it is, so a card clicked in a thread chat opens the artifact in the coordinator column beside that thread.
 - Toolbar: version switcher (`v3 of 3`, with "Compare with v2"), copy, download, open in Library, fullscreen, and a Raw/Rendered toggle where both make sense.
 
@@ -68,9 +70,11 @@ There is a **Visualize** button next to Copy under every finished assistant repl
   | Replaced prompt, thinking on | 526 | 3,913 (3,702 thinking) | $0.0201 | 25.7 s |
   | **Replaced prompt, thinking off** | **496** | **210** | **$0.0015** | **2.1 s** |
 
-  On a Claude plan it counts against the 5-hour window like any Haiku call, which comes to well under 1% of a window per use. A long reply, around 2,000 words, costs about $0.005.
+  On a Claude plan it counts toward usage like any other Haiku call. A long reply, around 2,000 words, is estimated at about $0.005 (not measured).
 - The input is the reply's text only. It does not include the conversation, it never resumes a session, and the result is never added to the chat history. The coordinator does not see it unless the person shares it.
 - The prompt asks for one diagram of a given type (`auto`, `flowchart`, `sequence`, `mindmap`, `timeline`, or `table`, which is a GFM table summary rather than Mermaid), with strict rules: quoted labels, ASCII ids, no styling, and at most 30 nodes.
+
+**Where it runs.** The run uses the coordinator session's own Claude Code executable (a custom runtime's alias included, which is how the fake CLI stands in for it in tests), in an empty folder under the AOP home, and its log is deleted once read. The cost the panel shows is read from that log.
 
 **Validate, repair and fall back.** The dashboard validates, because Mermaid needs a DOM to parse most diagram types, and the browser is where it renders anyway. Running it on the host would add a DOM shim and several MB to the `aop` binary.
 
@@ -88,3 +92,7 @@ There is a **Visualize** button next to Copy under every finished assistant repl
 - **Markdown** goes through Streamdown's sanitizer (rehype-harden), as chat replies do. Links open outside the app.
 - **Mermaid** runs with `securityLevel: "strict"`, so labels cannot inject HTML or click handlers.
 - **Workspace files** are read through the Library's `readAgentFile` rules: realpath inside the session's workspace, never `.git`, and the size limit.
+
+### In the desktop app
+
+The desktop app serves the dashboard under its own CSP (`apps/desktop/electron/app-protocol.ts`). Two changes let the view work there: `frame-src blob:` on the dashboard surface, so a PDF held in memory can be framed, and `plugins: true`, which turns on Chromium's built-in PDF viewer. A `srcdoc` frame inherits its parent's CSP, so in the desktop app an HTML artifact's own scripts do not run (`script-src 'self'`); the page renders as static HTML. The app's policy is not loosened for it.

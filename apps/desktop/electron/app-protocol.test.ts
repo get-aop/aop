@@ -77,7 +77,8 @@ describe("contentSecurityPolicy", () => {
     expect(policy).toContain("connect-src 'self' https://mac.tail1234.ts.net");
     expect(policy).toContain("img-src 'self' data: blob: https://mac.tail1234.ts.net");
     expect(policy).toContain("object-src 'none'");
-    expect(policy).toContain("frame-src 'none'");
+    // A PDF artifact is framed from memory; no page of anywhere else can be.
+    expect(policy).toContain("frame-src blob:;");
     expect(policy).not.toContain("unsafe-eval");
   });
 

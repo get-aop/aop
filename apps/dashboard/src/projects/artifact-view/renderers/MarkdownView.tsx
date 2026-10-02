@@ -22,11 +22,7 @@ export const MarkdownView = memo(function MarkdownView({ text }: { text: string 
         plugins={plugins}
         remarkPlugins={remarkPlugins}
         components={components}
-        controls={{
-          table: true,
-          code: true,
-          mermaid: { download: true, copy: true, fullscreen: true, panZoom: true },
-        }}
+        controls={CONTROLS}
       >
         {text}
       </Streamdown>
@@ -34,6 +30,12 @@ export const MarkdownView = memo(function MarkdownView({ text }: { text: string 
   );
 });
 
+// Streamdown's pan and zoom draws unstyled icons here; the diagram is fitted to the width instead.
+const CONTROLS = {
+  table: true,
+  code: true,
+  mermaid: { download: true, copy: true, fullscreen: true, panZoom: false },
+};
 const plugins = { code: lazyCodeHighlighter, mermaid: lazyMermaidPlugin };
 const remarkPlugins = Object.values(defaultRemarkPlugins);
 

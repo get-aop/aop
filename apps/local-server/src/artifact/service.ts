@@ -46,6 +46,8 @@ export interface CreateArtifactInput extends ArtifactBody {
   /** Visualize: the reply the diagram was drawn from, and the type it was drawn as. */
   originMessageId?: string;
   originType?: string;
+  /** What the first version is, such as the diagram type Visualize drew. */
+  note?: string;
 }
 
 export interface UpdateArtifactInput extends ArtifactBody {
@@ -208,7 +210,7 @@ const recordNew = (
       origin_message_id: input.originMessageId ?? null,
       origin_type: input.originType ?? null,
     },
-    firstVersion(row, checked.kind, session),
+    firstVersion(row, checked.kind, session, input.note),
   );
 
 // A new artifact's title, file name and kind, once its content is known to fit the kind.
@@ -306,14 +308,19 @@ const promote = async (
   return artifact;
 };
 
-const firstVersion = (row: LibraryItemWithSession, kind: ArtifactKind, session: ChatSession) => ({
+const firstVersion = (
+  row: LibraryItemWithSession,
+  kind: ArtifactKind,
+  session: ChatSession,
+  note?: string,
+) => ({
   item_id: row.id,
   version: 1,
   sha256: row.sha256,
   size: row.size,
   mime_type: row.mime_type,
   kind,
-  note: null,
+  note: note?.trim().slice(0, ARTIFACT_LIMITS.noteMaxLength) || null,
   session_id: row.session_id ?? session.id,
   message_id: null,
   created_at: row.created_at,

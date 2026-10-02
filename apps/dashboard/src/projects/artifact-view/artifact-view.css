@@ -1,0 +1,160 @@
+/* The artifact view's documents: the chat's typography (.chat-markdown), with Streamdown's own
+   blocks (code, tables, diagrams) drawn as single cards. Streamdown ships Tailwind class names
+   from node_modules, which this build does not scan, so its blocks are styled here. */
+
+.artifact-markdown {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.artifact-markdown h1 {
+  font-size: 1.625rem;
+  margin-top: 0.25rem;
+}
+
+.artifact-markdown [data-streamdown="code-block"],
+.artifact-markdown [data-streamdown="mermaid-block"],
+.artifact-markdown [data-streamdown="table-wrapper"] {
+  position: relative;
+  margin: 1rem 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-raised);
+}
+
+.artifact-markdown [data-streamdown="code-block-header"],
+.artifact-markdown [data-streamdown="mermaid-block"] > div:first-child {
+  display: flex;
+  height: 2.25rem;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 0.75rem;
+  color: var(--color-text-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+/* The action bars sit in the block's header row, top right. */
+.artifact-markdown [data-streamdown="code-block"] > div:has(> [data-streamdown="code-block-actions"]),
+.artifact-markdown [data-streamdown="mermaid-block"] > div:has(> [data-streamdown="mermaid-block-actions"]) {
+  position: absolute;
+  top: 0;
+  right: 0.375rem;
+  z-index: 1;
+  display: flex;
+  height: 2.25rem;
+  align-items: center;
+  margin: 0;
+}
+
+.artifact-markdown [data-streamdown="code-block-actions"],
+.artifact-markdown [data-streamdown="mermaid-block-actions"] {
+  display: flex;
+  gap: 0.125rem;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  pointer-events: auto;
+}
+
+.artifact-markdown [data-streamdown="code-block-actions"] button,
+.artifact-markdown [data-streamdown="mermaid-block-actions"] button,
+.artifact-markdown [data-streamdown="table-wrapper"] > div:first-child button {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 0.375rem;
+  color: var(--color-text-subtle);
+}
+
+.artifact-markdown [data-streamdown="code-block-actions"] button:hover,
+.artifact-markdown [data-streamdown="mermaid-block-actions"] button:hover,
+.artifact-markdown [data-streamdown="table-wrapper"] > div:first-child button:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.artifact-markdown [data-streamdown="code-block-actions"] svg,
+.artifact-markdown [data-streamdown="mermaid-block-actions"] svg,
+.artifact-markdown [data-streamdown="table-wrapper"] > div:first-child svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.artifact-markdown [data-streamdown="code-block-body"] {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.artifact-markdown [data-streamdown="code-block-body"] pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.875rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+/* Shiki colors each token for light and dark; the app is dark only. */
+.artifact-markdown [data-streamdown="code-block-body"] span {
+  color: var(--shiki-dark, inherit);
+}
+
+.artifact-markdown [data-streamdown="mermaid"] {
+  display: block;
+  padding: 1rem;
+}
+
+.artifact-markdown [data-streamdown="mermaid"] svg {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 6rem;
+}
+
+.artifact-markdown [data-streamdown="table-wrapper"] > div:first-child {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.125rem;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.25rem 0.375rem;
+}
+
+.artifact-markdown [data-streamdown="table-wrapper"] table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.artifact-markdown [data-streamdown="table-header-cell"] {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.artifact-markdown [data-streamdown="table-cell"] {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.artifact-markdown [data-streamdown="table-row"]:last-child [data-streamdown="table-cell"] {
+  border-bottom: 0;
+}
+
+/* Code shown on its own (a code artifact, a source view) fills the view. */
+.artifact-code .artifact-markdown {
+  max-width: none;
+}
+
+.artifact-mermaid-svg svg {
+  display: block;
+  height: auto;
+}

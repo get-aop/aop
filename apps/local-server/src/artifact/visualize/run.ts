@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { aopPaths, getLogger } from "@aop/infra";
-import { createProvider } from "@aop/llm-provider";
+import { createProvider, extractUsageFromRawJsonl } from "@aop/llm-provider";
 import {
   type CreateProviderFn,
   createSessionRunLogPath,
@@ -55,7 +55,7 @@ export const createVisualizeModel =
         startupTimeoutMs: CHAT_RUNTIME_TIMEOUT_POLICY.startupTimeoutMs,
         inactivityTimeoutMs: INACTIVITY_TIMEOUT_MS,
       });
-      return await runOutput(result.exitCode, logFilePath, started, result.usage?.costUsd);
+      return await runOutput(result.exitCode, logFilePath, started);
     } catch (error) {
       log.warn("Visualize run failed", {
         error: error instanceof Error ? error.message : String(error),
@@ -70,16 +70,21 @@ export const createVisualizeModel =
 const runtimeAliasOf = (session: ChatSession): string | undefined =>
   session.runtime === "claude-code" ? (session.runtime_alias ?? undefined) : undefined;
 
+// What the run wrote, and what it cost as its log says (the provider's result carries no usage).
 const runOutput = async (
   exitCode: number,
   logFilePath: string,
   started: number,
-  costUsd: number | undefined,
 ): Promise<VisualizeRun | null> => {
   const text = exitCode === 0 ? await readAssistantTextFromLog(logFilePath) : "";
   if (!text) {
     log.warn("Visualize run wrote nothing", { exitCode });
     return null;
   }
-  return { text, durationMs: Date.now() - started, costUsd: costUsd ?? null };
+  const usage = extractUsageFromRawJsonl(
+    await Bun.file(logFilePath)
+      .text()
+      .catch(() => ""),
+  );
+  return { text, durationMs: Date.now() - started, costUsd: usage?.costUsd ?? null };
 };

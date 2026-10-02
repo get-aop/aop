@@ -60,6 +60,12 @@ describe("diffLines", () => {
     ]);
     expect(diffStats(lines)).toEqual({ added: 1, removed: 1 });
     expect(diffLines("", "x")).toEqual([{ type: "added", text: "x", after: 1 }]);
+    // A changed line: the old one first, then the new one.
+    expect(diffLines("a\nold", "a\nnew").map((line) => line.type)).toEqual([
+      "same",
+      "removed",
+      "added",
+    ]);
   });
 });
 

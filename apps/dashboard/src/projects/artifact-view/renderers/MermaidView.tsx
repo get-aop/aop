@@ -73,9 +73,7 @@ export const MermaidView = ({ source }: { source: string }) => {
           <ScanIcon />
         </ZoomButton>
       </div>
-      <div className="overflow-auto p-6 pt-14">
-        <SvgMarkup svg={drawn.svg} zoom={zoom} />
-      </div>
+      <SvgMarkup svg={drawn.svg} zoom={zoom} />
     </div>
   );
 };
@@ -102,24 +100,54 @@ const ZoomButton = ({
 
 /**
  * Mermaid's SVG, parsed as XML and attached as nodes: nothing in it runs (a script parsed this
- * way never executes), and Mermaid's strict level already left out scripts and handlers.
+ * way never executes), and Mermaid's strict level already left out scripts and handlers. At 100%
+ * it is fitted to the view, its width and its height, so a tall flowchart is seen whole; zooming
+ * scales that, and the view scrolls.
  */
 const SvgMarkup = ({ svg, zoom }: { svg: string; zoom: number }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  const holder = useRef<HTMLDivElement>(null);
+  const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
+  const fit = useFitScale(frame, natural);
   useEffect(() => {
-    const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
-    const root = parsed.documentElement;
+    const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
     if (root.nodeName !== "svg") return;
+    const [, , width = 0, height = 0] = (root.getAttribute("viewBox") ?? "").split(/[\s,]+/).map(Number);
     root.removeAttribute("height");
     root.setAttribute("width", "100%");
     root.style.maxWidth = "none";
-    ref.current?.replaceChildren(document.importNode(root, true));
+    holder.current?.replaceChildren(document.importNode(root, true));
+    setNatural(width > 0 && height > 0 ? { width, height } : null);
   }, [svg]);
+  const width = natural ? `${Math.round(natural.width * fit * zoom)}px` : `${zoom * 100}%`;
   return (
-    <div
-      ref={ref}
-      className="artifact-mermaid-svg mx-auto transition-[width] duration-150"
-      style={{ width: `${zoom * 100}%` }}
-    />
+    <div ref={frame} className="absolute inset-0 overflow-auto px-6 pt-14 pb-6">
+      <div ref={holder} className="artifact-mermaid-svg mx-auto" style={{ width }} />
+    </div>
   );
+};
+
+// Up to twice its own size: a small diagram is not blown up into a poster.
+const MAX_FIT = 2;
+
+const useFitScale = (
+  frame: React.RefObject<HTMLDivElement | null>,
+  natural: { width: number; height: number } | null,
+): number => {
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const element = frame.current;
+    if (!element || !natural) return;
+    const measure = () => {
+      const width = element.clientWidth - 48;
+      const height = element.clientHeight - 56 - 24;
+      if (width <= 0 || height <= 0) return;
+      setScale(Math.min(width / natural.width, height / natural.height, MAX_FIT));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [frame, natural]);
+  return scale;
 };

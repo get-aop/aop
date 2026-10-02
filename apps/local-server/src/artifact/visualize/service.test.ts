@@ -43,7 +43,7 @@ describe("visualize routes", () => {
     const before = await s.ctx.chatSessionRepository.countMessages(coordinator.id);
     const runsBefore = s.runs.length;
 
-    const { status, body } = await post<{ candidate: VisualizeCandidate }>(
+    const { status, body } = await post<{ candidate: VisualizeCandidate; costUsd: number }>(
       s,
       projectId,
       "generate",
@@ -55,6 +55,8 @@ describe("visualize routes", () => {
 
     expect(status).toBe(200);
     expect(body.candidate).toEqual({ kind: "mermaid", source: "flowchart TD; A[Bump]-->B[Tag]" });
+    // The fake reports what a turn costs at list prices, as Claude Code does.
+    expect(body.costUsd).toBeGreaterThan(0);
     const run = s.runs[runsBefore];
     expect(run).toMatchObject({
       model: VISUALIZE_MODEL,
@@ -120,7 +122,7 @@ describe("visualize routes", () => {
     });
     expect(second.body.artifact.id).toBe(first.body.artifact.id);
     expect(outline.body.artifact.versions.map(({ kind, note }) => ({ kind, note }))).toEqual([
-      { kind: "mermaid", note: null },
+      { kind: "mermaid", note: "Flowchart" },
       { kind: "markdown", note: "Table" },
       { kind: "markdown", note: "Outline (no valid diagram)" },
     ]);

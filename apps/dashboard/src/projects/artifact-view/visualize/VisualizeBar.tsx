@@ -117,7 +117,8 @@ const BarStatus = ({ job, note }: { job: VisualizeJob | undefined; note: string 
       </span>
     );
   }
-  const cost = job?.status === "done" && !job.cached ? ` · ${formatCost(job.costUsd)}` : "";
+  const spent = job?.status === "done" && !job.cached ? formatCost(job.costUsd) : null;
+  const cost = spent ? ` · ${spent}` : "";
   return (
     <span data-testid="visualize-bar-status" className="text-text-subtle">
       Made with Visualize{note ? ` · ${note}` : ""}
