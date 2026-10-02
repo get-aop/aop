@@ -41,7 +41,7 @@ export interface LibraryRepository {
   delete: (id: string) => Promise<void>;
   /** Keeps a chat item as a marker after its file went, so its message can say why. */
   markRemoved: (id: string, reason: LibraryRemovedReason, at: string) => Promise<void>;
-  /** Live non-chat items still pointing at a blob, and versions of live artifacts that keep it. */
+  /** Live non-chat items still pointing at a blob. */
   blobUsers: (projectId: string, sha256: string) => Promise<number>;
   /** The removed marker of a chat attachment, if retention or the person removed it. */
   chatRemoval: (
@@ -134,6 +134,7 @@ export const createLibraryRepository = (db: Kysely<Database>): LibraryRepository
       .where("source", "!=", "chat")
       .where("removed_at", "is", null)
       .executeTakeFirstOrThrow();
+    // An artifact's earlier versions keep their files while the artifact lives.
     const versions = await db
       .selectFrom("library_artifact_versions")
       .innerJoin("library_items", "library_items.id", "library_artifact_versions.item_id")

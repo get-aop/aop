@@ -113,11 +113,12 @@ interface SentFile {
   description: string;
 }
 
-// An image has no name of its own; it is named for when it was sent, e.g. image-2026-10-02-1430-1.png.
+// An image has no name of its own; it is named for when it was sent, in the host's local time
+// (the person's, on their own machine) to the second: image-2026-10-02-143012-1.png.
 const sentFiles = (content: string, sentAt: string): SentFile[] => {
   const { text, images, documents } = decodeStoredAttachmentMetadata(content);
   const description = text.trim().slice(0, DESCRIPTION_MAX);
-  const stamp = sentAt.slice(0, 16).replace("T", "-").replace(":", "");
+  const stamp = localStamp(new Date(sentAt));
   return [
     ...images.map((image, index) => ({
       fileName: image.fileName,
@@ -132,4 +133,10 @@ const sentFiles = (content: string, sentAt: string): SentFile[] => {
       description,
     })),
   ];
+};
+
+const localStamp = (at: Date): string => {
+  const two = (value: number) => String(value).padStart(2, "0");
+  const day = `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`;
+  return `${day}-${two(at.getHours())}${two(at.getMinutes())}${two(at.getSeconds())}`;
 };

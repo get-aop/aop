@@ -16,6 +16,7 @@ import {
 } from "@/ui/dropdown-menu";
 import { IconButton } from "../../components/IconButton";
 import { IssuesTab } from "../issues/IssuesTab";
+import { LibraryPanel } from "../library/LibraryPanel";
 import type { ProjectEntry } from "../projects-state";
 import { RoutinesTab } from "../routines/RoutinesTab";
 import { attentionOf, THREAD_STATUS_LABEL, THREAD_STATUS_ORDER } from "../selectors";
@@ -124,7 +125,7 @@ const PanelTabs = ({
           </>
         }
       />
-      <PanelTabBody entry={entry} tab={tab} filters={filters} />
+      <PanelTabBody entry={entry} tab={tab} filters={filters} revealChat={layout.revealChat} />
     </>
   );
 };
@@ -134,10 +135,12 @@ const PanelTabBody = ({
   entry,
   tab,
   filters,
+  revealChat,
 }: {
   entry: ProjectEntry;
   tab: PanelTabId;
   filters: OverviewFilters;
+  revealChat: () => void;
 }) => {
   switch (tab) {
     case "threads":
@@ -151,6 +154,8 @@ const PanelTabBody = ({
     case "issues":
       // Keyed by project, so a search or filter never carries over to another project's issues.
       return <IssuesTab key={entry.project.id} projectId={entry.project.id} />;
+    case "library":
+      return <LibraryPanel entry={entry} revealChat={revealChat} />;
   }
 };
 

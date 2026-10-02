@@ -128,7 +128,7 @@ describe("a sent image", () => {
       description: "Here is the screenshot",
       usedIn: { threadId: null, messageId: expect.stringMatching(/^smsg_/) },
     });
-    expect(item?.name).toMatch(/^image-\d{4}-\d{2}-\d{2}-\d{4}-1\.png$/);
+    expect(item?.name).toMatch(/^image-\d{4}-\d{2}-\d{2}-\d{6}-1\.png$/);
   });
 
   test("expires into a marker: the file goes and the message's image answers 410", async () => {

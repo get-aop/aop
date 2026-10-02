@@ -60,7 +60,8 @@ export const SECTIONS: Record<
   usage: {
     label: "Usage",
     icon: ChartLineIcon,
-    description: "What this project has spent, in tokens, cost and code changes.",
+    description:
+      "What this project has spent, in tokens, cost and code changes, and how much its Library keeps.",
   },
   advanced: {
     label: "Advanced",

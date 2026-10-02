@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { getProjectUsage } from "../../api/usage";
 import { useNow } from "../use-now";
+import { LibrarySettings } from "./LibrarySettings";
 import { CopyUsageButton, UsageOverview } from "./UsageOverview";
 import { UsageByModel } from "./UsageTables";
 import { UsageThreads } from "./UsageThreads";
@@ -48,6 +49,7 @@ export const UsageSection = ({ project }: { project: Project }) => {
 
   return (
     <div data-testid="settings-usage" data-window={windowId} className="flex flex-col gap-4">
+      <LibrarySettings projectId={project.id} />
       <div className="flex items-start gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h3 className="text-[14px] font-medium text-text">This project</h3>
