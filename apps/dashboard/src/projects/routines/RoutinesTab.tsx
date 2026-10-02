@@ -96,11 +96,11 @@ export const RoutinesTab = ({ project }: { project: Project }) => {
       <RoutineFormDialog
         project={project}
         mode={form}
-        limits={state.limits}
         onClose={() => setForm(null)}
         onSaved={(routine) => {
           state.put(routine);
           setForm(null);
+          setNotice(null);
         }}
       />
       <ConfirmDialog

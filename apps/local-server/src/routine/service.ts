@@ -304,6 +304,9 @@ export const createRoutineService = (
   };
 };
 
+const everyMinutes = (minutes: number): string =>
+  minutes === 1 ? "every minute" : `every ${minutes} minutes`;
+
 type TargetFields = Pick<RoutineRow, "repo_id" | "model" | "effort">;
 
 /** The routine's target fields with the patch applied; a field the patch leaves out stays. */
@@ -349,7 +352,7 @@ export const describeRoutineError = (error: RoutineError): string => {
     case "ROUTINE_NOT_FOUND":
       return "Routine not found";
     case "ROUTINE_TOO_FREQUENT":
-      return `This schedule runs every ${error.gapMinutes} minutes at its closest; routines run at most every ${error.minIntervalMinutes} minutes on this host (the host owner can change routine_min_interval_minutes)`;
+      return `This schedule runs ${everyMinutes(error.gapMinutes)} at its closest; routines run at most ${everyMinutes(error.minIntervalMinutes)} on this host (the host owner can change routine_min_interval_minutes)`;
     case "ROUTINE_LIMIT":
       return `This project already has ${error.maxActive} routines turned on, the most a project may have; pause or delete one first`;
     case "ROUTINE_BUSY":

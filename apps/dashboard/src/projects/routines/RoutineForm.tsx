@@ -3,7 +3,6 @@ import {
   getThinkingOptions,
   type Project,
   type Routine,
-  type RoutineLimits,
   type RoutineScheduleKind,
   type SchedulePreview,
 } from "@aop/common";
@@ -48,13 +47,11 @@ const PREVIEW_DELAY_MS = 250;
 export const RoutineFormDialog = ({
   project,
   mode,
-  limits,
   onClose,
   onSaved,
 }: {
   project: Project;
   mode: RoutineFormMode | null;
-  limits: RoutineLimits | null;
   onClose: () => void;
   onSaved: (routine: Routine) => void;
 }) => (
@@ -77,7 +74,6 @@ export const RoutineFormDialog = ({
             key={mode.kind === "edit" ? mode.routine.id : mode.title}
             project={project}
             mode={mode}
-            limits={limits}
             onCancel={onClose}
             onSaved={onSaved}
           />
@@ -90,13 +86,11 @@ export const RoutineFormDialog = ({
 const RoutineForm = ({
   project,
   mode,
-  limits,
   onCancel,
   onSaved,
 }: {
   project: Project;
   mode: RoutineFormMode;
-  limits: RoutineLimits | null;
   onCancel: () => void;
   onSaved: (routine: Routine) => void;
 }) => {
@@ -159,7 +153,7 @@ const RoutineForm = ({
         </p>
       </FormField>
       <ScheduleFields draft={draft} set={set} problem={shown.schedule} />
-      <PreviewLine preview={preview} limits={limits} />
+      <PreviewLine preview={preview} />
       <TargetFields project={project} draft={draft} set={set} />
       <FormField label="Runs missed while the host was off" htmlFor="routine-catch-up">
         <Select
@@ -328,13 +322,7 @@ const KindFields = ({
   );
 };
 
-const PreviewLine = ({
-  preview,
-  limits,
-}: {
-  preview: SchedulePreview | null;
-  limits: RoutineLimits | null;
-}) => {
+const PreviewLine = ({ preview }: { preview: SchedulePreview | null }) => {
   if (!preview) return null;
   if (preview.problem) {
     return (
@@ -347,10 +335,7 @@ const PreviewLine = ({
     <p data-testid="routine-preview" className="-mt-2 text-meta text-text-muted">
       {preview.description}. Next:{" "}
       {preview.nextRuns.map((run) => formatRunTime(run, preview.timeZone)).join(", ") || "never"}{" "}
-      <span className="text-text-subtle">
-        ({preview.timeZone}
-        {limits ? `, at most every ${limits.minIntervalMinutes} min` : ""})
-      </span>
+      <span className="text-text-subtle">({preview.timeZone})</span>
     </p>
   );
 };

@@ -1,4 +1,4 @@
-import type { Routine, RoutineLimits } from "@aop/common";
+import type { Routine } from "@aop/common";
 import { useCallback, useEffect, useState } from "react";
 import { listRoutines } from "../../api/routines";
 import type { ProjectStreamEvent } from "../live-projects";
@@ -12,7 +12,6 @@ export interface RoutinesState {
   /** Null until the first load. */
   routines: readonly Routine[] | null;
   timeZone: string | null;
-  limits: RoutineLimits | null;
   error: string | null;
   reload: () => Promise<void>;
   /** Puts a routine the host just answered with in place, ahead of its stream entry. */
@@ -25,7 +24,6 @@ export const useRoutines = (projectId: string): RoutinesState => {
   const live = useLiveProjects();
   const [routines, setRoutines] = useState<readonly Routine[] | null>(null);
   const [timeZone, setTimeZone] = useState<string | null>(null);
-  const [limits, setLimits] = useState<RoutineLimits | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -33,7 +31,6 @@ export const useRoutines = (projectId: string): RoutinesState => {
       const listed = await listRoutines(projectId);
       setRoutines(listed.routines);
       setTimeZone(listed.timeZone);
-      setLimits(listed.limits);
       setError(null);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
@@ -74,7 +71,7 @@ export const useRoutines = (projectId: string): RoutinesState => {
     };
   }, [live, projectId, reload, put, drop]);
 
-  return { routines, timeZone, limits, error, reload, put, drop };
+  return { routines, timeZone, error, reload, put, drop };
 };
 
 type EventStep =
