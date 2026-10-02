@@ -117,8 +117,7 @@ export const nextOccurrences = (
  * day. The host refuses a routine that runs more often than its minimum interval.
  */
 export const shortestGapMinutes = (schedule: RoutineSchedule): number => {
-  const spec = parseCron(scheduleToCron(schedule));
-  const times = spec.hours.flatMap((hour) => spec.minutes.map((minute) => hour * 60 + minute));
+  const times = timesOfDay(parseCron(scheduleToCron(schedule)));
   let shortest = DAY_MINUTES;
   for (let index = 1; index < times.length; index += 1) {
     shortest = Math.min(shortest, (times[index] as number) - (times[index - 1] as number));
@@ -182,22 +181,20 @@ const earliestOnDay = (
   timeZone: string,
 ): number | null => {
   const fromMinute = from ? from.hour * 60 + from.minute : 0;
-  let best: number | null = null;
-  let bestMinute = 0;
-  for (const hour of spec.hours) {
-    for (const minute of spec.minutes) {
-      const minuteOfDay = hour * 60 + minute;
-      if (minuteOfDay < fromMinute) continue;
-      if (best !== null && minuteOfDay > bestMinute + GAP_SLACK_MINUTES) return best;
-      const instant = instantOfWallTime({ ...day, hour, minute }, timeZone);
-      if (instant > after && (best === null || instant < best)) {
-        best = instant;
-        bestMinute = minuteOfDay;
-      }
-    }
+  let best: { instant: number; minuteOfDay: number } | null = null;
+  const candidates = timesOfDay(spec).filter((minuteOfDay) => minuteOfDay >= fromMinute);
+  for (const minuteOfDay of candidates) {
+    if (best && minuteOfDay > best.minuteOfDay + GAP_SLACK_MINUTES) break;
+    const wall = { ...day, hour: Math.floor(minuteOfDay / 60), minute: minuteOfDay % 60 };
+    const instant = instantOfWallTime(wall, timeZone);
+    if (instant > after && (!best || instant < best.instant)) best = { instant, minuteOfDay };
   }
-  return best;
+  return best?.instant ?? null;
 };
+
+/** A day's run times as minutes since midnight, in order. */
+const timesOfDay = (spec: CronSpec): number[] =>
+  spec.hours.flatMap((hour) => spec.minutes.map((minute) => hour * 60 + minute));
 
 const hourOf = (time: string): number => Number(time.slice(0, 2));
 const minuteOf = (time: string): number => Number(time.slice(3, 5));
