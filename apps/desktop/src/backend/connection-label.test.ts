@@ -55,6 +55,13 @@ describe("windowTitle", () => {
       "AOP · Update available (0.10.0)",
     );
   });
+
+  test("AOP Nightly's title names it, so it is never taken for the stable app", () => {
+    expect(windowTitle({ status: "unconfigured" }, [], "AOP Nightly")).toBe("AOP Nightly");
+    expect(
+      windowTitle({ status: "connected", host: HOST, hostVersion: "1" }, [], "AOP Nightly"),
+    ).toStartWith("AOP Nightly · Connected to");
+  });
 });
 
 describe("hostName", () => {

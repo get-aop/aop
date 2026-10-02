@@ -30,7 +30,7 @@ Everything that names an install comes from `CHANNELS` in `packages/common/src/c
 | Host binary | `aop` in `~/.local/bin` (or `/usr/local/bin`) | `aop-nightly` in `~/.aop-nightly/bin`, run by name through a launcher in `~/.local/bin` |
 | launchd label, systemd unit | `com.aop.local-server`, `aop-local-server` | `com.aop.local-server.nightly`, `aop-nightly-local-server` |
 | Desktop app | `AOP.app`, `com.getaop.aop` | `AOP Nightly.app`, `com.getaop.aop.nightly`, icon with a "NIGHTLY" band (`apps/desktop/build/nightly/`) |
-| App data (Electron `userData`, keychain item, single-instance lock) | `~/Library/Application Support/AOP` | `~/Library/Application Support/AOP Nightly` (Electron derives them from the product name) |
+| App data (Electron `userData`, keychain item, single-instance lock, updater download folder) | `~/Library/Application Support/@aop/desktop` (Electron names stable after its package, `@aop/desktop`) | `~/Library/Application Support/AOP Nightly` (the nightly build sets `productName`) |
 | Feed origin | `https://getaop.com` | `https://getaop.com/nightly` |
 | `/api/health` `channel` | `stable` | `nightly` |
 

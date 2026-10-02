@@ -1,3 +1,4 @@
+import { buildChannel } from "@aop/common";
 import type { ConnectionState, IncompatibleReason } from "./types";
 
 /** One line saying how the app stands with its host: the window title, the menu, the status screen. */
@@ -19,9 +20,13 @@ export const connectionLabel = (connection: ConnectionState): string => {
 };
 
 /** `notes` are short asides after the connection, such as an available update. */
-export const windowTitle = (connection: ConnectionState, notes: (string | null)[] = []): string =>
+export const windowTitle = (
+  connection: ConnectionState,
+  notes: (string | null)[] = [],
+  appName: string = buildChannel().productName,
+): string =>
   [
-    connection.status === "unconfigured" ? "AOP" : `AOP · ${connectionLabel(connection)}`,
+    connection.status === "unconfigured" ? appName : `${appName} · ${connectionLabel(connection)}`,
     ...notes.filter((note) => note !== null),
   ].join(" · ");
 

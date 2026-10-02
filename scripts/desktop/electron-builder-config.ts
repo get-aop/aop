@@ -36,10 +36,14 @@ export const createElectronBuilderConfig = ({
     output: "dist/electron-builder",
   },
   extraMetadata: {
-    // electron-builder names the folder electron-updater downloads into after the package name
-    // (`@aopdesktop-updater` for stable). AOP Nightly gets its own, so the two apps never share a
-    // pending download. Electron takes the app's name and data folder from productName, not this.
-    ...(channel === "nightly" ? { name: "aop-nightly-desktop" } : {}),
+    // Electron names the app (menus, its data folder, its keychain item) after the packaged
+    // package.json: productName, else name. Stable has only `@aop/desktop`, so its data lives in
+    // ~/Library/Application Support/@aop/desktop; that stays as it is, or installed apps would
+    // lose their host and device token. AOP Nightly gets its own name and productName, so it
+    // never shares stable's data, keychain item or electron-updater download folder.
+    ...(channel === "nightly"
+      ? { name: "aop-nightly-desktop", productName: CHANNELS.nightly.productName }
+      : {}),
     main: "dist-electron/main.cjs",
     version,
     description: "AOP desktop app for running local coding-agent workflows.",
