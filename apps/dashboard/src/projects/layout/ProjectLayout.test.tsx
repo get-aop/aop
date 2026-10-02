@@ -319,10 +319,11 @@ describe("expand", () => {
     expect(chatColumn().className).not.toContain("hidden");
   });
 
-  test("the new-thread button gives the chat its room back and puts the cursor in its composer", async () => {
+  test("+ › New thread gives the chat its room back and puts the cursor in its composer", async () => {
     mount();
     fireEvent.click(screen.getByTestId("panel-expand"));
 
+    fireEvent.pointerDown(screen.getByTestId("panel-add"), { button: 0, ctrlKey: false });
     fireEvent.click(screen.getByTestId("panel-new-thread"));
     await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
 

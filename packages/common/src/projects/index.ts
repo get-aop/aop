@@ -63,6 +63,20 @@ export {
 } from "./device-auth.ts";
 export type { EventLogEntry } from "./event-log.ts";
 export { EventLogEntrySchema } from "./event-log.ts";
+export type {
+  GithubAuth,
+  GithubLabel,
+  GithubProjectRepo,
+  GithubStatusResponse,
+  GithubUser,
+} from "./github.ts";
+export {
+  GithubAuthSchema,
+  GithubLabelSchema,
+  GithubProjectRepoSchema,
+  GithubStatusResponseSchema,
+  GithubUserSchema,
+} from "./github.ts";
 export { applyLiveOps, compactLiveOps, diffTurnParts } from "./live-turn.ts";
 export type { MemoryFile, MemoryFileInput } from "./memory.ts";
 export {

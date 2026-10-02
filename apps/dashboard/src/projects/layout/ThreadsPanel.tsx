@@ -1,8 +1,6 @@
 import {
   Maximize2Icon,
-  MessagesSquareIcon,
   Minimize2Icon,
-  PlusIcon,
   SearchIcon,
   SlidersHorizontalIcon,
   XIcon,
@@ -17,32 +15,33 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { IconButton } from "../../components/IconButton";
-import { Link, projectPath } from "../../shell/router";
 import type { ProjectEntry } from "../projects-state";
 import { attentionOf, THREAD_STATUS_LABEL, THREAD_STATUS_ORDER } from "../selectors";
 import { ThreadOverview } from "../ThreadOverview";
 import { ThreadPane } from "../thread/ThreadPane";
+import { PanelTabStrip } from "./PanelTabStrip";
+import type { PanelTabId } from "./panel-tabs";
+import { useOpenTabs } from "./use-open-tabs";
 import type { OverviewFilters } from "./use-overview-filters";
 import type { PanelLayout } from "./use-panel-layout";
 
-// The panel's sections. Threads is the only one for now; a section added here gets a tab.
-export const PANEL_TABS = [{ id: "threads", label: "Threads", icon: MessagesSquareIcon }] as const;
-const ACTIVE_TAB: (typeof PANEL_TABS)[number]["id"] = "threads";
-
 /**
- * The right pane: the threads of the project. Its first view is the overview; a thread the
- * address names replaces it (with a breadcrumb back), and the panel's own buttons (expand,
- * close) move into that thread's header.
+ * The right pane: the project's threads, and the other tabs the person opened. Its first view
+ * is the threads' overview; a thread the address names replaces the tabs (with a breadcrumb
+ * back), and the panel's own buttons (expand, close) move into that thread's header.
  */
 export const ThreadsPanel = ({
   entry,
   threadId,
+  tab,
   layout,
   filters,
   onNewThread,
 }: {
   entry: ProjectEntry;
   threadId: string | null;
+  /** The tab showing when no thread is open. */
+  tab: PanelTabId;
   layout: PanelLayout;
   filters: OverviewFilters;
   onNewThread: () => void;
@@ -52,17 +51,13 @@ export const ThreadsPanel = ({
   return (
     <div data-testid="threads-panel-content" className="flex min-h-0 flex-1 flex-col">
       {threadId === null ? (
-        <>
-          <PanelTabStrip
-            entry={entry}
-            layout={layout}
-            filters={filters}
-            onNewThread={onNewThread}
-          />
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <ThreadOverview entry={entry} filters={filters} />
-          </div>
-        </>
+        <PanelTabs
+          entry={entry}
+          tab={tab}
+          layout={layout}
+          filters={filters}
+          onNewThread={onNewThread}
+        />
       ) : (
         <ThreadPane
           project={project}
@@ -97,95 +92,75 @@ const CloseButton = ({ layout }: { layout: PanelLayout }) => (
   </IconButton>
 );
 
-const PanelTabStrip = ({
+const PanelTabs = ({
   entry,
+  tab,
   layout,
   filters,
   onNewThread,
 }: {
   entry: ProjectEntry;
+  tab: PanelTabId;
   layout: PanelLayout;
   filters: OverviewFilters;
   onNewThread: () => void;
 }) => {
-  const waiting = attentionOf(entry.threads).waiting;
+  const openTabs = useOpenTabs(entry.project.id, tab);
   return (
-    <div
-      data-testid="panel-tabs"
-      role="tablist"
-      aria-label="Panel sections"
-      className="flex h-pane-header shrink-0 items-center gap-1 px-3"
-    >
-      {PANEL_TABS.map((tab) => (
-        <PanelTab
-          key={tab.id}
-          tab={tab}
-          active={tab.id === ACTIVE_TAB}
-          projectId={entry.project.id}
-          waiting={tab.id === "threads" ? waiting : 0}
-        />
-      ))}
-      <IconButton testId="panel-new-thread" label="New thread" onClick={onNewThread}>
-        <PlusIcon />
-      </IconButton>
-      <span className="flex-1" />
-      <IconButton
-        testId="panel-search"
-        label="Search threads"
-        pressed={filters.searchOpen}
-        active={filters.searchOpen}
-        onClick={filters.toggleSearch}
-      >
-        <SearchIcon />
-      </IconButton>
-      <StatusFilter filters={filters} />
-      <ExpandButton layout={layout} />
-      <CloseButton layout={layout} />
-    </div>
+    <>
+      <PanelTabStrip
+        projectId={entry.project.id}
+        active={tab}
+        openTabs={openTabs}
+        waiting={attentionOf(entry.threads).waiting}
+        onNewThread={onNewThread}
+        actions={tab === "threads" ? <ThreadsActions filters={filters} /> : null}
+        trailing={
+          <>
+            <ExpandButton layout={layout} />
+            <CloseButton layout={layout} />
+          </>
+        }
+      />
+      <PanelTabBody entry={entry} tab={tab} filters={filters} />
+    </>
   );
 };
 
-/**
- * One section of the panel: the one showing has its icon and name, the others only their icon
- * (the name is in the tooltip), so the strip stays short.
- */
-export const PanelTab = ({
-  tab: { id, label, icon: Icon },
-  active,
-  projectId,
-  waiting,
+/** What a tab shows under the strip. Each tab owns its body, toolbar included. */
+const PanelTabBody = ({
+  entry,
+  tab,
+  filters,
 }: {
-  tab: (typeof PANEL_TABS)[number];
-  active: boolean;
-  projectId: string;
-  /** Threads waiting on the person, counted on the tab. */
-  waiting: number;
-}) => (
-  <Link
-    to={projectPath(projectId)}
-    role="tab"
-    aria-selected={active}
-    aria-label={active ? undefined : label}
-    title={active ? undefined : label}
-    data-testid={`panel-tab-${id}`}
-    className={cn(
-      "flex h-8 items-center gap-2 rounded-row text-body transition-colors duration-[120ms]",
-      active
-        ? "border border-border-strong bg-active px-2.5 font-medium text-text"
-        : "w-8 justify-center text-text-subtle hover:bg-hover hover:text-text",
-    )}
-  >
-    <Icon aria-hidden="true" className={cn("size-4", active && "text-text-muted")} />
-    {active ? label : null}
-    {waiting > 0 ? (
-      <span
-        data-testid="project-tab-waiting"
-        className="rounded-full bg-running px-1.5 text-xs font-semibold tabular-nums text-primary-foreground"
-      >
-        {waiting}
-      </span>
-    ) : null}
-  </Link>
+  entry: ProjectEntry;
+  tab: PanelTabId;
+  filters: OverviewFilters;
+}) => {
+  switch (tab) {
+    case "threads":
+      return (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ThreadOverview entry={entry} filters={filters} />
+        </div>
+      );
+  }
+};
+
+/** The Threads tab's own buttons on the strip: search and the status filter. */
+const ThreadsActions = ({ filters }: { filters: OverviewFilters }) => (
+  <>
+    <IconButton
+      testId="panel-search"
+      label="Search threads"
+      pressed={filters.searchOpen}
+      active={filters.searchOpen}
+      onClick={filters.toggleSearch}
+    >
+      <SearchIcon />
+    </IconButton>
+    <StatusFilter filters={filters} />
+  </>
 );
 
 const StatusFilter = ({ filters }: { filters: OverviewFilters }) => (

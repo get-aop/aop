@@ -4,7 +4,8 @@ import { setupDashboardDom } from "../../test/setup-dom";
 setupDashboardDom();
 
 const { cleanup, render, screen } = await import("@testing-library/react");
-const { PANEL_TABS, PanelTab } = await import("./ThreadsPanel");
+const { PanelTab } = await import("./PanelTabStrip");
+const { PANEL_TABS } = await import("./panel-tabs");
 
 afterEach(cleanup);
 

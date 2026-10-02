@@ -16,7 +16,8 @@ import { type PanelLayout, usePanelLayout } from "./use-panel-layout";
 /**
  * The project screen in three panes: the projects sidebar (the shell's), the coordinator chat,
  * which is always here, and the threads panel beside it. `/projects/:id` has the panel on its
- * overview; `/projects/:id/threads/:threadId` has it on that thread.
+ * overview; `/projects/:id/threads/:threadId` has it on that thread, and `/projects/:id/<tab>`
+ * on another of its tabs.
  *
  * One grid holds them: the top bar over the chat, and the panel in a column of its own from the
  * top of the screen, so its header shares the top bar's row. When the panel covers the chat
@@ -39,13 +40,19 @@ export const ProjectLayout = ({
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
   const threadId = route.name === "thread" ? route.threadId : null;
+  const tab = route.name === "project-tab" ? route.tab : "threads";
   const { pullRequest } = route;
   // Closing the thread leaves a pull request that is open beside it where it is.
   const leaveThread = useCallback(
     () => navigate(projectScreenPath({ name: "project", projectId: project.id, pullRequest })),
     [project.id, pullRequest],
   );
-  const layout = usePanelLayout({ projectId: project.id, threadId, onCloseThread: leaveThread });
+  const layout = usePanelLayout({
+    projectId: project.id,
+    threadId,
+    tab: tab === "threads" ? null : tab,
+    onCloseThread: leaveThread,
+  });
   const filters = useOverviewFilters();
   const { revealChat } = layout;
   useRevealForPullRequest(pullRequest, revealChat);
@@ -115,6 +122,7 @@ export const ProjectLayout = ({
           <ThreadsPanel
             entry={entry}
             threadId={threadId}
+            tab={tab}
             layout={layout}
             filters={filters}
             onNewThread={startThread}

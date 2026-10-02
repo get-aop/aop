@@ -1,4 +1,10 @@
-import { navigate, type ProjectScreen, parseRoute, projectScreenPath } from "../../shell/router";
+import {
+  isProjectScreen,
+  navigate,
+  type ProjectScreen,
+  parseRoute,
+  projectScreenPath,
+} from "../../shell/router";
 
 /** Which pull request to show: one of the project's repositories (AOP's repo id) and its number. */
 export interface PullRequestViewTarget {
@@ -9,8 +15,8 @@ export interface PullRequestViewTarget {
 
 /**
  * Shows a pull request where the coordinator chat is, as a new history entry, so back returns to
- * what was there. The threads panel keeps its place: a thread of the same project that is open
- * stays open beside it. The chat stays mounted underneath and keeps its scroll and its draft.
+ * what was there. The threads panel keeps its place: a thread or a tab of the same project that
+ * is open stays open beside it. The chat stays mounted underneath and keeps its scroll and its draft.
  */
 export const openPullRequestView = ({ projectId, repoId, number }: PullRequestViewTarget): void => {
   navigate(projectScreenPath({ ...screenUnder(projectId), pullRequest: { repoId, number } }));
@@ -19,15 +25,17 @@ export const openPullRequestView = ({ projectId, repoId, number }: PullRequestVi
 /** Gives the chat its place back; the threads panel stays as it is. */
 export const closePullRequestView = (): void => {
   const route = parseRoute(window.location.pathname);
-  if (route?.name !== "project" && route?.name !== "thread") return;
-  if (!route.pullRequest) return;
+  if (!route || !isProjectScreen(route) || !route.pullRequest) return;
   const { pullRequest: _closed, ...screen } = route;
   navigate(projectScreenPath(screen));
 };
 
+/** The panel as it is now (a thread or a tab of the same project), without the pull request. */
 const screenUnder = (projectId: string): ProjectScreen => {
   const route = parseRoute(window.location.pathname);
-  return route?.name === "thread" && route.projectId === projectId
-    ? { name: "thread", projectId, threadId: route.threadId }
-    : { name: "project", projectId };
+  if (!route || !isProjectScreen(route) || route.projectId !== projectId) {
+    return { name: "project", projectId };
+  }
+  const { pullRequest: _replaced, ...screen } = route;
+  return screen;
 };
