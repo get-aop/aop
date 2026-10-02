@@ -11,7 +11,7 @@ GitHub's pull request page inside AOP, shown where the coordinator chat is: the 
 
 ## Fixture `gh`
 
-Never act on real pull requests. `scripts/fake-gh-pr-view.ts` answers the calls the PR View makes from the fixtures in `scripts/pr-view-fixtures.ts` (#1 ready, #2 blocked for five reasons, #3 draft with checks running, #4 merged, #5 closed, #6 320 files and a 20,000-line file, #7 empty, #8 read-only, #9 behind; `acme/fixtures`). Writes change its state, so they show on the page. Switch files in `$FAKE_GH_DIR` (default `<home>/fake-gh`): `signed-out`, `rate-limited`, `refuse-merge` (one time). `fake reset` restores the fixtures.
+Never act on real pull requests. `scripts/fake-gh-pr-view.ts` answers the calls the PR View makes from the fixtures in `scripts/pr-view-fixtures.ts` (#1 ready, #2 blocked for five reasons, #3 draft with checks running, #4 merged, #5 closed, #6 320 files and a 20,000-line file, #7 empty, #8 read-only, #9 behind; `acme/fixtures`). Writes change its state, so they show on the page. People have real avatars from `avatars.githubusercontent.com` (`FIXTURE_AVATARS`), so a browser check shows real pictures; `bob`'s avatar address is a web page (a picture that fails to load), and #1's last commit has a co-author with no GitHub account: both must show an initial, never a broken image. Switch files in `$FAKE_GH_DIR` (default `<home>/fake-gh`): `signed-out`, `rate-limited`, `refuse-merge` (one time). `fake reset` restores the fixtures.
 
 ```bash
 mkdir -p .work/fakebin
@@ -46,6 +46,7 @@ The host caches a read for 10 seconds (checks 5), and the `gh` login for a minut
 
 ## Gotchas
 
+- The desktop app's content security policy (`apps/desktop/electron/app-protocol.ts`) decides which image hosts the bundled dashboard may load; a browser check of the host-served dashboard does not cover it. Check avatars in the desktop app too (`features/desktop.md`).
 - Real GitHub pull requests are for read-only checks only (open `get-aop/aop`'s through a clone of it registered as a repository). Write actions go to the fixtures.
 - A `gh` stand-in must write its output synchronously: `process.exit` right after an asynchronous write to a pipe cuts it at 64 KB, and the host then gets half a page of files.
 - CUA key presses (Escape) sometimes land outside the page right after a navigation; click inside the page first.

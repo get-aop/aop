@@ -16,9 +16,10 @@ export const GithubAvatar = ({
   size?: number;
   className?: string;
 }) => {
-  const [failed, setFailed] = useState(false);
+  // Remembers which address failed, so a new picture for the same spot gets its own try.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const style = { width: size, height: size };
-  if (!avatarUrl || failed) {
+  if (!avatarUrl || failedUrl === avatarUrl) {
     return (
       <span
         aria-hidden="true"
@@ -39,7 +40,7 @@ export const GithubAvatar = ({
       aria-hidden="true"
       loading="lazy"
       referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
+      onError={() => setFailedUrl(avatarUrl)}
       style={style}
       className={cn("shrink-0 rounded-full bg-active", className)}
     />

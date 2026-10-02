@@ -12,6 +12,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { GithubAvatar } from "../pull-requests/GithubAvatar";
 import { formatAgo } from "../selectors";
 import { useSharedNow } from "../use-now";
 
@@ -102,26 +103,10 @@ export const RollupDot = ({ state }: { state: "pending" | "success" | "failure" 
     <CheckStatusIcon status={state === "pending" ? "in_progress" : state} className="size-3.5" />
   );
 
-export const Avatar = ({ user, size = 20 }: { user: GithubUser | null; size?: number }) =>
-  user?.avatarUrl ? (
-    <img
-      src={user.avatarUrl}
-      alt=""
-      width={size}
-      height={size}
-      loading="lazy"
-      className="shrink-0 rounded-full bg-raised"
-      style={{ width: size, height: size }}
-    />
-  ) : (
-    <span
-      aria-hidden="true"
-      className="grid shrink-0 place-items-center rounded-full bg-raised text-[10px] font-medium uppercase text-text-muted"
-      style={{ width: size, height: size }}
-    >
-      {user?.login.slice(0, 1) ?? "?"}
-    </span>
-  );
+/** A GitHub account's picture; its initial when it has none or the picture does not load. */
+export const Avatar = ({ user, size = 20 }: { user: GithubUser | null; size?: number }) => (
+  <GithubAvatar login={user?.login ?? "?"} avatarUrl={user?.avatarUrl ?? null} size={size} />
+);
 
 /** "3 hours ago", kept current; the exact time on hover. */
 export const Ago = ({ at, className }: { at: string; className?: string }) => {
