@@ -8,7 +8,7 @@ import { RELEASE_NOTES_PATH } from "./release-notes.ts";
 import { normalizeReleaseVersion } from "./versioning.ts";
 
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
-const DEFAULT_REPO = "get-aop/aop-mono";
+const DEFAULT_REPO = "get-aop/aop";
 
 export interface LocalReleaseOptions {
   version: string;

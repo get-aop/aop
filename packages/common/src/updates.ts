@@ -6,7 +6,7 @@ import { normalizeReleaseVersion } from "./version.ts";
  * updaters read the public feed on getaop.com (release-feed.ts) and fall back to these releases
  * only with a token.
  */
-export const RELEASE_REPO = "get-aop/aop-mono";
+export const RELEASE_REPO = "get-aop/aop";
 
 /** The GitHub API origin. A test points the host and the apps at a fake feed instead. */
 export const GITHUB_API_URL = "https://api.github.com";

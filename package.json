@@ -59,11 +59,11 @@
   "description": "Agents Operating Platform — local-first orchestrator for coding-agent CLIs",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/get-aop/aop-mono.git"
+    "url": "git+https://github.com/get-aop/aop.git"
   },
   "homepage": "https://getaop.com",
   "bugs": {
-    "url": "https://github.com/get-aop/aop-mono/issues"
+    "url": "https://github.com/get-aop/aop/issues"
   },
   "author": "AOP contributors"
 }

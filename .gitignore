@@ -11,8 +11,8 @@ coverage
 *.lcov
 
 # logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+*.log
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # dotenv environment variable files
 .env
@@ -76,3 +76,19 @@ tmp
 
 # Design reference docs (PLAN-*, never committed)
 docs/design/
+
+# local work state, databases and screen captures that must never be committed
+.work/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+/*.png
+/*.jpg
+/*.gif
+/*.mov
+/*.mp4
+.claude/settings.local.json
