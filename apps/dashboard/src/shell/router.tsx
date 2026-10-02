@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { type AddableTabId, isAddableTabId } from "../projects/layout/panel-tabs";
 import { canGoBack, canGoForward, pushEntry, replaceEntry } from "./app-history";
 
 /** The screens of a project's settings, in the order its side nav lists them. */
@@ -31,38 +32,38 @@ export type ArtifactViewRef =
   | { kind: "file"; threadId: string | null; path: string }
   | { kind: "visualize"; messageId: string };
 
+/** What a project screen may show where the chat is, one at a time. */
+interface CoordinatorView {
+  pullRequest?: PullRequestViewRef;
+  artifact?: ArtifactViewRef;
+}
+
 /**
  * The app's screens. `project` is the project screen: the coordinator chat with the threads
- * panel on its overview. `thread` is the same screen with one thread open in the panel;
+ * panel on its overview. `thread` is the same screen with one thread open in the panel, and
+ * `project-tab` the same screen with another of the panel's tabs showing;
  * `project-settings` is one section of the project's settings, in a dialog over the project screen.
- * Either project screen may name a `pullRequest` or an `artifact` (one at a time), shown where the
+ * Any project screen may name a `pullRequest` or an `artifact` (one at a time), shown where the
  * chat is while the panel stays.
  */
 export type Route =
   | { name: "projects" }
-  | {
-      name: "project";
-      projectId: string;
-      pullRequest?: PullRequestViewRef;
-      artifact?: ArtifactViewRef;
-    }
-  | {
-      name: "thread";
-      projectId: string;
-      threadId: string;
-      pullRequest?: PullRequestViewRef;
-      artifact?: ArtifactViewRef;
-    }
+  | ({ name: "project"; projectId: string } & CoordinatorView)
+  | ({ name: "thread"; projectId: string; threadId: string } & CoordinatorView)
+  | ({ name: "project-tab"; projectId: string; tab: AddableTabId } & CoordinatorView)
   | { name: "project-settings"; projectId: string; section: ProjectSettingsSection };
 
-/** The two screens the panel and the chat (or a pull request in its place) share. */
-export type ProjectScreen = Extract<Route, { name: "project" | "thread" }>;
+/** The screens the panel and the chat (or a pull request in its place) share. */
+export type ProjectScreen = Extract<Route, { name: "project" | "thread" | "project-tab" }>;
 
 export const projectsPath = (): string => "/";
 export const projectPath = (projectId: string): string =>
   `/projects/${encodeURIComponent(projectId)}`;
 export const threadPath = (projectId: string, threadId: string): string =>
   `${projectPath(projectId)}/threads/${encodeURIComponent(threadId)}`;
+/** The project screen with one of the panel's other tabs (pull requests, ...) showing. */
+export const projectTabPath = (projectId: string, tab: AddableTabId): string =>
+  `${projectPath(projectId)}/${tab}`;
 export const projectSettingsPath = (
   projectId: string,
   section: ProjectSettingsSection = "general",
@@ -70,10 +71,7 @@ export const projectSettingsPath = (
 
 /** The address of a project screen, with the pull request or artifact it names, if any. */
 export const projectScreenPath = (screen: ProjectScreen): string => {
-  const base =
-    screen.name === "thread"
-      ? threadPath(screen.projectId, screen.threadId)
-      : projectPath(screen.projectId);
+  const base = screenBasePath(screen);
   const pr = screen.pullRequest;
   if (pr) return `${base}/pulls/${encodeURIComponent(pr.repoId)}/${pr.number}`;
   return screen.artifact ? `${base}${artifactViewPath(screen.artifact)}` : base;
@@ -92,6 +90,12 @@ const artifactViewPath = (ref: ArtifactViewRef): string => {
 
 // A file of the coordinator's workspace names no thread.
 const COORDINATOR_SEGMENT = "coordinator";
+
+const screenBasePath = (screen: ProjectScreen): string => {
+  if (screen.name === "thread") return threadPath(screen.projectId, screen.threadId);
+  if (screen.name === "project-tab") return projectTabPath(screen.projectId, screen.tab);
+  return projectPath(screen.projectId);
+};
 
 /** The route a path names, or null for a path no screen owns (the app then shows the projects). */
 export const parseRoute = (pathname: string): Route | null => {
@@ -114,23 +118,27 @@ const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
     const before = rest.slice(0, pullRequestAt);
     // The old chat address is only ever bare; it is not a screen a pull request opens over.
     const screen = before[0] === "chat" ? null : parseScreenRoute(projectId, before);
-    if (!pullRequest || !screen || (screen.name !== "project" && screen.name !== "thread")) {
-      return null;
-    }
+    if (!pullRequest || !screen || !isProjectScreen(screen)) return null;
     return { ...screen, pullRequest };
   }
   return parseScreenRoute(projectId, rest);
 };
 
-// The artifact view follows the screen it opens over: the project's (no segments) or a thread's
-// (`threads/<id>`). Undefined when the address names no artifact view.
+/** Whether the route is a project screen (the chat and the panel), which a pull request can open over. */
+export const isProjectScreen = (route: Route): route is ProjectScreen =>
+  route.name === "project" || route.name === "thread" || route.name === "project-tab";
+
+const ARTIFACT_VIEWS = new Set(["artifacts", "files", "visualize"]);
+
+// The artifact view follows the screen it opens over: the project's (no segments), a thread's
+// (`threads/<id>`) or a tab's (`<tab>`). Undefined when the address names no artifact view.
 const parseArtifactSegments = (projectId: string, rest: string[]): Route | null | undefined => {
-  const at = rest[0] === "threads" ? 2 : 0;
+  const at = rest[0] === "threads" ? 2 : rest[0] && ARTIFACT_VIEWS.has(rest[0]) ? 0 : 1;
   const view = rest[at];
-  if (view !== "artifacts" && view !== "files" && view !== "visualize") return undefined;
+  if (!view || !ARTIFACT_VIEWS.has(view)) return undefined;
   const artifact = parseArtifactView(view, rest.slice(at + 1));
   const screen = parseScreenRoute(projectId, rest.slice(0, at));
-  if (!artifact || !screen || (screen.name !== "project" && screen.name !== "thread")) return null;
+  if (!artifact || !screen || !isProjectScreen(screen)) return null;
   return { ...screen, artifact };
 };
 
@@ -171,6 +179,8 @@ const parseScreenRoute = (projectId: string, rest: string[]): Route | null => {
   if (pane === "chat") return detail === undefined ? { name: "project", projectId } : null;
   if (pane === "settings") return parseSettingsRoute(projectId, detail);
   if (pane === "threads" && detail) return { name: "thread", projectId, threadId: detail };
+  if (isAddableTabId(pane) && detail === undefined)
+    return { name: "project-tab", projectId, tab: pane };
   return null;
 };
 

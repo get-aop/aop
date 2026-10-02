@@ -25,6 +25,14 @@ describe("artifact view addresses", () => {
         threadId: "t1",
         artifact,
       });
+      expect(
+        roundTrip({ name: "project-tab", projectId: "p1", tab: "routines", artifact }),
+      ).toEqual({
+        name: "project-tab",
+        projectId: "p1",
+        tab: "routines",
+        artifact,
+      });
     }
   });
 

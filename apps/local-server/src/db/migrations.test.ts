@@ -29,6 +29,7 @@ const USAGE_TABLES = ["run_usage"];
 const WATCH_TABLES = ["pull_request_watch"];
 const SUGGESTION_TABLES = ["suggestion_answers"];
 const KICKOFF_TABLES = ["project_kickoffs"];
+const ROUTINE_TABLES = ["routine_runs", "routines"];
 const LIBRARY_TABLES = ["library_items", "library_settings"];
 const ARTIFACT_TABLES = ["library_artifact_versions", "library_artifacts"];
 
@@ -50,7 +51,7 @@ describe("runMigrations", () => {
     await db.destroy();
   });
 
-  test("creates the baseline, projects, usage, watch, suggestion, kickoff, library and artifact tables", async () => {
+  test("creates the baseline, projects, usage, watch, suggestion, kickoff, routine, library and artifact tables", async () => {
     await runMigrations(db);
 
     expect(await listTables(db)).toEqual(
@@ -61,6 +62,7 @@ describe("runMigrations", () => {
         ...WATCH_TABLES,
         ...SUGGESTION_TABLES,
         ...KICKOFF_TABLES,
+        ...ROUTINE_TABLES,
         ...LIBRARY_TABLES,
         ...ARTIFACT_TABLES,
       ].sort(),

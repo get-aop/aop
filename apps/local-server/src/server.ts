@@ -102,6 +102,8 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   // Shortly after boot and then every `agent_cli_check_interval_minutes`, the agent CLIs are
   // checked for newer versions (and updated, when the person turned that on).
   agentClis.start();
+  // Routines fire when they come due; runs a stopped host left half-started are failed first.
+  await projectServices.routineScheduler.start();
   // Once a day the Library removes what outlived its retention or its caps.
   const stopLibraryRetention = startLibraryRetention(() => runLibraryRetention(ctx));
   // A project created just before a restart may not have started its survey yet.
@@ -111,6 +113,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     shutdown: async () => {
       logger.info("Shutting down...");
       stopMaintenance();
+      await projectServices.routineScheduler.stop();
       stopLibraryRetention();
       updates.stop();
       agentClis.stop();

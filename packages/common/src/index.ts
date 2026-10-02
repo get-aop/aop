@@ -80,6 +80,7 @@ export {
   releaseFeedUrl,
   releaseNotesUrl,
 } from "./release-feed.ts";
+export * from "./routines/index.ts";
 export { suggestSessionBranchName } from "./session-branch.ts";
 export type { SseMessage } from "./sse.ts";
 export { readSseBody } from "./sse.ts";

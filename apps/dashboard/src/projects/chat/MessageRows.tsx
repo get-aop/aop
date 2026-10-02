@@ -6,7 +6,7 @@ import {
   type ThreadReportOutcome,
   type UserMessage,
 } from "@aop/common";
-import { CircleAlertIcon, CircleCheckIcon, HandIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon, ClockIcon, HandIcon } from "lucide-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Bubble } from "@/ui/bubble";
@@ -25,7 +25,8 @@ const COLLAPSED_MAX_LINES = 8;
 
 /**
  * The person's words: a bubble on the right, folded when long, with the time and a copy button
- * on hover. The images they sent sit above it; a message of images alone has no bubble.
+ * on hover. The images they sent sit above it; a message of images alone has no bubble. A brief
+ * one of their routines sent is labelled with the routine's name.
  */
 export const UserRow = memo(function UserRow({ message }: { message: UserMessage }) {
   return (
@@ -35,6 +36,15 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
       data-message-id={message.id}
       data-message-role="user"
     >
+      {message.routine ? (
+        <span
+          data-testid="user-message-routine"
+          className="flex items-center gap-1 text-meta text-text-subtle"
+        >
+          <ClockIcon aria-hidden="true" className="size-3.5" />
+          Routine · {message.routine.name}
+        </span>
+      ) : null}
       {message.images ? <MessageImages images={message.images} /> : null}
       {message.text ? (
         <Bubble className="relative">

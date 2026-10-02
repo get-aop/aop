@@ -1,5 +1,5 @@
 /**
- * Migration v23: artifacts, on top of the Library (v22). Versions 1 to 22 are never edited.
+ * Migration v24: artifacts, on top of the Library (v23). Versions 1 to 23 are never edited.
  *
  * - library_artifacts: what makes a Library item an artifact: the title and kind its card and
  *   view show, the version that is current, and for a Visualize diagram the reply it was drawn
@@ -10,7 +10,7 @@
  *   Library's blob accounting counts these rows, so an old version's file stays while its
  *   artifact does.
  */
-export const ARTIFACTS_V23_STATEMENTS: readonly string[] = [
+export const ARTIFACTS_V24_STATEMENTS: readonly string[] = [
   `CREATE TABLE library_artifacts (
     item_id TEXT PRIMARY KEY REFERENCES library_items(id) ON DELETE CASCADE,
     title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),

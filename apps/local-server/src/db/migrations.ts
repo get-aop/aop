@@ -1,6 +1,6 @@
 import { type Kysely, sql } from "kysely";
 import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
-import { ARTIFACTS_V23_STATEMENTS } from "./artifacts-v23.ts";
+import { ARTIFACTS_V24_STATEMENTS } from "./artifacts-v24.ts";
 import { AUTO_CONTINUE_V14_STATEMENTS } from "./auto-continue-v14.ts";
 import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { COMPUTER_USE_V20_STATEMENTS } from "./computer-use-v20.ts";
@@ -14,6 +14,7 @@ import { PROJECT_KICKOFF_V12_STATEMENTS } from "./project-kickoff-v12.ts";
 import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
 import { REPORTED_RUNTIME_V13_STATEMENTS } from "./reported-runtime-v13.ts";
+import { ROUTINES_V22_STATEMENTS } from "./routines-v22.ts";
 import { RUN_CLI_VERSION_V17_STATEMENTS } from "./run-cli-version-v17.ts";
 import { RUN_PERMISSIONS_V19_STATEMENTS } from "./run-permissions-v19.ts";
 import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
@@ -58,8 +59,9 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 19, name: "run-permissions", statements: RUN_PERMISSIONS_V19_STATEMENTS },
   { version: 20, name: "computer-use", statements: COMPUTER_USE_V20_STATEMENTS },
   { version: 21, name: "thread-attention", statements: THREAD_ATTENTION_V21_STATEMENTS },
-  { version: 22, name: "library", statements: LIBRARY_V22_STATEMENTS },
-  { version: 23, name: "artifacts", statements: ARTIFACTS_V23_STATEMENTS },
+  { version: 22, name: "routines", statements: ROUTINES_V22_STATEMENTS },
+  { version: 23, name: "library", statements: LIBRARY_V22_STATEMENTS },
+  { version: 24, name: "artifacts", statements: ARTIFACTS_V24_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

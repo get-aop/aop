@@ -4,6 +4,7 @@ import type { ArtifactsDatabase } from "./artifacts-schema.ts";
 import type { ChatHistoryDatabase } from "./chat-history-schema.ts";
 import type { LibraryDatabase } from "./library-schema.ts";
 import type { ProjectsDatabase } from "./projects-schema.ts";
+import type { RoutinesDatabase } from "./routines-schema.ts";
 import type { UsageDatabase } from "./usage-schema.ts";
 
 export interface SettingsTable {
@@ -185,6 +186,7 @@ export interface SchemaMigrationsTable {
 export interface Database
   extends ChatHistoryDatabase,
     ProjectsDatabase,
+    RoutinesDatabase,
     UsageDatabase,
     LibraryDatabase,
     ArtifactsDatabase {

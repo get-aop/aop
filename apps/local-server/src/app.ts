@@ -18,6 +18,7 @@ import { type ComputerUseService, computerUse } from "./computer-use/service.ts"
 import type { LocalServerContext } from "./context.ts";
 import { createEventStreamRoutes } from "./event-log/routes.ts";
 import { createFsRoutes } from "./fs/routes.ts";
+import { createGithubRoutes, createGithubService, type GithubService } from "./github/index.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createLibraryRoutes } from "./library/routes.ts";
@@ -28,6 +29,7 @@ import { createProjectServices, type ProjectServices } from "./project/services.
 import { createPullRequestWatchRoutes } from "./pull-request-watch/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
+import { createRoutineRoutes } from "./routine/routes.ts";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
@@ -60,6 +62,8 @@ export interface AppDependencies {
   agentClis?: AgentCliService;
   /** CUA Driver's status; tests pass one that probes a fake driver. */
   computerUse?: ComputerUseService;
+  /** The host's GitHub access; tests pass one over a fake `gh`. */
+  github?: GithubService;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -131,6 +135,8 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/mcp-secret", createMcpSecretRoutes());
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
+  app.route("/api/projects", createRoutineRoutes(projects.routines));
+  app.route("/api/projects", createGithubRoutes(deps.github ?? createGithubService(ctx)));
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
   app.route("/api", createThreadRoutes(projects));

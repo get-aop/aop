@@ -1,7 +1,7 @@
 import type { ArtifactKind } from "@aop/common";
 import type { Insertable, Selectable } from "kysely";
 
-/** Added by migration v23; see artifacts-v23.ts for what each column means. */
+/** Added by migration v24; see artifacts-v24.ts for what each column means. */
 export interface LibraryArtifactsTable {
   item_id: string;
   title: string;

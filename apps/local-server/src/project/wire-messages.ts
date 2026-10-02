@@ -178,6 +178,8 @@ export const toWireMessage = (
   // The server's nudge to resume after a rate limit is plumbing: the reply that explains the
   // wait is already in the transcript.
   if (origin?.type === "rate-limit-resume") return null;
+  // A thread's routine proposal reaches the person through the coordinator's reply to it.
+  if (origin?.type === "routine-proposal") return null;
   const steers = extras.steers && origin?.type !== "thread-report" ? { steers: extras.steers } : {};
   return MessageSchema.parse({ ...userSideMessage(base, text, origin, images), ...steers });
 };
@@ -253,6 +255,13 @@ const userSideMessage = (
           { type: "text", text },
         ],
       };
+    case "routine":
+      return {
+        ...base,
+        role: "user",
+        text: origin.prompt,
+        routine: { id: origin.routineId, name: origin.name },
+      };
     default:
       return {
         ...base,
@@ -264,8 +273,11 @@ const userSideMessage = (
 };
 
 /** What the chat shows for a person's message: their own words, not the frame the server put around them. */
-export const shownUserText = (content: string, origin?: MessageOrigin | null): string =>
-  origin?.type === "memory-request" ? origin.request : content;
+export const shownUserText = (content: string, origin?: MessageOrigin | null): string => {
+  if (origin?.type === "memory-request") return origin.request;
+  if (origin?.type === "routine") return origin.prompt;
+  return content;
+};
 
 /** What a stored message says, as a person reads it: attachments' markers and pasted text expanded. */
 export const displayText = (row: Pick<ChatMessage, "content" | "session_id">): string => {

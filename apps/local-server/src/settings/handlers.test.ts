@@ -33,6 +33,8 @@ describe("settings/handlers", () => {
         { key: "library_project_cap_mb", value: "1024" },
         { key: "library_host_cap_mb", value: "5120" },
         { key: "max_concurrent_runs", value: "4" },
+        { key: "routine_max_active_per_project", value: "10" },
+        { key: "routine_min_interval_minutes", value: "15" },
         { key: "update_check", value: "true" },
         { key: "update_auto_apply", value: "false" },
       ]);

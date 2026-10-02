@@ -24,6 +24,15 @@ import {
 import { libraryListTool, libraryReadTool, librarySaveTool } from "./tools-library.ts";
 import { memoryDeleteTool, memoryReadTool, memoryWriteTool } from "./tools-memory.ts";
 import { listReposTool, setChatWorkspaceTool } from "./tools-platform.ts";
+import {
+  proposeRoutineTool,
+  routineCreateTool,
+  routineDeleteTool,
+  routineListTool,
+  routinePauseTool,
+  routineRunNowTool,
+  routineUpdateTool,
+} from "./tools-routine.ts";
 import { askUserTool, openPullRequestTool, reportStatusTool } from "./tools-thread.ts";
 
 export { McpToolError } from "./registry.ts";
@@ -42,9 +51,16 @@ const TOOLS: readonly McpTool[] = [
   proposeThreadsTool,
   projectSettingsGetTool,
   projectSettingsSetTool,
+  routineCreateTool,
+  routineListTool,
+  routineUpdateTool,
+  routinePauseTool,
+  routineDeleteTool,
+  routineRunNowTool,
   askUserTool,
   reportStatusTool,
   openPullRequestTool,
+  proposeRoutineTool,
   memoryReadTool,
   memoryWriteTool,
   memoryDeleteTool,

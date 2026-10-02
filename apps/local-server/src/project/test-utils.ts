@@ -21,6 +21,8 @@ import { createAuthenticatedMcpUrl } from "../mcp/auth.ts";
 import { createMcpRoutes } from "../mcp/routes.ts";
 import { createPullRequestWatchRoutes } from "../pull-request-watch/routes.ts";
 import type { PullRequestWatcherDeps } from "../pull-request-watch/watcher.ts";
+import type { RoutineDeps } from "../routine/create.ts";
+import { createRoutineRoutes } from "../routine/routes.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { createSuggestionRoutes } from "../suggestion/routes.ts";
 import type { ThreadGitDeps } from "../thread/git.ts";
@@ -195,6 +197,8 @@ export const createProjectStack = async (
     watch?: PullRequestWatcherDeps;
     /** The quiet window before thread reports wake the coordinator; short by default so suites stay fast. */
     wakeWindowMs?: number;
+    /** The seams of routines: their clock and zone, timers, and the plan-limit check. */
+    routines?: RoutineDeps;
   } = {},
 ): Promise<ProjectStack> => {
   const db = await createTestDb();
@@ -226,6 +230,8 @@ export const createProjectStack = async (
     },
     { runGh: refusingGh, ...options.git },
     options.watch,
+    // No suite reads the plan usage of this machine's AOP_HOME unless it asks to.
+    { usageLimit: async () => null, ...options.routines },
   );
   const app = new Hono();
   app.route("/api/mcp", createMcpRoutes(ctx, services));
@@ -236,6 +242,7 @@ export const createProjectStack = async (
   app.route("/api", createThreadRoutes(services));
   app.route("/api", createSuggestionRoutes(services));
   app.route("/api", createPullRequestWatchRoutes(services));
+  app.route("/api/projects", createRoutineRoutes(services.routines));
 
   const previousMcpUrl = process.env.AOP_MCP_URL;
   const server = options.mcp
@@ -283,6 +290,7 @@ export const createProjectStack = async (
     },
     settle: waitForPendingChatReplies,
     cleanup: async () => {
+      await services.routineScheduler.stop();
       await waitForPendingChatReplies();
       await server?.stop(true);
       if (previousMcpUrl === undefined) delete process.env.AOP_MCP_URL;
