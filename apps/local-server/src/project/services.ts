@@ -6,6 +6,9 @@ import {
   type PullRequestWatcher,
   type PullRequestWatcherDeps,
 } from "../pull-request-watch/watcher.ts";
+import { createRoutines, type RoutineDeps } from "../routine/create.ts";
+import type { RoutineScheduler } from "../routine/scheduler.ts";
+import type { RoutineService } from "../routine/service.ts";
 import { createSuggestionService, type SuggestionService } from "../suggestion/service.ts";
 import { createThreadGit, type ThreadGit, type ThreadGitDeps } from "../thread/git.ts";
 import { createThreadService, type ThreadService } from "../thread/service.ts";
@@ -31,6 +34,10 @@ export interface ProjectServices {
   pullRequestWatcher: PullRequestWatcher;
   /** Notices threads whose AOP tools stopped reaching the host; the MCP endpoint feeds it. */
   toolHealth: ThreadToolHealth;
+  /** The project's work on a schedule. */
+  routines: RoutineService;
+  /** Fires routines when they come due; the server starts it (see server.ts). */
+  routineScheduler: RoutineScheduler;
 }
 
 export const createProjectServices = (
@@ -38,6 +45,7 @@ export const createProjectServices = (
   deps: ChatSessionServiceDeps = {},
   gitDeps: ThreadGitDeps = {},
   watchDeps: PullRequestWatcherDeps = {},
+  routineDeps: RoutineDeps = {},
 ): ProjectServices => {
   const chat = createChatSessionService(ctx, deps);
   // Pull request drafts run on the runtime the chat engine runs on, so one seam covers both.
@@ -47,6 +55,7 @@ export const createProjectServices = (
   const projects = createProjectService(ctx, chat, git, kickoff);
   const toolHealth = createThreadToolHealth(ctx, chat.wake);
   ctx.sessionHooks.observeThreadProgress(toolHealth.turnProgress);
+  const routines = createRoutines(ctx, { threads, projects }, routineDeps);
   return {
     chat,
     projects,
@@ -66,5 +75,7 @@ export const createProjectServices = (
       { runGh: gitDeps.runGh, ...watchDeps },
     ),
     toolHealth,
+    routines: routines.service,
+    routineScheduler: routines.scheduler,
   };
 };

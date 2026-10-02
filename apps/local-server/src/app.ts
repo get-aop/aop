@@ -31,6 +31,7 @@ import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
 import { createSuggestionRoutes } from "./suggestion/routes.ts";
+import { createRoutineRoutes } from "./routine/routes.ts";
 import { createThreadRoutes } from "./thread/routes.ts";
 import { createHostUpdateService } from "./update/host-update-service.ts";
 import { createUpdateRoutes } from "./update/routes.ts";
@@ -132,6 +133,7 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/mcp-secret", createMcpSecretRoutes());
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
+  app.route("/api/projects", createRoutineRoutes(projects.routines));
   app.route("/api/projects", createGithubRoutes(deps.github ?? createGithubService(ctx)));
   app.route("/api", createThreadRoutes(projects));
   app.route("/api", createSuggestionRoutes(projects));
