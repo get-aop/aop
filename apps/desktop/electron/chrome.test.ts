@@ -14,6 +14,7 @@ describe("buildMenuTemplate", () => {
     stopHost: mock(() => {}),
     openUpdateDownload: mock(() => {}),
     restartToUpdate: mock(() => {}),
+    quit: mock(() => {}),
   });
   const model = (overrides: Partial<MenuModel> = {}): MenuModel => ({
     platform: "darwin",
@@ -35,6 +36,19 @@ describe("buildMenuTemplate", () => {
     expect(roles).toEqual(
       expect.arrayContaining(["appMenu", "editMenu", "viewMenu", "windowMenu"]),
     );
+  });
+
+  test("on a Mac, Quit (⌘Q) quits through the app, not the native terminate action", () => {
+    const menuActions = actions();
+    const appMenu = buildMenuTemplate(model(), menuActions)[0];
+    const items = (appMenu?.submenu ?? []) as MenuItemConstructorOptions[];
+    const quit = items.find((item) => item.label === "Quit");
+
+    expect(appMenu?.role).toBe("appMenu");
+    expect(items.some((item) => item.role === "quit")).toBe(false);
+    expect(quit?.accelerator).toBe("Command+Q");
+    quit?.click?.({} as never, undefined, {} as never);
+    expect(menuActions.quit).toHaveBeenCalledTimes(1);
   });
 
   test("a Windows app has a File menu to quit from instead of an app menu", () => {

@@ -85,6 +85,8 @@ const appVersion = app.isPackaged ? app.getVersion() : packageInfo.version;
 // `AOP_RELEASE_FEED_URL` points the app at a fake release feed; it is how the updater is tested.
 const feedOverride = process.env.AOP_RELEASE_FEED_URL?.trim() || undefined;
 
+const QUIT_GRACE_MS = 5_000;
+
 let mainWindow: BrowserWindow | null = null;
 let finishingQuit = false;
 
@@ -294,6 +296,7 @@ function installMenuActions(controller: ReturnType<typeof createDesktopControlle
     stopHost: () => void controller.stopHostMode(),
     openUpdateDownload: () => void openDownload(),
     restartToUpdate: () => appUpdater?.restartToUpdate(),
+    quit: () => app.quit(),
   };
   if (lastState) applyChrome(lastState);
 }
@@ -315,7 +318,12 @@ function installLifecycle(controller: ReturnType<typeof createDesktopController>
     event.preventDefault();
     finishingQuit = true;
     appUpdater?.stop();
-    void controller.shutdown().finally(() => app.quit());
+    void controller.shutdown().finally(() => {
+      app.quit();
+      // The shutdown is done. A page in the AOP Browser must not keep the app alive, its window
+      // closed, if quitting stalls (a guest that never lets its embedder go).
+      setTimeout(() => app.exit(0), QUIT_GRACE_MS);
+    });
   });
 }
 
