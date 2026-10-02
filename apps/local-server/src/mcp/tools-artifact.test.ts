@@ -69,9 +69,12 @@ describe("aop_artifact_create", () => {
       originMessageId: null,
     });
     expect(artifact.versions.map((version) => version.version)).toEqual([1]);
-    expect((await getListing(s, projectId)).items.map((item) => item.name)).toEqual([
-      "release-plan.md",
-    ]);
+    const [item] = (await getListing(s, projectId)).items;
+    expect(item?.name).toBe("release-plan.md");
+    // Pinned by default: Library retention never removes an artifact.
+    expect(item?.pinned).toBe(true);
+    expect(item?.expiresAt).toBeNull();
+    expect(artifact.expiresAt).toBeNull();
   });
 
   test("infers the kind from the name, takes code's language, and reads images from the workspace", async () => {
@@ -217,6 +220,7 @@ describe("aop_artifact_update", () => {
 
     const promoted = await getArtifact(s, projectId, item?.id ?? "");
     expect(promoted).toMatchObject({ versioned: true, currentVersion: 2 });
+    expect((await getListing(s, projectId)).items[0]?.pinned).toBe(true);
     expect((await versionText(s, projectId, item?.id ?? "", 1)).text).toBe("a: 1");
   });
 

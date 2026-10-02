@@ -12,7 +12,7 @@ export interface ArtifactRepository {
   versions: (itemId: string) => Promise<LibraryArtifactVersionRow[]>;
   /** The diagram Visualize drew from a reply, if it is still in the Library. */
   byOriginMessage: (projectId: string, messageId: string) => Promise<LibraryArtifactRow | null>;
-  /** Makes a Library item an artifact, with its first version. */
+  /** Makes a Library item an artifact, with its first version, and pins it. */
   insert: (artifact: LibraryArtifactRow, first: NewLibraryArtifactVersionRow) => Promise<void>;
   /** Adds a version and makes it current; title, kind or the diagram type change with it if given. */
   addVersion: (
@@ -51,6 +51,12 @@ export const createArtifactRepository = (db: Kysely<Database>): ArtifactReposito
     await db.transaction().execute(async (tx) => {
       await tx.insertInto("library_artifacts").values(artifact).execute();
       await tx.insertInto("library_artifact_versions").values(first).execute();
+      // An artifact is the person's to keep: pinned, so Library retention never takes it.
+      await tx
+        .updateTable("library_items")
+        .set({ pinned: 1 })
+        .where("id", "=", artifact.item_id)
+        .execute();
     });
   },
 

@@ -15,7 +15,7 @@ An artifact is a Library item (`library_items`, `source = 'artifact'`) with vers
 
 `kind` is one of `markdown`, `json`, `code`, `csv`, `mermaid`, `html`, `svg`, `image`, `pdf` and `text`. It is inferred from the name and MIME type when the agent does not give one. The Library's file name keeps a matching extension (`release-plan.md`).
 
-The Library's cleanup treats every `sha256` in `library_artifact_versions` as still used, so it never deletes an old version's blob while the artifact exists. Retention applies to the artifact as a whole: it keeps the Library's rules (30 days for what agents save, unless pinned), and a card whose artifact is gone shows "No longer in the Library".
+The Library's cleanup treats every `sha256` in `library_artifact_versions` as still used, so it never deletes an old version's blob while the artifact exists. Artifacts are **pinned by default**: they never expire with the Library's retention and are never evicted to make room, because they are the documents the person asked for. The person can unpin one in the Library, after which the usual rules apply (30 days for what agents save); they count toward the project's Library cap like any pinned file. A card whose artifact was deleted opens to "This can't be shown".
 
 A Library item that is not an artifact, such as an uploaded `.md` or a `.json` an agent saved with `aop_library_save`, opens in the same view as a single version. Files in a chat's workspace that a reply links to (`[plan](docs/plan.md)`, or an absolute path) open there too, read only, with a "Save to Library" action. They are read from that chat's workspace (a thread's worktree, or the coordinator's folder) under the same rules as an agent's save.
 
