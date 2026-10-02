@@ -1,6 +1,6 @@
 import type { LinearCatalog, LinearScope } from "@aop/common";
 import { ArrowUpRightIcon } from "lucide-react";
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, type FormEvent, useState } from "react";
 import { Button } from "@/ui/button";
 import {
   Dialog,
@@ -124,39 +124,7 @@ const Connected = ({
         <dd className="text-text">{connection?.viewer || "—"}</dd>
       </dl>
       {owner ? (
-        <DialogFooter className="sm:justify-between">
-          <Button
-            variant="destructive"
-            size="sm"
-            data-testid="linear-disconnect"
-            disabled={setup.busy}
-            onClick={async () => {
-              if (await setup.disconnect()) onDone();
-            }}
-          >
-            Disconnect
-          </Button>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              data-testid="linear-replace-key"
-              disabled={setup.busy}
-              onClick={setup.replaceKey}
-            >
-              Replace key
-            </Button>
-            <Button
-              size="sm"
-              data-testid="linear-change-scope"
-              disabled={setup.busy}
-              onClick={() => void setup.changeScope()}
-            >
-              {setup.busy ? <Spinner className="size-3.5" /> : null}
-              Change team or project
-            </Button>
-          </div>
-        </DialogFooter>
+        <ConnectedActions setup={setup} onDone={onDone} />
       ) : (
         <p className="text-meta text-text-subtle">
           Only the host owner can change this, on the host machine.
@@ -166,14 +134,81 @@ const Connected = ({
   );
 };
 
+/**
+ * Disconnect, replace the key, or map another team or project. Disconnecting deletes the key
+ * from the host, so it asks once more, in place.
+ */
+const ConnectedActions = ({ setup, onDone }: { setup: LinearSetup; onDone: () => void }) => {
+  const [confirming, setConfirming] = useState(false);
+  if (confirming) {
+    return (
+      <DialogFooter className="items-center sm:justify-between">
+        <p data-testid="linear-disconnect-confirm" className="text-meta text-text-muted">
+          Delete the key from this host?
+        </p>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            data-testid="linear-disconnect-confirmed"
+            disabled={setup.busy}
+            onClick={async () => {
+              if (await setup.disconnect()) onDone();
+              setConfirming(false);
+            }}
+          >
+            Disconnect
+          </Button>
+        </div>
+      </DialogFooter>
+    );
+  }
+  return (
+    <DialogFooter className="sm:justify-between">
+      <Button
+        variant="destructive"
+        size="sm"
+        data-testid="linear-disconnect"
+        disabled={setup.busy}
+        onClick={() => setConfirming(true)}
+      >
+        Disconnect
+      </Button>
+      <div className="flex gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          data-testid="linear-replace-key"
+          disabled={setup.busy}
+          onClick={setup.replaceKey}
+        >
+          Replace key
+        </Button>
+        <Button
+          size="sm"
+          data-testid="linear-change-scope"
+          disabled={setup.busy}
+          onClick={() => void setup.changeScope()}
+        >
+          {setup.busy ? <Spinner className="size-3.5" /> : null}
+          Change team or project
+        </Button>
+      </div>
+    </DialogFooter>
+  );
+};
+
 const KeyStep = ({ setup }: { setup: LinearSetup }) => {
   const [key, setKey] = useState("");
-  const submit = () => {
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
     if (key.trim()) void setup.checkKey(key.trim());
   };
   return (
-    // Not a <form> with a password field: the browser would offer to save the key as a login.
-    <div className="flex flex-col gap-4">
+    <form onSubmit={submit} className="flex flex-col gap-4">
       <ol className="flex list-decimal flex-col gap-1.5 pl-4 text-meta leading-relaxed text-text-muted marker:text-text-subtle">
         <li>
           In Linear, open{" "}
@@ -198,7 +233,8 @@ const KeyStep = ({ setup }: { setup: LinearSetup }) => {
           id="linear-api-key"
           data-testid="linear-api-key"
           type="text"
-          // Masked like a password, without being one to the browser's password manager.
+          // Masked like a password without being a password field, which the browser would
+          // offer to save as a login.
           style={{ WebkitTextSecurity: "disc" } as CSSProperties}
           data-1p-ignore
           data-lpignore="true"
@@ -207,9 +243,6 @@ const KeyStep = ({ setup }: { setup: LinearSetup }) => {
           placeholder="lin_api_…"
           value={key}
           onChange={(event) => setKey(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") submit();
-          }}
           className="h-9 bg-input-surface font-mono text-meta md:text-meta"
           autoFocus
         />
@@ -221,17 +254,16 @@ const KeyStep = ({ setup }: { setup: LinearSetup }) => {
           </Button>
         ) : null}
         <Button
-          type="button"
+          type="submit"
           size="sm"
           data-testid="linear-check-key"
-          onClick={submit}
           disabled={!key.trim() || setup.busy}
         >
           {setup.busy ? <Spinner className="size-3.5" /> : null}
           Continue
         </Button>
       </DialogFooter>
-    </div>
+    </form>
   );
 };
 

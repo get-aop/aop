@@ -9,6 +9,10 @@
  * - a file `signed-out`: `gh` acts logged out (`gh api user` fails with the login hint).
  * - `gh issues-fixture touch`: edits one issue (a new title and update time), so its ETag changes.
  * - `gh issues-fixture sign-out` / `sign-in`: create or remove `signed-out`.
+ * - `gh issues-fixture many` / `few`: add or drop 120 old open issues (past one page of 100).
+ * - a file `fail` makes every issues read fail like a GitHub outage (HTTP 502).
+ * - a file `slow` delays every issues read by 4 seconds (to see the loading state).
+ * - a repository whose name ends in `-empty` has no issues.
  * Every call is appended to `calls.log` there, so a check can count probes and GraphQL reads.
  */
 import { spawnSync } from "node:child_process";
@@ -30,6 +34,8 @@ mkdirSync(dir, { recursive: true });
 const args = process.argv.slice(2);
 const versionPath = join(dir, "issues-version");
 const signedOutPath = join(dir, "signed-out");
+const manyPath = join(dir, "many");
+const failPath = join(dir, "fail");
 const version = existsSync(versionPath) ? Number(readFileSync(versionPath, "utf8")) || 0 : 0;
 
 const log = (what: string) =>
@@ -54,6 +60,18 @@ const signedOut = () => {
   process.exit(4);
 };
 
+type FixtureNode = ReturnType<typeof githubIssueNodes>[number];
+
+const answerIssueBody = (all: FixtureNode[], nameWithOwner: string): never => {
+  const issue = all.find((item) => item.number === Number(flagValue("number")));
+  log(`graphql issue-body ${nameWithOwner}#${flagValue("number")}`);
+  if (!issue) {
+    process.stderr.write("GraphQL: Could not resolve to an Issue with the number.\n");
+    process.exit(1);
+  }
+  return out(JSON.stringify({ data: { repository: { issue } } }));
+};
+
 const handlers: [(a: string[]) => boolean, () => void][] = [
   [
     (a) => a[0] === "issues-fixture",
@@ -61,6 +79,10 @@ const handlers: [(a: string[]) => boolean, () => void][] = [
       if (args[1] === "touch") writeFileSync(versionPath, String(version + 1));
       if (args[1] === "sign-out") writeFileSync(signedOutPath, "");
       if (args[1] === "sign-in") rmSync(signedOutPath, { force: true });
+      if (args[1] === "many") writeFileSync(manyPath, "");
+      if (args[1] === "few") rmSync(manyPath, { force: true });
+      if (args[1] === "fail") writeFileSync(failPath, "");
+      if (args[1] === "recover") rmSync(failPath, { force: true });
       out(`${args[1]} done\n`);
     },
   ],
@@ -81,7 +103,12 @@ const handlers: [(a: string[]) => boolean, () => void][] = [
       if (existsSync(signedOutPath)) signedOut();
       const path = args.find((arg) => arg.startsWith("repos/")) ?? "";
       const nameWithOwner = path.split("/").slice(1, 3).join("/");
-      const etag = `W/"${createHash("sha1").update(`${nameWithOwner}:${version}`).digest("hex")}"`;
+      if (existsSync(failPath)) {
+        process.stderr.write("gh: Server Error (HTTP 502)\n");
+        process.exit(1);
+      }
+      const state = `${nameWithOwner}:${version}:${existsSync(manyPath)}`;
+      const etag = `W/"${createHash("sha1").update(state).digest("hex")}"`;
       const sent = args.find((arg) => arg.startsWith("If-None-Match: "))?.slice(15);
       log(`probe ${nameWithOwner} ${sent === etag ? "304" : "200"}`);
       if (sent === etag) out(`HTTP/2.0 304 Not Modified\r\nEtag: ${etag}\r\n\r\n`, 1);
@@ -94,16 +121,11 @@ const handlers: [(a: string[]) => boolean, () => void][] = [
       if (existsSync(signedOutPath)) signedOut();
       const query = flagValue("query") ?? "";
       const nameWithOwner = `${flagValue("owner")}/${flagValue("name")}`;
-      const all = githubIssueNodes(nameWithOwner, version);
-      if (query.includes("issue(number")) {
-        const issue = all.find((item) => item.number === Number(flagValue("number")));
-        log(`graphql issue-body ${nameWithOwner}#${flagValue("number")}`);
-        if (!issue) {
-          process.stderr.write("GraphQL: Could not resolve to an Issue with the number.\n");
-          process.exit(1);
-        }
-        out(JSON.stringify({ data: { repository: { issue } } }));
-      }
+      if (existsSync(join(dir, "slow"))) spawnSync("sleep", ["4"]);
+      const all = nameWithOwner.endsWith("-empty")
+        ? []
+        : githubIssueNodes(nameWithOwner, version, existsSync(manyPath) ? 120 : 0);
+      if (query.includes("issue(number")) answerIssueBody(all, nameWithOwner);
       const states = /states: \[([A-Z, ]+)\]/.exec(query)?.[1]?.split(/,\s*/) ?? ["OPEN", "CLOSED"];
       const matching = all.filter((issue) => states.includes(issue.state));
       const first = Number(flagValue("first") ?? 100);

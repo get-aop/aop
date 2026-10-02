@@ -57,6 +57,7 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
         shown={shown.length}
         filtering={filtering}
         refreshing={issues.refreshing}
+        error={issues.error}
         onRefresh={issues.refresh}
         onClear={view.clearFilters}
         onLinear={() => setLinearOpen(true)}
@@ -173,6 +174,7 @@ const SummaryBar = ({
   shown,
   filtering,
   refreshing,
+  error,
   onRefresh,
   onClear,
   onLinear,
@@ -181,12 +183,13 @@ const SummaryBar = ({
   shown: number;
   filtering: boolean;
   refreshing: boolean;
+  /** Why the last refresh the person asked for failed; the list shown stays. */
+  error: string | null;
   onRefresh: () => void;
   onClear: () => void;
   onLinear: () => void;
 }) => {
   const total = list?.issues.length ?? 0;
-  const readAt = latestRead(list);
   return (
     <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-4 text-meta text-text-subtle">
       <span data-testid="issues-count" className="tabular-nums">
@@ -207,11 +210,7 @@ const SummaryBar = ({
         </button>
       ) : null}
       <span className="flex-1" />
-      {readAt ? (
-        <span data-testid="issues-read-at" className="hidden truncate @md/issues:inline">
-          Updated {formatAgo(readAt)}
-        </span>
-      ) : null}
+      <ReadState list={list} error={error} />
       <button
         type="button"
         data-testid="issues-linear"
@@ -238,6 +237,23 @@ const SummaryBar = ({
       </button>
     </div>
   );
+};
+
+/** When the list was read, or that the last refresh failed (the list shown is the older one). */
+const ReadState = ({ list, error }: { list: IssueList | null; error: string | null }) => {
+  if (list && error) {
+    return (
+      <span data-testid="issues-refresh-failed" title={error} className="truncate text-waiting">
+        Could not refresh
+      </span>
+    );
+  }
+  const readAt = latestRead(list);
+  return readAt ? (
+    <span data-testid="issues-read-at" className="hidden truncate @md/issues:inline">
+      Updated {formatAgo(readAt)}
+    </span>
+  ) : null;
 };
 
 /** The newest read across sources: what "Updated …" says. */

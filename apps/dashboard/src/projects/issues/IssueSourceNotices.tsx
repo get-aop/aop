@@ -163,7 +163,7 @@ const SourceFailed = ({ source }: { source: IssueSourceStatus }) => (
     icon={<TriangleAlertIcon />}
     title={`Could not read ${source.source === "linear" ? "Linear" : source.name}`}
   >
-    {source.message}
+    {sentence(source.message ?? "")}
     {source.stale && source.fetchedAt
       ? ` Showing the issues read ${formatAgo(source.fetchedAt)}.`
       : null}
@@ -241,6 +241,12 @@ const OffGithub = ({ sources }: { sources: readonly IssueSourceStatus[] }) => (
     GitHub remote, so {sources.length === 1 ? "its" : "their"} issues are not listed.
   </p>
 );
+
+/** A message from `gh` or Linear as a sentence, so another can follow it. */
+const sentence = (text: string): string => {
+  const trimmed = text.trim();
+  return !trimmed || /[.!?)]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+};
 
 const copyCommand = async (command: string) => {
   try {

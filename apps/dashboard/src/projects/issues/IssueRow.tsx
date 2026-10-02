@@ -98,7 +98,10 @@ export const IssueRow = memo(
         </div>
         <ColumnMeta issue={issue} now={now} />
         <div className="flex shrink-0 items-center gap-1 self-center">
-          <AvatarStack people={issue.assignees} />
+          {/* A fixed slot on a wide panel, so the columns line up with or without assignees. */}
+          <span className="flex shrink-0 justify-end @xl/issues:w-14">
+            <AvatarStack people={issue.assignees} />
+          </span>
           <StartThreadButton issue={issue} starting={starting} onStart={onStartThread} />
           <RowMenu issue={issue} starting={starting} onStartThread={onStartThread} />
         </div>

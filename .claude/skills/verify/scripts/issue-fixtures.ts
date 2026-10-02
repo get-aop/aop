@@ -296,15 +296,28 @@ const node = (issue: FixtureIssue, nameWithOwner: string) => ({
   body: issue.body ?? `${issue.title}.\n\nReported by @${issue.author.login}.`,
 });
 
+/** `extra` old issues, so a list runs past one page of 100. */
+const filler = (extra: number): FixtureIssue[] =>
+  Array.from({ length: extra }, (_, index) => ({
+    number: 1000 + index,
+    title: `Older backlog item ${index + 1}`,
+    state: "OPEN" as const,
+    hours: 800 + index,
+    author: people.ben,
+    labels: [labels.perf],
+  }));
+
 /** The repository's issues as GitHub's GraphQL API returns them, newest update first. */
-export const githubIssueNodes = (nameWithOwner: string, version: number) =>
-  GITHUB_ISSUES.map((issue, index) => {
-    const edited = version > 0 && index === 3;
-    return node(
-      edited ? { ...issue, title: `${issue.title} (edited ${version})`, hours: 0 } : issue,
-      nameWithOwner,
-    );
-  }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+export const githubIssueNodes = (nameWithOwner: string, version: number, extra = 0) =>
+  [...GITHUB_ISSUES, ...filler(extra)]
+    .map((issue, index) => {
+      const edited = version > 0 && index === 3;
+      return node(
+        edited ? { ...issue, title: `${issue.title} (edited ${version})`, hours: 0 } : issue,
+        nameWithOwner,
+      );
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
 const linearPeople = {
   sam: { name: "Sam Rivera", displayName: "sam", avatarUrl: null },

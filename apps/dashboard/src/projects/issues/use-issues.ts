@@ -43,7 +43,7 @@ export const useIssues = (
       if (!options.quiet) setRefreshing(true);
       const outcome = await listIssues(projectId, { state, ...options }).then(
         (next) => ({ next }),
-        (cause: unknown) => ({ error: cause instanceof Error ? cause.message : String(cause) }),
+        (cause: unknown) => ({ error: failureMessage(cause) }),
       );
       if (!current()) return;
       if ("next" in outcome) {
@@ -91,4 +91,10 @@ export const useIssues = (
   }, [read]);
 
   return { list, loading, refreshing, error, limit, refresh, loadMore };
+};
+
+// A `fetch` that never reached the host rejects with a TypeError ("Failed to fetch").
+const failureMessage = (cause: unknown): string => {
+  if (cause instanceof TypeError) return "The AOP host could not be reached.";
+  return cause instanceof Error ? cause.message : String(cause);
 };
