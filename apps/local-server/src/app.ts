@@ -31,6 +31,11 @@ import { createProjectRoutes } from "./project/routes.ts";
 import { createProjectServices, type ProjectServices } from "./project/services.ts";
 import { createPullRequestListRoutes } from "./pull-request-list/routes.ts";
 import { createPullRequestListService } from "./pull-request-list/service.ts";
+import { createPullRequestViewRoutes } from "./pull-request-view/routes.ts";
+import {
+  createPullRequestViewService,
+  type PullRequestViewService,
+} from "./pull-request-view/service.ts";
 import { createPullRequestWatchRoutes } from "./pull-request-watch/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
@@ -71,6 +76,8 @@ export interface AppDependencies {
   github?: GithubService;
   /** The Issues tab's GitHub and Linear reads; tests pass one over a fake `gh` and Linear. */
   issues?: IssueService;
+  /** The PR View's reads and writes; tests pass one over a fake `gh`. */
+  pullRequestView?: PullRequestViewService;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -143,20 +150,9 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createRoutineRoutes(projects.routines));
-  const github = deps.github ?? createGithubService(ctx);
-  app.route("/api/projects", createGithubRoutes(github));
-  app.route(
-    "/api/projects",
-    createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
-  );
+  app.route("/api/projects", createGithubBackedRoutes(deps, projects));
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
-  app.route(
-    "/api/projects",
-    createPullRequestListRoutes(
-      createPullRequestListService({ github, threads: ctx.threadRepository }),
-    ),
-  );
   app.route("/api", createThreadRoutes(projects));
   app.route("/api", createSuggestionRoutes(projects));
   app.route("/api", createPullRequestWatchRoutes(projects));
@@ -212,6 +208,28 @@ export const createApp = (deps: AppDependencies) => {
 };
 
 // What the model of a refused run reads, since Claude Code passes it on as the call's error.
+/** The routes that read and act on GitHub through the host's `gh`: status, issues, PRs, the PR View. */
+const createGithubBackedRoutes = (deps: AppDependencies, projects: ProjectServices) => {
+  const github = deps.github ?? createGithubService(deps.ctx);
+  const routes = new Hono<AuthEnv>();
+  routes.route("/", createGithubRoutes(github));
+  routes.route(
+    "/",
+    createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
+  );
+  routes.route(
+    "/",
+    createPullRequestViewRoutes(deps.pullRequestView ?? createPullRequestViewService({ github })),
+  );
+  routes.route(
+    "/",
+    createPullRequestListRoutes(
+      createPullRequestListService({ github, threads: deps.ctx.threadRepository }),
+    ),
+  );
+  return routes;
+};
+
 const NO_OAUTH =
   "This AOP host has no OAuth server. Its MCP endpoint refused the token in the URL: the session ended, or the host's MCP secret was rotated. The next turn gets a new token.";
 

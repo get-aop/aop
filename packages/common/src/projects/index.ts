@@ -200,6 +200,34 @@ export {
   PullRequestListUnavailableReasonSchema,
   PullRequestReviewStateSchema,
 } from "./pull-request-list.ts";
+export type {
+  PullRequestCommentBody,
+  PullRequestMergeBlocker,
+  PullRequestMergeBody,
+  PullRequestMergeMethod,
+  PullRequestReviewBody,
+  PullRequestUpdateBody,
+  PullRequestViewCheck,
+  PullRequestViewChecks,
+  PullRequestViewChecksResponse,
+  PullRequestViewComment,
+  PullRequestViewCommit,
+  PullRequestViewDetail,
+  PullRequestViewFile,
+  PullRequestViewFilesResponse,
+  PullRequestViewMergeBox,
+  PullRequestViewReviewer,
+  PullRequestViewReviewThread,
+  PullRequestViewState,
+  PullRequestViewTimelineItem,
+  PullRequestViewViewer,
+} from "./pull-request-view.ts";
+export {
+  PullRequestCommentBodySchema,
+  PullRequestMergeBodySchema,
+  PullRequestReviewBodySchema,
+  PullRequestUpdateBodySchema,
+} from "./pull-request-view.ts";
 export {
   DEFAULT_MAX_CONCURRENT_RUNS,
   MAX_CONCURRENT_RUNS_LIMIT,

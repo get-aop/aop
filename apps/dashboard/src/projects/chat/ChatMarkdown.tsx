@@ -7,6 +7,7 @@ import { openExternalUrl } from "../../api/client";
 import { lazyCodeHighlighter } from "../../components/lazy-code-highlighter";
 import { isDesktopApp } from "../../utils/desktop-runtime";
 import { openArtifactView } from "../artifact-view/open-artifact-view";
+import { openInView, usePullRequestLinks } from "../pull-request-view/pull-request-links";
 import { ArtifactCard } from "./ArtifactCard";
 import { artifactLinkOf, fileLinkOf, useChatOrigin, withArtifactLinks } from "./artifact-links";
 import { useOptionalChatContext } from "./chat-context";
@@ -90,6 +91,8 @@ function ChatLink({
   ...props
 }: AnchorHTMLAttributes<HTMLAnchorElement> & ChildrenProps) {
   const { desktop, openLink, chips } = useContext(ChatLinkContext);
+  // A link to one of the project's pull requests shows it in the PR View.
+  const pullRequest = usePullRequestLinks()?.targetOf(href) ?? null;
   const thread = threadChipOf(href);
   if (thread !== null) return <ThreadChip threadId={thread} />;
   const chip = chipIndexOf(href);
@@ -102,7 +105,11 @@ function ChatLink({
       target="_blank"
       rel="noopener noreferrer"
       {...props}
-      onClick={(event) => handleLinkClick(event, href, desktop, openLink)}
+      data-opens={pullRequest ? "pull-request-view" : undefined}
+      onClick={(event) => {
+        openInView(pullRequest)(event);
+        if (!event.defaultPrevented) handleLinkClick(event, href, desktop, openLink);
+      }}
     >
       {children}
     </a>

@@ -50,10 +50,15 @@ const installResizeObserverForTests = (): void => {
         const rect = target.getBoundingClientRect();
         const width = rect.width > 0 ? rect.width : 800;
         const height = rect.height > 0 ? rect.height : 600;
+        // Libraries read the box sizes rather than contentRect (the diff renderer's virtualizer).
+        const size = [{ inlineSize: width, blockSize: height }];
         this.callback(
           [
             {
               target,
+              borderBoxSize: size,
+              contentBoxSize: size,
+              devicePixelContentBoxSize: size,
               contentRect: {
                 width,
                 height,

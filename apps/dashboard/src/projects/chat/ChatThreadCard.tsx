@@ -128,6 +128,7 @@ const CardTrailing = ({ thread, variant }: { thread: Thread; variant: ThreadCard
         <PullRequestChip
           pullRequest={pullRequest}
           testId="chat-thread-card-pr"
+          repoId={thread.repoId}
           className="relative z-10 shrink-0"
         />
       ) : null}

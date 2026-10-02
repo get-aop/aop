@@ -93,6 +93,7 @@ const CardAside = ({ thread, now }: { thread: Thread; now: number }) => {
         <PullRequestChip
           pullRequest={pullRequest}
           testId="thread-pr-chip"
+          repoId={thread.repoId}
           className="relative z-10"
         />
       ) : null}
