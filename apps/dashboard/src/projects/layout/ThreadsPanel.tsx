@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { IconButton } from "../../components/IconButton";
+import { IssuesTab } from "../issues/IssuesTab";
 import type { ProjectEntry } from "../projects-state";
 import { RoutinesTab } from "../routines/RoutinesTab";
 import { attentionOf, THREAD_STATUS_LABEL, THREAD_STATUS_ORDER } from "../selectors";
@@ -147,6 +148,9 @@ const PanelTabBody = ({
       );
     case "routines":
       return <RoutinesTab project={entry.project} />;
+    case "issues":
+      // Keyed by project, so a search or filter never carries over to another project's issues.
+      return <IssuesTab key={entry.project.id} projectId={entry.project.id} />;
   }
 };
 

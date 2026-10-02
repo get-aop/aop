@@ -21,6 +21,9 @@ import { createFsRoutes } from "./fs/routes.ts";
 import { createGithubRoutes, createGithubService, type GithubService } from "./github/index.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
+import { createHostIssueService } from "./issues/host-issue-service.ts";
+import { createIssueRoutes } from "./issues/routes.ts";
+import type { IssueService } from "./issues/service.ts";
 import { createLibraryRoutes } from "./library/routes.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
 import { createMcpSecretRoutes } from "./mcp/secret-routes.ts";
@@ -64,6 +67,8 @@ export interface AppDependencies {
   computerUse?: ComputerUseService;
   /** The host's GitHub access; tests pass one over a fake `gh`. */
   github?: GithubService;
+  /** The Issues tab's GitHub and Linear reads; tests pass one over a fake `gh` and Linear. */
+  issues?: IssueService;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -136,7 +141,12 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createRoutineRoutes(projects.routines));
-  app.route("/api/projects", createGithubRoutes(deps.github ?? createGithubService(ctx)));
+  const github = deps.github ?? createGithubService(ctx);
+  app.route("/api/projects", createGithubRoutes(github));
+  app.route(
+    "/api/projects",
+    createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
+  );
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
   app.route("/api", createThreadRoutes(projects));
