@@ -12,6 +12,7 @@ const {
   PROJECT_SETTINGS_SECTIONS,
   parseRoute,
   projectPath,
+  projectScreenPath,
   projectSettingsPath,
   routeProjectId,
   threadPath,
@@ -87,6 +88,47 @@ describe("parseRoute", () => {
       projectId: id,
       threadId: "t/1",
     });
+  });
+
+  test("a project or thread screen may name a pull request shown in the chat's place", () => {
+    const pullRequest = { repoId: "repo_1", number: 752 };
+    expect(parseRoute("/projects/p1/pulls/repo_1/752")).toEqual({
+      name: "project",
+      projectId: "p1",
+      pullRequest,
+    });
+    expect(parseRoute("/projects/p1/threads/t1/pulls/repo_1/752")).toEqual({
+      name: "thread",
+      projectId: "p1",
+      threadId: "t1",
+      pullRequest,
+    });
+    for (const path of [
+      "/projects/p1/pulls/repo_1",
+      "/projects/p1/pulls/repo_1/0",
+      "/projects/p1/pulls/repo_1/07",
+      "/projects/p1/pulls/repo_1/7x",
+      "/projects/p1/pulls/repo_1/99999999999999999999",
+      "/projects/p1/chat/pulls/repo_1/7",
+      "/projects/p1/settings/pulls/repo_1/7",
+      "/projects/p1/threads/pulls/repo_1/7",
+      "/projects/p1/pulls/repo_1/7/files",
+    ]) {
+      expect(parseRoute(path)).toBeNull();
+    }
+  });
+
+  test("projectScreenPath and the parser agree, with and without a pull request", () => {
+    const screens = [
+      { name: "project", projectId: "p 1" },
+      { name: "thread", projectId: "p1", threadId: "t/1" },
+      { name: "project", projectId: "p1", pullRequest: { repoId: "repo/x", number: 3 } },
+      { name: "thread", projectId: "p1", threadId: "t1", pullRequest: { repoId: "r", number: 9 } },
+    ] as const;
+    for (const screen of screens) {
+      expect(parseRoute(projectScreenPath(screen))).toEqual(screen);
+    }
+    expect(projectScreenPath(screens[2])).toBe("/projects/p1/pulls/repo%2Fx/3");
   });
 
   test("routeProjectId is the project a route belongs to, or null", () => {
