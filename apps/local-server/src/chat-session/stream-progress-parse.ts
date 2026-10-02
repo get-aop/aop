@@ -399,7 +399,8 @@ const claudeToolChunk = (block: Record<string, unknown>): ProgressChunk => {
 const stringType = (event: Record<string, unknown>): string =>
   typeof event.type === "string" ? event.type : "";
 
-const humanizeToolName = (name: string): string => {
+/** How a tool is named in a turn's parts: `mcp__aop__aop_ask_user` is "mcp aop aop ask user". */
+export const humanizeToolName = (name: string): string => {
   const trimmed = name.trim();
   if (!trimmed) return "Tool";
   return trimmed

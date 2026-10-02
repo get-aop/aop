@@ -37,6 +37,34 @@ export const BlockedQuestionSchema = z.object({
 });
 export type BlockedQuestion = z.infer<typeof BlockedQuestionSchema>;
 
+export const THREAD_WAIT_REASON_MAX = 300;
+
+/**
+ * What a working thread waits on the person for outside AOP while it keeps working: a deployment
+ * to approve on GitHub, a login, a secret. Unlike a question it does not end the turn; it clears
+ * when the thread reports again without it or its turn ends. `link` is where the person acts.
+ */
+export const ThreadWaitSchema = z.object({
+  reason: z.string().trim().min(1).max(THREAD_WAIT_REASON_MAX),
+  link: z
+    .url({ protocol: /^https?$/ })
+    .max(2000)
+    .nullable(),
+  since: TimestampSchema,
+});
+export type ThreadWait = z.infer<typeof ThreadWaitSchema>;
+
+/**
+ * A working thread whose AOP tools stopped reaching the host: it cannot report, ask or open its
+ * pull request through AOP until they come back. The host sets it and clears it when a call
+ * arrives again or the turn ends.
+ */
+export const ThreadDegradedSchema = z.object({
+  reason: z.string().min(1).max(500),
+  since: TimestampSchema,
+});
+export type ThreadDegraded = z.infer<typeof ThreadDegradedSchema>;
+
 const ThreadBaseSchema = z.object({
   id: IdSchema,
   projectId: IdSchema,
@@ -62,6 +90,8 @@ const stateBoundFields = {
   blockedQuestion: z.never().optional(),
   resolvedAt: z.never().optional(),
   resumesAt: z.never().optional(),
+  waitingOn: z.never().optional(),
+  degraded: z.never().optional(),
 };
 
 const hasPullRequest = (artifacts: { type: string }[]): boolean =>
@@ -70,7 +100,8 @@ const hasPullRequest = (artifacts: { type: string }[]): boolean =>
 /**
  * A thread as the Overview and the thread pane see it. Discriminated on `status`:
  * - waiting-on-you: blocked on `blockedQuestion`, which only this status carries.
- * - working: an agent turn is running.
+ * - working: an agent turn is running. It may carry `waitingOn`, something outside AOP it waits on
+ *   the person for while it goes on, and `degraded`, when its AOP tools stopped reaching the host.
  * - queued: a turn is accepted but waits for a free run slot; the host runs at most a set number
  *   of thread turns at once, and queued turns start in the order they were accepted.
  * - rate-limited: the agent's CLI refused a turn because of a rate or usage limit. The thread
@@ -87,7 +118,12 @@ export const ThreadSchema = z.discriminatedUnion("status", [
     status: z.literal("waiting-on-you"),
     blockedQuestion: BlockedQuestionSchema,
   }),
-  ThreadBaseSchema.extend({ ...stateBoundFields, status: z.literal("working") }),
+  ThreadBaseSchema.extend({
+    ...stateBoundFields,
+    status: z.literal("working"),
+    waitingOn: ThreadWaitSchema.optional(),
+    degraded: ThreadDegradedSchema.optional(),
+  }),
   ThreadBaseSchema.extend({ ...stateBoundFields, status: z.literal("queued") }),
   ThreadBaseSchema.extend({
     ...stateBoundFields,
@@ -115,6 +151,13 @@ export type ThreadStatus = Thread["status"];
 export const THREAD_STATUSES: readonly ThreadStatus[] = ThreadSchema.options.map(
   (variant) => variant.shape.status.value,
 );
+
+/**
+ * The status a person should see the thread under: a working thread that waits on them for
+ * something outside AOP is waiting on them, though its turn goes on.
+ */
+export const shownThreadStatus = (thread: Thread): ThreadStatus =>
+  thread.status === "working" && thread.waitingOn ? "waiting-on-you" : thread.status;
 
 /** Completed steps over total steps, or null while the thread has no checklist yet. */
 export const getThreadProgress = (

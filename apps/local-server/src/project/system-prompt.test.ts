@@ -122,6 +122,9 @@ describe("a thread's system prompt", () => {
     expect(prompt).toContain("- Ledger is append-only");
     expect(prompt).toContain("aop_report_status");
     expect(prompt).toContain("aop_ask_user");
+    expect(prompt).toContain(
+      "blocked on the person for something outside AOP (approving a deployment or a pull request on GitHub, a login, a secret) and keep working or polling for it, call aop_report_status with waitingOn",
+    );
   });
 
   test("a thread with a branch is told it has a worktree of its own and opens its pull request through aop_open_pr", () => {

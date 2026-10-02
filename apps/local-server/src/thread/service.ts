@@ -1,11 +1,4 @@
-import type {
-  BlockedQuestion,
-  MessagePage,
-  Project,
-  Thread,
-  ThreadStatus,
-  ThreadStep,
-} from "@aop/common";
+import type { BlockedQuestion, MessagePage, Project, Thread, ThreadStatus } from "@aop/common";
 import { generateTypeId } from "@aop/infra";
 import { discardStagedImages } from "../attachment/service.ts";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
@@ -29,6 +22,7 @@ import { changeThread as applyPatch } from "./change.ts";
 import type { ThreadGit } from "./git.ts";
 import { createThreadRepository, type ThreadPatch } from "./repository.ts";
 import { invalidMessage, planTarget, readMessageInput, threadTitle } from "./spawn-target.ts";
+import { type StatusReport, storeStatusReport } from "./status-report.ts";
 import { insertThreadSession } from "./thread-session.ts";
 import type { ThreadError, ThreadResult } from "./types.ts";
 
@@ -89,14 +83,17 @@ export interface ThreadService {
   /** Ends a rate-limited thread's wait now instead of at its reset; the thread takes up its work again. */
   resume: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
   stop: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
-  /** The thread's own tools: it needs the person's call (waiting on you) or reports progress. */
+  /**
+   * The thread's own tools: it needs the person's call (waiting on you), or reports progress,
+   * which may say it waits on the person for something outside AOP while it keeps working.
+   */
   askUser: (
     threadId: string,
     question: BlockedQuestion,
   ) => Promise<ThreadResult<{ thread: Thread }>>;
   reportStatus: (
     threadId: string,
-    report: { line?: string | null; steps?: ThreadStep[] },
+    report: StatusReport,
   ) => Promise<ThreadResult<{ thread: Thread }>>;
   markRead: (threadId: string) => Promise<ThreadResult<{ thread: Thread }>>;
   /** What the thread changed in its worktree: the files, and one file's hunks. */
@@ -355,12 +352,12 @@ export const createThreadService = (
         lastActivityAt: new Date().toISOString(),
       }),
 
-    reportStatus: async (threadId, report) =>
-      changeThread(threadId, {
-        ...(report.steps && { steps: report.steps }),
-        ...(report.line !== undefined && { liveStatusLine: report.line }),
-        lastActivityAt: new Date().toISOString(),
-      }),
+    reportStatus: async (threadId, report) => {
+      const woken = await storeStatusReport(ctx, threadId, report);
+      if (woken === null) return { success: false, error: { code: "THREAD_NOT_FOUND" } };
+      if (woken.length > 0) await chat.wake(woken);
+      return reload(threadId);
+    },
 
     markRead: async (threadId) => {
       const thread = await ctx.threadRepository.getById(threadId);

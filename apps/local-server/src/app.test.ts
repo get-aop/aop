@@ -9,6 +9,7 @@ import { createLoopbackApp } from "./auth/test-utils.ts";
 import { createCommandContext, type LocalServerContext } from "./context.ts";
 import type { Database } from "./db/schema.ts";
 import { type AnyJson, createTestDb, createTestRepo } from "./db/test-utils.ts";
+import { createAuthenticatedMcpUrl, hasValidMcpAccess } from "./mcp/auth.ts";
 
 describe("app", () => {
   let db: Kysely<Database>;
@@ -28,6 +29,18 @@ describe("app", () => {
   afterEach(async () => {
     await db.destroy();
     cleanupAopHome();
+  });
+
+  test("rotates the MCP secret for the host owner, which invalidates the tokens issued before", async () => {
+    const before = new URL(createAuthenticatedMcpUrl("http://127.0.0.1:1/api/mcp", "isess_a"));
+
+    const rotated = await app.request("/api/mcp-secret/rotate", { method: "POST" });
+
+    expect(rotated.status).toBe(200);
+    expect(await rotated.json()).toEqual({ rotated: true });
+    expect(hasValidMcpAccess("isess_a", before.searchParams.get("accessToken") ?? undefined)).toBe(
+      false,
+    );
   });
 
   describe("GET /api/health", () => {
@@ -177,6 +190,39 @@ describe("app - static file serving", () => {
         expect(route.status).toBe(200);
         expect(route.headers.get("Content-Type")).toBe("text/html");
         expect(await route.text()).toBe('<div id="root"></div>');
+      }
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+      await db.destroy();
+    }
+  });
+
+  test("answers an MCP client's OAuth discovery with JSON, never with the dashboard page", async () => {
+    const db = await createTestDb();
+    const tempDir = await mkdtemp(join(tmpdir(), "aop-test-oauth-paths-"));
+    await writeFile(join(tempDir, "index.html"), '<div id="root"></div>');
+
+    try {
+      const app = createLoopbackApp({
+        ctx: createCommandContext(db),
+        startTimeMs: Date.now(),
+        dashboardStaticPath: tempDir,
+      });
+      const probes: [string, string][] = [
+        ["GET", "/.well-known/oauth-protected-resource/api/mcp?sessionId=x&accessToken=y"],
+        ["GET", "/.well-known/oauth-protected-resource"],
+        ["GET", "/.well-known/oauth-authorization-server"],
+        ["GET", "/.well-known/openid-configuration"],
+        ["POST", "/register"],
+      ];
+
+      for (const [method, path] of probes) {
+        const response = await app.request(path, { method });
+        expect({ path, status: response.status }).toEqual({ path, status: 404 });
+        expect(response.headers.get("Content-Type")).toContain("application/json");
+        expect(await response.json()).toEqual({
+          error: expect.stringContaining("This AOP host has no OAuth server."),
+        });
       }
     } finally {
       await rm(tempDir, { recursive: true, force: true });

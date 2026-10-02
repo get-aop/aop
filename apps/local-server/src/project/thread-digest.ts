@@ -29,7 +29,19 @@ const digestLine = (thread: Thread): string => {
   const detail = [
     progress ? `${progress.done}/${progress.total}` : null,
     thread.liveStatusLine ? oneLine(thread.liveStatusLine, STATUS_LINE_MAX_CHARS) : null,
+    ...attentionNotes(thread),
   ].filter((part) => part !== null);
   const title = oneLine(thread.title, TITLE_MAX_CHARS);
   return `- ${thread.id} "${title}" [${thread.status}]${detail.length ? ` ${detail.join(" · ")}` : ""}`;
+};
+
+// What a working thread needs the person to know while its turn goes on.
+const attentionNotes = (thread: Thread): string[] => {
+  if (thread.status !== "working") return [];
+  return [
+    ...(thread.waitingOn
+      ? [`waiting on the person: ${oneLine(thread.waitingOn.reason, STATUS_LINE_MAX_CHARS)}`]
+      : []),
+    ...(thread.degraded ? ["lost its AOP tools"] : []),
+  ];
 };

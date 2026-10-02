@@ -6,6 +6,7 @@ import {
   ReasoningEffortSchema,
   SUGGESTED_THREADS_MAX,
   SUGGESTION_REASON_MAX,
+  shownThreadStatus,
   THREAD_STATUSES,
   type Thread,
 } from "@aop/common";
@@ -51,6 +52,9 @@ const summarize = (thread: Thread) => ({
   branch: thread.branch,
   pullRequest: thread.artifacts.find((artifact) => artifact.type === "pr") ?? null,
   ...(thread.status === "waiting-on-you" ? { blockedQuestion: thread.blockedQuestion } : {}),
+  // A working thread can wait on the person for something outside AOP, or have lost its AOP tools.
+  ...(thread.status === "working" && thread.waitingOn ? { waitingOn: thread.waitingOn } : {}),
+  ...(thread.status === "working" && thread.degraded ? { degraded: thread.degraded } : {}),
   // A rate-limited thread resumes by itself at this time; the coordinator has no need to steer it.
   ...(thread.status === "rate-limited" ? { resumesAt: thread.resumesAt } : {}),
   lastActivityAt: thread.lastActivityAt,
@@ -185,16 +189,22 @@ export const threadResolveTool = defineTool({
 export const threadListTool = defineTool({
   name: "thread_list",
   description:
-    "List this project's threads, most recent activity first, with status, one-line progress, and the question of any thread waiting on the person.",
+    "List this project's threads, most recent activity first, with status, one-line progress, the question of any thread waiting on the person, what a working thread waits on the person for (waitingOn), and whether a working thread lost its AOP tools (degraded).",
   input: z.object({
     status: z
       .enum(THREAD_STATUSES as [string, ...string[]])
       .optional()
-      .describe("Only threads in this status."),
+      .describe(
+        "Only threads in this status. waiting-on-you also lists working threads that wait on the person.",
+      ),
   }),
   handler: async (args, call) => {
     const { threads } = unwrap(await call.services.threads.list(projectIdOf(call)));
-    const shown = args.status ? threads.filter((thread) => thread.status === args.status) : threads;
+    const shown = args.status
+      ? threads.filter(
+          (thread) => thread.status === args.status || shownThreadStatus(thread) === args.status,
+        )
+      : threads;
     return textResult({ threads: shown.map(summarize) });
   },
 });

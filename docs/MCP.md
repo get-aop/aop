@@ -35,7 +35,7 @@ A thread's report reaches the coordinator as a `Thread report:` message that wak
 | Tool | Behavior |
 | --- | --- |
 | `aop_ask_user` | Puts the thread on "waiting on you" with a question and up to eight options (at most one recommended). The thread ends its turn; the person's reply resumes the same runtime session as the next turn. |
-| `aop_report_status` | Sets the thread's checklist (`pending`, `active`, `done` steps) and its one-line status. |
+| `aop_report_status` | Sets the thread's checklist (`pending`, `active`, `done` steps) and its one-line status. With `waitingOn` (`reason`, optional `https` `link`) the thread says it waits on the person for something outside AOP, such as a deployment to approve on GitHub, a login or a secret, while its turn goes on: it shows under Waiting on you with the reason and link, and the coordinator gets a `needs-you` report at once. The same wait reported again tells nobody again. The wait clears when the thread reports without `waitingOn` or its turn ends. |
 | `aop_open_pr` | Opens the thread's pull request from its own branch, with the title and description the thread gives or ones written from its conversation. Called again, it pushes what the thread did since and returns the same pull request; a merged or closed one is refused. |
 | `memory_read`, `memory_write` | Same project memory as the coordinator (no `memory_delete`). |
 
@@ -58,7 +58,20 @@ Threads, their worktrees and pull requests are described in [Threads and git](./
 
 ## Loopback authentication
 
-The MCP endpoint listens on localhost and requires a token that is valid for one chat session. The local server derives it from a secret generated at boot and adds it to the MCP URL it hands the runtime. Requests with a missing, invalid, or other-session token are rejected, including tool discovery, and so is a correctly signed URL whose session no longer exists. The trust boundary and threat model are recorded in the [MCP loopback-authentication ADR](./adr/mcp-loopback-authentication.md).
+The MCP endpoint listens on localhost and requires a token that is valid for one chat session. The local server derives it from a secret kept in `~/.aop/mcp-secret` (the AOP home; owner-only, mode 600, created on first use) and adds it to the MCP URL it hands the runtime. Because the secret outlives the host process, a run that survives a host restart or upgrade keeps calling its tools: Claude Code's HTTP client sends its next request to the new process, which accepts the same token. Requests with a missing, invalid, or other-session token are rejected, including tool discovery, and so are a correctly signed URL whose session no longer exists and one of a resolved thread. The trust boundary and threat model are recorded in the [MCP loopback-authentication ADR](./adr/mcp-loopback-authentication.md).
+
+- **Rotation.** `POST /api/mcp-secret/rotate` (host owner only) writes a new secret. Every token issued before stops working at once, on purpose; each run's next turn gets a new one. Deleting the file and restarting the host does the same.
+- **When the file cannot be kept.** If the AOP home cannot be written or the file read (or a loosened file cannot be made owner-only again), the host logs a warning and signs with a secret of its own process, as it did before the secret was kept: tokens then stop working when the host restarts.
+- **What a refused client sees.** A refusal is a `401` with a JSON body. Claude Code then looks for OAuth metadata under `/.well-known/` and tries `POST /register`; the host answers those with a JSON `404`, not the dashboard page, so the client reports a refusal instead of a `SyntaxError`. `GET /api/mcp`, which a streamable-HTTP client uses to open a stream for server messages, answers `405`: the host sends none.
+
+## Threads whose tools stop working
+
+The host marks a working thread degraded, shows it in the threads panel and tells the coordinator with a `needs-you` report, when either happens:
+
+- the thread's transcript shows a call to one of its AOP tools that failed and never reached the host (Claude Code names each call with `_meta["claudecode/toolUseId"]`, which the host records), or
+- the host refuses a request carrying the session's id and a token of the shape it signs (the secret was rotated under the turn).
+
+A call that is still running never counts, however long it takes, and neither does a failed call of another tool or an AOP call that reached the host and failed there. The mark clears when a request from the session is accepted again and when the turn ends; the next turn runs with tools of its own.
 
 ## Related guides
 

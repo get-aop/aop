@@ -1,5 +1,12 @@
 import type { Thread } from "@aop/common";
-import { ClockIcon, HourglassIcon, RotateCcwIcon } from "lucide-react";
+import {
+  ClockIcon,
+  ExternalLinkIcon,
+  HandIcon,
+  HourglassIcon,
+  RotateCcwIcon,
+  UnplugIcon,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
@@ -9,11 +16,14 @@ import { threadActions } from "../thread-actions";
 import { useNow } from "../use-now";
 
 type RateLimited = Extract<Thread, { status: "rate-limited" }>;
+type Working = Extract<Thread, { status: "working" }>;
 
 /**
- * What a thread that is not simply working has to say: it waits for a run slot, it waits out a
- * usage limit (with the time it resumes by itself, unless the project's auto-continue is off, and
- * a way to end the wait), a merge is running, or it is closed and a message would reopen it.
+ * What a thread that is not simply working has to say: its AOP tools stopped reaching the host,
+ * it waits on the person for something outside AOP while it works, it waits for a run slot, it
+ * waits out a usage limit (with the time it resumes by itself, unless the project's auto-continue
+ * is off, and a way to end the wait), a merge is running, or it is closed and a message would
+ * reopen it.
  */
 export const ThreadNotice = ({
   thread,
@@ -23,6 +33,8 @@ export const ThreadNotice = ({
   autoContinue?: boolean;
 }) => {
   switch (thread.status) {
+    case "working":
+      return <WorkingNotice thread={thread} />;
     case "queued":
       return (
         <Notice testId="thread-notice-queued" icon={<HourglassIcon className="size-4" />}>
@@ -49,6 +61,53 @@ export const ThreadNotice = ({
       return null;
   }
 };
+
+// Lost tools come first: until they are back, the thread cannot even say it is waiting.
+const WorkingNotice = ({ thread }: { thread: Working }) => {
+  if (thread.degraded) {
+    return (
+      <Notice
+        testId="thread-notice-degraded"
+        tone="blocked"
+        icon={<UnplugIcon className="size-4" />}
+      >
+        <p>
+          <strong className="font-medium text-text">AOP tools lost.</strong>{" "}
+          {thread.degraded.reason} The thread keeps running but cannot report, ask you or open its
+          pull request through AOP. Stop it and send it a message to start a turn with working
+          tools.
+        </p>
+      </Notice>
+    );
+  }
+  if (!thread.waitingOn) return null;
+  const { reason, link } = thread.waitingOn;
+  return (
+    <Notice
+      testId="thread-notice-waiting-on"
+      tone="waiting"
+      icon={<HandIcon className="size-4" />}
+      action={
+        link ? (
+          <Button asChild size="sm" variant="outline">
+            <a href={link} target="_blank" rel="noreferrer noopener" data-testid="thread-wait-open">
+              <ExternalLinkIcon />
+              Open
+            </a>
+          </Button>
+        ) : undefined
+      }
+    >
+      <p>
+        <strong className="font-medium text-text">Waiting on you.</strong> {asSentence(reason)} The
+        thread keeps working meanwhile.
+      </p>
+    </Notice>
+  );
+};
+
+/** A reason a thread wrote, ended like a sentence whether or not it ended it. */
+const asSentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`);
 
 const ResolvedNotice = ({ thread }: { thread: Extract<Thread, { status: "resolved" }> }) => {
   const merged = pullRequestOf(thread)?.state === "merged";
@@ -126,6 +185,11 @@ const RateLimitedNotice = ({
   );
 };
 
+const NOTICE_TONE = {
+  waiting: { box: "border-waiting/40 bg-waiting/5", icon: "text-waiting" },
+  blocked: { box: "border-blocked/40 bg-blocked/5", icon: "text-blocked" },
+} as const;
+
 const Notice = ({
   testId,
   tone,
@@ -134,7 +198,7 @@ const Notice = ({
   children,
 }: {
   testId: string;
-  tone?: "waiting";
+  tone?: keyof typeof NOTICE_TONE;
   icon: React.ReactNode;
   action?: React.ReactNode;
   children: React.ReactNode;
@@ -144,10 +208,10 @@ const Notice = ({
     role="status"
     className={cn(
       "mx-6 mt-3 flex items-center gap-3 rounded-card border px-4 py-3 text-meta text-text-muted",
-      tone === "waiting" ? "border-waiting/40 bg-waiting/5" : "border-border bg-raised",
+      tone ? NOTICE_TONE[tone].box : "border-border bg-raised",
     )}
   >
-    <span aria-hidden="true" className={tone === "waiting" ? "text-waiting" : "text-text-subtle"}>
+    <span aria-hidden="true" className={tone ? NOTICE_TONE[tone].icon : "text-text-subtle"}>
       {icon}
     </span>
     <div className="min-w-0 flex-1">{children}</div>

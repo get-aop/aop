@@ -1,9 +1,10 @@
-import type {
-  AssistantMessage,
-  Message,
-  ThreadReportMessage,
-  ThreadReportOutcome,
-  UserMessage,
+import {
+  type AssistantMessage,
+  type Message,
+  shownThreadStatus,
+  type ThreadReportMessage,
+  type ThreadReportOutcome,
+  type UserMessage,
 } from "@aop/common";
 import { CircleAlertIcon, CircleCheckIcon, HandIcon } from "lucide-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
@@ -214,7 +215,10 @@ export const ThreadReportRow = memo(function ThreadReportRow({
   // been answered is not a call any more: what the thread is now is on its card.
   const superseded = newest !== undefined && newest !== message.id;
   const answered =
-    message.outcome === "needs-you" && thread !== undefined && thread.status !== "waiting-on-you";
+    message.outcome === "needs-you" &&
+    thread !== undefined &&
+    shownThreadStatus(thread) !== "waiting-on-you" &&
+    !(thread.status === "working" && thread.degraded);
   if (superseded || answered) return null;
   return (
     <div

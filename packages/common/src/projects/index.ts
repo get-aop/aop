@@ -136,17 +136,23 @@ export {
 export type {
   BlockedQuestion,
   Thread,
+  ThreadDegraded,
   ThreadStatus,
   ThreadStep,
   ThreadTarget,
+  ThreadWait,
 } from "./thread.ts";
 export {
   BlockedQuestionSchema,
   getThreadProgress,
+  shownThreadStatus,
   THREAD_STATUSES,
+  THREAD_WAIT_REASON_MAX,
+  ThreadDegradedSchema,
   ThreadSchema,
   ThreadStepSchema,
   ThreadTargetSchema,
+  ThreadWaitSchema,
 } from "./thread.ts";
 export type {
   CodeChanges,

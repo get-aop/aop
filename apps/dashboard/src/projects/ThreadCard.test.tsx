@@ -326,3 +326,47 @@ describe("Resume on a rate-limited card", () => {
     expect(window.location.pathname).toBe("/");
   });
 });
+
+describe("a working thread that needs the person", () => {
+  const waitingOn = {
+    reason: "Approve the production deployment on GitHub",
+    link: "https://github.com/get-aop/aop-web/actions/runs/1",
+    since: AT,
+  };
+
+  test("waiting on them for something outside AOP, it looks like a thread waiting on them, with the reason and where to act", () => {
+    render(<ThreadCard now={NOW} thread={makeThread({ status: "working", waitingOn })} />);
+
+    expect(card().getAttribute("data-status")).toBe("working");
+    expect(card().getAttribute("data-shown-status")).toBe("waiting-on-you");
+    expect(card().className).toContain("border-waiting");
+    expect(screen.getByTestId("thread-status-dot").className).toContain("bg-waiting");
+    expect(screen.getByTestId("thread-status-label").textContent).toBe("Waiting on you");
+    expect(screen.getByTestId("thread-status-line").textContent).toBe(
+      "Needs you · Approve the production deployment on GitHub",
+    );
+    const link = screen.getByTestId("thread-wait-link");
+    expect(link.getAttribute("href")).toBe(waitingOn.link);
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.textContent).toBe("github.com");
+  });
+
+  test("whose AOP tools are lost, it says so in red ahead of anything else", () => {
+    render(
+      <ThreadCard
+        now={NOW}
+        thread={makeThread({
+          status: "working",
+          waitingOn,
+          degraded: { reason: "Its call failed before it reached the host.", since: AT },
+        })}
+      />,
+    );
+
+    expect(card().getAttribute("data-degraded")).toBe("true");
+    expect(screen.getByTestId("thread-status-line").textContent).toBe(
+      "AOP tools lost · Its call failed before it reached the host.",
+    );
+    expect(screen.getByTestId("thread-status-line").innerHTML).toContain("text-blocked");
+  });
+});

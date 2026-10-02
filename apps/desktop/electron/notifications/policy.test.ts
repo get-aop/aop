@@ -10,6 +10,7 @@ import {
 import {
   coordinatorPost,
   entryFor,
+  JUST_NOW,
   LONG_AGO,
   makeProject,
   makeThread,
@@ -73,6 +74,38 @@ describe("a thread that needs the person", () => {
 
   test("is not announced a second time by the report that the thread needs the person", () => {
     expect(decide(entryFor({ message: threadReport("needs-you") }))).toBeNull();
+  });
+});
+
+describe("a working thread that needs the person", () => {
+  const waitingOn = {
+    reason: "Approve the production deployment",
+    link: "https://github.com/acme/app/actions/runs/1",
+    since: JUST_NOW,
+  };
+
+  test("notifies once when it starts waiting on the person outside AOP", () => {
+    const waits = makeThread({ waitingOn });
+
+    expect(decide(entryFor({ thread: waits }), { previousThread: makeThread() })).toEqual({
+      kind: "needs-you",
+      title: "checkout-service",
+      body: "Fix the cold start · Approve the production deployment",
+      target: { projectId: "prj_1", threadId: "thr_1" },
+    });
+    expect(decide(entryFor({ thread: waits }), { previousThread: waits })).toBeNull();
+  });
+
+  test("notifies when its AOP tools stop reaching the host, once", () => {
+    const lost = makeThread({ degraded: { reason: "Its call failed.", since: JUST_NOW } });
+
+    expect(decide(entryFor({ thread: lost }), { previousThread: makeThread() })).toEqual({
+      kind: "thread-error",
+      title: "checkout-service",
+      body: "Fix the cold start lost its AOP tools",
+      target: { projectId: "prj_1", threadId: "thr_1" },
+    });
+    expect(decide(entryFor({ thread: lost }), { previousThread: lost })).toBeNull();
   });
 });
 

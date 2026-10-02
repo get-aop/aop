@@ -203,3 +203,49 @@ describe("formatCountdown", () => {
     expect(formatCountdown(ms)).toBe(text);
   });
 });
+
+describe("a working thread that needs the person", () => {
+  test("waiting on them outside AOP, it says what for and opens where they act", () => {
+    render(
+      <ThreadNotice
+        thread={makeThread({
+          status: "working",
+          waitingOn: {
+            reason: "Approve the production deployment",
+            link: "https://github.com/acme/app/actions/runs/1",
+            since: "2026-09-30T10:00:00.000Z",
+          },
+        })}
+      />,
+    );
+
+    const notice = screen.getByTestId("thread-notice-waiting-on");
+    expect(notice.textContent).toContain(
+      "Waiting on you. Approve the production deployment. The thread keeps working meanwhile.",
+    );
+    expect(screen.getByTestId("thread-wait-open").getAttribute("href")).toBe(
+      "https://github.com/acme/app/actions/runs/1",
+    );
+  });
+
+  test("whose AOP tools are lost, it says what that means and how to recover", () => {
+    render(
+      <ThreadNotice
+        thread={makeThread({
+          status: "working",
+          degraded: { reason: "Its call failed.", since: "2026-09-30T10:00:00.000Z" },
+        })}
+      />,
+    );
+
+    const notice = screen.getByTestId("thread-notice-degraded");
+    expect(notice.textContent).toContain("AOP tools lost. Its call failed.");
+    expect(notice.textContent).toContain("Stop it and send it a message");
+  });
+
+  test("a thread simply working shows nothing", () => {
+    render(<ThreadNotice thread={makeThread({ status: "working" })} />);
+
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});

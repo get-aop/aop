@@ -1,4 +1,11 @@
-import type { EventLogEntry, Project, Thread, ThreadStatus } from "@aop/common";
+import type {
+  EventLogEntry,
+  Project,
+  Thread,
+  ThreadDegraded,
+  ThreadStatus,
+  ThreadWait,
+} from "@aop/common";
 import { buildProject } from "@aop/common/test-utils";
 import type { LiveProjects, ProjectStreamEvent } from "./live-projects";
 import { createLiveTurnMirror } from "./live-turn-mirror";
@@ -16,13 +23,21 @@ export const makeProject = (overrides: Partial<Project> = {}): Project =>
   });
 
 type ThreadOverrides = Partial<
-  Omit<Thread, "status" | "blockedQuestion" | "resolvedAt" | "resumesAt">
+  Omit<Thread, "status" | "blockedQuestion" | "resolvedAt" | "resumesAt" | "waitingOn" | "degraded">
 > & {
   status?: ThreadStatus;
+  /** Kept only by a working thread, like the server keeps them. */
+  waitingOn?: ThreadWait;
+  degraded?: ThreadDegraded;
 };
 
 /** A thread in any status: the fields a status requires are filled in, the rest can be overridden. */
-export const makeThread = ({ status = "working", ...overrides }: ThreadOverrides = {}): Thread => {
+export const makeThread = ({
+  status = "working",
+  waitingOn,
+  degraded,
+  ...overrides
+}: ThreadOverrides = {}): Thread => {
   const base = {
     id: "thr_1",
     projectId: "prj_1",
@@ -59,6 +74,8 @@ export const makeThread = ({ status = "working", ...overrides }: ThreadOverrides
       return { ...base, status, resolvedAt: AT };
     case "rate-limited":
       return { ...base, status, resumesAt: "2026-09-29T15:00:00.000Z" };
+    case "working":
+      return { ...base, status, ...(waitingOn && { waitingOn }), ...(degraded && { degraded }) };
     default:
       return { ...base, status };
   }

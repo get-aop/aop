@@ -4,10 +4,12 @@ import {
   type PullRequestRef,
   type Thread,
   type ThreadAccess,
+  type ThreadDegraded,
   ThreadSchema,
   type ThreadStatus,
   type ThreadStep,
   type ThreadTarget,
+  type ThreadWait,
 } from "@aop/common";
 import { type Kysely, sql } from "kysely";
 import { READ_ONLY_ACCESS } from "../chat-session/run-profile.ts";
@@ -37,6 +39,12 @@ export interface ThreadPatch {
   target?: ThreadTarget;
   unread?: boolean;
   lastActivityAt?: string;
+  /**
+   * What a working thread waits on the person for, and whether its AOP tools are lost; `null`
+   * clears it. Both belong to the running turn: any status but `working` clears them too.
+   */
+  waitingOn?: ThreadWait | null;
+  degraded?: ThreadDegraded | null;
 }
 
 /**
@@ -114,14 +122,19 @@ const selectThreads = (db: Kysely<Database>) =>
     )
     .where("chat_sessions.kind", "=", "thread");
 
+// The status goes last: a change away from `working` clears what the turn told the person, even
+// when the same patch sets it.
 const toColumns = (patch: ThreadPatch): ChatSessionUpdate => ({
-  ...(patch.status && statusColumns(patch.status)),
   ...(patch.pullRequest !== undefined && pullRequestColumns(patch.pullRequest)),
   ...(patch.checks !== undefined && {
     pr_checks_json: patch.checks === null ? null : JSON.stringify(patch.checks),
   }),
   ...plainColumns(patch),
+  ...(patch.status && statusColumns(patch.status)),
 });
+
+const jsonOrNull = (value: object | null): string | null =>
+  value === null ? null : JSON.stringify(value);
 
 const statusColumns = (change: ThreadStatusChange): ChatSessionUpdate => ({
   state: change.status,
@@ -129,6 +142,8 @@ const statusColumns = (change: ThreadStatusChange): ChatSessionUpdate => ({
     change.status === "waiting-on-you" ? JSON.stringify(change.blockedQuestion) : null,
   resolved_at: change.status === "resolved" ? change.resolvedAt : null,
   resumes_at: change.status === "rate-limited" ? change.resumesAt : null,
+  // A thread that goes on working keeps what its turn told the person; any other status ends the turn.
+  ...(change.status !== "working" && { waiting_on_json: null, tools_degraded_json: null }),
 });
 
 // The checks belong to the pull request the watcher read them from, so they go with it and are
@@ -149,6 +164,8 @@ const plainColumns = (patch: ThreadPatch): ChatSessionUpdate => {
   if (patch.target) columns.target_json = JSON.stringify(patch.target);
   if (patch.unread !== undefined) columns.unread = patch.unread ? 1 : 0;
   if (patch.lastActivityAt) columns.last_activity_at = patch.lastActivityAt;
+  if (patch.waitingOn !== undefined) columns.waiting_on_json = jsonOrNull(patch.waitingOn);
+  if (patch.degraded !== undefined) columns.tools_degraded_json = jsonOrNull(patch.degraded);
   return columns;
 };
 
@@ -187,4 +204,6 @@ const toThread = (row: ThreadRow): Thread =>
       : { blockedQuestion: JSON.parse(row.blocked_question_json) }),
     ...(row.resolved_at === null ? {} : { resolvedAt: row.resolved_at }),
     ...(row.resumes_at === null ? {} : { resumesAt: row.resumes_at }),
+    ...(row.waiting_on_json === null ? {} : { waitingOn: JSON.parse(row.waiting_on_json) }),
+    ...(row.tools_degraded_json === null ? {} : { degraded: JSON.parse(row.tools_degraded_json) }),
   });

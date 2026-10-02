@@ -1,5 +1,5 @@
-import { getThreadProgress, type Thread } from "@aop/common";
-import { FileTextIcon } from "lucide-react";
+import { getThreadProgress, shownThreadStatus, type Thread } from "@aop/common";
+import { ExternalLinkIcon, FileTextIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Link, threadPath } from "../shell/router";
 import { PullRequestChip } from "./PullRequestChip";
@@ -16,19 +16,23 @@ import { ThreadStatusDot } from "./ThreadStatusDot";
  * request instead.
  */
 export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => {
-  const blocked = thread.status === "waiting-on-you";
+  const shown = shownThreadStatus(thread);
+  const blocked = shown === "waiting-on-you";
   const failing = hasFailingChecks(thread);
+  const degraded = thread.status === "working" && thread.degraded !== undefined;
 
   return (
     <article
       data-testid="thread-card"
       data-thread-id={thread.id}
       data-status={thread.status}
+      data-shown-status={shown}
       data-unread={thread.unread}
       data-checks-failing={failing ? "true" : undefined}
+      data-degraded={degraded ? "true" : undefined}
       className={cn(
         "group/card relative flex items-start gap-3 rounded-row border-l-2 px-3.5 py-2.5 transition-colors duration-[120ms] hover:bg-hover",
-        blocked ? "border-waiting/60" : failing ? "border-blocked/60" : "border-transparent",
+        cardEdge(blocked, failing || degraded),
         thread.status === "resolved" && "opacity-70",
       )}
     >
@@ -43,7 +47,7 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
             blocked && "text-waiting",
           )}
         >
-          {failing ? "Checks failing" : THREAD_STATUS_LABEL[thread.status]}
+          {failing ? "Checks failing" : THREAD_STATUS_LABEL[shown]}
         </span>
         <StatusLine thread={thread} />
         <CardFooter thread={thread} />
@@ -53,10 +57,16 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
   );
 };
 
+// A thread waiting on the person is marked yellow; one whose checks fail or whose tools are lost, red.
+const cardEdge = (blocked: boolean, alarmed: boolean): string => {
+  if (blocked) return "border-waiting/60";
+  return alarmed ? "border-blocked/60" : "border-transparent";
+};
+
 /** The title, which is the link that opens the thread, led by its status dot alone; unread is a bolder title, so a row never shows two dots. */
 const CardTitle = ({ thread, failing }: { thread: Thread; failing: boolean }) => (
   <h3 className="flex min-w-0 items-center gap-2.5 text-title text-text">
-    <ThreadStatusDot status={thread.status} className={cn(failing && "bg-blocked")} />
+    <ThreadStatusDot status={shownThreadStatus(thread)} className={cn(failing && "bg-blocked")} />
     <Link
       to={threadPath(thread.projectId, thread.id)}
       data-testid="thread-card-link"
@@ -97,13 +107,18 @@ const CardAside = ({ thread, now }: { thread: Thread; now: number }) => {
   );
 };
 
-/** What else the thread has: a Resume button, and its documents; the branch is in the thread's own header. */
+/**
+ * What else the thread has: a Resume button, where the person acts on what it waits on, and its
+ * documents; the branch is in the thread's own header.
+ */
 const CardFooter = ({ thread }: { thread: Thread }) => {
   const docCount = thread.artifacts.filter((artifact) => artifact.type === "doc").length;
-  if (thread.status !== "rate-limited" && docCount === 0) return null;
+  const waitLink = thread.status === "working" ? thread.waitingOn?.link : null;
+  if (thread.status !== "rate-limited" && docCount === 0 && !waitLink) return null;
   return (
     <footer className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 text-meta text-text-subtle">
       <ResumeThreadButton thread={thread} />
+      {waitLink ? <WaitLink href={waitLink} /> : null}
       {docCount > 0 ? (
         <span className="inline-flex items-center gap-1" data-testid="thread-docs">
           <FileTextIcon className="size-3" />
@@ -114,13 +129,56 @@ const CardFooter = ({ thread }: { thread: Thread }) => {
   );
 };
 
-/** The one live line: what a working thread is doing, or the question a blocked one is asking. */
+/** Where the person does what a working thread waits on; it sits above the row's own link. */
+const WaitLink = ({ href }: { href: string }) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noreferrer noopener"
+    data-testid="thread-wait-link"
+    className="relative z-10 inline-flex h-6 items-center gap-1 rounded-md border border-waiting/40 bg-waiting/10 px-2 font-medium text-waiting hover:bg-waiting/15"
+  >
+    <ExternalLinkIcon aria-hidden="true" className="size-3" />
+    {linkHost(href)}
+  </a>
+);
+
+/** "github.com" for a link a thread gave: the host says where it goes without the noise of the path. */
+const linkHost = (href: string): string => {
+  try {
+    return new URL(href).host;
+  } catch {
+    return "Open link";
+  }
+};
+
+/**
+ * The one live line: what a working thread is doing, the question a blocked one is asking, what a
+ * working one waits on the person for, or that its AOP tools are lost, which outranks the rest:
+ * nothing the thread says reaches AOP until they are back.
+ */
 const StatusLine = ({ thread }: { thread: Thread }) => {
   if (thread.status === "waiting-on-you") {
     return (
       <p data-testid="thread-status-line" className="line-clamp-2 text-meta text-text-muted">
         <span className="font-medium text-waiting">Blocked · </span>
         {thread.blockedQuestion.question}
+      </p>
+    );
+  }
+  if (thread.status === "working" && thread.degraded) {
+    return (
+      <p data-testid="thread-status-line" className="line-clamp-2 text-meta text-text-muted">
+        <span className="font-medium text-blocked">AOP tools lost · </span>
+        {thread.degraded.reason}
+      </p>
+    );
+  }
+  if (thread.status === "working" && thread.waitingOn) {
+    return (
+      <p data-testid="thread-status-line" className="line-clamp-2 text-meta text-text-muted">
+        <span className="font-medium text-waiting">Needs you · </span>
+        {thread.waitingOn.reason}
       </p>
     );
   }

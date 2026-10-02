@@ -9,6 +9,7 @@ import {
 import { createSuggestionService, type SuggestionService } from "../suggestion/service.ts";
 import { createThreadGit, type ThreadGit, type ThreadGitDeps } from "../thread/git.ts";
 import { createThreadService, type ThreadService } from "../thread/service.ts";
+import { createThreadToolHealth, type ThreadToolHealth } from "../thread/tool-health.ts";
 import type { ChatEngine } from "./engine.ts";
 import { createProjectKickoff, type ProjectKickoff } from "./kickoff.ts";
 import { createMemoryService, type MemoryService } from "./memory-service.ts";
@@ -28,6 +29,8 @@ export interface ProjectServices {
   git: ThreadGit;
   /** Watches the open pull requests of threads; the server starts it (see server.ts). */
   pullRequestWatcher: PullRequestWatcher;
+  /** Notices threads whose AOP tools stopped reaching the host; the MCP endpoint feeds it. */
+  toolHealth: ThreadToolHealth;
 }
 
 export const createProjectServices = (
@@ -42,6 +45,8 @@ export const createProjectServices = (
   const threads = createThreadService(ctx, chat, git);
   const kickoff = createProjectKickoff(ctx, threads);
   const projects = createProjectService(ctx, chat, git, kickoff);
+  const toolHealth = createThreadToolHealth(ctx, chat.wake);
+  ctx.sessionHooks.observeThreadProgress(toolHealth.turnProgress);
   return {
     chat,
     projects,
@@ -60,5 +65,6 @@ export const createProjectServices = (
       { threads, git, chat },
       { runGh: gitDeps.runGh, ...watchDeps },
     ),
+    toolHealth,
   };
 };

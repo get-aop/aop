@@ -110,6 +110,8 @@ It also carries `detail` (one sentence), `version`, `latestVersion`, `path`, eac
 | `idle` | A turn ends with nothing more to say. |
 | `resolved` | Marked resolved, merged, or idle for seven days. A message reopens it. |
 
+A `working` thread can also carry two marks that last until its turn ends. `waitingOn` is set by the thread through `aop_report_status` when it waits on the person for something outside AOP (an approval on GitHub, a login, a secret) and keeps working: the panel lists it under Waiting on you, in yellow, with the reason and a link, and the coordinator is told. `degraded` is set by the host when the thread's AOP tools stop reaching it ([MCP](./MCP.md#threads-whose-tools-stop-working)): the panel says so in red, and the coordinator is told.
+
 ## What is removed, and when
 
 | Event | Worktree | Branch |

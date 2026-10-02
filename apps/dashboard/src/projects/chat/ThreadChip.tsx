@@ -1,4 +1,4 @@
-import type { Thread } from "@aop/common";
+import { shownThreadStatus, type Thread } from "@aop/common";
 import { cn } from "@/lib/cn";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/ui/hover-card";
 import { Link, threadPath } from "../../shell/router";
@@ -35,7 +35,7 @@ export const ThreadChip = ({ threadId }: { threadId: string }) => {
           data-chat-chip=""
           className="mx-0.5 inline-flex max-w-[18rem] items-center gap-1.5 rounded-md border border-border bg-raised px-1.5 align-baseline font-medium text-text transition-colors duration-[120ms] hover:bg-hover"
         >
-          <ThreadStatusDot status={thread.status} className="size-1.5" />
+          <ThreadStatusDot status={shownThreadStatus(thread)} className="size-1.5" />
           <span className="truncate">{thread.title}</span>
         </Link>
       </HoverCardTrigger>
@@ -48,16 +48,17 @@ export const ThreadChip = ({ threadId }: { threadId: string }) => {
 
 /** Status, title, and how much has been said in the thread: what the chip's hover card shows. */
 export const ThreadChipDetails = ({ thread, now }: { thread: Thread; now: number }) => {
-  const blocked = thread.status === "waiting-on-you";
+  const shown = shownThreadStatus(thread);
+  const blocked = shown === "waiting-on-you";
   return (
     <div className="flex flex-col gap-1.5">
       <p className="flex items-center gap-2 text-meta">
-        <ThreadStatusDot status={thread.status} />
+        <ThreadStatusDot status={shown} />
         <span
           data-testid="thread-chip-status"
           className={cn("text-text-muted", blocked && "text-waiting")}
         >
-          {THREAD_STATUS_LABEL[thread.status]}
+          {THREAD_STATUS_LABEL[shown]}
         </span>
       </p>
       <p data-testid="thread-chip-title" className="text-body font-medium text-text">

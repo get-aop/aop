@@ -44,6 +44,10 @@ export const settleThreadTurn = async (
   await threads.update(session.id, {
     ...(change && { status: change }),
     ...closingFields(thread, { ...turn, end }, queued, change?.status === "rate-limited"),
+    // Both belong to the turn that ended, also when the next one starts at once: its run has
+    // tools of its own, and the thread says again what it waits on if it still does.
+    waitingOn: null,
+    degraded: null,
     lastActivityAt: new Date().toISOString(),
   });
   await recordThreadUpserted(tx, session.id);

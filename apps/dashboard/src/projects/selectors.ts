@@ -1,9 +1,15 @@
-import type { Artifact, PullRequestRef, Thread, ThreadStatus } from "@aop/common";
+import {
+  type Artifact,
+  type PullRequestRef,
+  shownThreadStatus,
+  type Thread,
+  type ThreadStatus,
+} from "@aop/common";
 import { plainStatusLine } from "./plain-status-line";
 import type { ProjectEntry, ProjectsState } from "./projects-state";
 
 export interface Attention {
-  /** Threads blocked on a question only the person can answer. */
+  /** Threads blocked on a question only the person can answer, or working ones that wait on them. */
   waiting: number;
   /** Threads with an agent turn running. */
   working: number;
@@ -12,8 +18,8 @@ export interface Attention {
 }
 
 export const attentionOf = (threads: readonly Thread[]): Attention => ({
-  waiting: threads.filter((thread) => thread.status === "waiting-on-you").length,
-  working: threads.filter((thread) => thread.status === "working").length,
+  waiting: threads.filter((thread) => shownThreadStatus(thread) === "waiting-on-you").length,
+  working: threads.filter((thread) => shownThreadStatus(thread) === "working").length,
   unread: threads.filter((thread) => thread.unread).length,
 });
 
@@ -44,7 +50,7 @@ const STATUS_RANK: Record<ThreadStatus, number> = {
 export const sortThreads = (threads: readonly Thread[]): Thread[] =>
   [...threads].sort(
     (a, b) =>
-      STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+      STATUS_RANK[shownThreadStatus(a)] - STATUS_RANK[shownThreadStatus(b)] ||
       Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt),
   );
 
@@ -80,7 +86,8 @@ export const emptyGroupLine = (
     : ALWAYS_LISTED[status];
 
 /**
- * The Overview's groups: one per status, questions first and closed work last, each newest
+ * The Overview's groups: one per status a person sees (a working thread that waits on them is in
+ * Waiting on you), questions first and closed work last, each newest
  * activity first, except the queue, which lists threads in the order the host starts them
  * (oldest first). A status with no thread has no group, unless it is one of `alwaysListed`.
  */
@@ -90,7 +97,7 @@ export const groupThreads = (
 ): ThreadGroup[] => {
   const sorted = sortThreads(threads);
   return THREAD_STATUS_ORDER.flatMap((status) => {
-    const inStatus = sorted.filter((thread) => thread.status === status);
+    const inStatus = sorted.filter((thread) => shownThreadStatus(thread) === status);
     if (inStatus.length === 0 && !alwaysListed.includes(status)) return [];
     return [{ status, threads: status === "queued" ? inStatus.toReversed() : inStatus }];
   });
@@ -131,8 +138,9 @@ export const matchesThreadSearch = (thread: Thread, query: string): boolean => {
     thread.title,
     plainStatusLine(thread.liveStatusLine ?? ""),
     thread.blockedQuestion?.question ?? "",
+    thread.waitingOn?.reason ?? "",
     thread.branch ?? "",
-    THREAD_STATUS_LABEL[thread.status],
+    THREAD_STATUS_LABEL[shownThreadStatus(thread)],
   ];
   return haystack.some((text) => text.toLowerCase().includes(needle));
 };

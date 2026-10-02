@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { parseMessageOrigin } from "../chat-session/message-origin.ts";
 import type { ChatSession } from "../db/schema.ts";
 import {
   createProjectStack,
+  insertProjectSession,
   type ProjectStack,
   projectSettings,
   useTempAopHome,
 } from "../project/test-utils.ts";
-import { createAuthenticatedMcpUrl } from "./auth.ts";
+import { coordinatorInbox } from "../thread/test-utils.ts";
+import { createAuthenticatedMcpUrl, rotateMcpSecret } from "./auth.ts";
+import { forgetMcpSecret } from "./secret.ts";
 
 const home = useTempAopHome();
 let stack: ProjectStack | undefined;
@@ -205,5 +209,92 @@ describe("MCP HTTP routes", () => {
     expect(missing.content[0]?.text).toContain("prompt");
     expect(unknownThread.isError).toBe(true);
     expect(unknownThread.content[0]?.text).toContain("Thread not found");
+  });
+});
+
+const listTools = (s: ProjectStack, url: string) =>
+  s.app.request(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  });
+
+describe("MCP access across host restarts", () => {
+  test("a token issued before the host restarted still works", async () => {
+    const { s, coordinator } = await setup();
+    const url = createAuthenticatedMcpUrl("http://localhost/api/mcp", coordinator.id);
+
+    // A new host process holds no secret; it reads the one the old process kept.
+    forgetMcpSecret();
+    const response = await listTools(s, url);
+
+    expect(response.status).toBe(200);
+  });
+
+  test("a resolved thread's token no longer works", async () => {
+    const { s, project } = await setup();
+    await insertProjectSession(
+      s.db,
+      { id: "isess_done", projectId: project.id, kind: "thread" },
+      { state: "resolved", resolved_at: "2026-09-30T10:00:00.000Z" },
+    );
+
+    const { status } = await s.mcp("isess_done", "tools/list");
+
+    expect(status).toBe(401);
+  });
+
+  test("tells a client that opens a stream for server messages that there is none", async () => {
+    const { s, coordinator } = await setup();
+    const url = createAuthenticatedMcpUrl("http://localhost/api/mcp", coordinator.id);
+
+    const response = await s.app.request(url, { headers: { Accept: "text/event-stream" } });
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("Allow")).toBe("POST");
+  });
+
+  test("a working thread whose token went stale is marked degraded and reported; its next call clears it", async () => {
+    const { s, project } = await setup();
+    await insertProjectSession(s.db, { id: "isess_busy", projectId: project.id, kind: "thread" });
+    const staleUrl = createAuthenticatedMcpUrl("http://localhost/api/mcp", "isess_busy");
+
+    rotateMcpSecret();
+    const refused = await listTools(s, staleUrl);
+
+    expect(refused.status).toBe(401);
+    expect(await refused.json()).toMatchObject({ error: expect.stringContaining("MCP secret") });
+    const degraded = await s.services.threads.get("isess_busy");
+    expect(
+      degraded.success && degraded.thread.status === "working" && degraded.thread.degraded,
+    ).toMatchObject({ reason: expect.stringContaining("refused its AOP tool token") });
+    const [report] = await coordinatorInbox(s, project.id);
+    expect(report?.content).toStartWith(
+      'Thread report: "isess_busy" (isess_busy) lost its AOP tools.',
+    );
+    expect(parseMessageOrigin(report?.origin_json ?? null)).toMatchObject({ outcome: "needs-you" });
+
+    // A second refusal of the same turn tells nobody again.
+    await listTools(s, staleUrl);
+    expect(await coordinatorInbox(s, project.id)).toHaveLength(1);
+
+    const fresh = await s.mcp("isess_busy", "tools/list");
+    expect(fresh.status).toBe(200);
+    const cleared = await s.services.threads.get("isess_busy");
+    expect(
+      cleared.success && cleared.thread.status === "working" && cleared.thread.degraded,
+    ).toBeUndefined();
+  });
+
+  test("a token of the wrong shape marks nothing", async () => {
+    const { s, project } = await setup();
+    await insertProjectSession(s.db, { id: "isess_busy", projectId: project.id, kind: "thread" });
+
+    await listTools(s, "http://localhost/api/mcp?sessionId=isess_busy&accessToken=guess");
+
+    const thread = await s.services.threads.get("isess_busy");
+    expect(
+      thread.success && thread.thread.status === "working" && thread.thread.degraded,
+    ).toBeUndefined();
   });
 });
