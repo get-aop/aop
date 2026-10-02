@@ -149,7 +149,7 @@ const SwitcherMenu = ({
   const route = useRoute();
   const { pinnedIds } = usePinnedProjects();
   const [query, setQuery] = useState("");
-  const entries = Object.values(state.byId);
+  const entries = useMemo(() => Object.values(state.byId), [state.byId]);
   const sections = useMemo(
     () => switcherSections(entries, pinnedIds, query),
     [entries, pinnedIds, query],

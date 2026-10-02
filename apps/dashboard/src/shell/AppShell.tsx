@@ -10,6 +10,7 @@ import {
   announceRepoAttached,
   openNewProjectDialog,
   openSettingsDialog,
+  setProjectSwitcherOpen,
   toggleProjectSwitcher,
 } from "./dialog-store";
 import { routeProjectId, useRoute } from "./router";
@@ -30,6 +31,11 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     live.setSelected(openProjectId);
   }, [live, openProjectId]);
+
+  // Whatever moved the page (a pick, back, a notification) leaves no switcher open on the new screen.
+  useEffect(() => {
+    if (route) setProjectSwitcherOpen(false);
+  }, [route]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

@@ -114,6 +114,18 @@ describe("AppShell project switcher", () => {
     );
   });
 
+  test("closes when the page moves, so the next screen does not open with it", async () => {
+    renderWithTopBar();
+    fireEvent.keyDown(document.body, { key: "k", metaKey: true });
+    expect(getDialogs().switcher).toBe(true);
+
+    act(() => {
+      window.history.pushState({}, "", "/projects/b");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(getDialogs().switcher).toBe(false);
+  });
+
   test("its tooltip names the shortcut", () => {
     renderWithTopBar();
     expect(screen.getByTestId("project-switcher").getAttribute("title")).toContain("⌘K");

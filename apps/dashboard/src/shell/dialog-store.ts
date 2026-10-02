@@ -49,7 +49,10 @@ export const closeSettingsDialog = (): void =>
 export const openNewProjectDialog = (): void => setState({ newProject: true });
 export const closeNewProjectDialog = (): void => setState({ newProject: false });
 
-export const setProjectSwitcherOpen = (open: boolean): void => setState({ switcher: open });
+// Asked to close on every page move: telling no one when nothing changed keeps that cheap.
+export const setProjectSwitcherOpen = (open: boolean): void => {
+  if (current.switcher !== open) setState({ switcher: open });
+};
 export const toggleProjectSwitcher = (): void => setState({ switcher: !current.switcher });
 
 export const openAttachRepoDialog = (): void => setState({ attachRepo: true });
