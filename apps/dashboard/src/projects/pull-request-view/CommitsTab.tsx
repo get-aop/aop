@@ -18,7 +18,12 @@ export const CommitsTab = ({ detail }: { detail: PullRequestViewDetail }) => {
       {detail.commitCount > detail.commits.length ? (
         <p className="text-meta text-text-subtle">
           Showing the latest {plural(detail.commits.length, "commit")} of {detail.commitCount}.{" "}
-          <a href={`${detail.url}/commits`} target="_blank" rel="noreferrer noopener" className="text-running hover:underline">
+          <a
+            href={`${detail.url}/commits`}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-running hover:underline"
+          >
             See all on GitHub
           </a>
         </p>

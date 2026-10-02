@@ -32,21 +32,55 @@ export const PullRequestHeader = ({
   refreshing,
   onRefresh,
   onAsk,
+  compact = false,
 }: {
   detail: PullRequestViewDetail;
   actions: PullRequestActions;
   refreshing: boolean;
   onRefresh: () => void;
   onAsk: (question: string) => Promise<boolean>;
+  /** One line (state, title, buttons), so the Files tab keeps its height for the diff. */
+  compact?: boolean;
 }) => {
   const [editing, setEditing] = useState(false);
+  const buttons = (
+    <HeaderButtons
+      detail={detail}
+      actions={actions}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      onAsk={onAsk}
+    />
+  );
+  if (compact) {
+    return (
+      <header
+        data-testid="pr-header"
+        data-compact="true"
+        className="flex items-center gap-3 border-b border-border pb-3"
+      >
+        <StateBadge detail={detail} />
+        <h1
+          data-testid="pr-title"
+          className="min-w-0 flex-1 truncate text-title text-text"
+          title={detail.title}
+        >
+          {detail.title} <span className="text-text-subtle">#{detail.number}</span>
+        </h1>
+        {buttons}
+      </header>
+    );
+  }
   return (
     <header data-testid="pr-header" className="flex flex-col gap-3 border-b border-border pb-4">
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         {editing ? (
           <TitleEditor detail={detail} actions={actions} onDone={() => setEditing(false)} />
         ) : (
-          <h1 data-testid="pr-title" className="min-w-0 flex-1 text-[1.5rem] leading-tight font-normal text-text">
+          <h1
+            data-testid="pr-title"
+            className="min-w-0 flex-[1_1_22rem] text-[1.375rem] leading-snug font-normal text-text"
+          >
             <span className="break-words">{detail.title}</span>{" "}
             <span className="text-text-subtle">#{detail.number}</span>
             {actions.canWrite && detail.state !== "merged" ? (
@@ -63,28 +97,7 @@ export const PullRequestHeader = ({
             ) : null}
           </h1>
         )}
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            data-testid="pr-refresh"
-            aria-label="Refresh from GitHub"
-            title="Refresh from GitHub"
-            disabled={refreshing}
-            onClick={onRefresh}
-          >
-            <RefreshCwIcon className={cn(refreshing && "animate-spin")} />
-          </Button>
-          <AskCoordinator detail={detail} onAsk={onAsk} />
-          <Button variant="secondary" size="sm" asChild>
-            <a href={detail.url} target="_blank" rel="noreferrer noopener" data-testid="pr-open-github">
-              <ExternalLinkIcon />
-              <span className="hidden @2xl:inline">Open on GitHub</span>
-              <span className="@2xl:hidden">GitHub</span>
-            </a>
-          </Button>
-          <StateMenu detail={detail} actions={actions} />
-        </div>
+        {buttons}
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-body text-text-muted">
         <StateBadge detail={detail} />
@@ -97,20 +110,59 @@ export const PullRequestHeader = ({
   );
 };
 
+const HeaderButtons = ({
+  detail,
+  actions,
+  refreshing,
+  onRefresh,
+  onAsk,
+}: {
+  detail: PullRequestViewDetail;
+  actions: PullRequestActions;
+  refreshing: boolean;
+  onRefresh: () => void;
+  onAsk: (question: string) => Promise<boolean>;
+}) => (
+  <div className="ml-auto flex shrink-0 items-center gap-1.5">
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      data-testid="pr-refresh"
+      aria-label="Refresh from GitHub"
+      title="Refresh from GitHub"
+      disabled={refreshing}
+      onClick={onRefresh}
+    >
+      <RefreshCwIcon className={cn(refreshing && "animate-spin")} />
+    </Button>
+    <AskCoordinator detail={detail} onAsk={onAsk} />
+    <Button variant="secondary" size="sm" asChild>
+      <a href={detail.url} target="_blank" rel="noreferrer noopener" data-testid="pr-open-github">
+        <ExternalLinkIcon />
+        <span className="hidden @5xl:inline">Open on GitHub</span>
+        <span className="@5xl:hidden">GitHub</span>
+      </a>
+    </Button>
+    <StateMenu detail={detail} actions={actions} />
+  </div>
+);
+
 const MergeSentence = ({ detail }: { detail: PullRequestViewDetail }) => {
   const verb = detail.state === "merged" ? "merged" : "wants to merge";
   return (
     <span data-testid="pr-merge-sentence" className="min-w-0">
       <span className="font-medium text-text">{detail.author?.login ?? "Someone"}</span> {verb}{" "}
       {plural(detail.commitCount, "commit")} into <BranchName name={detail.baseRefName} /> from{" "}
-      <BranchName name={detail.headLabel} />
-      <CopyBranch branch={detail.headRefName} />
+      <span className="inline-flex max-w-full items-center align-middle">
+        <BranchName name={detail.headLabel} />
+        <CopyBranch branch={detail.headRefName} />
+      </span>
     </span>
   );
 };
 
 const BranchName = ({ name }: { name: string }) => (
-  <code className="rounded-md bg-running/10 px-1.5 py-0.5 font-mono text-[12.5px] text-running">
+  <code className="min-w-0 truncate rounded-md bg-running/10 px-1.5 py-0.5 font-mono text-[12.5px] text-running">
     {name}
   </code>
 );
@@ -129,7 +181,7 @@ const CopyBranch = ({ branch }: { branch: string }) => {
           window.setTimeout(() => setCopied(false), 1500);
         });
       }}
-      className="ml-1 inline-grid size-6 place-items-center rounded-row align-middle text-text-subtle hover:bg-hover hover:text-text"
+      className="ml-1 inline-grid size-6 shrink-0 place-items-center rounded-row align-middle text-text-subtle hover:bg-hover hover:text-text"
     >
       {copied ? <CheckIcon className="size-3.5 text-ok" /> : <CopyIcon className="size-3.5" />}
     </button>
@@ -142,7 +194,11 @@ export const ChecksSummary = ({ detail }: { detail: Pick<PullRequestViewDetail, 
   if (checks.state === "none") return null;
   const status = checks.state === "pending" ? "in_progress" : checks.state;
   return (
-    <span data-testid="pr-checks-summary" data-state={checks.state} className="inline-flex items-center gap-1.5 text-meta">
+    <span
+      data-testid="pr-checks-summary"
+      data-state={checks.state}
+      className="inline-flex items-center gap-1.5 text-meta"
+    >
       <CheckStatusIcon status={status} />
       {checksSentence(checks)}
     </span>
@@ -150,7 +206,8 @@ export const ChecksSummary = ({ detail }: { detail: Pick<PullRequestViewDetail, 
 };
 
 export const checksSentence = (checks: PullRequestViewDetail["checks"]): string => {
-  if (checks.state === "success") return `All checks have passed (${plural(checks.successful, "successful check")})`;
+  if (checks.state === "success")
+    return `All checks have passed (${plural(checks.successful, "successful check")})`;
   const parts = [
     checks.failing > 0 ? `${checks.failing} failing` : null,
     checks.pending > 0 ? `${checks.pending} in progress` : null,
@@ -176,7 +233,11 @@ const TitleEditor = ({
     if (!next || next === detail.title || (await actions.rename(next))) onDone();
   };
   return (
-    <form onSubmit={save} className="flex min-w-0 flex-1 items-center gap-2" data-testid="pr-title-form">
+    <form
+      onSubmit={save}
+      className="flex min-w-0 flex-1 items-center gap-2"
+      data-testid="pr-title-form"
+    >
       <Input
         autoFocus
         aria-label="Title"
@@ -193,7 +254,12 @@ const TitleEditor = ({
         }}
         className="h-9 flex-1 text-title"
       />
-      <Button type="submit" size="sm" variant="secondary" disabled={actions.pending === "rename" || !title.trim()}>
+      <Button
+        type="submit"
+        size="sm"
+        variant="secondary"
+        disabled={actions.pending === "rename" || !title.trim()}
+      >
         {actions.pending === "rename" ? "Saving…" : "Save"}
       </Button>
       <Button type="button" size="sm" variant="ghost" onClick={onDone}>
@@ -204,19 +270,34 @@ const TitleEditor = ({
 };
 
 /** Close or reopen, and draft or ready: the host owner's state changes, out of the way in a menu. */
-const StateMenu = ({ detail, actions }: { detail: PullRequestViewDetail; actions: PullRequestActions }) => {
+const StateMenu = ({
+  detail,
+  actions,
+}: {
+  detail: PullRequestViewDetail;
+  actions: PullRequestActions;
+}) => {
   if (!actions.canWrite || detail.state === "merged") return null;
   const open = detail.state === "open";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" data-testid="pr-state-menu" aria-label="More actions" disabled={actions.pending !== null}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          data-testid="pr-state-menu"
+          aria-label="More actions"
+          disabled={actions.pending !== null}
+        >
           <EllipsisIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {open ? (
-          <DropdownMenuItem data-testid="pr-toggle-draft" onSelect={() => void actions.setDraft(!detail.isDraft)}>
+          <DropdownMenuItem
+            data-testid="pr-toggle-draft"
+            onSelect={() => void actions.setDraft(!detail.isDraft)}
+          >
             {detail.isDraft ? "Ready for review" : "Convert to draft"}
           </DropdownMenuItem>
         ) : null}

@@ -127,7 +127,12 @@ const StateSummary = ({ thread }: { thread: Thread }) => {
         <Spinner className="size-3.5" />
         Merging
         {pullRequest ? (
-          <PullRequestChip pullRequest={pullRequest} testId="pr-bar-chip" prefix="PR " />
+          <PullRequestChip
+            pullRequest={pullRequest}
+            testId="pr-bar-chip"
+            prefix="PR "
+            repoId={thread.repoId}
+          />
         ) : null}
       </p>
     );
@@ -139,6 +144,7 @@ const StateSummary = ({ thread }: { thread: Thread }) => {
         pullRequest={pullRequest}
         testId="pr-bar-chip"
         prefix="PR "
+        repoId={thread.repoId}
         className="h-5 shrink-0"
       />
       {pullRequest.state === "open" ? null : (

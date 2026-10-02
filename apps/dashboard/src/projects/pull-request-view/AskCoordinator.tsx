@@ -44,8 +44,8 @@ export const AskCoordinator = ({
       <PopoverTrigger asChild>
         <Button variant="secondary" size="sm" data-testid="pr-ask-coordinator">
           <MessageSquareIcon />
-          <span className="hidden @2xl:inline">Ask the coordinator</span>
-          <span className="@2xl:hidden">Ask</span>
+          <span className="hidden @5xl:inline">Ask the coordinator</span>
+          <span className="@5xl:hidden">Ask</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80">
@@ -64,7 +64,13 @@ export const AskCoordinator = ({
             }}
           />
           <p className="text-meta text-text-subtle">The pull request's link goes with it.</p>
-          <Button type="submit" size="sm" disabled={sending} data-testid="pr-ask-send" className="self-end">
+          <Button
+            type="submit"
+            size="sm"
+            disabled={sending}
+            data-testid="pr-ask-send"
+            className="self-end"
+          >
             {sending ? "Sending…" : "Send to the coordinator"}
           </Button>
         </form>

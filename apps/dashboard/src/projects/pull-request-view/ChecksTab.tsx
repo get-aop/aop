@@ -10,14 +10,16 @@ export const ChecksTab = ({ detail }: { detail: PullRequestViewDetail }) => {
   if (checks.total === 0) {
     return (
       <EmptyTab testId="pr-checks-empty" title="No checks">
-        GitHub reported no checks for the head commit <code className="font-mono">{detail.headSha.slice(0, 7)}</code>.
+        GitHub reported no checks for the head commit{" "}
+        <code className="font-mono">{detail.headSha.slice(0, 7)}</code>.
       </EmptyTab>
     );
   }
   return (
     <section data-testid="pr-checks-tab" className="flex flex-col gap-3">
       <p className="text-body text-text-muted">
-        {checksSentence(checks)} on <code className="font-mono text-[12.5px]">{detail.headSha.slice(0, 7)}</code>
+        {checksSentence(checks)} on{" "}
+        <code className="font-mono text-[12.5px]">{detail.headSha.slice(0, 7)}</code>
         {checks.pending > 0 ? " · updating while they run" : ""}
       </p>
       <div className="overflow-hidden rounded-card border border-border-strong">
@@ -28,7 +30,13 @@ export const ChecksTab = ({ detail }: { detail: PullRequestViewDetail }) => {
 };
 
 /** Checks grouped as GitHub's merge box groups them: failing, then running, then the rest. */
-export const CheckList = ({ items, compact = false }: { items: PullRequestViewCheck[]; compact?: boolean }) => (
+export const CheckList = ({
+  items,
+  compact = false,
+}: {
+  items: PullRequestViewCheck[];
+  compact?: boolean;
+}) => (
   <ul data-testid="pr-check-list" className="flex flex-col divide-y divide-border">
     {items.map((check) => (
       <CheckRow key={`${check.workflow ?? ""}/${check.name}`} check={check} compact={compact} />
@@ -41,7 +49,10 @@ const CheckRow = ({ check, compact }: { check: PullRequestViewCheck; compact: bo
     data-testid="pr-check"
     data-status={check.status}
     data-required={check.required}
-    className={cn("flex min-w-0 items-center gap-2.5 text-meta", compact ? "px-2 py-1.5" : "px-4 py-2.5")}
+    className={cn(
+      "flex min-w-0 items-center gap-2.5 text-meta",
+      compact ? "px-2 py-1.5" : "px-4 py-2.5",
+    )}
   >
     <CheckStatusIcon status={check.status} />
     <span className="min-w-0 flex-1 truncate">
@@ -84,10 +95,20 @@ const CheckRow = ({ check, compact }: { check: PullRequestViewCheck; compact: bo
   </li>
 );
 
-export const EmptyTab = ({ testId, title, children }: { testId: string; title: string; children: React.ReactNode }) => (
-  <div data-testid={testId} className="flex flex-col items-center gap-1 rounded-card border border-dashed border-border-strong px-6 py-10 text-center">
+export const EmptyTab = ({
+  testId,
+  title,
+  children,
+}: {
+  testId: string;
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <div
+    data-testid={testId}
+    className="flex flex-col items-center gap-1 rounded-card border border-dashed border-border-strong px-6 py-10 text-center"
+  >
     <p className="text-body font-medium text-text">{title}</p>
     <p className="text-meta text-text-muted">{children}</p>
   </div>
 );
-

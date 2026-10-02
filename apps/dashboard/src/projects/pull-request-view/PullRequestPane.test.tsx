@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../../test/setup-dom";
-import { mockEmptyThreadHost, silentChatHost } from "../layout/test-utils";
+import { silentChatHost } from "../layout/test-utils";
 import type { ProjectsState } from "../projects-state";
 import { makeEntry, makeProject, makeState, makeThread, stubLiveProjects } from "../test-utils";
+import { json, mockHost } from "../thread/test-utils";
+import { answerPullRequests, makeDetail } from "./test-utils";
 
 setupDashboardDom();
 
@@ -14,12 +16,21 @@ const { SidebarProvider } = await import("@/ui/sidebar");
 const { useRoute } = await import("../../shell/router");
 const { openPullRequestView } = await import("./open-pull-request-view");
 
-let host: ReturnType<typeof mockEmptyThreadHost>;
+let host: ReturnType<typeof mockHost>;
+
+// What a thread's pane asks when it opens, with nothing to show.
+const threadPane = (url: string) => {
+  if (url.endsWith("/messages")) return json({ messages: [] });
+  if (url.endsWith("/activity")) return json({ turns: [] });
+  if (url.endsWith("/status")) return json({ repos: [] });
+  return json({ defaultBranch: "main", files: [], perFileLineCap: 2000, summaryOnly: true });
+};
 
 beforeEach(() => {
   window.localStorage.clear();
   window.history.pushState({}, "", "/projects/p1");
-  host = mockEmptyThreadHost();
+  host = mockHost();
+  answerPullRequests(host, { detail: makeDetail({ number: 752 }) }, threadPane);
 });
 afterEach(() => {
   cleanup();
@@ -174,7 +185,7 @@ describe("the pull request in the chat's place", () => {
   test("names the thread that opened the pull request and opens it in the panel beside it", async () => {
     mount();
     await open();
-    const link = screen.getByTestId("pull-request-view-thread");
+    const link = await screen.findByTestId("pull-request-view-thread");
     expect(link.textContent).toBe("Ship the checkout fix");
 
     fireEvent.click(link);

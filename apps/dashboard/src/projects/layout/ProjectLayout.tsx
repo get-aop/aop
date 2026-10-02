@@ -8,6 +8,7 @@ import type { ChatModel, ProjectChat } from "../chat/project-chat";
 import { ProjectTopBar } from "../ProjectTopBar";
 import type { ProjectEntry } from "../projects-state";
 import { PullRequestPane } from "../pull-request-view/PullRequestPane";
+import { PullRequestLinksProvider } from "../pull-request-view/pull-request-links";
 import { PanelDivider } from "./PanelDivider";
 import { CHAT_MIN_WIDTH } from "./panel-layout";
 import type { PanelTabId } from "./panel-tabs";
@@ -69,61 +70,63 @@ export const ProjectLayout = ({
   }, [revealChat]);
 
   return (
-    <div
-      ref={layout.containerRef}
-      data-testid="project-layout"
-      data-mode={layout.mode}
-      data-panel-open={layout.visible}
-      data-panel-beside-top-bar={layout.besideTopBar}
-      style={{ gridTemplateColumns: gridColumns(layout) }}
-      className="relative grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
-    >
-      <ProjectTopBar
-        entry={entry}
-        panel={{ visible: layout.visible, toggle: layout.toggle }}
-        settingsOpen={settingsOpen}
-        className={cn("row-start-1", layout.besideTopBar ? "col-start-1" : "col-span-full")}
-      />
-      {/* Hidden, never unmounted: the chat keeps its stream, its scroll place and its draft. */}
-      <section
-        data-testid="chat-column"
-        aria-label="Coordinator chat"
-        className={cn(
-          "col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col",
-          (layout.chatHidden || covered) && "hidden",
-        )}
+    <PullRequestLinksProvider projectId={project.id} repoIds={project.repoIds}>
+      <div
+        ref={layout.containerRef}
+        data-testid="project-layout"
+        data-mode={layout.mode}
+        data-panel-open={layout.visible}
+        data-panel-beside-top-bar={layout.besideTopBar}
+        style={{ gridTemplateColumns: gridColumns(layout) }}
+        className="relative grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
       >
-        <CoordinatorChatPane
-          project={project}
-          threads={threads}
-          threadsLoaded={threadsLoaded}
-          threadsError={threadsError}
-          chat={chat}
-          model={model}
-          active={!layout.chatHidden && !covered}
+        <ProjectTopBar
+          entry={entry}
+          panel={{ visible: layout.visible, toggle: layout.toggle }}
+          settingsOpen={settingsOpen}
+          className={cn("row-start-1", layout.besideTopBar ? "col-start-1" : "col-span-full")}
         />
-      </section>
-      <CoveringView entry={entry} route={route} hidden={layout.chatHidden} />
-      {layout.visible && layout.mode === "side" && !layout.expanded ? (
-        <PanelDivider
-          width={layout.width}
-          containerRef={layout.containerRef}
-          onResize={layout.setWidth}
-        />
-      ) : null}
-      {layout.visible ? (
-        <PanelFrame layout={layout}>
-          <ThreadsPanel
-            entry={entry}
-            threadId={threadId}
-            tab={tab}
-            layout={layout}
-            filters={filters}
-            onNewThread={startThread}
+        {/* Hidden, never unmounted: the chat keeps its stream, its scroll place and its draft. */}
+        <section
+          data-testid="chat-column"
+          aria-label="Coordinator chat"
+          className={cn(
+            "col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col",
+            (layout.chatHidden || covered) && "hidden",
+          )}
+        >
+          <CoordinatorChatPane
+            project={project}
+            threads={threads}
+            threadsLoaded={threadsLoaded}
+            threadsError={threadsError}
+            chat={chat}
+            model={model}
+            active={!layout.chatHidden && !covered}
           />
-        </PanelFrame>
-      ) : null}
-    </div>
+        </section>
+        <CoveringView entry={entry} route={route} chat={chat} hidden={layout.chatHidden} />
+        {layout.visible && layout.mode === "side" && !layout.expanded ? (
+          <PanelDivider
+            width={layout.width}
+            containerRef={layout.containerRef}
+            onResize={layout.setWidth}
+          />
+        ) : null}
+        {layout.visible ? (
+          <PanelFrame layout={layout}>
+            <ThreadsPanel
+              entry={entry}
+              threadId={threadId}
+              tab={tab}
+              layout={layout}
+              filters={filters}
+              onNewThread={startThread}
+            />
+          </PanelFrame>
+        ) : null}
+      </div>
+    </PullRequestLinksProvider>
   );
 };
 
@@ -131,10 +134,13 @@ export const ProjectLayout = ({
 const CoveringView = ({
   entry,
   route: { pullRequest, artifact },
+  chat,
   hidden,
 }: {
   entry: ProjectEntry;
   route: ProjectScreen;
+  /** Where "Ask the coordinator" sends its question. */
+  chat: ProjectChat;
   /** The panel covers the chat's column. */
   hidden: boolean;
 }) => {
@@ -145,7 +151,7 @@ const CoveringView = ({
         aria-label={`Pull request #${pullRequest.number}`}
         className={cn("col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col", hidden && "hidden")}
       >
-        <PullRequestPane entry={entry} pullRequest={pullRequest} />
+        <PullRequestPane entry={entry} pullRequest={pullRequest} chat={chat} />
       </section>
     );
   }

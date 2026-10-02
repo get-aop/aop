@@ -22,24 +22,35 @@ import { useSharedNow } from "../use-now";
 
 type ShownState = "open" | "draft" | "merged" | "closed";
 
-export const shownStateOf = ({ state, isDraft }: Pick<PullRequestViewDetail, "state" | "isDraft">): ShownState =>
+export const shownStateOf = ({
+  state,
+  isDraft,
+}: Pick<PullRequestViewDetail, "state" | "isDraft">): ShownState =>
   state === "open" && isDraft ? "draft" : state;
 
-const STATE: Record<ShownState, { label: string; tone: string; Icon: typeof GitPullRequestIcon }> = {
-  open: { label: "Open", tone: "bg-ok text-white", Icon: GitPullRequestIcon },
-  draft: { label: "Draft", tone: "bg-text-subtle text-white", Icon: GitPullRequestDraftIcon },
-  merged: { label: "Merged", tone: "bg-merged text-white", Icon: GitMergeIcon },
-  closed: { label: "Closed", tone: "bg-blocked text-white", Icon: GitPullRequestClosedIcon },
-};
+const STATE: Record<ShownState, { label: string; tone: string; Icon: typeof GitPullRequestIcon }> =
+  {
+    open: { label: "Open", tone: "bg-ok text-white", Icon: GitPullRequestIcon },
+    draft: { label: "Draft", tone: "bg-text-subtle text-white", Icon: GitPullRequestDraftIcon },
+    merged: { label: "Merged", tone: "bg-merged text-white", Icon: GitMergeIcon },
+    closed: { label: "Closed", tone: "bg-blocked text-white", Icon: GitPullRequestClosedIcon },
+  };
 
-export const StateBadge = ({ detail }: { detail: Pick<PullRequestViewDetail, "state" | "isDraft"> }) => {
+export const StateBadge = ({
+  detail,
+}: {
+  detail: Pick<PullRequestViewDetail, "state" | "isDraft">;
+}) => {
   const shown = shownStateOf(detail);
   const { label, tone, Icon } = STATE[shown];
   return (
     <span
       data-testid="pr-state-badge"
       data-state={shown}
-      className={cn("inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-meta font-medium", tone)}
+      className={cn(
+        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-meta font-medium",
+        tone,
+      )}
     >
       <Icon className="size-4" aria-hidden="true" />
       {label}
@@ -75,7 +86,12 @@ export const CheckStatusIcon = ({
       role="img"
       aria-label={label}
       data-status={status}
-      className={cn("size-4 shrink-0", tone, status === "in_progress" && "animate-pulse", className)}
+      className={cn(
+        "size-4 shrink-0",
+        tone,
+        status === "in_progress" && "animate-pulse",
+        className,
+      )}
     />
   );
 };
@@ -83,10 +99,7 @@ export const CheckStatusIcon = ({
 /** A commit's rollup: the dot GitHub draws beside a commit. */
 export const RollupDot = ({ state }: { state: "pending" | "success" | "failure" | null }) =>
   state === null ? null : (
-    <CheckStatusIcon
-      status={state === "pending" ? "in_progress" : state}
-      className="size-3.5"
-    />
+    <CheckStatusIcon status={state === "pending" ? "in_progress" : state} className="size-3.5" />
   );
 
 export const Avatar = ({ user, size = 20 }: { user: GithubUser | null; size?: number }) =>

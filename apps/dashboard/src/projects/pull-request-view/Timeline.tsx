@@ -30,7 +30,10 @@ type Event = Extract<PullRequestViewTimelineItem, { kind: "event" }>;
 
 /** The Conversation tab's history, oldest first, the way GitHub draws it down a line. */
 export const Timeline = ({ items }: { items: PullRequestViewTimelineItem[] }) => (
-  <ol data-testid="pr-timeline" className="relative flex flex-col gap-4 before:absolute before:inset-y-0 before:left-[19px] before:w-px before:bg-border">
+  <ol
+    data-testid="pr-timeline"
+    className="relative flex flex-col gap-4 before:absolute before:inset-y-0 before:left-[19px] before:w-px before:bg-border"
+  >
     {items.map((item) => (
       <li key={keyOf(item)} className="relative">
         <TimelineItem item={item} />
@@ -70,7 +73,8 @@ export const CommentCard = ({
   verb,
   testId = "pr-comment",
 }: {
-  comment: Pick<Comment, "author" | "body" | "createdAt" | "url"> & Partial<Pick<Comment, "kind">> & { state?: string };
+  comment: Pick<Comment, "author" | "body" | "createdAt" | "url"> &
+    Partial<Pick<Comment, "kind">> & { state?: string };
   verb?: string;
   testId?: string;
 }) => (
@@ -83,7 +87,12 @@ export const CommentCard = ({
         <span className="font-medium text-text">{comment.author?.login ?? "ghost"}</span>
         {verb ?? verbOf(comment as Comment)}
         {comment.url ? (
-          <a href={comment.url} target="_blank" rel="noreferrer noopener" className="hover:underline">
+          <a
+            href={comment.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="hover:underline"
+          >
             <Ago at={comment.createdAt} />
           </a>
         ) : (
@@ -114,7 +123,8 @@ const ReviewVerdict = ({ review }: { review: Extract<Comment, { kind: "review" }
   return (
     <EventLine icon={Icon} tone={tone} testId="pr-review-verdict">
       <Avatar user={review.author} size={18} />
-      <Actor login={review.author?.login ?? null} /> {REVIEW_WORDS[review.state]} <Ago at={review.createdAt} />
+      <Actor login={review.author?.login ?? null} /> {REVIEW_WORDS[review.state]}{" "}
+      <Ago at={review.createdAt} />
     </EventLine>
   );
 };
@@ -122,8 +132,8 @@ const ReviewVerdict = ({ review }: { review: Extract<Comment, { kind: "review" }
 const CommitGroup = ({ commits, at }: { commits: PullRequestViewCommit[]; at: string }) => (
   <div data-testid="pr-timeline-commits">
     <EventLine icon={GitCommitHorizontalIcon}>
-      <Actor login={commits[0]?.authors[0]?.login ?? null} /> added {plural(commits.length, "commit")}{" "}
-      <Ago at={at} />
+      <Actor login={commits[0]?.authors[0]?.login ?? null} /> added{" "}
+      {plural(commits.length, "commit")} <Ago at={at} />
     </EventLine>
     <ul className="mt-1 flex flex-col pl-12">
       {commits.map((commit) => (
@@ -136,11 +146,21 @@ const CommitGroup = ({ commits, at }: { commits: PullRequestViewCommit[]; at: st
 export const CommitLine = ({ commit }: { commit: PullRequestViewCommit }) => (
   <li data-testid="pr-commit-line" className="flex min-w-0 items-center gap-2 py-0.5 text-meta">
     <AvatarStack users={commit.authors} />
-    <a href={commit.url} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-text-muted hover:text-running hover:underline">
+    <a
+      href={commit.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-text-muted hover:text-running hover:underline"
+    >
       {commit.headline}
     </a>
     <RollupDot state={commit.checks} />
-    <a href={commit.url} target="_blank" rel="noreferrer noopener" className="shrink-0 font-mono text-[12px] text-text-subtle hover:text-running hover:underline">
+    <a
+      href={commit.url}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="shrink-0 font-mono text-[12px] text-text-subtle hover:text-running hover:underline"
+    >
       {commit.shortSha}
     </a>
   </li>
@@ -177,26 +197,59 @@ const EVENT_WORDS: Record<Event["event"], (event: Event) => ReactNode> = {
   unlabeled: (event) => <>removed {event.label ? <LabelChip {...event.label} /> : "a label"}</>,
   closed: () => "closed this",
   reopened: () => "reopened this",
-  merged: (event) => <>merged commit <Code>{event.subject}</Code></>,
+  merged: (event) => (
+    <>
+      merged commit <Code>{event.subject}</Code>
+    </>
+  ),
   ready_for_review: () => "marked this pull request as ready for review",
   converted_to_draft: () => "marked this pull request as draft",
-  force_pushed: (event) => <>force-pushed the branch to <Code>{event.subject}</Code></>,
-  review_requested: (event) => <>requested a review from <b className="font-medium text-text">{event.subject}</b></>,
-  assigned: (event) => <>assigned <b className="font-medium text-text">{event.subject}</b></>,
-  renamed: (event) => <>changed the title <span className="text-text">{event.subject}</span></>,
+  force_pushed: (event) => (
+    <>
+      force-pushed the branch to <Code>{event.subject}</Code>
+    </>
+  ),
+  review_requested: (event) => (
+    <>
+      requested a review from <b className="font-medium text-text">{event.subject}</b>
+    </>
+  ),
+  assigned: (event) => (
+    <>
+      assigned <b className="font-medium text-text">{event.subject}</b>
+    </>
+  ),
+  renamed: (event) => (
+    <>
+      changed the title <span className="text-text">{event.subject}</span>
+    </>
+  ),
   referenced: (event) =>
     event.url ? (
       <>
         mentioned this in{" "}
-        <a href={event.url} target="_blank" rel="noreferrer noopener" className="text-running hover:underline">
+        <a
+          href={event.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-running hover:underline"
+        >
           {event.subject}
         </a>
       </>
     ) : (
       "mentioned this"
     ),
-  base_changed: (event) => <>changed the base branch to <Code>{event.subject}</Code></>,
-  head_deleted: (event) => <>deleted the <Code>{event.subject}</Code> branch</>,
+  base_changed: (event) => (
+    <>
+      changed the base branch to <Code>{event.subject}</Code>
+    </>
+  ),
+  head_deleted: (event) => (
+    <>
+      deleted the <Code>{event.subject}</Code> branch
+    </>
+  ),
   auto_merge_enabled: () => "enabled auto-merge",
 };
 
@@ -220,8 +273,16 @@ const EventLine = ({
   testId?: string;
   children: ReactNode;
 }) => (
-  <div data-testid={testId} className="flex min-h-8 items-center gap-3 pl-[7px] text-meta text-text-muted">
-    <span className={cn("relative z-10 grid size-7 shrink-0 place-items-center rounded-full ring-4 ring-background", tone)}>
+  <div
+    data-testid={testId}
+    className="flex min-h-8 items-center gap-3 pl-[7px] text-meta text-text-muted"
+  >
+    <span
+      className={cn(
+        "relative z-10 grid size-7 shrink-0 place-items-center rounded-full ring-4 ring-background",
+        tone,
+      )}
+    >
       <Icon className="size-3.5" aria-hidden="true" />
     </span>
     <span className="flex min-w-0 flex-wrap items-center gap-x-1">{children}</span>
@@ -269,7 +330,9 @@ export const ReviewThreads = ({ threads }: { threads: PullRequestViewReviewThrea
                 <Avatar user={comment.author} size={24} />
                 <div className="min-w-0 flex-1">
                   <p className="text-meta text-text-muted">
-                    <span className="font-medium text-text">{comment.author?.login ?? "ghost"}</span>{" "}
+                    <span className="font-medium text-text">
+                      {comment.author?.login ?? "ghost"}
+                    </span>{" "}
                     <Ago at={comment.createdAt} />
                   </p>
                   <ChatMarkdown content={comment.body} />

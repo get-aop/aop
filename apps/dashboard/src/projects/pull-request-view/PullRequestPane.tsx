@@ -2,9 +2,10 @@ import { ChevronRightIcon, MessageSquareIcon, XIcon } from "lucide-react";
 import { type RefObject, useEffect, useRef } from "react";
 import { IconButton } from "../../components/IconButton";
 import type { PullRequestViewRef } from "../../shell/router";
+import type { ProjectChat } from "../chat/project-chat";
 import type { ProjectEntry } from "../projects-state";
 import { closePullRequestView } from "./open-pull-request-view";
-import { PullRequestView } from "./PullRequestView";
+import { askThroughChat, PullRequestView } from "./PullRequestView";
 
 /**
  * A pull request in the coordinator chat's place, under a breadcrumb back to the chat. The chat
@@ -13,9 +14,12 @@ import { PullRequestView } from "./PullRequestView";
 export const PullRequestPane = ({
   entry,
   pullRequest,
+  chat,
 }: {
   entry: ProjectEntry;
   pullRequest: PullRequestViewRef;
+  /** "Ask the coordinator" sends through it, then brings the chat back to show the answer. */
+  chat: Pick<ProjectChat, "send">;
 }) => {
   const paneRef = useRef<HTMLDivElement>(null);
   useEscapeCloses();
@@ -58,6 +62,7 @@ export const PullRequestPane = ({
         key={`${pullRequest.repoId}#${pullRequest.number}`}
         entry={entry}
         pullRequest={pullRequest}
+        onAsk={askThroughChat((text) => chat.send(text), closePullRequestView)}
       />
     </div>
   );
