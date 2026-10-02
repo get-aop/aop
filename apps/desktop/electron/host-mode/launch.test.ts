@@ -102,6 +102,9 @@ describe("resolveLogDir", () => {
   test("defaults to the folder the server itself logs to", () => {
     expect(resolveLogDir({ HOME: "/Users/me" })).toBe(join("/Users/me", ".aop", "logs"));
     expect(resolveLogDir({ HOME: "/Users/me", AOP_LOG_DIR: "/elsewhere" })).toBe("/elsewhere");
+    expect(resolveLogDir({ HOME: "/Users/me" }, ".aop-nightly")).toBe(
+      join("/Users/me", ".aop-nightly", "logs"),
+    );
   });
 });
 

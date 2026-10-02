@@ -1,8 +1,9 @@
 import {
-  isNewerRelease,
+  buildChannel,
+  type ChannelConfig,
+  isNewerBuild,
   latestReleaseFeedUrl,
   parseReleaseFeed,
-  RELEASE_FEED_ORIGIN,
 } from "@aop/common";
 import type { FetchLike } from "../connection/host-client";
 
@@ -20,25 +21,25 @@ export interface FeedCheckInput {
   arch: string;
   /** `AOP_RELEASE_FEED_URL`: a test points the app at a fake feed. */
   feedOrigin?: string;
+  /** Whose feed to read: this app's channel unless a test says otherwise. */
+  channel?: ChannelConfig;
 }
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /**
  * The published release when it is newer than this app, or null. Throws when the feed cannot be
- * read. The feed is the one on getaop.com: the repository's GitHub Releases are private.
+ * read. The feed is this channel's on getaop.com (`/nightly` for AOP Nightly).
  */
 export const checkForNewerRelease = async (input: FeedCheckInput): Promise<NewerRelease | null> => {
-  const response = await input.fetch(
-    latestReleaseFeedUrl(input.feedOrigin ?? RELEASE_FEED_ORIGIN),
-    {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    },
-  );
+  const channel = input.channel ?? buildChannel();
+  const response = await input.fetch(latestReleaseFeedUrl(input.feedOrigin ?? channel.feedOrigin), {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
   if (!response.ok) throw new Error(`The release feed answered ${response.status}.`);
-  const release = parseReleaseFeed(await response.json());
-  if (!release || !isNewerRelease(release.version, input.appVersion)) return null;
+  const release = parseReleaseFeed(await response.json(), channel.id);
+  if (!release || !isNewerBuild(release.version, input.appVersion, channel.id)) return null;
   return {
     version: release.version,
     releaseUrl: release.url,

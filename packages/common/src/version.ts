@@ -78,10 +78,7 @@ const nightlyParts = (input: string): [number, number] | null => {
   return match ? [Number(match[2]), Number(match[3])] : null;
 };
 
-const compareNightlyParts = (
-  a: [number, number] | null,
-  b: [number, number] | null,
-): number => {
+const compareNightlyParts = (a: [number, number] | null, b: [number, number] | null): number => {
   if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
   return a[0] - b[0] || a[1] - b[1];
 };

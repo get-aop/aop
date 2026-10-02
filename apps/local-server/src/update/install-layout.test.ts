@@ -13,7 +13,11 @@ describe("install layout", () => {
     expect(detectInstall("/usr/local/bin/bun", "0.9.51")).toBeNull();
     // AOP Nightly's binary is aop-nightly in its own folder; stable's aop is not it.
     expect(
-      detectInstall("/u/.aop-nightly/bin/aop-nightly", "0.10.7-nightly.20261002.14", CHANNELS.nightly),
+      detectInstall(
+        "/u/.aop-nightly/bin/aop-nightly",
+        "0.10.7-nightly.20261002.14",
+        CHANNELS.nightly,
+      ),
     ).toMatchObject({ dashboardDir: "/u/.aop-nightly/bin/dashboard" });
     expect(detectInstall("/home/me/.local/bin/aop", "0.9.51", CHANNELS.nightly)).toBeNull();
     expect(detectInstall("/u/.aop-nightly/bin/aop-nightly", "0.9.51")).toBeNull();

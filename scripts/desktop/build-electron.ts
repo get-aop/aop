@@ -3,12 +3,18 @@
 
 import { rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { channelDefine, parseReleaseChannel } from "@aop/common";
 
 const WORKSPACE_ROOT = join(import.meta.dirname, "../..");
 
-export const buildElectronBundlePlan = (workspaceRoot = WORKSPACE_ROOT) => {
+export const buildElectronBundlePlan = (
+  workspaceRoot = WORKSPACE_ROOT,
+  channel = parseReleaseChannel(process.env.AOP_BUILD_CHANNEL),
+) => {
   const root = resolve(workspaceRoot);
   return {
+    // AOP_BUILD_CHANNEL=nightly makes AOP Nightly (docs/NIGHTLY.md).
+    define: channelDefine(channel),
     entrypoints: [
       join(root, "apps/desktop/electron/main.ts"),
       join(root, "apps/desktop/electron/preload.ts"),

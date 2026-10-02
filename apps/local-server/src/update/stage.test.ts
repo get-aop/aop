@@ -16,7 +16,11 @@ import {
 
 const releaseOf = async (options: Parameters<typeof startFakeRelease>[0]) => {
   const fake = await startFakeRelease(options);
-  const release = await fetchLatestRelease({ origin: fake.url, channel: "stable" as const, github: null });
+  const release = await fetchLatestRelease({
+    origin: fake.url,
+    channel: "stable" as const,
+    github: null,
+  });
   return { fake, release };
 };
 
@@ -63,7 +67,11 @@ describe("stageRelease", () => {
     const layout = await createInstall("0.9.51");
     const fake = await startFakeRelease({ version: "0.10.0", feedDown: true, corruptBinary: true });
     const github = { apiUrl: fake.url, repo: "get-aop/aop-mono", token: FAKE_TOKEN };
-    const release = await fetchLatestRelease({ origin: fake.url, channel: "stable" as const, github });
+    const release = await fetchLatestRelease({
+      origin: fake.url,
+      channel: "stable" as const,
+      github,
+    });
 
     await expect(stageRelease(release, PLATFORM, layout, localStageTools())).rejects.toThrow(
       `Checksum verification failed for ${BINARY_ASSET}`,

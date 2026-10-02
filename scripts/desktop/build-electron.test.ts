@@ -4,7 +4,8 @@ import { buildElectronBundlePlan } from "./build-electron";
 
 describe("Electron main-process build", () => {
   test("bundles main and preload as CommonJS while keeping Electron external", () => {
-    expect(buildElectronBundlePlan("/repo")).toEqual({
+    expect(buildElectronBundlePlan("/repo", "stable")).toEqual({
+      define: { AOP_BUILD_CHANNEL: '"stable"' },
       entrypoints: [
         join("/repo", "apps/desktop/electron/main.ts"),
         join("/repo", "apps/desktop/electron/preload.ts"),
@@ -15,6 +16,12 @@ describe("Electron main-process build", () => {
       outdir: join("/repo", "apps/desktop/dist-electron"),
       sourcemap: "external",
       target: "node",
+    });
+  });
+
+  test("bakes in the channel, so a nightly build is AOP Nightly", () => {
+    expect(buildElectronBundlePlan("/repo", "nightly").define).toEqual({
+      AOP_BUILD_CHANNEL: '"nightly"',
     });
   });
 });

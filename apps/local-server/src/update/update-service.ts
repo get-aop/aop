@@ -153,22 +153,26 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
     if (due && (await deps.isEnabled())) await runCheck();
   };
 
-  const runAutoApply = async (): Promise<void> => {
-    const auto = deps.autoApply;
-    if (!auto || !deps.supported || applyingSince !== null) return;
+  // The newer build the last check saw, when this host may install it by itself; else null.
+  const autoApplyCandidate = async (auto: AutoApply): Promise<string | null> => {
+    if (!deps.supported || applyingSince !== null) return null;
     const seen = await loadRecord();
-    if (!seen || !isNewerBuild(seen.latest, deps.current, deps.feed.channel)) return;
-    if (!(await deps.isEnabled()) || !(await auto.enabled())) return;
-    if (await failedRecently(deps.home, deps.current, now())) return;
-    if (await auto.busy()) {
-      logger.info("AOP {version} is ready; installing it once no turn is running", {
-        version: seen.latest,
-      });
+    if (!seen || !isNewerBuild(seen.latest, deps.current, deps.feed.channel)) return null;
+    const allowed =
+      (await deps.isEnabled()) &&
+      (await auto.enabled()) &&
+      !(await failedRecently(deps.home, deps.current, now()));
+    return allowed ? seen.latest : null;
+  };
+
+  const runAutoApply = async (): Promise<void> => {
+    const version = deps.autoApply ? await autoApplyCandidate(deps.autoApply) : null;
+    if (!version || !deps.autoApply) return;
+    if (await deps.autoApply.busy()) {
+      logger.info("AOP {version} is ready; installing it once no turn is running", { version });
       return;
     }
-    logger.info("Installing AOP {version} by itself (update_auto_apply)", {
-      version: seen.latest,
-    });
+    logger.info("Installing AOP {version} by itself (update_auto_apply)", { version });
     const result = await apply();
     if (!result.ok) logger.warn("Automatic update did not start: {error}", { error: result.error });
   };

@@ -41,7 +41,11 @@ describe("createSystemUpdateDeps", () => {
       AOP_LOCAL_SERVER_PORT: "26001",
     });
 
-    expect(deps.feed).toEqual({ origin: "http://127.0.0.1:1", channel: "stable" as const, github: null });
+    expect(deps.feed).toEqual({
+      origin: "http://127.0.0.1:1",
+      channel: "stable" as const,
+      github: null,
+    });
     expect(deps.planInput.port).toBe(26001);
   });
 

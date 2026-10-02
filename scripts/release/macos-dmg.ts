@@ -3,6 +3,7 @@
 
 import { cp, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
+import { CHANNELS, parseReleaseChannel, type ReleaseChannel } from "@aop/common";
 import cac from "cac";
 import {
   buildElectronResourcePlan,
@@ -53,6 +54,8 @@ interface BuildMacDmgPlanOptions {
   releaseDir?: string;
   version: string;
   workspaceRoot?: string;
+  /** AOP_BUILD_CHANNEL: `nightly` packages AOP Nightly.app (docs/NIGHTLY.md). */
+  channel?: ReleaseChannel;
 }
 
 interface BuildMacDmgArtifactsOptions {
@@ -77,12 +80,14 @@ export const buildMacDmgPlan = ({
   releaseDir = DEFAULT_RELEASE_DIR,
   version,
   workspaceRoot = WORKSPACE_ROOT,
+  channel = parseReleaseChannel(process.env.AOP_BUILD_CHANNEL),
 }: BuildMacDmgPlanOptions): MacDmgPlan => {
   const root = resolve(workspaceRoot);
+  const productName = CHANNELS[channel].productName;
   const resolvedReleaseDir = isAbsolute(releaseDir) ? releaseDir : join(root, releaseDir);
   const builderOutputDir = join(root, "dist/electron-builder");
   return {
-    appName: "AOP.app",
+    appName: `${productName}.app`,
     arch,
     binaryPath: join(resolvedReleaseDir, `aop-darwin-${arch}`),
     builderDmgPath: join(builderOutputDir, `aop-macos-${arch}.dmg`),
@@ -93,7 +98,7 @@ export const buildMacDmgPlan = ({
     resourcesDir: join(root, "apps/desktop/resources"),
     runtimeAssetsArchive: join(resolvedReleaseDir, "runtime-assets.tar.gz"),
     version,
-    volumeName: `AOP ${version} ${arch}`,
+    volumeName: `${productName} ${version} ${arch}`,
     workspaceRoot: root,
     zipPath: join(resolvedReleaseDir, macUpdateZipName(arch)),
   };
@@ -221,7 +226,9 @@ const buildSingleDmg = async (plan: MacDmgPlan, signingConfig: MacSigningConfig)
       "never",
     ],
     plan.workspaceRoot,
-    electronBuilderSigningEnv(signingConfig),
+    // The version the app carries: electron-builder-config.ts reads it, so a nightly app is
+    // `0.10.7-nightly.<date>.<run>` and not the release in package.json.
+    { ...electronBuilderSigningEnv(signingConfig), AOP_APP_VERSION: plan.version },
   );
   await assertFile(plan.builderDmgPath, "Electron Builder did not produce the expected DMG.");
   await cp(plan.builderDmgPath, plan.dmgPath);

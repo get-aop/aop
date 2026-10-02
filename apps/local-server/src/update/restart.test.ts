@@ -83,7 +83,10 @@ describe("detectRestartPlan", () => {
     const agents = join(home, "Library", "LaunchAgents");
     await mkdir(agents, { recursive: true });
     // Stable's plist names a different binary; nightly's names this one.
-    await writeFile(join(agents, "com.aop.local-server.plist"), `<string>${layout.binaryPath}</string>`);
+    await writeFile(
+      join(agents, "com.aop.local-server.plist"),
+      `<string>${layout.binaryPath}</string>`,
+    );
     await writeFile(
       join(agents, "com.aop.local-server.nightly.plist"),
       "<string>/u/.aop-nightly/bin/aop-nightly</string>",
@@ -104,7 +107,13 @@ describe("detectRestartPlan", () => {
       "ExecStart=/u/.aop-nightly/bin/aop-nightly run --port 25650\n",
     );
     expect(
-      await detectRestartPlan({ ...linux.input, ...nightly, home: linux.home, os: "linux", channel: CHANNELS.nightly }),
+      await detectRestartPlan({
+        ...linux.input,
+        ...nightly,
+        home: linux.home,
+        os: "linux",
+        channel: CHANNELS.nightly,
+      }),
     ).toEqual({ kind: "systemd", unit: "aop-nightly-local-server.service" });
   });
 
@@ -171,9 +180,9 @@ describe("restartHost", () => {
   test("reports a service manager that refuses", async () => {
     const { tools } = recordingTools(1);
 
-    await expect(restartHost({ kind: "systemd", unit: SYSTEMD_UNIT }, layout, tools)).rejects.toThrow(
-      "systemctl restart failed (exit 1)",
-    );
+    await expect(
+      restartHost({ kind: "systemd", unit: SYSTEMD_UNIT }, layout, tools),
+    ).rejects.toThrow("systemctl restart failed (exit 1)");
   });
 
   test("a host nothing supervises cannot be restarted", async () => {

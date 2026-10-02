@@ -49,12 +49,12 @@ export const feedConfigFromEnv = (
     channel: channel.id,
     github:
       token && channel.id === "stable"
-      ? {
-          apiUrl: env.AOP_GITHUB_API_URL?.trim() || GITHUB_API_URL,
-          repo: env.AOP_GITHUB_REPO?.trim() || RELEASE_REPO,
-          token,
-        }
-      : null,
+        ? {
+            apiUrl: env.AOP_GITHUB_API_URL?.trim() || GITHUB_API_URL,
+            repo: env.AOP_GITHUB_REPO?.trim() || RELEASE_REPO,
+            token,
+          }
+        : null,
   };
 };
 

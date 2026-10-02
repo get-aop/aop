@@ -9,7 +9,11 @@ const noGithub = (origin: string) => ({ origin, channel: "stable" as const, gith
 
 describe("feedConfigFromEnv", () => {
   test("reads getaop.com, with no GitHub fallback unless a token is set", () => {
-    expect(feedConfigFromEnv({})).toEqual({ origin: "https://getaop.com", channel: "stable" as const, github: null });
+    expect(feedConfigFromEnv({})).toEqual({
+      origin: "https://getaop.com",
+      channel: "stable" as const,
+      github: null,
+    });
     expect(feedConfigFromEnv({ AOP_RELEASE_FEED_URL: "http://127.0.0.1:9" }).origin).toBe(
       "http://127.0.0.1:9",
     );
@@ -94,7 +98,11 @@ describe("fetchLatestRelease", () => {
     const fake = await startFakeRelease({ version: "0.10.5", feedDown: true });
     const github = { apiUrl: fake.url, repo: "get-aop/aop-mono", token: FAKE_TOKEN };
 
-    const release = await fetchLatestRelease({ origin: fake.url, channel: "stable" as const, github });
+    const release = await fetchLatestRelease({
+      origin: fake.url,
+      channel: "stable" as const,
+      github,
+    });
     const asset = release.assets[BINARY_ASSET];
     const dir = await scratchDir("fallback");
     await downloadAsset(BINARY_ASSET, asset ?? { url: "" }, join(dir, "aop"), downloadFetch);

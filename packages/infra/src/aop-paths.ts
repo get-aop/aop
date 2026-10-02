@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { buildChannel } from "@aop/common";
 
 // `~/.aop` for stable, `~/.aop-nightly` for AOP Nightly, so the two never share a database.
-const getAopHome = (): string => process.env.AOP_HOME ?? join(homedir(), buildChannel().homeDirName);
+const getAopHome = (): string =>
+  process.env.AOP_HOME ?? join(homedir(), buildChannel().homeDirName);
 
 export const aopPaths = {
   home: () => getAopHome(),
