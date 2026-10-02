@@ -82,6 +82,8 @@ src/
   chat-session/       the chat engine: turns, runs, steer queue, recovery
   project/, thread/   projects, the coordinator, threads, their worktrees and pull requests
   pull-request-watch/ the pull request watcher and automatic fixes
+  github/             the host's GitHub access shared by every GitHub view (auth, repos, cached GraphQL, ETag reads)
+  pull-request-view/  one pull request's page (GraphQL read, merge box, owner-only writes) for the PR View
   scheduling/         the cap on running turns, rate-limit waits
   repo/, session-git/ repo registration, git state
   process/            process supervision
