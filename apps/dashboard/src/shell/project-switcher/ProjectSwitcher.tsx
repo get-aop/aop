@@ -51,7 +51,7 @@ export const ProjectSwitcher = ({ current }: { current: ProjectEntry | null }) =
           aria-label={label}
           aria-keyshortcuts="Meta+K"
           title={label}
-          className="relative flex h-9 min-w-0 shrink items-center gap-2 rounded-row px-1.5 hover:bg-hover data-[state=open]:bg-active"
+          className="relative flex h-9 min-w-0 shrink items-center gap-2 overflow-hidden rounded-row px-1.5 hover:bg-hover data-[state=open]:bg-active"
         >
           <SwitcherChip current={current} />
           <ChevronsUpDownIcon
@@ -103,7 +103,7 @@ const SwitcherChip = ({ current }: { current: ProjectEntry | null }) => {
         </span>
         <span
           data-testid="project-title"
-          className="truncate text-body font-medium text-text-muted"
+          className="min-w-10 truncate text-body font-medium text-text-muted"
         >
           Select a project
         </span>
@@ -114,7 +114,11 @@ const SwitcherChip = ({ current }: { current: ProjectEntry | null }) => {
   return (
     <>
       <ProjectTile project={project} />
-      <span data-testid="project-title" className="truncate text-title font-semibold text-text">
+      {/* The name alone gives way on a crowded bar, down to a few letters; the notices drop their words first. */}
+      <span
+        data-testid="project-title"
+        className="min-w-10 truncate text-title font-semibold text-text"
+      >
         {project.name}
       </span>
       {project.status !== "active" ? (

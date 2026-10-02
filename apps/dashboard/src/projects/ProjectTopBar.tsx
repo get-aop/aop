@@ -50,7 +50,7 @@ export const ProjectTopBar = ({
     <header
       data-testid="project-topbar"
       className={cn(
-        "@container flex h-pane-header min-w-0 shrink-0 items-center gap-2 px-2 shadow-[inset_0_-1px_0_var(--color-border)]",
+        "@container flex h-pane-header min-w-0 shrink-0 items-center gap-1 px-2 @md:gap-2 shadow-[inset_0_-1px_0_var(--color-border)]",
         className,
       )}
     >

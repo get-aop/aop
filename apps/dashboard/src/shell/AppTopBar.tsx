@@ -8,7 +8,7 @@ import { ShellStatus } from "./ShellStatus";
 export const AppTopBar = () => (
   <header
     data-testid="app-topbar"
-    className="@container flex h-pane-header min-w-0 shrink-0 items-center gap-2 px-2 shadow-[inset_0_-1px_0_var(--color-border)]"
+    className="@container flex h-pane-header min-w-0 shrink-0 items-center gap-1 px-2 @md:gap-2 shadow-[inset_0_-1px_0_var(--color-border)]"
   >
     <ShellNav current={null} />
     <ShellStatus testId="app-topbar-status" />

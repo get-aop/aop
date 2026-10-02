@@ -24,7 +24,7 @@ export const ShellStatus = ({ testId }: { testId: string }) => (
 );
 
 const noticeClass =
-  "flex h-8 shrink-0 items-center gap-1.5 rounded-row px-2 text-meta transition-colors duration-[120ms] hover:bg-hover";
+  "flex h-8 shrink-0 items-center gap-1.5 rounded-row px-1.5 text-meta transition-colors @md:px-2 duration-[120ms] hover:bg-hover";
 
 /**
  * Shown while an agent CLI has a newer version out: noticeable without a bar across the screen,
@@ -48,7 +48,7 @@ const CliUpdateNotice = () => {
       className={cn(noticeClass, "text-running")}
     >
       <CliUpdateDot className="m-[5px]" />
-      <span className="hidden max-w-48 truncate @3xl:inline">{label}</span>
+      <span className="hidden max-w-48 truncate @5xl:inline">{label}</span>
     </button>
   );
 };
@@ -69,7 +69,7 @@ const PermissionBypassNotice = () => {
       className={cn(noticeClass, "text-blocked")}
     >
       <ShieldOffIcon className="size-4 shrink-0" strokeWidth={1.7} />
-      <span className="hidden @3xl:inline">Permission checks off</span>
+      <span className="hidden @5xl:inline">Permission checks off</span>
     </button>
   );
 };
@@ -86,7 +86,7 @@ const HostOfflineNotice = () => {
       className="flex h-8 shrink-0 items-center gap-1.5 px-2 text-meta text-blocked"
     >
       <span className={cn("size-1.5 rounded-full", CONNECTION_DOT.offline)} />
-      <span className="hidden @xl:inline">Host unreachable</span>
+      <span className="hidden @3xl:inline">Host unreachable</span>
     </span>
   );
 };
