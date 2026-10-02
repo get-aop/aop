@@ -134,7 +134,7 @@ describe("ComputerUseSetting", () => {
 
     const status = await screen.findByTestId("settings-cua-status");
     expect(status.getAttribute("data-tone")).toBe("ok");
-    expect(status.textContent).toContain("CUA Driver 0.32.0 is ready on this host.");
+    expect(status.textContent).toContain("CUA Driver 0.32.0 is ready on Studio Mac.");
     expect(screen.getByTestId("settings-cua-check-accessibility").getAttribute("data-ok")).toBe(
       "true",
     );

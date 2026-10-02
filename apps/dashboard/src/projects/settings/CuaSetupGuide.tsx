@@ -53,8 +53,10 @@ export const CuaHostStatus = ({
 };
 
 const titleOf = (status: CuaStatus, chosen: boolean): string => {
-  if (status.status === "ready") return status.detail;
   const where = `on ${status.host.name}`;
+  if (status.status === "ready") {
+    return `CUA Driver${status.version ? ` ${status.version}` : ""} is ready ${where}.`;
+  }
   const what =
     status.status === "not-installed"
       ? `CUA Driver is not installed ${where}.`
