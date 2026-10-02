@@ -71,14 +71,24 @@ async function buildJS(): Promise<BuildJsResult> {
     process.exit(1);
   }
 
-  const js = result.outputs.find((o) => o.path.endsWith(".js") && o.path.includes("main"));
-  const css = result.outputs.find((o) => o.path.endsWith(".css"));
+  return pickPageOutputs(result.outputs);
+}
 
+/**
+ * The script and stylesheet index.html loads. The script is Bun's entry point, found by its
+ * kind: matching "main" in the path picked a random chunk whenever the checkout's own folder
+ * had "main" in its name, and the page then loaded nothing.
+ */
+export const pickPageOutputs = (
+  outputs: ReadonlyArray<Pick<Bun.BuildArtifact, "path" | "kind">>,
+): BuildJsResult => {
+  const js = outputs.find((o) => o.kind === "entry-point" && o.path.endsWith(".js"));
+  const css = outputs.find((o) => o.path.endsWith(".css"));
   return {
     js: js && outputFilename(js.path),
     css: css && outputFilename(css.path),
   };
-}
+};
 
 async function buildHTML({ js, css }: BuildJsResult): Promise<void> {
   const html = readFileSync(`${SRC_DIR}/index.html`, "utf-8");
