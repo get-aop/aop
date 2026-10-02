@@ -1,4 +1,4 @@
-import { isNewerRelease, type UpdateStatus } from "@aop/common";
+import { isNewerBuild, type UpdateStatus } from "@aop/common";
 import { getLogger } from "@aop/infra";
 import { type FeedConfig, type FetchFn, fetchLatestRelease, messageOf } from "./release-feed.ts";
 import {
@@ -14,6 +14,11 @@ const logger = getLogger("update");
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FIRST_CHECK_DELAY_MS = 30_000;
 const DUE_POLL_MS = 60 * 60 * 1000;
+/** AOP Nightly looks every hour, and while turns run it asks again every ten minutes. */
+const NIGHTLY_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+const NIGHTLY_DUE_POLL_MS = 10 * 60 * 1000;
+/** After a failed install, a nightly host does not try again on its own for this long. */
+const AUTO_APPLY_BACKOFF_MS = 6 * 60 * 60 * 1000;
 const MANUAL_CHECK_COOLDOWN_MS = 30_000;
 /** An update run that has written nothing after this long is treated as lost. */
 const APPLY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -32,6 +37,18 @@ export interface UpdateServiceDeps {
   now?: () => number;
   /** Where the update files live; the host's data folder unless a test says otherwise. */
   home?: string;
+  /**
+   * AOP Nightly installs a newer build by itself, never while a turn runs. Stable passes none:
+   * a release is installed only when the owner asks.
+   */
+  autoApply?: AutoApply;
+}
+
+export interface AutoApply {
+  /** The `update_auto_apply` setting. */
+  enabled: () => Promise<boolean>;
+  /** Some agent turn is running, so a restart now would land in the middle of it. */
+  busy: () => Promise<boolean>;
 }
 
 export type ApplyResult = { ok: true } | { ok: false; error: string };
@@ -41,8 +58,10 @@ export interface UpdateService {
   /** Looks at the feed now, at most every half minute however often it is asked. */
   check: () => Promise<UpdateStatus>;
   apply: () => Promise<ApplyResult>;
-  /** Checks the feed if the last check is a day old and the setting is on. */
+  /** Checks the feed if the last check is a day old (an hour for nightly) and the setting is on. */
   runDueCheck: () => Promise<void>;
+  /** Nightly only: installs the build the last check saw when nothing is running. */
+  runAutoApply: () => Promise<void>;
   /** Starts the once-a-day background check. */
   start: () => void;
   stop: () => void;
@@ -90,7 +109,7 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
       supported: deps.supported,
       current: deps.current,
       latest: seen?.latest ?? null,
-      available: seen !== null && isNewerRelease(seen.latest, deps.current),
+      available: seen !== null && isNewerBuild(seen.latest, deps.current, deps.feed.channel),
       releaseUrl: seen?.releaseUrl ?? null,
       checkedAt: seen?.checkedAt ?? null,
       checkError,
@@ -111,7 +130,7 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
     if (applyingSince !== null) return { ok: false, error: "An update is already running" };
     await runCheck();
     const seen = await loadRecord();
-    if (!seen || !isNewerRelease(seen.latest, deps.current)) {
+    if (!seen || !isNewerBuild(seen.latest, deps.current, deps.feed.channel)) {
       return { ok: false, error: checkError ?? "AOP is already up to date" };
     }
     applyingSince = now();
@@ -124,18 +143,43 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
     return { ok: true };
   };
 
+  const nightly = deps.feed.channel === "nightly";
+  const checkInterval = nightly ? NIGHTLY_CHECK_INTERVAL_MS : CHECK_INTERVAL_MS;
+  const duePoll = nightly ? NIGHTLY_DUE_POLL_MS : DUE_POLL_MS;
+
   const runDueCheck = async (): Promise<void> => {
     const seen = await loadRecord();
-    const due = !seen || now() - Date.parse(seen.checkedAt) >= CHECK_INTERVAL_MS;
+    const due = !seen || now() - Date.parse(seen.checkedAt) >= checkInterval;
     if (due && (await deps.isEnabled())) await runCheck();
+  };
+
+  const runAutoApply = async (): Promise<void> => {
+    const auto = deps.autoApply;
+    if (!auto || !deps.supported || applyingSince !== null) return;
+    const seen = await loadRecord();
+    if (!seen || !isNewerBuild(seen.latest, deps.current, deps.feed.channel)) return;
+    if (!(await deps.isEnabled()) || !(await auto.enabled())) return;
+    if (await failedRecently(deps.home, deps.current, now())) return;
+    if (await auto.busy()) {
+      logger.info("AOP {version} is ready; installing it once no turn is running", {
+        version: seen.latest,
+      });
+      return;
+    }
+    logger.info("Installing AOP {version} by itself (update_auto_apply)", {
+      version: seen.latest,
+    });
+    const result = await apply();
+    if (!result.ok) logger.warn("Automatic update did not start: {error}", { error: result.error });
   };
 
   const schedule = (delayMs: number): void => {
     if (stopped) return;
     timer = setTimeout(() => {
       void runDueCheck()
+        .then(runAutoApply)
         .catch((error) => logger.warn("Update check failed: {error}", { error: messageOf(error) }))
-        .finally(() => schedule(DUE_POLL_MS));
+        .finally(() => schedule(duePoll));
     }, delayMs);
     timer.unref();
   };
@@ -145,12 +189,29 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
     check,
     apply,
     runDueCheck,
+    runAutoApply,
     start: () => schedule(FIRST_CHECK_DELAY_MS),
     stop: () => {
       stopped = true;
       if (timer) clearTimeout(timer);
     },
   };
+};
+
+// A build that failed to start was rolled back; trying it again every hour would restart the
+// host every hour for nothing. The owner can still install it with "Update now".
+const failedRecently = async (
+  home: string | undefined,
+  current: string,
+  nowMs: number,
+): Promise<boolean> => {
+  const outcome = await readOutcomeRecord(home);
+  return (
+    outcome !== null &&
+    !outcome.ok &&
+    outcome.from === current &&
+    nowMs - Date.parse(outcome.at) < AUTO_APPLY_BACKOFF_MS
+  );
 };
 
 interface Progress {

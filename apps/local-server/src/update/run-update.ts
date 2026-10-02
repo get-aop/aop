@@ -1,4 +1,4 @@
-import { isNewerRelease, normalizeReleaseVersion } from "@aop/common";
+import { isNewerBuild, normalizeReleaseVersion } from "@aop/common";
 import { detectInstall } from "./install-layout.ts";
 import { apiFetch, feedConfigFromEnv, fetchLatestRelease, messageOf } from "./release-feed.ts";
 import { createSystemUpdateDeps } from "./system.ts";
@@ -55,8 +55,9 @@ const printCheck = async (
   env: NodeJS.ProcessEnv,
   print: (line: string) => void,
 ): Promise<void> => {
-  const release = await fetchLatestRelease(feedConfigFromEnv(env), apiFetch);
-  if (!isNewerRelease(release.version, current)) {
+  const feed = feedConfigFromEnv(env);
+  const release = await fetchLatestRelease(feed, apiFetch);
+  if (!isNewerBuild(release.version, current, feed.channel)) {
     print(`AOP ${current} is up to date.`);
     return;
   }

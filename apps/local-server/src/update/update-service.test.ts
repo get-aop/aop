@@ -46,7 +46,7 @@ const createHarness = async (
     isEnabled: async () => enabled,
     supported: options.supported ?? true,
     current: options.current ?? "0.9.51",
-    feed: { origin: release.url, github: null },
+    feed: { origin: release.url, channel: "stable" as const, github: null },
     startUpdater:
       options.startUpdater ??
       (async () => {
@@ -105,7 +105,7 @@ describe("update service status", () => {
 
   test("an unreachable feed is an error message, not a failure of the host", async () => {
     const h = await createHarness();
-    h.deps.feed = { origin: "http://127.0.0.1:1", github: null };
+    h.deps.feed = { origin: "http://127.0.0.1:1", channel: "stable" as const, github: null };
 
     const status = await createUpdateService(h.deps).check();
 
@@ -270,5 +270,82 @@ describe("the daily check", () => {
     await writeFile(join(h.home, "update-check.json"), "{nope");
 
     expect((await createUpdateService(h.deps).status()).latest).toBeNull();
+  });
+});
+
+describe("nightly auto-apply", () => {
+  const nightlyHarness = async (state: { busy: boolean; enabled: boolean }) => {
+    const h = await createHarness({
+      latest: "0.10.7-nightly.20261002.15",
+      current: "0.10.7-nightly.20261002.14",
+    });
+    h.deps.feed = { ...h.deps.feed, channel: "nightly" };
+    h.deps.autoApply = { enabled: async () => state.enabled, busy: async () => state.busy };
+    return h;
+  };
+
+  test("installs a newer nightly once no turn is running, and not while one runs", async () => {
+    const state = { busy: true, enabled: true };
+    const h = await nightlyHarness(state);
+    const service = createUpdateService(h.deps);
+
+    await service.runDueCheck();
+    expect((await service.status()).available).toBe(true);
+    await service.runAutoApply();
+    expect(h.startedUpdaters).toBe(0);
+
+    state.busy = false;
+    await service.runAutoApply();
+    expect(h.startedUpdaters).toBe(1);
+    expect((await service.status()).state).toBe("updating");
+  });
+
+  test("does nothing when the setting is off, or for a stable host", async () => {
+    const off = await nightlyHarness({ busy: false, enabled: false });
+    const offService = createUpdateService(off.deps);
+    await offService.runDueCheck();
+    await offService.runAutoApply();
+    expect(off.startedUpdaters).toBe(0);
+
+    const stable = await createHarness();
+    const stableService = createUpdateService(stable.deps);
+    await stableService.runDueCheck();
+    await stableService.runAutoApply();
+    expect(stable.startedUpdaters).toBe(0);
+    expect((await stableService.status()).available).toBe(true);
+  });
+
+  test("waits six hours after a build that failed to start before trying again by itself", async () => {
+    const h = await nightlyHarness({ busy: false, enabled: true });
+    const service = createUpdateService(h.deps);
+    await service.runDueCheck();
+    await writeOutcomeRecord(
+      {
+        at: new Date(h.clock.now - 60_000).toISOString(),
+        ok: false,
+        from: "0.10.7-nightly.20261002.14",
+        to: null,
+        error: "did not start",
+      },
+      h.home,
+    );
+
+    await service.runAutoApply();
+    expect(h.startedUpdaters).toBe(0);
+
+    h.clock.now += 6 * 60 * 60 * 1000;
+    await service.runAutoApply();
+    expect(h.startedUpdaters).toBe(1);
+  });
+
+  test("a nightly host checks hourly, not daily", async () => {
+    const h = await nightlyHarness({ busy: true, enabled: true });
+    const service = createUpdateService(h.deps);
+    await service.runDueCheck();
+    const first = (await readCheckRecord(h.home))?.checkedAt;
+
+    h.clock.now += 61 * 60 * 1000;
+    await service.runDueCheck();
+    expect((await readCheckRecord(h.home))?.checkedAt).not.toBe(first);
   });
 });

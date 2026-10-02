@@ -1,4 +1,5 @@
 import { basename, dirname, join } from "node:path";
+import { buildChannel, type ChannelConfig } from "@aop/common";
 
 /** Where install.sh put the host: the binary and the dashboard folder beside it. */
 export interface InstallLayout {
@@ -18,15 +19,17 @@ export const layoutOf = (binaryPath: string): InstallLayout => {
 };
 
 /**
- * The installed host this process is, or null when it is not one. Only the compiled `aop`
- * binary can replace itself: a source checkout runs under `bun`, and overwriting that would
- * break the machine's runtime rather than update AOP.
+ * The installed host this process is, or null when it is not one. Only the compiled binary
+ * install.sh puts in place (`aop`, or `aop-nightly` for AOP Nightly) can replace itself: a source
+ * checkout runs under `bun`, and overwriting that would break the machine's runtime rather than
+ * update AOP.
  */
 export const detectInstall = (
   execPath: string = process.execPath,
   buildVersion: string | undefined = process.env.AOP_BUILD_VERSION,
+  channel: ChannelConfig = buildChannel(),
 ): InstallLayout | null =>
-  buildVersion?.trim() && basename(execPath) === "aop" ? layoutOf(execPath) : null;
+  buildVersion?.trim() && basename(execPath) === channel.binaryName ? layoutOf(execPath) : null;
 
 /**
  * The platform this host runs on, or null for one the releases do not ship a host for. An x64

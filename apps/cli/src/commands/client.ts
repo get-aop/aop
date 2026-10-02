@@ -1,4 +1,6 @@
-const DEFAULT_LOCAL_SERVER_URL = "http://127.0.0.1:25150";
+import { buildChannel } from "@aop/common";
+
+const DEFAULT_LOCAL_SERVER_URL = `http://127.0.0.1:${buildChannel().hostPort}`;
 
 export const getServerUrl = (): string => {
   const configuredUrl = process.env.AOP_LOCAL_SERVER_URL?.trim();

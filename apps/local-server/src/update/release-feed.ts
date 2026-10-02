@@ -1,11 +1,12 @@
 import {
+  buildChannel,
   GITHUB_API_URL,
   latestReleaseApiUrl,
   latestReleaseFeedUrl,
   parseGithubRelease,
   parseReleaseFeed,
-  RELEASE_FEED_ORIGIN,
   RELEASE_REPO,
+  type ReleaseChannel,
   type ReleaseInfo,
 } from "@aop/common";
 
@@ -26,17 +27,28 @@ export interface GithubSource {
 export interface FeedConfig {
   /** The public origin of the release feed, getaop.com; a test points it at a fake one. */
   origin: string;
+  /** Which builds the feed offers: a nightly host reads only nightlies, a stable one only releases. */
+  channel: ReleaseChannel;
   /** The GitHub Releases, read only when the feed fails and a token can read the private repo. */
   github: GithubSource | null;
 }
 
-/** The feed on getaop.com, with GitHub as the fallback when the environment holds a token. */
-export const feedConfigFromEnv = (env: NodeJS.ProcessEnv = process.env): FeedConfig => {
+/**
+ * The feed of this build's channel on getaop.com (`/nightly` for AOP Nightly), with GitHub as
+ * the fallback when the environment holds a token. Nightlies are never GitHub releases, so a
+ * nightly host has no fallback.
+ */
+export const feedConfigFromEnv = (
+  env: NodeJS.ProcessEnv = process.env,
+  channel = buildChannel(),
+): FeedConfig => {
   const token =
     env.AOP_GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim() || env.GITHUB_TOKEN?.trim() || "";
   return {
-    origin: env.AOP_RELEASE_FEED_URL?.trim() || RELEASE_FEED_ORIGIN,
-    github: token
+    origin: env.AOP_RELEASE_FEED_URL?.trim() || channel.feedOrigin,
+    channel: channel.id,
+    github:
+      token && channel.id === "stable"
       ? {
           apiUrl: env.AOP_GITHUB_API_URL?.trim() || GITHUB_API_URL,
           repo: env.AOP_GITHUB_REPO?.trim() || RELEASE_REPO,
@@ -52,7 +64,12 @@ export const fetchLatestRelease = async (
   fetchFn: FetchFn = apiFetch,
 ): Promise<ReleaseInfo> => {
   try {
-    return await readSource(latestReleaseFeedUrl(config.origin), {}, parseReleaseFeed, fetchFn);
+    return await readSource(
+      latestReleaseFeedUrl(config.origin),
+      {},
+      (json) => parseReleaseFeed(json, config.channel),
+      fetchFn,
+    );
   } catch (error) {
     if (!config.github) throw error;
     try {

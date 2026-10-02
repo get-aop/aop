@@ -1,5 +1,6 @@
 import { normalizeReleaseVersion } from "@aop/common";
 import type { LocalServerContext } from "../context.ts";
+import { countRunningRuns } from "../scheduling/capacity.ts";
 import { SettingKey } from "../settings/types.ts";
 import { detectInstall } from "./install-layout.ts";
 import { feedConfigFromEnv } from "./release-feed.ts";
@@ -16,14 +17,23 @@ export const createHostUpdateService = (
 ): UpdateService => {
   const buildVersion = env.AOP_BUILD_VERSION?.trim();
   const layout = detectInstall(process.execPath, buildVersion);
+  const feed = feedConfigFromEnv(env);
   return createUpdateService({
     isEnabled: async () => (await ctx.settingsRepository.get(SettingKey.UPDATE_CHECK)) === "true",
     supported: layout !== null,
     current: buildVersion ? normalizeReleaseVersion(buildVersion) : "dev",
-    feed: feedConfigFromEnv(env),
+    feed,
     startUpdater: async () => {
       if (!layout) throw new Error("not an installed build");
       await startUpdaterProcess(layout, env);
     },
+    autoApply:
+      feed.channel === "nightly"
+        ? {
+            enabled: async () =>
+              (await ctx.settingsRepository.get(SettingKey.UPDATE_AUTO_APPLY)) === "true",
+            busy: async () => (await countRunningRuns(ctx.db)) > 0,
+          }
+        : undefined,
   });
 };

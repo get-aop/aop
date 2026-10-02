@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { isNewerRelease } from "@aop/common";
+import { isNewerBuild } from "@aop/common";
 import type { HostPlatform, InstallLayout } from "./install-layout.ts";
 import { type FeedConfig, type FetchFn, fetchLatestRelease, messageOf } from "./release-feed.ts";
 import {
@@ -42,7 +42,7 @@ export interface UpdateDeps {
 export const updateHost = async (deps: UpdateDeps): Promise<UpdateResult> => {
   const { currentVersion: current, log } = deps;
   const release = await fetchLatestRelease(deps.feed, deps.fetch);
-  if (!isNewerRelease(release.version, current)) {
+  if (!isNewerBuild(release.version, current, deps.feed.channel)) {
     return { status: "up-to-date", current, latest: release.version };
   }
 

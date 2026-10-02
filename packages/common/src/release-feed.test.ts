@@ -89,3 +89,24 @@ describe("describeReleaseFile", () => {
     expect(describeReleaseFile("checksums.sha256")).toEqual({ kind: "checksums" });
   });
 });
+
+describe("channel feeds", () => {
+  const feed = (version: string) => ({
+    schemaVersion: 1,
+    version,
+    publishedAt: "2026-10-02T00:00:00Z",
+    notes: "",
+    notesUrl: `https://getaop.com/nightly/releases/v${version}.md`,
+    files: [],
+    commit: "c2133573",
+    channel: "nightly",
+  });
+
+  test("a stable reader ignores a nightly feed and a nightly reader a stable one", () => {
+    expect(parseReleaseFeed(feed("0.10.7-nightly.20261002.14"))).toBeNull();
+    expect(parseReleaseFeed(feed("0.10.6"), "nightly")).toBeNull();
+    expect(parseReleaseFeed(feed("0.10.7-nightly.20261002.14"), "nightly")?.version).toBe(
+      "0.10.7-nightly.20261002.14",
+    );
+  });
+});

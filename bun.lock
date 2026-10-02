@@ -21,6 +21,7 @@
         "aop": "./src/main.ts",
       },
       "dependencies": {
+        "@aop/common": "workspace:*",
         "@aop/infra": "workspace:*",
       },
       "devDependencies": {
@@ -127,6 +128,7 @@
     "packages/infra": {
       "name": "@aop/infra",
       "dependencies": {
+        "@aop/common": "workspace:*",
         "@logtape/file": "^2.3.0",
         "@logtape/logtape": "^2.3.0",
         "@opentelemetry/api": "^1.9.1",
