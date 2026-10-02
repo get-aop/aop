@@ -71,6 +71,19 @@ describe("aop_library_save", () => {
     });
   });
 
+  test("a file whose thread is gone stays, with no link to a chat that no longer exists", async () => {
+    const { s, projectId, threadId } = await setup();
+    await s.callTool(threadId, "aop_library_save", { content: "# Notes", name: "notes.md" });
+
+    await s.db.deleteFrom("chat_runs").where("session_id", "=", threadId).execute();
+    await s.db.deleteFrom("chat_messages").where("session_id", "=", threadId).execute();
+    await s.db.deleteFrom("chat_sessions").where("id", "=", threadId).execute();
+
+    const [item] = (await getListing(s, projectId)).items;
+    expect(item?.name).toBe("notes.md");
+    expect(item?.usedIn).toBeNull();
+  });
+
   test("refuses paths outside the workspace, links out of it and git's folder", async () => {
     const { s, threadId, workspace } = await setup();
     const outside = join(home.path(), "outside.txt");

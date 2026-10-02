@@ -68,10 +68,12 @@ export const toLibraryItem = (row: LibraryItemWithSession, retentionDays: number
   updatedAt: row.updated_at,
   lastAccessedAt: row.last_accessed_at,
   expiresAt: expiresAtOf(row, retentionDays),
-  usedIn: row.session_id
-    ? {
-        threadId: row.session_kind === "thread" ? row.session_id : null,
-        messageId: row.message_id,
-      }
-    : null,
+  // A session deleted since (a removed thread) leaves nothing to link to.
+  usedIn:
+    row.session_id && row.session_kind
+      ? {
+          threadId: row.session_kind === "thread" ? row.session_id : null,
+          messageId: row.message_id,
+        }
+      : null,
 });
