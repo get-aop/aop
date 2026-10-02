@@ -1,18 +1,17 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
-import { navigate, projectPath, type Route } from "../../shell/router";
+import { navigate, type ProjectScreen, projectScreenPath } from "../../shell/router";
 import { CoordinatorChatPane } from "../chat/CoordinatorChatPane";
 import { focusCoordinatorComposer } from "../chat/focus-composer";
 import type { ChatModel, ProjectChat } from "../chat/project-chat";
 import { ProjectTopBar } from "../ProjectTopBar";
 import type { ProjectEntry } from "../projects-state";
+import { PullRequestPane } from "../pull-request-view/PullRequestPane";
 import { PanelDivider } from "./PanelDivider";
 import { CHAT_MIN_WIDTH } from "./panel-layout";
 import { PanelFrame, ThreadsPanel } from "./ThreadsPanel";
 import { useOverviewFilters } from "./use-overview-filters";
 import { type PanelLayout, usePanelLayout } from "./use-panel-layout";
-
-type ProjectScreen = Extract<Route, { name: "project" | "thread" }>;
 
 /**
  * The project screen in three panes: the projects sidebar (the shell's), the coordinator chat,
@@ -21,7 +20,8 @@ type ProjectScreen = Extract<Route, { name: "project" | "thread" }>;
  *
  * One grid holds them: the top bar over the chat, and the panel in a column of its own from the
  * top of the screen, so its header shares the top bar's row. When the panel covers the chat
- * (expanded, or on a phone) or is closed, the top bar spans the screen.
+ * (expanded, or on a phone) or is closed, the top bar spans the screen. A screen that names a
+ * pull request shows it in the chat's column, over the chat.
  */
 export const ProjectLayout = ({
   entry,
@@ -39,10 +39,16 @@ export const ProjectLayout = ({
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
   const threadId = route.name === "thread" ? route.threadId : null;
-  const leaveThread = useCallback(() => navigate(projectPath(project.id)), [project.id]);
+  const { pullRequest } = route;
+  // Closing the thread leaves a pull request that is open beside it where it is.
+  const leaveThread = useCallback(
+    () => navigate(projectScreenPath({ name: "project", projectId: project.id, pullRequest })),
+    [project.id, pullRequest],
+  );
   const layout = usePanelLayout({ projectId: project.id, threadId, onCloseThread: leaveThread });
   const filters = useOverviewFilters();
   const { revealChat } = layout;
+  useRevealForPullRequest(pullRequest, revealChat);
 
   // A thread starts from what the person tells the coordinator, so this goes to its composer.
   const startThread = useCallback(() => {
@@ -72,7 +78,7 @@ export const ProjectLayout = ({
         aria-label="Coordinator chat"
         className={cn(
           "col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col",
-          layout.chatHidden && "hidden",
+          (layout.chatHidden || pullRequest) && "hidden",
         )}
       >
         <CoordinatorChatPane
@@ -82,9 +88,21 @@ export const ProjectLayout = ({
           threadsError={threadsError}
           chat={chat}
           model={model}
-          active={!layout.chatHidden}
+          active={!layout.chatHidden && !pullRequest}
         />
       </section>
+      {pullRequest ? (
+        <section
+          data-testid="pull-request-column"
+          aria-label={`Pull request #${pullRequest.number}`}
+          className={cn(
+            "col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col",
+            layout.chatHidden && "hidden",
+          )}
+        >
+          <PullRequestPane entry={entry} pullRequest={pullRequest} />
+        </section>
+      ) : null}
       {layout.visible && layout.mode === "side" && !layout.expanded ? (
         <PanelDivider
           width={layout.width}
@@ -105,6 +123,23 @@ export const ProjectLayout = ({
       ) : null}
     </div>
   );
+};
+
+/**
+ * A pull request opened from a panel that covers the chat's column (expanded, overlaid, or the
+ * one pane on a phone) needs that column back. Only a newly named one asks: the panel may be
+ * opened over it again afterwards.
+ */
+const useRevealForPullRequest = (
+  pullRequest: ProjectScreen["pullRequest"],
+  revealChat: () => void,
+): void => {
+  const reveal = useRef(revealChat);
+  reveal.current = revealChat;
+  const key = pullRequest ? `${pullRequest.repoId}#${pullRequest.number}` : null;
+  useEffect(() => {
+    if (key) reveal.current();
+  }, [key]);
 };
 
 /**

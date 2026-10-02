@@ -15,16 +15,26 @@ export const PROJECT_SETTINGS_SECTIONS = [
 ] as const;
 export type ProjectSettingsSection = (typeof PROJECT_SETTINGS_SECTIONS)[number];
 
+/** A pull request shown in the coordinator's place: which of the project's repositories, and its number. */
+export interface PullRequestViewRef {
+  repoId: string;
+  number: number;
+}
+
 /**
  * The app's screens. `project` is the project screen: the coordinator chat with the threads
  * panel on its overview. `thread` is the same screen with one thread open in the panel;
  * `project-settings` is one section of the project's settings, in a dialog over the project screen.
+ * Either project screen may name a `pullRequest`, shown where the chat is while the panel stays.
  */
 export type Route =
   | { name: "projects" }
-  | { name: "project"; projectId: string }
-  | { name: "thread"; projectId: string; threadId: string }
+  | { name: "project"; projectId: string; pullRequest?: PullRequestViewRef }
+  | { name: "thread"; projectId: string; threadId: string; pullRequest?: PullRequestViewRef }
   | { name: "project-settings"; projectId: string; section: ProjectSettingsSection };
+
+/** The two screens the panel and the chat (or a pull request in its place) share. */
+export type ProjectScreen = Extract<Route, { name: "project" | "thread" }>;
 
 export const projectsPath = (): string => "/";
 export const projectPath = (projectId: string): string =>
@@ -36,6 +46,16 @@ export const projectSettingsPath = (
   section: ProjectSettingsSection = "general",
 ): string => `${projectPath(projectId)}/settings${section === "general" ? "" : `/${section}`}`;
 
+/** The address of a project screen, with the pull request it names, if any. */
+export const projectScreenPath = (screen: ProjectScreen): string => {
+  const base =
+    screen.name === "thread"
+      ? threadPath(screen.projectId, screen.threadId)
+      : projectPath(screen.projectId);
+  const pr = screen.pullRequest;
+  return pr ? `${base}/pulls/${encodeURIComponent(pr.repoId)}/${pr.number}` : base;
+};
+
 /** The route a path names, or null for a path no screen owns (the app then shows the projects). */
 export const parseRoute = (pathname: string): Route | null => {
   const segments = pathname.split("/").filter(Boolean).map(decodeSegment);
@@ -45,7 +65,31 @@ export const parseRoute = (pathname: string): Route | null => {
   return parseProjectRoute(projectId, rest);
 };
 
+// A pull request is the address's last three segments: `pulls/<repoId>/<number>`.
+const PULL_REQUEST_SEGMENTS = 3;
+
 const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
+  const pullRequestAt = rest.length - PULL_REQUEST_SEGMENTS;
+  if (pullRequestAt >= 0 && rest[pullRequestAt] === "pulls") {
+    const pullRequest = parsePullRequest(rest.slice(pullRequestAt + 1));
+    const before = rest.slice(0, pullRequestAt);
+    // The old chat address is only ever bare; it is not a screen a pull request opens over.
+    const screen = before[0] === "chat" ? null : parseScreenRoute(projectId, before);
+    if (!pullRequest || !screen || (screen.name !== "project" && screen.name !== "thread")) {
+      return null;
+    }
+    return { ...screen, pullRequest };
+  }
+  return parseScreenRoute(projectId, rest);
+};
+
+const parsePullRequest = ([repoId, number]: string[]): PullRequestViewRef | null => {
+  if (!repoId || !number || !/^[1-9]\d*$/.test(number)) return null;
+  const parsed = Number(number);
+  return Number.isSafeInteger(parsed) ? { repoId, number: parsed } : null;
+};
+
+const parseScreenRoute = (projectId: string, rest: string[]): Route | null => {
   const [pane, detail, ...extra] = rest;
   if (extra.length > 0) return null;
   if (!pane) return { name: "project", projectId };
