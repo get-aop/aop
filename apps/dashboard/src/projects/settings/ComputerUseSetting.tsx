@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { skipsPermissions, useAgentClis } from "../../agent-clis/agent-cli-store";
 import { useIsHostOwner } from "../../settings/use-host-owner";
 import { useProjectActions } from "../use-project-actions";
 import { ROW_SELECT_CLASS, SettingRow, SettingsHeading } from "./blocks";
@@ -39,6 +40,8 @@ export const ComputerUseSetting = ({ project }: { project: Project }) => {
   const owner = useIsHostOwner(true);
   const actions = useProjectActions();
   const cua = useCuaStatus();
+  // While the host skips permission checks, Edit files threads run without them too.
+  const hostBypass = skipsPermissions(useAgentClis().data);
   const value = project.computerUse;
 
   return (
@@ -94,7 +97,7 @@ export const ComputerUseSetting = ({ project }: { project: Project }) => {
             cua={cua}
             owner={owner}
             chosen={value === "cua"}
-            editsOnly={project.threadAccess !== "full-access"}
+            editsOnly={project.threadAccess !== "full-access" && !hostBypass}
           />
         }
       />

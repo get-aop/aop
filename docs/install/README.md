@@ -10,7 +10,7 @@ The page says what each install gives you: the host is the server that keeps you
 | --- | --- |
 | **HOST** | `curl -fsSL https://getaop.com/install.sh \| sh`: fetches the build for the machine, puts `aop` on PATH and starts the background service. The script is [`scripts/installer/install.sh`](../../scripts/installer/install.sh). `--no-service` installs without starting it. |
 | **DESKTOP APP** | Durable download links for the macOS DMGs and the Windows installer, with the first-run warnings for unsigned builds. |
-| **SOURCE** | Clone [get-aop/aop-mono](https://github.com/get-aop/aop-mono) and run `./install` (builds from source and registers the service). |
+| **SOURCE** | Clone [get-aop/aop](https://github.com/get-aop/aop) and run `./install` (builds from source and registers the service). |
 
 ## Preview locally
 

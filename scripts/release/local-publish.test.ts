@@ -31,7 +31,7 @@ describe("local-publish release planning", () => {
       "run",
       "./scripts/release/release-notes.ts",
       "v0.2.20",
-      "get-aop/aop-mono",
+      "get-aop/aop",
       "dist/release-notes.md",
     ]);
     expect(plan.steps[4]?.command).toContain("v0.2.20");

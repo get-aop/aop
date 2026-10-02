@@ -99,7 +99,7 @@ export const runRelease = async (
     console.log(
       "The Release workflow (host binaries, macOS and Windows desktop apps, R2 deploy) now runs from the tag push.",
     );
-    console.log("Watch it with: gh run watch --repo get-aop/aop-mono");
+    console.log("Watch it with: gh run watch --repo get-aop/aop");
     console.log("");
   } else {
     console.log("");

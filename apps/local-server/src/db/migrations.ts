@@ -2,7 +2,7 @@ import { type Kysely, sql } from "kysely";
 import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
 import { AUTO_CONTINUE_V14_STATEMENTS } from "./auto-continue-v14.ts";
 import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
-import { COMPUTER_USE_V19_STATEMENTS } from "./computer-use-v19.ts";
+import { COMPUTER_USE_V20_STATEMENTS } from "./computer-use-v20.ts";
 import { COORDINATOR_V4_STATEMENTS } from "./coordinator-v4.ts";
 import { DEFAULT_RUNTIME_V9_STATEMENTS } from "./default-runtime-v9.ts";
 import { DROP_RUNTIME_PROFILES_V11_STATEMENTS } from "./drop-runtime-profiles-v11.ts";
@@ -13,6 +13,7 @@ import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
 import { REPORTED_RUNTIME_V13_STATEMENTS } from "./reported-runtime-v13.ts";
 import { RUN_CLI_VERSION_V17_STATEMENTS } from "./run-cli-version-v17.ts";
+import { RUN_PERMISSIONS_V19_STATEMENTS } from "./run-permissions-v19.ts";
 import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
 import type { Database } from "./schema.ts";
 import { STEER_DELIVERY_V18_STATEMENTS } from "./steer-delivery-v18.ts";
@@ -51,7 +52,8 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 16, name: "turn-parts", statements: TURN_PARTS_V16_STATEMENTS },
   { version: 17, name: "run-cli-version", statements: RUN_CLI_VERSION_V17_STATEMENTS },
   { version: 18, name: "steer-delivery", statements: STEER_DELIVERY_V18_STATEMENTS },
-  { version: 19, name: "computer-use", statements: COMPUTER_USE_V19_STATEMENTS },
+  { version: 19, name: "run-permissions", statements: RUN_PERMISSIONS_V19_STATEMENTS },
+  { version: 20, name: "computer-use", statements: COMPUTER_USE_V20_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

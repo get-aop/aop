@@ -30,6 +30,9 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
   ["POST", /^\/api\/updates\/apply\/?$/],
   // Installs a new version of an agent CLI on the host.
   ["POST", /^\/api\/agent-clis\/[^/]+\/update\/?$/],
+  // Lets every agent run any command without asking (settings/types.ts OWNER_ONLY_SETTING_KEYS;
+  // a bulk write of it is refused in settings/routes.ts, since this table sees paths only).
+  ["PUT", /^\/api\/settings\/agent_cli_skip_permissions\/?$/],
   // Gives a project's threads control of the host's desktop and browsers.
   ["PUT", /^\/api\/projects\/[^/]+\/computer-use\/?$/],
 ];

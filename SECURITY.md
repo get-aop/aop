@@ -5,7 +5,7 @@
 Please report security issues privately — do not open a public issue.
 
 - **Email:** security@getaop.com (or open a private advisory via
-  [GitHub Security Advisories](https://github.com/get-aop/aop-mono/security/advisories/new))
+  [GitHub Security Advisories](https://github.com/get-aop/aop/security/advisories/new))
 - Include: affected version, install method (installer / source / desktop),
   operating system, and a minimal reproduction if possible.
 
@@ -24,4 +24,4 @@ self-hosted deployments are separate attack surfaces.
 
 Only the latest release is supported for security fixes. Releases are
 published from `main`; the newest one is on the
-[releases page](https://github.com/get-aop/aop-mono/releases).
+[releases page](https://github.com/get-aop/aop/releases).

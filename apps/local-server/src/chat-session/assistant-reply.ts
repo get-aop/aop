@@ -20,6 +20,7 @@ import {
 } from "./message-images.ts";
 import { shouldSkipAssistantReply } from "./reply-state.ts";
 import { inputChannelFor, recordRunInput, settleRunInput } from "./run-input.ts";
+import { hostRunAccess } from "./run-permissions.ts";
 import { recordChatRunPid } from "./run-process.ts";
 import { persistActiveRuntimeSession, retireStaleRuntimeSession } from "./runtime-binding.ts";
 import {
@@ -229,6 +230,7 @@ const runMainRuntimeReply = async (
       : undefined,
     onSpawn: chatRunPidRecorder(ctx, input.chatRun),
     input: runInput,
+    hostAccess: hostRunAccess(ctx, session, input.chatRun),
   });
   if (!run.staleRuntimeSessionId || !input.chatRun) return run;
 
@@ -256,6 +258,7 @@ const runMainRuntimeReply = async (
       persistActiveRuntimeSession(ctx, input.chatRun?.id ?? "", sessionId),
     onSpawn: chatRunPidRecorder(ctx, input.chatRun),
     input: runInput,
+    hostAccess: hostRunAccess(ctx, freshSession, input.chatRun),
   });
 };
 

@@ -5,12 +5,12 @@ import { applyMigrations, runMigrations } from "./migrations.ts";
 import type { Database } from "./schema.ts";
 import { migrationsThrough } from "./test-utils.ts";
 
-describe("migration v19 on a database that ran versions 1 to 18", () => {
+describe("migration v20 on a database that ran versions 1 to 19", () => {
   let db: Kysely<Database>;
 
   beforeEach(async () => {
     db = createDatabase(":memory:");
-    await applyMigrations(db, migrationsThrough(18));
+    await applyMigrations(db, migrationsThrough(19));
   });
 
   afterEach(async () => {

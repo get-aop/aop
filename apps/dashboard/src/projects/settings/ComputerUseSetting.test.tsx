@@ -9,6 +9,9 @@ setupDashboardDom();
 const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
 const { ProjectsProvider } = await import("../ProjectsProvider");
 const { ComputerUseSetting } = await import("./ComputerUseSetting");
+const { refreshAgentClis, resetAgentClisForTests } = await import(
+  "../../agent-clis/agent-cli-store"
+);
 
 const READY: CuaStatus = {
   status: "ready",
@@ -51,12 +54,15 @@ let api: ReturnType<typeof mockApi> | undefined;
 afterEach(() => {
   cleanup();
   api?.restore();
+  resetAgentClisForTests();
 });
 
 interface SettingOptions {
   project?: Project;
   owner?: boolean;
   cua?: CuaStatus;
+  /** The host owner turned on Skip permission checks. */
+  hostBypass?: boolean;
 }
 
 const OWNER = { kind: "owner" };
@@ -68,6 +74,13 @@ const host = (project: Project, options: SettingOptions) => (call: ApiCall) => {
   const answers: Record<string, () => Response> = {
     "GET /auth/me": () => Response.json(options.owner === false ? DEVICE : OWNER),
     "GET /computer-use/cua": () => Response.json(options.cua ?? READY),
+    "GET /agent-clis": () =>
+      Response.json({
+        clis: [],
+        checkIntervalMinutes: 60,
+        autoUpdate: false,
+        skipPermissions: { enabled: options.hostBypass === true, blockedReason: null },
+      }),
     "PUT /projects/p1/computer-use": saved,
   };
   return answers[`${call.method} ${call.path.split("?")[0]}`]?.();
@@ -253,6 +266,17 @@ describe("ComputerUseSetting", () => {
     expect((await screen.findByTestId("settings-cua-edits-only")).textContent).toContain(
       "Full access",
     );
+  });
+
+  test("drops that warning while the host skips permission checks for every thread", async () => {
+    await renderSetting({
+      project: makeProject({ id: "p1", computerUse: "cua", threadAccess: "auto-accept-edits" }),
+      hostBypass: true,
+    });
+    await act(() => refreshAgentClis());
+
+    expect(await screen.findByTestId("settings-cua-status")).toBeTruthy();
+    expect(screen.queryByTestId("settings-cua-edits-only")).toBeNull();
   });
 
   test("is read-only on a paired device", async () => {

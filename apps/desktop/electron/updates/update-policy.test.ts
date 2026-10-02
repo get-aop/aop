@@ -1,35 +1,31 @@
 import { describe, expect, test } from "bun:test";
-import { chooseUpdateMode, MAC_AUTO_UPDATE_ENABLED } from "./update-policy";
+import { chooseUpdateMode } from "./update-policy";
 
-const input = { packaged: true, disabled: false } as const;
+const input = { packaged: true, disabled: false, macSigned: false } as const;
 
 describe("chooseUpdateMode", () => {
-  test("the switch is off until the macOS app is signed", () => {
-    expect(MAC_AUTO_UPDATE_ENABLED).toBe(false);
-  });
-
   test("Windows updates itself once packaged, and does nothing in development", () => {
     expect(chooseUpdateMode({ ...input, platform: "win32" })).toBe("auto");
     expect(chooseUpdateMode({ ...input, platform: "win32", packaged: false })).toBe("off");
   });
 
-  test("macOS shows a notice while the switch is off, even unpackaged", () => {
-    expect(chooseUpdateMode({ ...input, platform: "darwin", macAutoUpdate: false })).toBe("notice");
-    expect(
-      chooseUpdateMode({ ...input, platform: "darwin", packaged: false, macAutoUpdate: false }),
-    ).toBe("notice");
+  test("a macOS app without a Developer ID signature shows a notice, even unpackaged", () => {
+    expect(chooseUpdateMode({ ...input, platform: "darwin" })).toBe("notice");
+    expect(chooseUpdateMode({ ...input, platform: "darwin", packaged: false })).toBe("notice");
   });
 
-  test("macOS takes the Windows path once the switch is on", () => {
-    expect(chooseUpdateMode({ ...input, platform: "darwin", macAutoUpdate: true })).toBe("auto");
+  test("a Developer ID signed macOS app takes the Windows path", () => {
+    expect(chooseUpdateMode({ ...input, platform: "darwin", macSigned: true })).toBe("auto");
     expect(
-      chooseUpdateMode({ ...input, platform: "darwin", packaged: false, macAutoUpdate: true }),
+      chooseUpdateMode({ ...input, platform: "darwin", packaged: false, macSigned: true }),
     ).toBe("off");
   });
 
   test("the opt-out wins everywhere, and other platforms have no app", () => {
     expect(chooseUpdateMode({ ...input, platform: "win32", disabled: true })).toBe("off");
-    expect(chooseUpdateMode({ ...input, platform: "darwin", disabled: true })).toBe("off");
+    expect(
+      chooseUpdateMode({ ...input, platform: "darwin", disabled: true, macSigned: true }),
+    ).toBe("off");
     expect(chooseUpdateMode({ ...input, platform: "linux" })).toBe("off");
   });
 });

@@ -4,6 +4,7 @@ export type {
   AgentClisResponse,
   AgentCliUpdate,
   AgentCliUpdateState,
+  PermissionBypass,
 } from "./agent-clis.ts";
 export {
   AgentCliInstallMethodSchema,
@@ -13,6 +14,7 @@ export {
   AgentCliUpdateStateSchema,
   DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES,
+  PermissionBypassSchema,
   parseAgentCliCheckInterval,
 } from "./agent-clis.ts";
 export { AOP_PORTS, AOP_URLS } from "./env.ts";

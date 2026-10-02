@@ -83,11 +83,28 @@ export const AgentCliStatusSchema = z.object({
 });
 export type AgentCliStatus = z.infer<typeof AgentCliStatusSchema>;
 
+/**
+ * The host owner's "skip permission checks" setting (`agent_cli_skip_permissions`, off by
+ * default): while it is on, every Claude Code session the host starts runs with
+ * `--dangerously-skip-permissions`. It is read at each launch, so it reaches the next turn.
+ */
+export const PermissionBypassSchema = z.object({
+  enabled: z.boolean(),
+  /**
+   * Why runs on this host cannot skip permission checks whatever the setting says (Claude Code
+   * refuses to as root outside a sandbox), in words for the person; null when they can. While
+   * it is set, runs keep their usual checks instead of failing.
+   */
+  blockedReason: z.string().nullable(),
+});
+export type PermissionBypass = z.infer<typeof PermissionBypassSchema>;
+
 export const AgentClisResponseSchema = z.object({
   clis: z.array(AgentCliStatusSchema),
   /** Minutes between background checks; 0 means the periodic check is off. */
   checkIntervalMinutes: z.number().int().nonnegative(),
   autoUpdate: z.boolean(),
+  skipPermissions: PermissionBypassSchema,
 });
 export type AgentClisResponse = z.infer<typeof AgentClisResponseSchema>;
 

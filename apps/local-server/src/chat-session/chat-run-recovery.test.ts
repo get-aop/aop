@@ -423,6 +423,7 @@ const runningRun = (logFilePath: string, overrides: Partial<ChatRun> = {}): Chat
     pid: null,
     blocks_json: "[]",
     cli_version: null,
+    permissions_bypassed: null,
     input_path: null,
     created_at: now,
     updated_at: now,

@@ -42,6 +42,7 @@ Keys:
 | --- | --- |
 | `chat_global_instructions` | Free-text preferences added to every chat turn, outside the visible transcript |
 | `max_concurrent_runs` | How many thread turns the host runs at once, from 1 to 32 (default 4); see [Run scheduling](../../docs/SCHEDULING.md) |
+| `agent_cli_skip_permissions` | `true` runs every Claude Code session with `--dangerously-skip-permissions` from its next turn (default `false`); host only, see [Runtimes](../../docs/RUNTIMES.md#skipping-permission-checks) |
 
 Runtime providers and models are easier to manage through **Settings → Runtimes**.
 

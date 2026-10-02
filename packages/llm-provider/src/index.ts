@@ -55,6 +55,7 @@ export { sanitizeSessionId } from "./session-id";
 export type {
   LLMProvider,
   McpStdioServer,
+  RunAccessMode,
   RunImage,
   RunIsolation,
   RunMode,

@@ -10,7 +10,7 @@ The session behind the MCP URL decides which tools `tools/list` offers and `tool
 
 ### Project coordinator
 
-The coordinator is hermetic: it runs with the AOP tools only, with no Claude settings, hooks, other MCP servers, CLAUDE.md or auto memory, and its command line asks for no built-in tools. Its access mode is `approval-required`, pinned for every run whatever the stored session says, so the run carries no permission-skipping flag and only the tools below are pre-approved. All real work goes through a thread.
+The coordinator is hermetic: it runs with the AOP tools only, with no Claude settings, hooks, other MCP servers, CLAUDE.md or auto memory, and its command line asks for no built-in tools. Its access mode is `approval-required`, pinned for every run whatever the stored session says, so the run carries no permission-skipping flag and only the tools below are pre-approved. Its command line also denies the built-ins that touch the host by name (`--disallowedTools`). While the host owner's Skip permission checks setting is on, the coordinator runs with `--dangerously-skip-permissions` like every session, and its tools stay the same: `--tools ""` and the deny list hold in bypass mode ([Runtimes](./RUNTIMES.md#the-coordinator-stays-restricted)). All real work goes through a thread.
 
 | Tool | Behavior |
 | --- | --- |

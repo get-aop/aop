@@ -51,6 +51,7 @@ import { resolveDesktopPaths } from "./runtime-paths";
 import { isAllowedNavigation, isSafeExternalUrl, isSafeUpdateUrl } from "./security";
 import { type AppUpdater, createAppUpdater } from "./updates/app-updater";
 import { createElectronUpdaterPort } from "./updates/electron-updater-port";
+import { appBundleOf, isDeveloperIdSigned } from "./updates/mac-signature";
 import { chooseUpdateMode } from "./updates/update-policy";
 import { buildWindowOptions } from "./window-options";
 
@@ -167,12 +168,19 @@ async function start(): Promise<void> {
     log,
   });
 
+  const updateMode = chooseUpdateMode({
+    platform: process.platform,
+    packaged: app.isPackaged,
+    disabled: process.env.AOP_DESKTOP_DISABLE_UPDATES === "1",
+    // Only a packaged app is asked: the Electron binary a development run starts is signed by
+    // the Electron project, not by us.
+    macSigned:
+      process.platform === "darwin" &&
+      app.isPackaged &&
+      (await isDeveloperIdSigned(appBundleOf(app.getPath("exe")))),
+  });
   appUpdater = createAppUpdater({
-    mode: chooseUpdateMode({
-      platform: process.platform,
-      packaged: app.isPackaged,
-      disabled: process.env.AOP_DESKTOP_DISABLE_UPDATES === "1",
-    }),
+    mode: updateMode,
     appVersion: packageInfo.version,
     arch: process.arch,
     feedOrigin: feedOverride,
@@ -218,7 +226,12 @@ async function start(): Promise<void> {
 
   installMenuActions(controller);
   installLifecycle(controller);
-  log("started", { version: packageInfo.version, development, hostMode: supervisor !== null });
+  log("started", {
+    version: packageInfo.version,
+    development,
+    hostMode: supervisor !== null,
+    updates: updateMode,
+  });
   await controller.boot();
   appUpdater.start();
 }

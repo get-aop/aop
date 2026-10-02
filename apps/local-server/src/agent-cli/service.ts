@@ -12,6 +12,7 @@ import { createCheckScheduler } from "./check-scheduler.ts";
 import { AGENT_CLIS, type AgentCliDefinition } from "./definitions.ts";
 import { detectUpdatePlan, formatCommand, type UpdatePlan } from "./install-method.ts";
 import { fetchLatestCliVersion } from "./latest.ts";
+import { type CliIdentity, readPermissionBypass } from "./permission-bypass.ts";
 import { type CliProbe, messageOf, probeCli, runWithTimeout } from "./probe.ts";
 import type { AgentCliRunRepository } from "./run-repository.ts";
 import { checkWritable, runPlannedUpdate } from "./update-runner.ts";
@@ -54,6 +55,8 @@ export interface AgentCliServiceDeps {
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   deferPollMs?: number;
+  /** Test seam for the root check of the permission bypass; production reads the host's own. */
+  identity?: CliIdentity;
 }
 
 interface CliState {
@@ -256,6 +259,7 @@ export const createAgentCliService = (deps: AgentCliServiceDeps): AgentCliServic
     clis: await Promise.all(definitions.map(statusOf)),
     checkIntervalMinutes: await readCheckInterval(deps.settings),
     autoUpdate: await readAutoUpdate(deps.settings),
+    skipPermissions: await readPermissionBypass(deps.settings, deps.identity),
   });
 
   const scheduler = createCheckScheduler({

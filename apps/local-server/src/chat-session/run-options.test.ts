@@ -383,3 +383,92 @@ describe("resolveAopMcpUrl", () => {
     expect(resolveAopMcpUrl("pi", "isess_a")).toBeUndefined();
   });
 });
+
+describe("buildRunOptions with the host's permission bypass", () => {
+  const ON = { skipPermissions: true };
+  const OFF = { skipPermissions: false };
+  const command = (overrides: Partial<ChatSession>, host = ON) =>
+    new ClaudeCodeProvider().buildCommand(
+      buildRunOptions(
+        session(overrides),
+        "/work/dir",
+        "hi",
+        () => undefined,
+        "/logs/run.jsonl",
+        undefined,
+        undefined,
+        undefined,
+        host,
+      ),
+    );
+  const COORDINATOR = { kind: "coordinator", project_id: "proj_1" } as const;
+  const THREAD = { kind: "thread", project_id: "proj_1", state: "working" } as const;
+
+  test("off, every session keeps the access it had", () => {
+    expect(
+      flagValues(
+        command({ ...THREAD, runtime_access_mode: "auto-accept-edits" }, OFF),
+        "--permission-mode",
+      ),
+    ).toEqual(["acceptEdits"]);
+    expect(command({ runtime_access_mode: "auto" }, OFF)).not.toContain(
+      "--dangerously-skip-permissions",
+    );
+    expect(command(COORDINATOR, OFF)).not.toContain("--dangerously-skip-permissions");
+  });
+
+  test("on, a plain chat and a thread skip permission checks with the one flag and no permission mode", () => {
+    // A thread on approval-required is a read-only one, which the last test covers.
+    const sessions = [
+      ...(["approval-required", "auto-accept-edits", "auto"] as const).map((access) => ({
+        runtime_access_mode: access,
+      })),
+      ...(["auto-accept-edits", "full-access"] as const).map((access) => ({
+        ...THREAD,
+        runtime_access_mode: access,
+      })),
+    ];
+    for (const overrides of sessions) {
+      const cmd = command(overrides);
+      expect(cmd.filter((arg) => arg === "--dangerously-skip-permissions")).toHaveLength(1);
+      expect(cmd).not.toContain("--permission-mode");
+      expect(cmd).not.toContain("--permission-prompt-tool");
+    }
+  });
+
+  test("on, a thread keeps its own tools and still has no question or scheduling tools", () => {
+    const cmd = command({ ...THREAD, runtime_access_mode: "auto-accept-edits" });
+
+    expect(flagValues(cmd, "--allowedTools")).toEqual(THREAD_TOOL_NAMES.map(claudeMcpToolName));
+    expect(flagValues(cmd, "--disallowedTools")).toEqual(THREAD_DISALLOWED_TOOLS);
+  });
+
+  test("on, the coordinator skips the checks but its tool set does not grow: no built-ins, and the ones that touch the host denied by name", () => {
+    const on = command({ ...COORDINATOR, runtime_access_mode: "approval-required" });
+    const off = command({ ...COORDINATOR, runtime_access_mode: "approval-required" }, OFF);
+
+    expect(on).toContain("--dangerously-skip-permissions");
+    expect(on).not.toContain("--permission-mode");
+    for (const cmd of [on, off]) {
+      expect(flagValues(cmd, "--tools")).toEqual([""]);
+      expect(flagValues(cmd, "--disallowedTools")).toEqual(
+        expect.arrayContaining(["Bash", "Read", "Edit", "Write", "NotebookEdit", "WebFetch"]),
+      );
+      expect(flagValues(cmd, "--allowedTools")).toEqual(
+        COORDINATOR_TOOL_NAMES.map(claudeMcpToolName),
+      );
+      expect(cmd).toContain("--strict-mcp-config");
+    }
+  });
+
+  test("on, a read-only thread stays read-only: its allow-list is what holds it, and a bypassed run would ignore it", () => {
+    const cmd = command({ ...THREAD, runtime_access_mode: READ_ONLY_ACCESS });
+
+    expect(cmd).not.toContain("--dangerously-skip-permissions");
+    expect(cmd).not.toContain("--permission-mode");
+    expect(flagValues(cmd, "--allowedTools")).toEqual([
+      ...THREAD_TOOL_NAMES.map(claudeMcpToolName),
+      ...READ_ONLY_COMMANDS,
+    ]);
+  });
+});

@@ -45,7 +45,7 @@ describe("parseGithubRelease", () => {
 
   test("builds the latest-release URL for a base", () => {
     expect(latestReleaseApiUrl("http://127.0.0.1:9/")).toBe(
-      "http://127.0.0.1:9/repos/get-aop/aop-mono/releases/latest",
+      "http://127.0.0.1:9/repos/get-aop/aop/releases/latest",
     );
   });
 });

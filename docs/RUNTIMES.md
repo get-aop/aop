@@ -50,6 +50,36 @@ Updates never break a run in flight. The native installer writes each version to
 
 Each run records the CLI version its `system` init event named (`chat_runs.cli_version`), and the Runtimes row shows the versions of the runs in flight and of the last finished one.
 
+## Skipping permission checks
+
+Settings › Runtimes has a **Skip permission checks** switch under the agent CLIs, stored as the host setting `agent_cli_skip_permissions` (`"true"` or `"false"`, off by default). While it is on, every Claude Code session the host starts runs with `--dangerously-skip-permissions`: coordinator turns, thread turns, plain chats, follow-ups, resumed sessions and turns that take steers. The agents can then run any command and edit any file as you without asking.
+
+- **Who can change it.** Only the host owner. `PUT /api/settings/agent_cli_skip_permissions` is an owner route, and a bulk `PUT /api/settings` that carries the key is refused from a paired device (403 `HOST_ONLY`, see [Running the host](./HOST.md)); `aop config:set agent_cli_skip_permissions true` on the host works, without the dashboard's confirmation. A paired device sees the state read-only. Turning it on in the dashboard shows what it allows and asks for confirmation; turning it off does not. While it is on, the Runtimes row shows a warning, the Agent CLIs heading a "Permission checks off" badge, and the sidebar a line under Settings on every page.
+- **When it applies.** Each launch reads it right before the CLI starts, after any wait for a CLI update, so a change reaches every session's next turn without restarting AOP. A turn already running keeps the flags it started with. `GET /api/agent-clis` reports it as `skipPermissions: { enabled, blockedReason }`.
+- **What it replaces.** Without it, a session's flags come from what it is. A thread uses its project's thread access ([Threads](./THREADS.md#access): `--dangerously-skip-permissions` for Full access, `--permission-mode acceptEdits` for Edit files). A plain chat uses its own access mode. The coordinator runs `approval-required`, with no permission flag, so a headless run denies whatever `--allowedTools` does not pre-approve. With the setting on, all of them get `--dangerously-skip-permissions` alone, with no `--permission-mode`. AOP never passes `--permission-prompt-tool`: a headless run cannot ask, so a check denies instead of prompting, and with the setting on none are made. The Waiting on you group then stops offering permission requests, and a project's Thread access setting says it is overridden.
+- **The one exception.** A project's read-only survey thread keeps `approval-required` and its short allow-list of read-only `git` and `gh` commands. Bypass mode ignores allow-lists, so skipping its checks would let it write.
+- **Which flag.** `--dangerously-skip-permissions` and `--permission-mode bypassPermissions` behave the same on Claude Code 2.1.287. With AOP's flags (`-p`, `--input-format stream-json`, `--replay-user-messages`, `--include-partial-messages`, `--resume`), both start the session with `permissionMode: "bypassPermissions"` in the init event, and a resumed session keeps it. AOP passes `--dangerously-skip-permissions`, the flag Full access threads already used.
+
+### The coordinator stays restricted
+
+Skipping checks does not widen the coordinator's tools. Its tool set never came from permissions: `--tools ""` removes every built-in tool from the session, and `--strict-mcp-config` leaves the AOP server as its only MCP server. That server offers the coordinator its own tools only, whatever the run's mode. Allow-lists stop holding in bypass mode, so the coordinator also gets a deny list, `--disallowedTools` with Bash, Read, Edit, Write, NotebookEdit, Glob, Grep, WebFetch, WebSearch, Task and Agent. Deny rules still hold in bypass mode.
+
+Both layers were checked on the real CLI (2.1.287, Haiku) with the coordinator's flags plus `--dangerously-skip-permissions`, asked to run `touch`, read a file and edit another:
+
+- The init event listed `"permissionMode": "bypassPermissions"` and `"tools": []`.
+- The run made no `tool_use` call, no file was created or changed, and the "content" it quoted was made up.
+- `--dangerously-skip-permissions --disallowedTools Bash Read Edit Write` without `--tools` left those four out of the init event's tool list, and the model said it had no Bash tool.
+
+`apps/local-server/src/chat-session/run-options.test.ts` and `apps/local-server/src/project/permission-bypass.fake-cli.test.ts` pin the command line in both states.
+
+### When it cannot apply
+
+Claude Code exits at startup when bypass mode is asked for while it runs as root (uid 0), unless `IS_SANDBOX=1` or `CLAUDE_CODE_BUBBLEWRAP` is set. The CLI runs as AOP's user with AOP's spawn environment, so the host checks this beforehand. On a root host outside a sandbox, runs keep their usual permission checks instead of failing. The Runtimes row shows why (`blockedReason`), the switch cannot be turned on, and the host logs a warning at each launch while the setting stays on. Run AOP as a regular user, or set `IS_SANDBOX=1` in AOP's environment if the host is a disposable container or VM.
+
+### What a run records
+
+`chat_runs.permissions_bypassed` (migration v19) is 1 when a run was launched with a permission-skipping flag, from this setting or a thread's Full access, and 0 when it was not. It is written just before the CLI starts, next to `cli_version`. A run that outlives a server restart keeps its row, its flags and its input FIFO: the host only reattaches to it, so steering still works. The next turn reads the setting again.
+
 ## Checking a runtime against the real CLI
 
 Everything the tests know about Claude Code's output comes from a fake CLI, so a change in the real one would go unseen. `scripts/real-runtime` is an opt-in harness that runs a short session on the real `claude` (Sonnet at medium effort, on your own login) and a private scratch GitHub repository, and writes a pass/fail report: the coordinator's restrictions, what a thread with full access or with Edit files can run, `aop_ask_user` and the resume that follows, the appended system prompt on a resumed session, thread links, the usage, `modelUsage` and rate-limit events of a result, the `gh` output the pull request watcher reads, and the watcher's fix prompt on a check that really fails.
