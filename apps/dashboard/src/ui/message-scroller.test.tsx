@@ -137,6 +137,35 @@ describe("MessageScroller", () => {
 
     expect(scroller.scrollTop).toBe(300);
   });
+
+  test("hidden and shown again, it is back where the person left it, not at the end", () => {
+    const { scroller, grow } = mountScroller();
+    scroller.scrollTop = 20;
+    fireEvent.scroll(scroller);
+
+    // display: none: no size, and the browser reads (and reports) scrollTop 0.
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 0 });
+    scroller.scrollTop = 0;
+    fireEvent.scroll(scroller);
+    grow(0);
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 100 });
+    grow(400);
+
+    expect(scroller.scrollTop).toBe(20);
+  });
+
+  test("hidden while following the end, it shows the end again", () => {
+    const { scroller, grow } = mountScroller();
+
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 0 });
+    scroller.scrollTop = 0;
+    fireEvent.scroll(scroller);
+    grow(0);
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 100 });
+    grow(400);
+
+    expect(scroller.scrollTop).toBe(400);
+  });
 });
 
 describe("MessageScroller top edge", () => {
