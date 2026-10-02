@@ -1,6 +1,7 @@
 import { createChatSessionService } from "../chat-session/service.ts";
 import type { ChatSessionServiceDeps } from "../chat-session/session-types.ts";
 import type { LocalServerContext } from "../context.ts";
+import { createLibraryService, type LibraryService } from "../library/service.ts";
 import {
   createPullRequestWatcher,
   type PullRequestWatcher,
@@ -23,6 +24,8 @@ export interface ProjectServices {
   /** The answers to the threads the coordinator proposes. */
   suggestions: SuggestionService;
   memory: MemoryService;
+  /** The project's files: what its agents saved, what the person sent or added. */
+  library: LibraryService;
   /** A new project's first open; the server resumes kickoffs a restart left pending (see server.ts). */
   kickoff: ProjectKickoff;
   /** The git side of threads, for housekeeping that runs without a request. */
@@ -58,6 +61,7 @@ export const createProjectServices = (
       memory: ctx.memoryRepository,
       coordinator: projects,
     }),
+    library: createLibraryService(ctx),
     git,
     // The watcher reads GitHub through the same `gh` seam the threads' pull requests use.
     pullRequestWatcher: createPullRequestWatcher(

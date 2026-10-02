@@ -15,6 +15,7 @@ import {
 import { createCommandContext } from "./context.ts";
 import { createDatabase, getDefaultDbPath } from "./db/connection.ts";
 import { runMigrations } from "./db/migrations.ts";
+import { runLibraryRetention, startLibraryRetention } from "./library/retention.ts";
 import { createProjectServices } from "./project/services.ts";
 import { startPullRequestWatcher } from "./pull-request-watch/watcher.ts";
 import { cleanupOrphanRepoDirs } from "./repo/orphan-dirs.ts";
@@ -101,6 +102,8 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   // Shortly after boot and then every `agent_cli_check_interval_minutes`, the agent CLIs are
   // checked for newer versions (and updated, when the person turned that on).
   agentClis.start();
+  // Once a day the Library removes what outlived its retention or its caps.
+  const stopLibraryRetention = startLibraryRetention(() => runLibraryRetention(ctx));
   // A project created just before a restart may not have started its survey yet.
   void projectServices.kickoff.resumePending();
 
@@ -108,6 +111,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     shutdown: async () => {
       logger.info("Shutting down...");
       stopMaintenance();
+      stopLibraryRetention();
       updates.stop();
       agentClis.stop();
       await stopWatcher();

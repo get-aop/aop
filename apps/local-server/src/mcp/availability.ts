@@ -15,6 +15,12 @@ export const PLAIN_TOOL_NAMES = ["aop_list_repos", "aop_set_chat_workspace"] as 
 
 export const MEMORY_TOOL_NAMES = ["memory_read", "memory_write"] as const;
 
+export const LIBRARY_TOOL_NAMES = [
+  "aop_library_save",
+  "aop_library_list",
+  "aop_library_read",
+] as const;
+
 export const COORDINATOR_TOOL_NAMES = [
   "thread_spawn",
   "thread_steer",
@@ -28,6 +34,7 @@ export const COORDINATOR_TOOL_NAMES = [
   "project_settings_get",
   "project_settings_set",
   ...MEMORY_TOOL_NAMES,
+  ...LIBRARY_TOOL_NAMES,
   // The coordinator's alone: it keeps memory tidy, and Memory settings ask it to remove things.
   "memory_delete",
 ] as const;
@@ -37,6 +44,7 @@ export const THREAD_TOOL_NAMES = [
   "aop_report_status",
   "aop_open_pr",
   ...MEMORY_TOOL_NAMES,
+  ...LIBRARY_TOOL_NAMES,
 ] as const;
 
 const TOOL_NAMES: Record<SessionRole, readonly string[]> = {

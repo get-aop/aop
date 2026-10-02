@@ -120,6 +120,9 @@ describe("MCP HTTP routes", () => {
     await s.settle();
 
     expect(await toolNames(s, coordinator.id)).toEqual([
+      "aop_library_list",
+      "aop_library_read",
+      "aop_library_save",
       "memory_delete",
       "memory_read",
       "memory_write",
@@ -137,6 +140,9 @@ describe("MCP HTTP routes", () => {
     ]);
     expect(await toolNames(s, spawned.thread.id)).toEqual([
       "aop_ask_user",
+      "aop_library_list",
+      "aop_library_read",
+      "aop_library_save",
       "aop_open_pr",
       "aop_report_status",
       "memory_read",
