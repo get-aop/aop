@@ -80,7 +80,7 @@ src/
 
 ## Settings
 
-- A project's own settings are a dialog over the project at `/projects/:id/settings` (`src/projects/settings/`), one row per setting: General (name, goal, models and effort, thread access, pull requests, notifications, then pause, restart and archive, and delete under Danger zone), Memory (instructions and memory files), Environment (repositories) and Usage.
+- A project's own settings are a dialog over the project at `/projects/:id/settings` (`src/projects/settings/`), in sections with a side nav: General (name and icon, goal, instructions), Models, Threads & permissions (thread access, pull requests, auto-continue), Computer use, Notifications, Environment (repositories), Memory (memory files), Usage and Advanced (pause, restart, archive, and delete under Danger zone). Every setting saves as it changes (`use-settings-autosave.ts`): no Save button, and each row says when it is saved.
 - The Settings dialog is for the host: General, Repositories (attach dialog with git badges), Runtimes (add/clone/remove custom), Devices (host owner only: pairing code, paired devices, revoke) and About (version/update).
 - Kit chrome only: one chip, one menu, one badge. No ad-hoc controls outside `src/ui`
 

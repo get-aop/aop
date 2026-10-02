@@ -2,7 +2,17 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { canGoBack, canGoForward, pushEntry, replaceEntry } from "./app-history";
 
 /** The screens of a project's settings, in the order its side nav lists them. */
-export const PROJECT_SETTINGS_SECTIONS = ["general", "memory", "environment", "usage"] as const;
+export const PROJECT_SETTINGS_SECTIONS = [
+  "general",
+  "models",
+  "threads",
+  "computer-use",
+  "notifications",
+  "environment",
+  "memory",
+  "usage",
+  "advanced",
+] as const;
 export type ProjectSettingsSection = (typeof PROJECT_SETTINGS_SECTIONS)[number];
 
 /**

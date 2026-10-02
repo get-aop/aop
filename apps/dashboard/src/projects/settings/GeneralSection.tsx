@@ -1,163 +1,159 @@
-import { type NotificationLevel, PROJECT_GOAL_MAX_LENGTH, type Project } from "@aop/common";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import {
+  PROJECT_GOAL_MAX_LENGTH,
+  PROJECT_INSTRUCTIONS_MAX_LENGTH,
+  type Project,
+} from "@aop/common";
+import { cn } from "@/lib/cn";
 import { Textarea } from "@/ui/textarea";
-import { requestConfirmation } from "../../components/ConfirmationHost";
 import { NameAndIconInput } from "../NameAndIconInput";
-import { NOTIFICATION_LEVELS } from "../notification-levels";
 import { projectNameProblem } from "../project-fields";
-import { AutoContinueSetting } from "./AutoContinueSetting";
-import { AutoFixSetting } from "./AutoFixSetting";
-import { ROW_SELECT_CLASS, SaveBar, SettingRow, SettingsHeading } from "./blocks";
-import { ComputerUseSetting } from "./ComputerUseSetting";
-import { ModelSettings } from "./ModelSettings";
-import { ProjectLifecycle } from "./ProjectLifecycle";
-import { ThreadAccessSetting } from "./ThreadAccessSetting";
-import { type SettingsDraft, useSettingsDraft } from "./use-settings-draft";
+import { SettingRow, SettingsGroup } from "./blocks";
+import { type AutosaveSettings, useSettingsAutosave } from "./use-settings-autosave";
 
 const count = (value: number): string => value.toLocaleString("en-US");
+const NEAR_LIMIT = 0.9;
 
-/** Name and icon, goal, models, thread access and notifications in one form, then computer use (saved on its own) and the actions that are not edits. */
+/**
+ * What the project is called, and what the coordinator and every thread are told about it. Text
+ * saves once typing pauses or the field loses focus; a picked icon saves at once.
+ */
 export const GeneralSection = ({ project }: { project: Project }) => {
-  const draft = useSettingsDraft(project);
-  const name = draft.value("name");
-  const goal = draft.value("goal");
-  const nameMissing = name.trim() === "";
-  const nameProblem = nameMissing ? "A project needs a name." : projectNameProblem(name);
-
-  const save = async () => {
-    if (nameProblem) return;
-    // Full access is the one setting that lowers a guard, so saving it asks once more.
-    if (draft.patch.threadAccess === "full-access") {
-      const confirmed = await requestConfirmation({
-        title: "Give threads full access?",
-        message: `Threads of “${project.name}” will run any command on this host without asking, starting with their next turn. Only continue for a project you trust.`,
-        confirmLabel: "Give full access",
-        destructive: true,
-      });
-      if (!confirmed) return;
-    }
-    await draft.save();
-  };
-
+  const settings = useSettingsAutosave(project);
   return (
-    <div data-testid="settings-general" className="flex flex-col">
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save();
-        }}
-        className="flex flex-col"
+    <div data-testid="settings-general" className="flex flex-col gap-6">
+      <SettingsGroup>
+        <NameRow project={project} settings={settings} />
+      </SettingsGroup>
+      <SettingsGroup
+        title="What agents are told"
+        description="Sent to the coordinator and to every thread, on every turn."
       >
-        <SettingRow
-          label="Name and icon"
-          htmlFor="settings-name"
-          control={
-            <NameAndIconInput
-              id="settings-name"
-              data-testid="settings-name"
-              pickerTestId="settings-icon"
-              autoComplete="off"
-              value={name}
-              aria-invalid={nameProblem !== null}
-              onChange={(event) => draft.set("name", event.target.value)}
-              appearance={{
-                id: project.id,
-                name,
-                icon: draft.value("icon"),
-                color: draft.value("color"),
-              }}
-              onPick={({ icon, color }) => {
-                draft.set("icon", icon);
-                draft.set("color", color);
-              }}
-              className="w-full sm:w-64"
-            />
-          }
-          below={
-            nameProblem ? (
-              <p
-                data-testid="settings-name-error"
-                className="text-[12px] text-blocked sm:text-right"
-              >
-                {nameProblem}
-              </p>
-            ) : null
-          }
-        />
-        <SettingRow
+        <TextRow
+          settings={settings}
+          setting="goal"
           label="Goal"
-          description="The outcome you want the coordinator to work toward. Shown under the project's name, and sent to the coordinator and every thread."
-          htmlFor="settings-goal"
-          below={
-            <div className="flex flex-col gap-1.5">
-              <Textarea
-                id="settings-goal"
-                data-testid="settings-goal"
-                rows={3}
-                maxLength={PROJECT_GOAL_MAX_LENGTH}
-                placeholder="What is this project for?"
-                value={goal}
-                onChange={(event) => draft.set("goal", event.target.value)}
-                className="field-sizing-fixed min-h-0 text-[13px]"
-              />
-              <p
-                data-testid="settings-goal-count"
-                className="self-end text-[12px] tabular-nums text-text-subtle"
-              >
-                {count(goal.length)} / {count(PROJECT_GOAL_MAX_LENGTH)}
-              </p>
-            </div>
-          }
+          description="The outcome you want the coordinator to work toward. Also shown under the project's name."
+          placeholder="What is this project for?"
+          rows={3}
+          max={PROJECT_GOAL_MAX_LENGTH}
         />
-
-        <div data-testid="settings-models" className="flex flex-col">
-          <SettingsHeading
-            title="Models"
-            description="Each role runs the model and effort you choose. “Default” passes none, so Claude Code picks its own and the role follows it when it changes; the label names what the last run used."
-          />
-          <ModelSettings draft={draft} reported={project.reportedRuntime} />
-        </div>
-
-        <SettingsHeading title="Threads" />
-        <ThreadAccessSetting draft={draft} />
-        <AutoFixSetting draft={draft} />
-        <NotificationSetting draft={draft} />
-        <AutoContinueSetting draft={draft} />
-
-        <SaveBar draft={draft} blocked={nameProblem !== null} />
-      </form>
-
-      <ComputerUseSetting project={project} />
-      <ProjectLifecycle project={project} />
+        <TextRow
+          settings={settings}
+          setting="instructions"
+          label="Instructions"
+          description="What only you know: how the repositories relate, what is the source of truth, the rules a thread must keep. Do not repeat what each repository's CLAUDE.md already says."
+          placeholder="Project context, sources, source of truth, invariants, what to do before starting."
+          rows={8}
+          max={PROJECT_INSTRUCTIONS_MAX_LENGTH}
+        />
+      </SettingsGroup>
     </div>
   );
 };
 
-const NotificationSetting = ({ draft }: { draft: SettingsDraft }) => (
-  <SettingRow
-    label="Notifications"
-    description="When the desktop app raises a notification for this project."
-    htmlFor="settings-notifications"
-    control={
-      <Select
-        value={draft.value("notificationLevel")}
-        onValueChange={(level) => draft.set("notificationLevel", level as NotificationLevel)}
-      >
-        <SelectTrigger
-          id="settings-notifications"
-          data-testid="settings-notifications"
-          className={ROW_SELECT_CLASS}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {NOTIFICATION_LEVELS.map(({ level, label }) => (
-            <SelectItem key={level} value={level} data-testid={`settings-notifications-${level}`}>
-              {label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    }
-  />
-);
+const NameRow = ({ project, settings }: { project: Project; settings: AutosaveSettings }) => {
+  const name = settings.value("name");
+  const problem = name.trim() === "" ? "A project needs a name." : projectNameProblem(name);
+  // One row holds two settings; it reports whichever the person changed last.
+  const status = settings.state("name");
+  return (
+    <SettingRow
+      label="Name and icon"
+      description="How the project shows in the sidebar and in its header."
+      htmlFor="settings-name"
+      status={settings.state(status.phase === "idle" ? "icon" : "name")}
+      control={
+        <NameAndIconInput
+          id="settings-name"
+          data-testid="settings-name"
+          pickerTestId="settings-icon"
+          autoComplete="off"
+          value={name}
+          aria-invalid={problem !== null}
+          aria-describedby={problem ? "settings-name-error" : undefined}
+          onChange={(event) => settings.set("name", event.target.value, { typed: true })}
+          onBlur={settings.flush}
+          appearance={{
+            id: project.id,
+            name,
+            icon: settings.value("icon"),
+            color: settings.value("color"),
+          }}
+          onPick={({ icon, color }) => {
+            // The first only records the icon; the second saves both in one request.
+            settings.set("icon", icon, { typed: true });
+            settings.set("color", color);
+          }}
+          className="w-full sm:w-64"
+        />
+      }
+      below={
+        problem ? (
+          <p
+            id="settings-name-error"
+            data-testid="settings-name-error"
+            className="text-[12px] text-blocked sm:text-right"
+          >
+            {problem}
+          </p>
+        ) : null
+      }
+    />
+  );
+};
+
+const TextRow = ({
+  settings,
+  setting,
+  label,
+  description,
+  placeholder,
+  rows,
+  max,
+}: {
+  settings: AutosaveSettings;
+  setting: "goal" | "instructions";
+  label: string;
+  description: string;
+  placeholder: string;
+  rows: number;
+  max: number;
+}) => {
+  const text = settings.value(setting);
+  const nearLimit = text.length >= max * NEAR_LIMIT;
+  const id = `settings-${setting}`;
+  return (
+    <SettingRow
+      label={label}
+      description={description}
+      htmlFor={id}
+      status={settings.state(setting)}
+      stacked
+      control={
+        <div className="flex w-full flex-col gap-1.5">
+          <Textarea
+            id={id}
+            data-testid={id}
+            rows={rows}
+            maxLength={max}
+            placeholder={placeholder}
+            value={text}
+            onChange={(event) => settings.set(setting, event.target.value, { typed: true })}
+            onBlur={settings.flush}
+            className="field-sizing-fixed min-h-0 text-[13px] leading-relaxed"
+          />
+          <p
+            data-testid={`${id}-count`}
+            data-near-limit={nearLimit}
+            className={cn(
+              "self-end text-[11.5px] tabular-nums",
+              nearLimit ? "text-waiting" : "text-text-subtle",
+            )}
+          >
+            {count(text.length)} / {count(max)}
+          </p>
+        </div>
+      }
+    />
+  );
+};

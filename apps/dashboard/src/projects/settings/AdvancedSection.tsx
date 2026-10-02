@@ -11,22 +11,22 @@ import type { ReactNode } from "react";
 import { Button } from "@/ui/button";
 import { requestConfirmation } from "../../components/ConfirmationHost";
 import { useProjectActions } from "../use-project-actions";
-import { SettingRow, SettingsHeading } from "./blocks";
+import { SettingRow, SettingsGroup } from "./blocks";
 
 /**
- * The actions that are not edits: pause, restart the coordinator and archive as plain rows, each
- * behind a question since they stop work, then Delete alone under "Danger zone".
+ * The actions that are not edits: pause, restart the coordinator and archive in one group, each
+ * behind a question since they stop work, then Delete alone in a red-edged "Danger zone".
  */
-export const ProjectLifecycle = ({ project }: { project: Project }) => (
-  <div data-testid="settings-lifecycle" className="flex flex-col">
-    <SettingsHeading title="Project" />
-    {project.status === "archived" ? null : <PauseRow project={project} />}
-    <RestartRow project={project} />
-    <ArchiveRow project={project} />
-    <div data-testid="settings-danger-zone" className="flex flex-col">
-      <SettingsHeading title="Danger zone" />
+export const AdvancedSection = ({ project }: { project: Project }) => (
+  <div className="flex flex-col gap-8">
+    <SettingsGroup testId="settings-lifecycle" title="Project">
+      {project.status === "archived" ? null : <PauseRow project={project} />}
+      <RestartRow project={project} />
+      <ArchiveRow project={project} />
+    </SettingsGroup>
+    <SettingsGroup testId="settings-danger-zone" title="Danger zone" tone="danger">
       <DeleteRow project={project} />
-    </div>
+    </SettingsGroup>
   </div>
 );
 
@@ -144,9 +144,9 @@ const DeleteRow = ({ project }: { project: Project }) => {
       control={
         <Button
           type="button"
+          variant="destructive"
           size="sm"
           data-testid="settings-delete"
-          className="bg-blocked text-white hover:bg-blocked/90"
           onClick={() => void actions.remove(project)}
         >
           <Trash2Icon />

@@ -1,0 +1,63 @@
+import type { Project } from "@aop/common";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentType } from "react";
+import { ConfirmationHost } from "../../components/ConfirmationHost";
+import { type ApiCall, mockApi } from "../../test/mock-api";
+import { ProjectsProvider } from "../ProjectsProvider";
+import { makeEntry, makeState, stubLiveProjects } from "../test-utils";
+
+/**
+ * A project settings section on a host that saves every PATCH as sent. Tests import this after
+ * `setupDashboardDom()`, since testing-library needs the DOM first. `respond` answers any other
+ * call, or a PATCH differently.
+ */
+export const renderSection = async (
+  Section: ComponentType<{ project: Project }>,
+  project: Project,
+  respond: (call: ApiCall) => Response | Promise<Response> | undefined = () => undefined,
+) => {
+  const api = mockApi(
+    (call) =>
+      respond(call) ??
+      (call.method === "PATCH" && call.path === `/projects/${project.id}`
+        ? Response.json({ project: { ...project, ...(call.body as object) } })
+        : undefined),
+  );
+  const stub = stubLiveProjects(makeState([makeEntry(project)]));
+  const page = (current: Project, open = true) => (
+    <ProjectsProvider live={stub.live}>
+      {open ? <Section project={current} /> : null}
+      <ConfirmationHost />
+    </ProjectsProvider>
+  );
+  const view = render(page(project));
+  // Async so the switch's size read (a microtask in the test DOM) lands inside act.
+  await act(async () => {});
+  return {
+    api,
+    stub,
+    /** The section with the project the host now has. */
+    rerender: (current: Project) => view.rerender(page(current)),
+    /** The section closes (another section, × or Escape) while the rest of the page stays. */
+    leave: () => view.rerender(page(project, false)),
+  };
+};
+
+export const type = (testId: string, value: string) =>
+  fireEvent.change(screen.getByTestId(testId), { target: { value } });
+
+/** Opens a Radix select and picks an option by its name. */
+export const choose = async (triggerTestId: string, option: string | RegExp) => {
+  const trigger = screen.getByTestId(triggerTestId);
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("option", { name: option }));
+};
+
+/** What a row's save state says: idle, saving, saved or error. */
+export const savePhase = (rowControlTestId: string): string | null => {
+  const row = screen.getByTestId(rowControlTestId).closest("[data-setting-row]");
+  return (
+    row?.querySelector("[data-testid=settings-save-state]")?.getAttribute("data-phase") ?? null
+  );
+};

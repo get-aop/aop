@@ -40,7 +40,7 @@ A thread that is `idle` or `ready-for-review` gets it, and its status is checked
 
 **The cap.** A thread's pull request gets 3 messages in all, whichever trouble they answered. There is no reset. When more trouble comes after the third, the watcher stops. It sets the thread's status line to `Auto-fix stopped after 3 attempts: ...`, marks the thread unread and tells the coordinator in a thread report (`needs-you`). It reports once, and sends nothing more for that pull request; the person or the coordinator can still message the thread.
 
-**The setting.** The project setting `autoFixPullRequests` is on for every project until the person turns it off (project settings, General, "Fix pull requests automatically"; or `PATCH /api/projects/:id`). Off means the watcher still publishes the checks and reports how the pull request ends, and sends no fix. The coordinator can read the setting and cannot change it.
+**The setting.** The project setting `autoFixPullRequests` is on for every project until the person turns it off (project settings, Threads & permissions, "Fix pull requests automatically"; or `PATCH /api/projects/:id`). Off means the watcher still publishes the checks and reports how the pull request ends, and sends no fix. The coordinator can read the setting and cannot change it.
 
 **How it ends.** A pull request found merged is settled by the same landing the merge route uses (`syncPullRequest`): the thread is resolved and its worktree and branch are removed. One found closed without merging is recorded as `closed`, and the thread keeps its work. The coordinator gets a thread report for each (`finished`, and `needs-you`), written down before the thread is brought in line, so a crash in between reports nothing twice. A pull request that was merged or closed through AOP is not the watcher's find and is not reported. Commits pushed to the branch after the merge are not in the merged pull request, and go with the branch when the thread is cleaned up: this is how `syncPullRequest` already treats a merge made on GitHub.
 
@@ -54,7 +54,7 @@ The calls are `gh pr view --json state,mergeable,headRefOid,baseRefName`, `gh pr
 
 ## Access
 
-The project setting `threadAccess` decides what every thread of the project may do on the host. It is set when the project is created and changed only by the person (project settings, General, Thread access; or `PATCH /api/projects/:id`).
+The project setting `threadAccess` decides what every thread of the project may do on the host. It is set when the project is created and changed only by the person (project settings, Threads & permissions, Thread access; or `PATCH /api/projects/:id`).
 
 | Value | What a thread can do | Claude Code flags |
 | --- | --- | --- |
@@ -71,7 +71,7 @@ Other runtimes map the same two values to their own flags (Codex and Pi); a thre
 
 ## Computer and browser use
 
-The project setting `computerUse` decides where the project's threads get tools to see and operate apps and browsers on the host. Only the host owner changes it (project settings, General, Computer / browser use; or `PUT /api/projects/:id/computer-use` with `{"computerUse": "..."}`), and it saves as soon as it is chosen. A paired device sees it read-only and gets `403` from the route; `PATCH /api/projects/:id` and the coordinator's `project_settings_set` cannot change it.
+The project setting `computerUse` decides where the project's threads get tools to see and operate apps and browsers on the host. Only the host owner changes it (project settings, Computer use; or `PUT /api/projects/:id/computer-use` with `{"computerUse": "..."}`), and it saves as soon as it is chosen. A paired device sees it read-only and gets `403` from the route; `PATCH /api/projects/:id` and the coordinator's `project_settings_set` cannot change it.
 
 | Value | What a thread gets |
 | --- | --- |

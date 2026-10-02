@@ -26,8 +26,8 @@ export interface ProjectActions {
   setNotifications: (project: Project, level: NotificationLevel) => Promise<void>;
   /** Saves settings. Rejects with the host's message, so a form can say why beside its fields. */
   update: (project: Project, patch: ProjectPatch) => Promise<Project>;
-  /** Host owner only; applies from each thread's next turn. */
-  setComputerUse: (project: Project, computerUse: ComputerUseOption) => Promise<void>;
+  /** Host owner only; applies from each thread's next turn. Resolves whether the host took it. */
+  setComputerUse: (project: Project, computerUse: ComputerUseOption) => Promise<boolean>;
   /** A fresh coordinator session: the chat stays, the threads are untouched. */
   restartCoordinator: (project: Project) => Promise<void>;
   /** Asks first; deletes the project, its threads and its memory for good. */
@@ -50,9 +50,9 @@ export const useProjectActions = (): ProjectActions => {
         return project;
       },
       transition: (project, action) =>
-        attempt(async () => live.adopt(await transitionProject(project.id, action))),
+        quietly(async () => live.adopt(await transitionProject(project.id, action))),
       setNotifications: (project, level) =>
-        attempt(async () =>
+        quietly(async () =>
           live.adopt(await patchProject(project.id, { notificationLevel: level })),
         ),
       update: async (project, patch) => {
@@ -63,7 +63,7 @@ export const useProjectActions = (): ProjectActions => {
       setComputerUse: (project, computerUse) =>
         attempt(async () => live.adopt(await setProjectComputerUse(project.id, computerUse))),
       restartCoordinator: (project) =>
-        attempt(async () => {
+        quietly(async () => {
           live.adopt(await restartCoordinator(project.id));
           toast.success("Coordinator restarted");
         }),
@@ -76,7 +76,7 @@ export const useProjectActions = (): ProjectActions => {
           destructive: true,
         });
         if (!confirmed) return;
-        await attempt(async () => {
+        await quietly(async () => {
           await deleteProject(project.id);
           live.forget(project.id);
           const current = parseRoute(window.location.pathname);
@@ -88,10 +88,16 @@ export const useProjectActions = (): ProjectActions => {
   );
 };
 
-const attempt = async (run: () => Promise<void>): Promise<void> => {
+const attempt = async (run: () => Promise<void>): Promise<boolean> => {
   try {
     await run();
+    return true;
   } catch (error) {
     toast.error(error instanceof Error ? error.message : "Something went wrong");
+    return false;
   }
+};
+
+const quietly = async (run: () => Promise<void>): Promise<void> => {
+  await attempt(run);
 };
