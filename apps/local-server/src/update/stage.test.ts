@@ -106,6 +106,24 @@ describe("stageRelease", () => {
     fake.stop();
   });
 
+  test("reads the version an aop-nightly binary prints", async () => {
+    const layout = await createInstall("0.10.7-nightly.20261002.1");
+    const version = "0.10.7-nightly.20261002.2";
+    const fake = await startFakeRelease({ version });
+    const release = await fetchLatestRelease({
+      origin: fake.url,
+      channel: "nightly",
+      github: null,
+    });
+    const tools = localStageTools();
+    tools.probeVersion = async () => `aop-nightly/${version}+abc1234 darwin-arm64 bun-v1.3.14`;
+
+    const staged = await stageRelease(release, PLATFORM, layout, tools);
+
+    expect(existsSync(staged.binary)).toBe(true);
+    fake.stop();
+  });
+
   test("says when the install folder cannot be written", async () => {
     const layout = await createInstall("0.9.51");
     const { fake, release } = await releaseOf({ version: "0.10.0" });

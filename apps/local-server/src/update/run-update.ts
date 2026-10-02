@@ -1,4 +1,4 @@
-import { isNewerBuild, normalizeReleaseVersion } from "@aop/common";
+import { buildChannel, isNewerBuild, normalizeReleaseVersion } from "@aop/common";
 import { detectInstall } from "./install-layout.ts";
 import { apiFetch, feedConfigFromEnv, fetchLatestRelease, messageOf } from "./release-feed.ts";
 import { createSystemUpdateDeps } from "./system.ts";
@@ -62,7 +62,7 @@ const printCheck = async (
     return;
   }
   print(
-    `AOP ${release.version} is available (you have ${current}). Run \`aop update\` to install it.`,
+    `AOP ${release.version} is available (you have ${current}). Run \`${buildChannel().binaryName} update\` to install it.`,
   );
   print(`Release notes: ${release.url}`);
 };
