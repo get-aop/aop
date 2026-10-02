@@ -1,15 +1,21 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { buildChannel, type ChannelConfig } from "@aop/common";
 import type { InstallLayout } from "./install-layout.ts";
 
-// The names install.sh registers; the restart has to talk to the same service.
-export const LAUNCHD_LABEL = "com.aop.local-server";
-export const SYSTEMD_UNIT = "aop-local-server.service";
+// The names install.sh registers for this build's channel; the restart has to talk to the same
+// service, and AOP Nightly's service is not stable's.
+export const launchdLabelOf = (channel: ChannelConfig = buildChannel()): string =>
+  channel.launchdLabel;
+export const systemdUnitOf = (channel: ChannelConfig = buildChannel()): string =>
+  `${channel.systemdUnit}.service`;
+export const LAUNCHD_LABEL = launchdLabelOf();
+export const SYSTEMD_UNIT = systemdUnitOf();
 
 /** How the host runs, which decides how it is restarted onto a new binary. */
 export type RestartPlan =
   | { kind: "launchd"; plist: string }
-  | { kind: "systemd" }
+  | { kind: "systemd"; unit: string }
   | { kind: "background"; pidFile: string; pid: number; port: number }
   /** Started by hand in a terminal, or not running: nothing here can start it again. */
   | { kind: "manual" };
@@ -31,6 +37,8 @@ export interface PlanInput {
   port: number;
   /** Whether process `pid` is running `binaryPath`: a recycled pid must not be taken for the host. */
   runsBinary: (pid: number, binaryPath: string) => boolean;
+  /** Whose service names to look for; this build's channel unless a test says otherwise. */
+  channel?: ChannelConfig;
 }
 
 /**
@@ -41,15 +49,16 @@ export interface PlanInput {
 export const detectRestartPlan = async (input: PlanInput): Promise<RestartPlan> => {
   const { layout, home, os } = input;
   if (os === "darwin") {
-    const plist = join(home, "Library", "LaunchAgents", `${LAUNCHD_LABEL}.plist`);
+    const plist = join(home, "Library", "LaunchAgents", `${launchdLabelOf(input.channel)}.plist`);
     if ((await readText(plist)).includes(`<string>${layout.binaryPath}</string>`)) {
       return { kind: "launchd", plist };
     }
   }
   if (os === "linux") {
-    const unit = join(home, ".config", "systemd", "user", SYSTEMD_UNIT);
+    const unitName = systemdUnitOf(input.channel);
+    const unit = join(home, ".config", "systemd", "user", unitName);
     if ((await readText(unit)).includes(`ExecStart=${layout.binaryPath} `)) {
-      return { kind: "systemd" };
+      return { kind: "systemd", unit: unitName };
     }
   }
   const pid = Number.parseInt((await readText(input.pidFile)).trim(), 10);
@@ -72,7 +81,7 @@ export const restartHost = async (
       return expectOk(await tools.run(["launchctl", "load", "-w", plan.plist]), "launchctl load");
     case "systemd":
       return expectOk(
-        await tools.run(["systemctl", "--user", "restart", SYSTEMD_UNIT]),
+        await tools.run(["systemctl", "--user", "restart", plan.unit]),
         "systemctl restart",
       );
     case "background":

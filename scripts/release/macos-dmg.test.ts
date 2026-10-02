@@ -20,6 +20,7 @@ describe("macos-dmg release planning", () => {
       releaseDir: "dist/release",
       version: "0.2.7",
       workspaceRoot: "/repo",
+      channel: "stable",
     });
 
     expect(plan).toEqual({
@@ -37,6 +38,21 @@ describe("macos-dmg release planning", () => {
       volumeName: "AOP 0.2.7 arm64",
       workspaceRoot: "/repo",
       zipPath: join("/repo", "dist/release/aop-macos-arm64.zip"),
+    });
+  });
+
+  test("a nightly plan packages AOP Nightly.app under the same file names", () => {
+    const plan = buildMacDmgPlan({
+      arch: "arm64",
+      version: "0.10.7-nightly.20261002.14",
+      workspaceRoot: "/repo",
+      channel: "nightly",
+    });
+
+    expect(plan).toMatchObject({
+      appName: "AOP Nightly.app",
+      volumeName: "AOP Nightly 0.10.7-nightly.20261002.14 arm64",
+      dmgPath: join("/repo", "dist/release/aop-macos-arm64.dmg"),
     });
   });
 });

@@ -23,6 +23,8 @@ export const HostHealthSchema = z.object({
   service: z.literal("aop"),
   /** The host's release, for showing to the person. Never compared: use the API versions. */
   version: z.string().min(1),
+  /** `stable` or `nightly` (docs/NIGHTLY.md); hosts before channels existed leave it out. */
+  channel: z.string().optional(),
   apiVersion: z.number().int().positive(),
   minClientApiVersion: z.number().int().positive(),
 });

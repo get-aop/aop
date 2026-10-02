@@ -34,6 +34,7 @@ describe("settings/handlers", () => {
         { key: "library_host_cap_mb", value: "5120" },
         { key: "max_concurrent_runs", value: "4" },
         { key: "update_check", value: "true" },
+        { key: "update_auto_apply", value: "false" },
       ]);
       expect(result.settings.map(({ key }) => key).sort()).toEqual(
         Object.keys(DEFAULT_SETTINGS).sort(),

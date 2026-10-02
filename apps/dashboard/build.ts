@@ -6,6 +6,7 @@
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { channelDefine, parseReleaseChannel } from "@aop/common";
 import { configureLogging, getLogger } from "@aop/infra";
 import { emitFontFiles } from "./font-files";
 
@@ -25,6 +26,8 @@ export const dashboardBuildOptions = {
   naming: "[name]-[hash].[ext]",
   define: {
     "process.env.NODE_ENV": '"production"',
+    // AOP_BUILD_CHANNEL=nightly builds AOP Nightly's dashboard (docs/NIGHTLY.md).
+    ...channelDefine(parseReleaseChannel(process.env.AOP_BUILD_CHANNEL)),
   },
 } satisfies Parameters<typeof Bun.build>[0];
 

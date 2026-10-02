@@ -38,6 +38,7 @@ describe("health routes", () => {
       expect(HostHealthSchema.parse(await res.json())).toEqual({
         service: "aop",
         version: expect.any(String),
+        channel: "stable",
         apiVersion: API_VERSION,
         minClientApiVersion: MIN_CLIENT_API_VERSION,
       });

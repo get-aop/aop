@@ -9,21 +9,48 @@
 # The release workflow replaces the placeholder below with the release's own version when it
 # publishes this file, so the copy on getaop.com installs that release and no "latest version"
 # file has to exist. An unstamped copy (a checkout) needs --version.
+#
+# AOP Nightly (docs/NIGHTLY.md): curl -fsSL https://getaop.com/nightly/install.sh | sh
+# That copy has CHANNEL stamped "nightly". It installs `aop-nightly` beside the stable `aop`, with
+# its own folder, data, port and service, and leaves the stable install alone. A nightly install
+# reads only AOP_NIGHTLY_* overrides: a shell inside a stable AOP thread carries stable's
+# AOP_LOCAL_SERVER_PORT, and honouring it would stop the stable host.
 set -eu
 
 DEFAULT_VERSION="__AOP_VERSION__"
-RELEASES_BASE_URL="${AOP_RELEASES_URL:-https://getaop.com}"
-AOP_GITHUB_REPO="${AOP_GITHUB_REPO:-get-aop/aop}"
+CHANNEL="__AOP_CHANNEL__"
 RUNTIME_ASSETS_NAME="runtime-assets.tar.gz"
-LOCAL_SERVER_PORT="${AOP_LOCAL_SERVER_PORT:-25150}"
-DASHBOARD_PORT="${AOP_DASHBOARD_PORT:-25160}"
-LOCAL_SERVER_URL="${AOP_LOCAL_SERVER_URL:-http://aop.localhost:${LOCAL_SERVER_PORT}}"
+AOP_GITHUB_REPO="${AOP_GITHUB_REPO:-get-aop/aop}"
+if [ "$CHANNEL" = "nightly" ]; then
+  PRODUCT_NAME="AOP Nightly"
+  BIN_NAME="aop-nightly"
+  DATA_DIR="${HOME}/.aop-nightly"
+  INSTALL_PAGE="https://getaop.com/nightly/install.sh"
+  RELEASES_BASE_URL="${AOP_NIGHTLY_RELEASES_URL:-https://getaop.com/nightly}"
+  LOCAL_SERVER_PORT="${AOP_NIGHTLY_LOCAL_SERVER_PORT:-25650}"
+  DASHBOARD_PORT="${AOP_NIGHTLY_DASHBOARD_PORT:-25660}"
+  LOCAL_SERVER_URL="http://aop.localhost:${LOCAL_SERVER_PORT}"
+  DASHBOARD_URL="http://localhost:${DASHBOARD_PORT}"
+  LOG_DIR="${DATA_DIR}/logs"
+  SERVICE_NAME="com.aop.local-server.nightly"
+  SYSTEMD_SERVICE_NAME="aop-nightly-local-server"
+else
+  CHANNEL="stable"
+  PRODUCT_NAME="AOP"
+  BIN_NAME="aop"
+  DATA_DIR="${HOME}/.aop"
+  INSTALL_PAGE="https://getaop.com/install.sh"
+  RELEASES_BASE_URL="${AOP_RELEASES_URL:-https://getaop.com}"
+  LOCAL_SERVER_PORT="${AOP_LOCAL_SERVER_PORT:-25150}"
+  DASHBOARD_PORT="${AOP_DASHBOARD_PORT:-25160}"
+  LOCAL_SERVER_URL="${AOP_LOCAL_SERVER_URL:-http://aop.localhost:${LOCAL_SERVER_PORT}}"
+  DASHBOARD_URL="${AOP_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT}}"
+  LOG_DIR="${AOP_LOG_DIR:-${DATA_DIR}/logs}"
+  SERVICE_NAME="com.aop.local-server"
+  SYSTEMD_SERVICE_NAME="aop-local-server"
+fi
 LOCAL_SERVER_HEALTH_URL="http://127.0.0.1:${LOCAL_SERVER_PORT}"
-DASHBOARD_URL="${AOP_DASHBOARD_URL:-http://localhost:${DASHBOARD_PORT}}"
-LOG_DIR="${AOP_LOG_DIR:-${HOME}/.aop/logs}"
 LOG_PATH="${LOG_DIR}/local-server.log"
-SERVICE_NAME="com.aop.local-server"
-SYSTEMD_SERVICE_NAME="aop-local-server"
 
 main() {
   parse_args "$@"
@@ -39,6 +66,7 @@ main() {
   verify_checksum "$RUNTIME_ASSETS_NAME"
   install_binary
   install_runtime_assets
+  link_nightly_command
   start_local_server
   wait_for_local_server
   check_post_install_warnings
@@ -156,10 +184,10 @@ run_preflight_checks() {
     printf '%s\n' "$issues" >&2
     echo "" >&2
     echo "After fixing the items above, rerun:" >&2
-    echo "  curl -fsSL https://getaop.com/install.sh | sh" >&2
+    echo "  curl -fsSL ${INSTALL_PAGE} | sh" >&2
     echo "" >&2
     echo "Advanced users can bypass this check with:" >&2
-    echo "  curl -fsSL https://getaop.com/install.sh | AOP_SKIP_PREFLIGHT=1 sh" >&2
+    echo "  curl -fsSL ${INSTALL_PAGE} | AOP_SKIP_PREFLIGHT=1 sh" >&2
     exit 1
   fi
 
@@ -205,12 +233,12 @@ resolve_version() {
 
   if [ "$DEFAULT_VERSION" = "__AOP_VERSION__" ]; then
     echo "Error: this copy of install.sh is not tied to a release. Pass --version <x.y.z>," >&2
-    echo "or use the copy published with a release: curl -fsSL https://getaop.com/install.sh | sh" >&2
+    echo "or use the copy published with a release: curl -fsSL ${INSTALL_PAGE} | sh" >&2
     exit 1
   fi
 
   VERSION="$DEFAULT_VERSION"
-  echo "Installing AOP $VERSION"
+  echo "Installing ${PRODUCT_NAME} $VERSION"
 }
 
 # --- Install Directory ---
@@ -220,6 +248,9 @@ INSTALL_DIR=""
 resolve_install_dir() {
   if [ -n "$PREFIX" ]; then
     INSTALL_DIR="${PREFIX}/bin"
+  elif [ "$CHANNEL" = "nightly" ]; then
+    # Its own folder: the dashboard unpacks beside the binary, and stable's is in ~/.local/bin.
+    INSTALL_DIR="${DATA_DIR}/bin"
   elif [ -w "/usr/local/bin" ]; then
     INSTALL_DIR="/usr/local/bin"
   else
@@ -234,12 +265,12 @@ resolve_install_dir() {
 EXISTING_VERSION=""
 
 check_existing_installation() {
-  local existing_bin="${INSTALL_DIR}/aop"
+  local existing_bin="${INSTALL_DIR}/${BIN_NAME}"
 
   if [ -x "$existing_bin" ]; then
     EXISTING_VERSION="$("$existing_bin" --version 2>/dev/null || echo "")"
     if [ "$EXISTING_VERSION" = "$VERSION" ]; then
-      echo "AOP $VERSION is already installed; refreshing assets and service"
+      echo "${PRODUCT_NAME} $VERSION is already installed; refreshing assets and service"
     fi
   fi
 }
@@ -291,6 +322,7 @@ download_release_artifacts() {
   local checksums_url="${RELEASES_BASE_URL}/v${VERSION}/checksums.sha256"
 
   if ! http_download_optional "$checksums_url" "${TMP_DIR}/checksums.sha256"; then
+    no_github_fallback "checksums.sha256"
     checksums_url="$(github_release_asset_url "checksums.sha256")"
     http_download "$checksums_url" "${TMP_DIR}/checksums.sha256" || {
       echo "Error: Failed to download checksums.sha256" >&2
@@ -308,12 +340,21 @@ download_release_asset() {
 
   echo "Downloading ${name} v${VERSION}..."
   if ! http_download_optional "$asset_url" "${TMP_DIR}/${name}"; then
+    no_github_fallback "$name"
     echo "Primary CDN miss — trying GitHub Releases..."
     asset_url="$(github_release_asset_url "$name")"
     http_download "$asset_url" "${TMP_DIR}/${name}" || {
       echo "Error: Failed to download ${name} from getaop.com or GitHub Releases" >&2
       exit 1
     }
+  fi
+}
+
+# Nightlies are published on getaop.com only, never as GitHub releases.
+no_github_fallback() {
+  if [ "$CHANNEL" = "nightly" ]; then
+    echo "Error: Failed to download $1 from ${RELEASES_BASE_URL}/v${VERSION}/" >&2
+    exit 1
   fi
 }
 
@@ -355,7 +396,7 @@ verify_checksum() {
 # --- Install ---
 
 install_binary() {
-  local target="${INSTALL_DIR}/aop"
+  local target="${INSTALL_DIR}/${BIN_NAME}"
 
   cp "${TMP_DIR}/${BINARY_NAME}" "$target"
   chmod +x "$target"
@@ -366,9 +407,9 @@ install_binary() {
   fi
 
   if [ -n "$EXISTING_VERSION" ]; then
-    echo "Upgraded AOP from $EXISTING_VERSION to $VERSION"
+    echo "Upgraded ${PRODUCT_NAME} from $EXISTING_VERSION to $VERSION"
   else
-    echo "Installed AOP $VERSION to $target"
+    echo "Installed ${PRODUCT_NAME} $VERSION to $target"
   fi
 }
 
@@ -387,6 +428,23 @@ install_runtime_assets() {
   fi
 
   echo "Installed runtime assets to ${INSTALL_DIR}"
+}
+
+# AOP Nightly lives in its own folder; a small launcher in ~/.local/bin puts `aop-nightly` on
+# PATH. A launcher rather than a symlink, so the host always runs from its real path, which is
+# what its updater and its service files name.
+COMMAND_DIR=""
+
+link_nightly_command() {
+  COMMAND_DIR="$INSTALL_DIR"
+  if [ "$CHANNEL" != "nightly" ] || [ -n "$PREFIX" ]; then
+    return
+  fi
+  COMMAND_DIR="${HOME}/.local/bin"
+  mkdir -p "$COMMAND_DIR"
+  printf '#!/bin/sh\nexec "%s" "$@"\n' "${INSTALL_DIR}/${BIN_NAME}" > "${COMMAND_DIR}/${BIN_NAME}"
+  chmod +x "${COMMAND_DIR}/${BIN_NAME}"
+  echo "Linked ${COMMAND_DIR}/${BIN_NAME}"
 }
 
 # --- Service Management ---
@@ -410,8 +468,8 @@ stop_existing_service() {
     systemctl --user disable --now "${SYSTEMD_SERVICE_NAME}.service" >/dev/null 2>&1 || true
   fi
 
-  if [ -x "${INSTALL_DIR}/aop" ]; then
-    "${INSTALL_DIR}/aop" stop >/dev/null 2>&1 || true
+  if [ -x "${INSTALL_DIR}/${BIN_NAME}" ]; then
+    "${INSTALL_DIR}/${BIN_NAME}" stop >/dev/null 2>&1 || true
   fi
 
   clear_local_server_port
@@ -439,7 +497,7 @@ clear_local_server_port() {
 
 start_local_server() {
   if [ -n "$NO_SERVICE" ]; then
-    echo "Skipping the background service (--no-service); start the host with: ${INSTALL_DIR}/aop run"
+    echo "Skipping the background service (--no-service); start the host with: ${INSTALL_DIR}/${BIN_NAME} run"
     return
   fi
 
@@ -454,7 +512,7 @@ start_local_server() {
     return
   fi
 
-  echo "systemd user service unavailable; starting AOP in background"
+  echo "systemd user service unavailable; starting ${PRODUCT_NAME} in background"
   AOP_LOG_DIR="$LOG_DIR" \
   AOP_LOCAL_SERVER_PORT="$LOCAL_SERVER_PORT" \
   AOP_DASHBOARD_PORT="$DASHBOARD_PORT" \
@@ -462,7 +520,7 @@ start_local_server() {
   AOP_DASHBOARD_URL="$DASHBOARD_URL" \
   NODE_ENV="production" \
   PATH="$(service_path)" \
-    "${INSTALL_DIR}/aop" run --background --port "$LOCAL_SERVER_PORT"
+    "${INSTALL_DIR}/${BIN_NAME}" run --background --port "$LOCAL_SERVER_PORT"
 }
 
 install_launchd_service() {
@@ -481,7 +539,7 @@ install_launchd_service() {
   <string>${SERVICE_NAME}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${INSTALL_DIR}/aop</string>
+    <string>${INSTALL_DIR}/${BIN_NAME}</string>
     <string>run</string>
     <string>--port</string>
     <string>${LOCAL_SERVER_PORT}</string>
@@ -517,7 +575,7 @@ EOF
   chmod 644 "$plist"
   launchctl unload "$plist" >/dev/null 2>&1 || true
   launchctl load -w "$plist"
-  echo "Started AOP local server with launchd"
+  echo "Started ${PRODUCT_NAME} local server with launchd"
 }
 
 install_systemd_service() {
@@ -529,12 +587,12 @@ install_systemd_service() {
   mkdir -p "$systemd_dir"
   cat > "$unit" <<EOF
 [Unit]
-Description=AOP Local Server
+Description=${PRODUCT_NAME} Local Server
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/aop run --port ${LOCAL_SERVER_PORT}
+ExecStart=${INSTALL_DIR}/${BIN_NAME} run --port ${LOCAL_SERVER_PORT}
 Environment=AOP_LOG_DIR=${LOG_DIR}
 Environment=AOP_LOCAL_SERVER_PORT=${LOCAL_SERVER_PORT}
 Environment=AOP_DASHBOARD_PORT=${DASHBOARD_PORT}
@@ -555,7 +613,7 @@ EOF
 
   systemctl --user daemon-reload >/dev/null 2>&1 || return 1
   systemctl --user enable --now "${SYSTEMD_SERVICE_NAME}.service" >/dev/null 2>&1 || return 1
-  echo "Started AOP local server with systemd"
+  echo "Started ${PRODUCT_NAME} local server with systemd"
   return 0
 }
 
@@ -568,11 +626,11 @@ wait_for_local_server() {
   local attempts=30
   local i=0
 
-  printf 'Waiting for AOP dashboard at %s' "$LOCAL_SERVER_URL"
+  printf 'Waiting for %s dashboard at %s' "$PRODUCT_NAME" "$LOCAL_SERVER_URL"
   while [ "$i" -lt "$attempts" ]; do
     if http_get "$health_url" >/dev/null 2>&1; then
       echo ""
-      echo "AOP local server is ready"
+      echo "${PRODUCT_NAME} local server is ready"
       return
     fi
     printf '.'
@@ -581,7 +639,7 @@ wait_for_local_server() {
   done
 
   echo "" >&2
-  echo "Error: AOP local server did not become ready at ${LOCAL_SERVER_URL}" >&2
+  echo "Error: ${PRODUCT_NAME} local server did not become ready at ${LOCAL_SERVER_URL}" >&2
   echo "Check logs at ${LOG_PATH}" >&2
   exit 1
 }
@@ -593,11 +651,11 @@ check_post_install_warnings() {
 
   # `aop` only runs by name when its folder is on PATH. Say exactly what to add when it is not.
   case ":${PATH}:" in
-    *":${INSTALL_DIR}:"*) ;;
+    *":${COMMAND_DIR}:"*) ;;
     *)
-      echo "Warning: ${INSTALL_DIR} is not on your PATH, so \`aop\` will not be found by name." >&2
+      echo "Warning: ${COMMAND_DIR} is not on your PATH, so \`${BIN_NAME}\` will not be found by name." >&2
       echo "Add this line to your shell profile (~/.zshrc or ~/.bashrc), then open a new terminal:" >&2
-      echo "  export PATH=\"${INSTALL_DIR}:\$PATH\"" >&2
+      echo "  export PATH=\"${COMMAND_DIR}:\$PATH\"" >&2
       all_found=false
       ;;
   esac
@@ -611,10 +669,10 @@ check_post_install_warnings() {
 
 print_success() {
   echo ""
-  echo "AOP $VERSION installed successfully!"
+  echo "${PRODUCT_NAME} $VERSION installed successfully!"
   if [ -n "$NO_SERVICE" ]; then
     # Nothing was started, so a dashboard address here would point at a host that is not running.
-    echo "Start the host with: ${INSTALL_DIR}/aop run"
+    echo "Start the host with: ${INSTALL_DIR}/${BIN_NAME} run"
     echo "Then open the dashboard at ${LOCAL_SERVER_URL}"
   else
     echo "Dashboard: ${LOCAL_SERVER_URL}"

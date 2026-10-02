@@ -1,4 +1,5 @@
 import {
+  buildChannel,
   DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   DEFAULT_MAX_CONCURRENT_RUNS,
   LIBRARY_CAP_MB_MAX,
@@ -63,6 +64,12 @@ export const SettingKey = {
    * "false"; on by default. It never installs anything by itself.
    */
   UPDATE_CHECK: "update_check",
+  /**
+   * Whether AOP Nightly installs a newer nightly by itself once no turn is running. "true" or
+   * "false"; on by default in a nightly build. Only a nightly host reads it: a stable host never
+   * installs a release without the owner (docs/NIGHTLY.md).
+   */
+  UPDATE_AUTO_APPLY: "update_auto_apply",
 } as const;
 
 export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
@@ -78,6 +85,7 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.LIBRARY_HOST_CAP_MB]: String(LIBRARY_DEFAULTS.hostCapMb),
   [SettingKey.MAX_CONCURRENT_RUNS]: String(DEFAULT_MAX_CONCURRENT_RUNS),
   [SettingKey.UPDATE_CHECK]: "true",
+  [SettingKey.UPDATE_AUTO_APPLY]: buildChannel().id === "nightly" ? "true" : "false",
 };
 
 export const VALID_KEYS: SettingKey[] = Object.values(SettingKey);
@@ -100,6 +108,7 @@ export const isValidSettingKey = (key: string): key is SettingKey => {
 
 const BOOLEAN_KEYS: readonly SettingKey[] = [
   SettingKey.UPDATE_CHECK,
+  SettingKey.UPDATE_AUTO_APPLY,
   SettingKey.AGENT_CLI_AUTO_UPDATE,
   SettingKey.AGENT_CLI_SKIP_PERMISSIONS,
 ];

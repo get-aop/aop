@@ -1,6 +1,7 @@
 import { z } from "zod";
+import type { ReleaseChannel } from "./channel.ts";
 import type { ReleaseInfo } from "./updates.ts";
-import { isReleaseVersion, normalizeReleaseVersion } from "./version.ts";
+import { isChannelVersion, normalizeReleaseVersion } from "./version.ts";
 
 /**
  * The public origin every release is published to (Cloudflare R2 behind getaop.com): the
@@ -46,13 +47,23 @@ export const ReleaseFeedSchema = z.object({
   notes: z.string(),
   notesUrl: z.string().url(),
   files: z.array(ReleaseFeedFileSchema),
+  /** The commit the build was made from; nightly feeds carry it. */
+  commit: z.string().optional(),
+  /** `nightly` for a nightly feed; absent on stable, whose feed predates channels. */
+  channel: z.string().optional(),
 });
 export type ReleaseFeed = z.infer<typeof ReleaseFeedSchema>;
 
-/** Reads the feed into what an updater needs, or null when it does not describe a release. */
-export const parseReleaseFeed = (json: unknown): ReleaseInfo | null => {
+/**
+ * Reads the feed into what an updater needs, or null when it does not describe a build of
+ * `channel`: a stable updater ignores a nightly feed and the other way round.
+ */
+export const parseReleaseFeed = (
+  json: unknown,
+  channel: ReleaseChannel = "stable",
+): ReleaseInfo | null => {
   const parsed = ReleaseFeedSchema.safeParse(json);
-  if (!parsed.success || !isReleaseVersion(parsed.data.version)) return null;
+  if (!parsed.success || !isChannelVersion(parsed.data.version, channel)) return null;
   const feed = parsed.data;
   return {
     version: normalizeReleaseVersion(feed.version),

@@ -133,8 +133,8 @@ const requireRelease = async (
   } catch (error) {
     throw new Error(`The downloaded host does not run: ${messageOf(error)}`);
   }
-  // cac prints `aop/<version> <platform> <runtime>`.
-  const reported = printed.match(/^aop\/(\S+)/)?.[1] ?? printed;
+  // cac prints `<name>/<version> <platform> <runtime>`: `aop/…`, or `aop-nightly/…` for AOP Nightly.
+  const reported = printed.match(/^aop(?:-nightly)?\/(\S+)/)?.[1] ?? printed;
   if (normalizeReleaseVersion(reported) !== version) {
     throw new Error(`The downloaded host reports version "${printed}", not ${version}`);
   }

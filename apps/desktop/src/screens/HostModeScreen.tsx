@@ -1,3 +1,4 @@
+import { buildChannel } from "@aop/common";
 import { useState } from "react";
 import type {
   DesktopBackend,
@@ -196,7 +197,7 @@ const PairingResult = ({ result }: { result: PairingCodeResult | null }) => {
   );
 };
 
-const STOP_SERVICE_COMMAND = "launchctl unload ~/Library/LaunchAgents/com.aop.local-server.plist";
+const STOP_SERVICE_COMMAND = `launchctl unload ~/Library/LaunchAgents/${buildChannel().launchdLabel}.plist`;
 
 const describe = (hostProcess: HostProcessState, port: number): string => {
   switch (hostProcess.status) {

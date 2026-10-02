@@ -126,6 +126,71 @@ describe("install.sh host install", () => {
   });
 });
 
+describe("install.sh AOP Nightly", () => {
+  test("installs aop-nightly beside stable, on its own port and service, and leaves stable alone", async () => {
+    const box = await createBox();
+    const health = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => Response.json({ ok: true }),
+    });
+    const stamped = join(box.root, "install-nightly.sh");
+    const source = await readFile(INSTALLER, "utf8");
+    await writeFile(
+      stamped,
+      source
+        .replace(/^DEFAULT_VERSION="__AOP_VERSION__"/m, `DEFAULT_VERSION="${VERSION}"`)
+        .replace(/^CHANNEL="__AOP_CHANNEL__"/m, 'CHANNEL="nightly"'),
+    );
+    const agents = join(box.home, "Library", "LaunchAgents");
+    await mkdir(agents, { recursive: true });
+    await writeFile(join(agents, "com.aop.local-server.plist"), "stable plist");
+
+    try {
+      const result = await run(["/bin/sh", stamped], {
+        HOME: box.home,
+        PATH: `${box.binDir}:/usr/bin:/bin`,
+        TMPDIR: box.root,
+        AOP_SKIP_PREFLIGHT: "1",
+        AOP_NIGHTLY_RELEASES_URL: `file://${box.releases}`,
+        AOP_NIGHTLY_LOCAL_SERVER_PORT: String(health.port),
+        // What a shell inside a stable AOP thread carries; a nightly install must ignore them.
+        AOP_LOCAL_SERVER_PORT: "25150",
+        AOP_RELEASES_URL: "file:///nowhere",
+        AOP_LOG_DIR: join(box.root, "stable-logs"),
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.output).toContain(`Installing AOP Nightly ${VERSION}`);
+      expect(result.output).toContain("AOP Nightly local server is ready");
+      const bin = join(box.home, ".aop-nightly", "bin");
+      expect(existsSync(join(bin, "aop-nightly"))).toBe(true);
+      expect(existsSync(join(bin, "dashboard", "index.html"))).toBe(true);
+      const launcher = join(box.home, ".local", "bin", "aop-nightly");
+      expect((await run([launcher, "--version"], { HOME: box.home })).stdout.trim()).toBe(
+        `aop/${VERSION} stub`,
+      );
+      expect(existsSync(join(box.home, ".local", "bin", "aop"))).toBe(false);
+
+      const plistPath = join(agents, "com.aop.local-server.nightly.plist");
+      const plist = await readFile(plistPath, "utf8");
+      expect(plist).toContain(`<string>${bin}/aop-nightly</string>`);
+      expect(plist).toContain(`<string>${health.port}</string>`);
+      expect(plist).toContain(`<string>${join(box.home, ".aop-nightly", "logs")}</string>`);
+      expect(await readFile(join(agents, "com.aop.local-server.plist"), "utf8")).toBe(
+        "stable plist",
+      );
+      const calls = await box.allCalls();
+      expect(calls.filter((line) => line.includes("com.aop.local-server.plist"))).toEqual([]);
+      expect(calls.filter((line) => line.startsWith("lsof"))).toEqual([
+        `lsof -tiTCP:${health.port} -sTCP:LISTEN`,
+      ]);
+    } finally {
+      await health.stop(true);
+    }
+  });
+});
+
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -187,9 +252,13 @@ const createBox = async ({ corruptBinary = false, uname = unameStub() }: BoxOpti
     root,
     home,
     prefix,
+    releases,
+    binDir,
     install,
     runInstalled: async (args: string[]) =>
       (await run([join(prefix, "bin", "aop"), ...args], { HOME: home })).stdout.trim(),
+    allCalls: async () =>
+      (await readFile(callLog, "utf8").catch(() => "")).split("\n").filter(Boolean),
     serviceCalls: async () =>
       (await readFile(callLog, "utf8").catch(() => ""))
         .split("\n")

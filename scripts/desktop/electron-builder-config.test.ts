@@ -61,6 +61,36 @@ describe("Electron Builder configuration", () => {
     expect(config.nsis).toMatchObject({ oneClick: true, perMachine: false });
   });
 
+  test("a nightly build is a separate app with its own icon and feed", () => {
+    const config = createElectronBuilderConfig({
+      version: "0.10.7-nightly.20261002.14",
+      notarize: true,
+      channel: "nightly",
+    });
+
+    expect(config).toMatchObject({
+      appId: "com.getaop.aop.nightly",
+      productName: "AOP Nightly",
+      extraMetadata: {
+        name: "aop-nightly-desktop",
+        productName: "AOP Nightly",
+        version: "0.10.7-nightly.20261002.14",
+      },
+      publish: [{ provider: "generic", url: "https://getaop.com/nightly/latest/" }],
+      detectUpdateChannel: false,
+    });
+    expect(config.mac.icon).toBe("apps/desktop/build/nightly/icon.icns");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Electron Builder expands these placeholders.
+    expect(config.dmg.title).toBe("AOP Nightly ${version} ${arch}");
+    const stable = createElectronBuilderConfig({ version: "0.10.6", notarize: true });
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Electron Builder expands these placeholders.
+    expect(stable.dmg.title).toBe("AOP ${version} ${arch}");
+    expect(stable.mac.icon).toBe("apps/desktop/build/icon.icns");
+    // Stable's app name, and with it its data folder, must not move.
+    expect(stable.extraMetadata).not.toHaveProperty("name");
+    expect(stable.extraMetadata).not.toHaveProperty("productName");
+  });
+
   test("publishes a generic feed on getaop.com, so the Windows build writes latest.yml", () => {
     const config = createElectronBuilderConfig({ version: "0.9.49", notarize: false });
 

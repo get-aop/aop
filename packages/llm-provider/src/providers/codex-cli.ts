@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { buildSpawnEnv, resolveExecHost } from "@aop/infra";
+import { aopPaths, buildSpawnEnv, resolveExecHost } from "@aop/infra";
 import { extractRuntimeSessionIdFromRawJsonl } from "../logs";
 import { assertNativePlanModeSupported } from "../plan-mode";
 import { resolveRuntimeAlias } from "../runtime-alias";
@@ -198,7 +198,7 @@ const buildCodexEnv = (extraEnv?: Record<string, string>): Record<string, string
   };
 
   if (!baseEnv.CODEX_HOME) {
-    const aopHome = baseEnv.AOP_HOME ?? process.env.AOP_HOME ?? join(homedir(), ".aop");
+    const aopHome = baseEnv.AOP_HOME ?? aopPaths.home();
     baseEnv.CODEX_HOME = join(aopHome, "codex-home");
   }
 

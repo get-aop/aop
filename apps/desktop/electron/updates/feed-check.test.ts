@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { CHANNELS } from "@aop/common";
 import { checkForNewerRelease } from "./feed-check";
 
 const digest = "b".repeat(64);
@@ -31,6 +32,36 @@ const feed = (body: unknown, status = 200) => {
 };
 
 describe("checkForNewerRelease", () => {
+  test("AOP Nightly reads the nightly feed and moves only to a newer nightly", async () => {
+    const newer = feed(release("0.10.7-nightly.20261002.15"));
+    const found = await checkForNewerRelease({
+      fetch: newer.fetch,
+      appVersion: "0.10.7-nightly.20261002.14",
+      arch: "arm64",
+      channel: CHANNELS.nightly,
+    });
+    expect(newer.urls).toEqual(["https://getaop.com/nightly/releases/latest.json"]);
+    expect(found?.version).toBe("0.10.7-nightly.20261002.15");
+
+    const stable = feed(release("0.10.7"));
+    expect(
+      await checkForNewerRelease({
+        fetch: stable.fetch,
+        appVersion: "0.10.7-nightly.20261002.14",
+        arch: "arm64",
+        channel: CHANNELS.nightly,
+      }),
+    ).toBeNull();
+    // And a stable app never takes a nightly.
+    expect(
+      await checkForNewerRelease({
+        fetch: feed(release("0.10.7-nightly.20261002.15")).fetch,
+        appVersion: "0.10.6",
+        arch: "arm64",
+      }),
+    ).toBeNull();
+  });
+
   test("reads getaop.com by default", async () => {
     const { fetch, urls } = feed(release("0.10.5"));
 

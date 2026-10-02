@@ -188,3 +188,30 @@ describe("absoluteUpdaterUrls", () => {
     );
   });
 });
+
+describe("nightly feed", () => {
+  test("lives under its own origin, names its commit and has no GitHub-shaped copy", async () => {
+    const dir = await releaseDir();
+    await rm(join(dir, "latest.yml"));
+    const version = "0.10.7-nightly.20261002.14";
+    const docs = await buildFeedDocuments({
+      ...input(dir),
+      version,
+      origin: "https://getaop.test/nightly",
+      channel: "nightly",
+      commit: "c2133573",
+    });
+
+    expect(Object.keys(docs.versioned).sort()).toEqual([
+      `releases/v${version}.json`,
+      `releases/v${version}.md`,
+    ]);
+    expect(Object.keys(docs.pointers)).toEqual(["releases/latest.json"]);
+    const feed = ReleaseFeedSchema.parse(JSON.parse(docs.pointers["releases/latest.json"] ?? ""));
+    expect(feed).toMatchObject({ version, commit: "c2133573", channel: "nightly" });
+    expect(feed.files[0]?.url).toStartWith(`https://getaop.test/nightly/v${version}/`);
+    expect(parseReleaseFeed(feed, "nightly")?.version).toBe(version);
+    // A stable reader never takes it, even if it were served at the stable path.
+    expect(parseReleaseFeed(feed)).toBeNull();
+  });
+});

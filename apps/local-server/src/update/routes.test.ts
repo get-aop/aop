@@ -35,6 +35,7 @@ describe("update routes", () => {
       return applyResult;
     },
     runDueCheck: async () => {},
+    runAutoApply: async () => {},
     start: () => {},
     stop: () => {},
   };

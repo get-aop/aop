@@ -47,6 +47,7 @@ describe("settings/routes", () => {
         { key: "library_host_cap_mb", value: "5120" },
         { key: "max_concurrent_runs", value: "4" },
         { key: "update_check", value: "true" },
+        { key: "update_auto_apply", value: "false" },
       ]);
       expect(body.settings).toHaveLength(VALID_KEYS.length);
     });

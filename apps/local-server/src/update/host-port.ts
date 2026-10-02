@@ -1,4 +1,7 @@
-export const DEFAULT_LOCAL_SERVER_PORT = 25150;
+import { buildChannel } from "@aop/common";
+
+/** 25150 for stable, 25650 for AOP Nightly. */
+export const DEFAULT_LOCAL_SERVER_PORT = buildChannel().hostPort;
 
 /** The port the host listens on, as `aop run` reads it. */
 export const hostPort = (env: NodeJS.ProcessEnv = process.env): number => {
