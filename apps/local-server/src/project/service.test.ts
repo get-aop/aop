@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { aopPaths } from "@aop/infra";
+import { createLinearConnectionStore } from "../issues/linear-connection-store.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import {
   createProjectStack,
@@ -375,6 +376,23 @@ describe("deleting a project", () => {
     expect(types.at(-1)).toBe("project.removed");
     expect(types).toContain("thread.upserted");
   }, 30_000);
+
+  test("takes the project's Linear key off the host", async () => {
+    const s = await createProjectStack(home.path());
+    stack = s;
+    const created = await s.services.projects.create(projectSettings({ repoIds: [] }));
+    if (!created.success) throw new Error("project not created");
+    const store = createLinearConnectionStore();
+    await store.write(created.project.id, {
+      apiKey: "lin_api_secret",
+      scope: { kind: "team", id: "t1", name: "Eng" },
+      workspace: "Acme",
+      viewer: "sam",
+    });
+
+    expect(await s.services.projects.remove(created.project.id)).toEqual({ success: true });
+    expect(await store.read(created.project.id)).toBeNull();
+  });
 
   test("an unknown project is not found", async () => {
     const s = await createProjectStack(home.path());

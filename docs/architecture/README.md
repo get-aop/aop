@@ -49,6 +49,7 @@ Clients follow a project over `GET /api/projects/:id/stream`, a server-sent even
 | Scratch directory of a thread with no repository | `~/.aop/projects/<project-id>/threads/<thread-id>/` |
 | Run logs and attachments | `~/.aop/logs/chat-sessions/<session-id>/` |
 | Workspace of a chat with no repository | `~/.aop/chats/general/` |
+| A project's Linear API key (owner-only file) | `~/.aop/connections/linear/<project-id>.json` |
 
 `AOP_HOME` moves the whole tree. Removing a repository deletes its worktrees, chat history and logs under `~/.aop/`. Runtime authentication homes (see [Runtimes](../RUNTIMES.md)) are deliberately preserved, so agent logins survive a reset.
 
@@ -62,5 +63,6 @@ The desktop app is a thin client of one AOP host. It bundles the dashboard, serv
 
 ## Related guides
 
+- [The Issues tab](./issues-tab.md)
 - [Runtimes](../RUNTIMES.md)
 - [MCP](../MCP.md)
