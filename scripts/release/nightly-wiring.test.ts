@@ -48,6 +48,7 @@ describe("nightly workflow wiring", () => {
     expect(workflow.jobs.publish?.environment).toBe("nightly");
     expect(workflow.jobs.publish?.if).toBe("needs.resolve.outputs.publish == 'true'");
     expect(workflow.jobs["package-macos"]?.environment).toBe(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a GitHub Actions expression.
       "${{ needs.resolve.outputs.publish == 'true' && 'nightly' || '' }}",
     );
     for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -72,7 +73,7 @@ describe("nightly workflow wiring", () => {
   });
 
   test("the set the workflow checks is the set deploy-nightly.sh publishes", () => {
-    const deployed = [...deployText.matchAll(/^ {2}"([^":]+):/gm)].map((match) => match[1]);
+    const deployed = [...deployText.matchAll(/^ {2}"([^":]+):/gm)].map((match) => match[1] ?? "");
     const checkStep = workflow.jobs.assemble?.steps.find(
       (step) => step.name === "Check the nightly set",
     );

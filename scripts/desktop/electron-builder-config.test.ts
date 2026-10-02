@@ -75,8 +75,10 @@ describe("Electron Builder configuration", () => {
       publish: [{ provider: "generic", url: "https://getaop.com/nightly/latest/" }],
     });
     expect(config.mac.icon).toBe("apps/desktop/build/nightly/icon.icns");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Electron Builder expands these placeholders.
     expect(config.dmg.title).toBe("AOP Nightly ${version} ${arch}");
     const stable = createElectronBuilderConfig({ version: "0.10.6", notarize: true });
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Electron Builder expands these placeholders.
     expect(stable.dmg.title).toBe("AOP ${version} ${arch}");
     expect(stable.mac.icon).toBe("apps/desktop/build/icon.icns");
   });
