@@ -6,23 +6,18 @@ import { LOOPBACK_PEER, REMOTE_PEER } from "../auth/test-utils.ts";
 import { createCommandContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { type AnyJson, createTestDb } from "../db/test-utils.ts";
-import type { ComputerUseService } from "./service.ts";
+import type { CuaProbeDeps } from "./cua-driver.ts";
+import { createComputerUseService } from "./service.ts";
+import { CUA_PATH, type FakeCuaOptions, fakeCua } from "./test-utils.ts";
 
 const JSON_HEADERS = { "content-type": "application/json" };
-
-const NOT_INSTALLED: CuaStatus = {
-  state: "not-installed",
-  usable: false,
-  path: null,
-  version: null,
-  detail: "CUA Driver is not installed on this host.",
-  fix: ["install it"],
-};
 
 describe("project computer use over the API", () => {
   let db: Kysely<Database>;
   let app: ReturnType<typeof createApp>;
-  const probes: { fresh?: boolean }[] = [];
+  // The host's driver as the probe finds it; each test sets what it needs.
+  let host: { options: FakeCuaOptions; overrides: Partial<CuaProbeDeps> };
+  let probes = 0;
 
   // The host owner at the machine, and a paired device that reached it over the tailnet.
   const local = (path: string, init: RequestInit = {}) =>
@@ -53,17 +48,26 @@ describe("project computer use over the API", () => {
     ((await (await local(`/api/projects/${id}`)).json()) as { project: Project }).project;
 
   beforeEach(async () => {
-    probes.length = 0;
+    host = { options: {}, overrides: {} };
+    probes = 0;
     db = await createTestDb();
-    const computerUse: ComputerUseService = {
-      cuaStatus: async (options = {}) => {
-        probes.push(options);
-        return NOT_INSTALLED;
+    // The real service and probe over a fake `cua-driver`, so the route answers what a host would.
+    const computerUse = createComputerUseService({
+      ...fakeCua(),
+      locate: () => (host.overrides.locate ? host.overrides.locate() : CUA_PATH),
+      run: (argv, timeoutMs) => {
+        if (argv[1] === "--version") probes += 1;
+        return fakeCua(host.options).run(argv, timeoutMs);
       },
-      serversFor: async () => undefined,
-    };
+    });
     app = createApp({ ctx: createCommandContext(db), startTimeMs: Date.now(), computerUse });
   });
+
+  const readCua = async (path = "/api/computer-use/cua", init: RequestInit = {}) => {
+    const res = await remote(path, init);
+    expect(res.status).toBe(200);
+    return (await res.json()) as CuaStatus;
+  };
 
   afterEach(async () => {
     await db.destroy();
@@ -150,15 +154,56 @@ describe("project computer use over the API", () => {
     expect(missing.status).toBe(404);
   });
 
-  test("any paired device reads CUA Driver's status, and can ask for a fresh probe", async () => {
-    const device = await pairDevice();
+  describe("GET /api/computer-use/cua, the host's own CUA Driver", () => {
+    let device: Record<string, string>;
+    const read = (path?: string) => readCua(path, { headers: device });
 
-    const cached = await remote("/api/computer-use/cua", { headers: device });
-    const fresh = await remote("/api/computer-use/cua?fresh=1", { headers: device });
+    beforeEach(async () => {
+      device = await pairDevice();
+    });
 
-    expect(cached.status).toBe(200);
-    expect(await cached.json()).toEqual(NOT_INSTALLED);
-    expect(fresh.status).toBe(200);
-    expect(probes).toEqual([{ fresh: false }, { fresh: true }]);
+    test("ready, with its version and the host's name, to any paired device", async () => {
+      expect(await read()).toMatchObject({
+        status: "ready",
+        reason: "ready",
+        version: "0.32.0",
+        host: { name: "Studio Mac", platform: "darwin" },
+      });
+    });
+
+    test("not installed", async () => {
+      host.overrides.locate = () => null;
+
+      expect(await read()).toMatchObject({
+        status: "not-installed",
+        reason: "not-installed",
+        detail: "CUA Driver is not installed on this host.",
+        version: null,
+      });
+    });
+
+    test("installed but not ready, with the reason and the version", async () => {
+      host.options.permissions = JSON.stringify({ accessibility: false, screen_recording: true });
+
+      expect(await read()).toMatchObject({
+        status: "not-ready",
+        reason: "missing-permissions",
+        detail: "CUA Driver lacks the macOS Accessibility permission.",
+        version: "0.32.0",
+      });
+    });
+
+    test("reuses its last answer for a few seconds, and checks again on demand", async () => {
+      expect((await read()).status).toBe("ready");
+      host.options.permissions = JSON.stringify({ daemon_running: false });
+
+      expect((await read()).status).toBe("ready");
+      expect(probes).toBe(1);
+      expect(await read("/api/computer-use/cua?fresh=1")).toMatchObject({
+        status: "not-ready",
+        reason: "not-running",
+      });
+      expect(probes).toBe(2);
+    });
   });
 });

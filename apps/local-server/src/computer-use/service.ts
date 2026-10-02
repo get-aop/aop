@@ -12,12 +12,12 @@ export const CUA_MCP_SERVER_NAME = "cua-driver";
 const STATUS_TTL_MS = 10_000;
 
 export interface ComputerUseService {
-  /** CUA Driver as the host sees it; `fresh` skips the few seconds a probe is reused. */
+  /** CUA Driver on this host (where runs spawn); `fresh` skips the few seconds a probe is reused. */
   cuaStatus: (options?: { fresh?: boolean }) => Promise<CuaStatus>;
   /**
    * The MCP servers a project's session adds for computer use, read on every launch so a change
    * applies from the next turn. Only threads get them: the coordinator stays on the aop tools.
-   * A project on CUA whose driver cannot serve gets none, and the run starts without them.
+   * A project on CUA whose host is not ready gets none, and the run starts without them.
    */
   serversFor: (
     project: Pick<Project, "id" | "computerUse">,
@@ -30,12 +30,24 @@ export const createComputerUseService = (
   now: () => number = Date.now,
 ): ComputerUseService => {
   let cached: { status: CuaStatus; at: number } | null = null;
+  // A burst of thread launches and a "Check again" share one probe instead of starting several.
+  let inFlight: Promise<CuaStatus> | null = null;
+
+  const probe = (): Promise<CuaStatus> => {
+    inFlight ??= probeCua(deps)
+      .then((status) => {
+        cached = { status, at: now() };
+        return status;
+      })
+      .finally(() => {
+        inFlight = null;
+      });
+    return inFlight;
+  };
 
   const cuaStatus: ComputerUseService["cuaStatus"] = async ({ fresh = false } = {}) => {
     if (!fresh && cached && now() - cached.at < STATUS_TTL_MS) return cached.status;
-    const status = await probeCua(deps);
-    cached = { status, at: now() };
-    return status;
+    return probe();
   };
 
   return {
@@ -43,10 +55,15 @@ export const createComputerUseService = (
     serversFor: async (project, role) => {
       if (role !== "thread" || project.computerUse !== "cua") return undefined;
       const status = await cuaStatus();
-      if (!status.usable || !status.path) {
+      if (status.status !== "ready" || !status.path) {
         logger.warn(
-          "Project {projectId} uses CUA for computer use, but CUA Driver is {state}: the thread runs without its tools. {detail}",
-          { projectId: project.id, state: status.state, detail: status.detail },
+          "Project {projectId} uses CUA for computer use, but CUA Driver on this host is {status} ({reason}): the thread runs without its tools. {detail}",
+          {
+            projectId: project.id,
+            status: status.status,
+            reason: status.reason,
+            detail: status.detail,
+          },
         );
         return undefined;
       }

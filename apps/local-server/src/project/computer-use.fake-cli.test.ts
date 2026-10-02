@@ -22,17 +22,22 @@ afterEach(async () => {
   await computerUse.cuaStatus({ fresh: true });
 });
 
-/** A `cua-driver` that answers the probe; `granted` false reports Screen Recording missing. */
-const installFakeDriver = async (granted: boolean): Promise<string> => {
+/**
+ * A `cua-driver` on the host. Ready, it answers the probe with both grants; not ready, it answers
+ * nothing, which leaves the host not ready on any platform.
+ */
+const installFakeDriver = async (ready: boolean): Promise<string> => {
   const path = join(home.path(), `cua-driver-${crypto.randomUUID()}`);
-  const permissions = JSON.stringify({ accessibility: true, screen_recording: granted });
+  const permissions = JSON.stringify({ accessibility: true, screen_recording: true });
   writeFileSync(
     path,
-    `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "cua-driver 0.32.0"; else echo '${permissions}'; fi\n`,
+    ready
+      ? `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "cua-driver 0.32.0"; else echo '${permissions}'; fi\n`
+      : "#!/bin/sh\nexit 1\n",
   );
   chmodSync(path, 0o755);
   process.env.AOP_CUA_DRIVER = path;
-  await computerUse.cuaStatus({ fresh: true });
+  expect((await computerUse.cuaStatus({ fresh: true })).status).toBe(ready ? "ready" : "not-ready");
   return path;
 };
 

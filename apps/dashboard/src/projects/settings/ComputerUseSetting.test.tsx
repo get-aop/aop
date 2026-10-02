@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { CuaStatus, Project } from "@aop/common";
+import { CUA_COMMANDS, type CuaStatus, type Project } from "@aop/common";
 import { type ApiCall, mockApi } from "../../test/mock-api";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { makeEntry, makeProject, makeState, stubLiveProjects } from "../test-utils";
@@ -11,20 +11,39 @@ const { ProjectsProvider } = await import("../ProjectsProvider");
 const { ComputerUseSetting } = await import("./ComputerUseSetting");
 
 const READY: CuaStatus = {
-  state: "ready",
-  usable: true,
+  status: "ready",
+  reason: "ready",
+  detail: "CUA Driver 0.32.0 is ready on this host.",
   path: "/Applications/CuaDriver.app/Contents/MacOS/cua-driver",
   version: "0.32.0",
-  detail: "CUA Driver 0.32.0 is installed and has its macOS permissions.",
-  fix: [],
+  latestVersion: "0.32.0",
+  checks: [
+    { id: "installed", label: "Installed", required: true, ok: true, detail: "" },
+    { id: "accessibility", label: "Accessibility", required: true, ok: true, detail: "" },
+    { id: "up-to-date", label: "Up to date", required: false, ok: true, detail: "" },
+  ],
+  host: { name: "Studio Mac", platform: "darwin" },
+  checkedAt: "2026-10-01T12:00:00.000Z",
 };
 const NOT_INSTALLED: CuaStatus = {
-  state: "not-installed",
-  usable: false,
+  ...READY,
+  status: "not-installed",
+  reason: "not-installed",
+  detail: "CUA Driver is not installed on this host.",
   path: null,
   version: null,
-  detail: "CUA Driver is not installed on this host.",
-  fix: ['/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"'],
+  latestVersion: null,
+  checks: [{ id: "installed", label: "Installed", required: true, ok: false, detail: "" }],
+};
+const MISSING_GRANT: CuaStatus = {
+  ...READY,
+  status: "not-ready",
+  reason: "missing-permissions",
+  detail: "CUA Driver lacks the macOS Screen Recording permission.",
+  checks: [
+    { id: "accessibility", label: "Accessibility", required: true, ok: true, detail: "" },
+    { id: "screen-recording", label: "Screen Recording", required: true, ok: false, detail: "" },
+  ],
 };
 
 let api: ReturnType<typeof mockApi> | undefined;
@@ -110,15 +129,19 @@ describe("ComputerUseSetting", () => {
     await waitFor(() => expect(stub.calls.adopted.at(-1)?.computerUse).toBe("cua"));
   });
 
-  test("on CUA, says the driver is ready", async () => {
+  test("on CUA, says the driver is ready on the host, with what it checked", async () => {
     await renderSetting({ project: makeProject({ id: "p1", computerUse: "cua" }) });
 
     const status = await screen.findByTestId("settings-cua-status");
     expect(status.getAttribute("data-tone")).toBe("ok");
-    expect(status.textContent).toContain("CUA Driver 0.32.0 is installed");
+    expect(status.textContent).toContain("CUA Driver 0.32.0 is ready on this host.");
+    expect(screen.getByTestId("settings-cua-check-accessibility").getAttribute("data-ok")).toBe(
+      "true",
+    );
+    expect(screen.queryByTestId("settings-cua-guide")).toBeNull();
   });
 
-  test("says why CUA is not ready, that threads run without it, and what to run", async () => {
+  test("not installed: CUA stays selectable, and the guide installs it on the host", async () => {
     await renderSetting({
       project: makeProject({ id: "p1", computerUse: "cua" }),
       cua: NOT_INSTALLED,
@@ -126,19 +149,92 @@ describe("ComputerUseSetting", () => {
 
     const status = await screen.findByTestId("settings-cua-status");
     expect(status.getAttribute("data-tone")).toBe("warn");
-    expect(status.textContent).toContain("threads run without its tools");
-    expect(status.textContent).toContain("CUA Driver is not installed on this host.");
-    expect(screen.getByTestId("settings-cua-fix").textContent).toContain(
-      "https://cua.ai/driver/install.sh",
+    expect(status.textContent).toContain(
+      "CUA Driver is not installed on Studio Mac. Threads run without its tools until it is.",
+    );
+    expect(screen.getByTestId("settings-cua-host").textContent).toContain(
+      "Run these on this machine, Studio Mac: it is the AOP host.",
+    );
+    const steps = ["install", "start", "permissions", "config"].map((id) =>
+      screen.getByTestId(`settings-cua-step-${id}`),
+    );
+    expect(steps).toHaveLength(4);
+    const commands = screen.getAllByTestId("settings-cua-command").map((c) => c.textContent);
+    expect(commands).toEqual([
+      CUA_COMMANDS.install,
+      CUA_COMMANDS.start,
+      CUA_COMMANDS.grant,
+      CUA_COMMANDS.permissionsStatus,
+    ]);
+    expect(screen.getByTestId("settings-cua-step-permissions").textContent).toContain(
+      "System Settings › Privacy & Security › Accessibility",
     );
     openOptions();
-    expect((await screen.findByTestId("settings-computer-use-cua")).textContent).toContain(
-      "Not ready",
+    const option = await screen.findByTestId("settings-computer-use-cua");
+    expect(option.textContent).toContain("Not ready");
+    expect(option.getAttribute("data-disabled")).toBeNull();
+  });
+
+  test("installed but not ready: names the missing grant and how to give it", async () => {
+    await renderSetting({
+      project: makeProject({ id: "p1", computerUse: "cua" }),
+      cua: MISSING_GRANT,
+    });
+
+    expect((await screen.findByTestId("settings-cua-status")).textContent).toContain(
+      "CUA Driver is installed on Studio Mac but not ready.",
+    );
+    expect(screen.getByTestId("settings-cua-step-permissions").textContent).toContain(
+      "Screen & System Audio Recording",
+    );
+    expect(screen.queryByTestId("settings-cua-step-install")).toBeNull();
+  });
+
+  test("Copy puts the command on the clipboard", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text: string) => void copied.push(text) },
+    });
+    await renderSetting({
+      project: makeProject({ id: "p1", computerUse: "cua" }),
+      cua: NOT_INSTALLED,
+    });
+
+    fireEvent.click((await screen.findAllByTestId("settings-cua-copy"))[0] as HTMLElement);
+
+    await waitFor(() => expect(copied).toEqual([CUA_COMMANDS.install]));
+    expect(await screen.findByText("Copied")).toBeTruthy();
+  });
+
+  test("a paired device is told to run the commands on the host, by name", async () => {
+    await renderSetting({
+      project: makeProject({ id: "p1", computerUse: "cua" }),
+      owner: false,
+      cua: NOT_INSTALLED,
+    });
+
+    expect((await screen.findByTestId("settings-cua-host")).textContent).toContain(
+      "Run these on the AOP host, Studio Mac, not on this device.",
     );
   });
 
-  test("probes the driver again when asked", async () => {
+  test("on the model's default, a host that is not ready gets a line, and the guide on request", async () => {
     await renderSetting({ cua: NOT_INSTALLED });
+
+    expect((await screen.findByTestId("settings-cua-not-ready")).textContent).toContain(
+      "CUA is not ready on the AOP host, Studio Mac.",
+    );
+    expect(screen.queryByTestId("settings-cua-guide")).toBeNull();
+    fireEvent.click(screen.getByTestId("settings-cua-show-guide"));
+    expect(await screen.findByTestId("settings-cua-guide")).toBeTruthy();
+  });
+
+  test("Check again probes the host again", async () => {
+    await renderSetting({
+      project: makeProject({ id: "p1", computerUse: "cua" }),
+      cua: NOT_INSTALLED,
+    });
     fireEvent.click(await screen.findByTestId("settings-cua-recheck"));
 
     await waitFor(() =>

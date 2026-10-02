@@ -1,12 +1,12 @@
-import type { ComputerUseOption, CuaStatus, Project } from "@aop/common";
-import { TriangleAlertIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComputerUseOption, Project } from "@aop/common";
+import { useState } from "react";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { useIsHostOwner } from "../../settings/use-host-owner";
 import { useProjectActions } from "../use-project-actions";
 import { ROW_SELECT_CLASS, SettingRow, SettingsHeading } from "./blocks";
+import { CuaHostStatus } from "./CuaSetupGuide";
 import { type CuaStatusState, useCuaStatus } from "./use-cua-status";
 
 interface Option {
@@ -26,14 +26,14 @@ const OPTIONS: Option[] = [
 const DESCRIPTIONS: Record<Project["computerUse"], string> = {
   "model-default":
     "Threads get no computer-use tools from AOP. They have whatever their agent CLI brings by itself.",
-  cua: "Threads get CUA Driver's tools to see and operate apps and browsers on this host, from their next turn. The coordinator does not get them.",
+  cua: "Threads get CUA Driver's tools to see and operate apps and browsers on the AOP host, from their next turn. The coordinator does not get them.",
 };
 
 /**
  * Where a project's threads get computer and browser use from. It saves as soon as it changes,
  * apart from the form above it, because only the host owner may change it (a paired device sees
  * it read-only) and the host takes it on its own route. CUA can be chosen while CUA Driver is not
- * ready: threads then run without its tools, and this row says why and how to fix it.
+ * ready on the host: threads then run without its tools, and this row guides the setup there.
  */
 export const ComputerUseSetting = ({ project }: { project: Project }) => {
   const owner = useIsHostOwner(true);
@@ -81,7 +81,7 @@ export const ComputerUseSetting = ({ project }: { project: Project }) => {
                 >
                   {option.label}
                   {option.wip ? <Badge variant="draft">WIP</Badge> : null}
-                  {option.value === "cua" && cua.status && !cua.status.usable ? (
+                  {option.value === "cua" && cua.status && cua.status.status !== "ready" ? (
                     <Badge variant="blocked">Not ready</Badge>
                   ) : null}
                 </SelectItem>
@@ -90,53 +90,57 @@ export const ComputerUseSetting = ({ project }: { project: Project }) => {
           </Select>
         }
         below={
-          value === "cua" || (cua.status && !cua.status.usable) ? (
-            <CuaNotice
-              cua={cua}
-              chosen={value === "cua"}
-              editsOnly={project.threadAccess !== "full-access"}
-            />
-          ) : null
+          <ComputerUseBelow
+            cua={cua}
+            owner={owner}
+            chosen={value === "cua"}
+            editsOnly={project.threadAccess !== "full-access"}
+          />
         }
       />
     </div>
   );
 };
 
-/** What CUA Driver looks like on the host: ready, or why not and what to run. */
-const CuaNotice = ({
+/**
+ * On CUA: the host's status, its setup guide when it is not ready, and the access threads need.
+ * On the model's default: a line when CUA is not ready on the host, with the guide one click away.
+ */
+const ComputerUseBelow = ({
   cua,
+  owner,
   chosen,
   editsOnly,
 }: {
   cua: CuaStatusState;
+  owner: boolean;
   chosen: boolean;
   editsOnly: boolean;
 }) => {
-  const { status } = cua;
-  if (!status) {
-    return cua.checking ? null : (
-      <Notice
-        tone="warn"
-        testId="settings-cua-status"
-        title="Could not ask the host about CUA Driver."
-        cua={cua}
-      />
+  const [open, setOpen] = useState(false);
+  const notReady = cua.status !== null && cua.status.status !== "ready";
+  if (!chosen && !notReady) return null;
+  if (!chosen && !open) {
+    return (
+      <p data-testid="settings-cua-not-ready" className="text-[12px] text-text-muted">
+        CUA is not ready on the AOP host{cua.status ? `, ${cua.status.host.name}` : ""}.{" "}
+        <Button
+          type="button"
+          variant="link"
+          size="xs"
+          data-testid="settings-cua-show-guide"
+          className="h-auto px-0"
+          onClick={() => setOpen(true)}
+        >
+          Show how to set it up
+        </Button>
+      </p>
     );
   }
-  const blocked = !status.usable;
   return (
     <div className="flex flex-col gap-2">
-      <Notice
-        tone={status.state === "ready" ? "ok" : "warn"}
-        testId="settings-cua-status"
-        title={noticeTitle(status, chosen)}
-        cua={cua}
-      >
-        {status.state === "ready" ? null : <p className="text-text-muted">{status.detail}</p>}
-        <FixSteps status={status} />
-      </Notice>
-      {chosen && editsOnly && !blocked ? (
+      <CuaHostStatus cua={cua} owner={owner} chosen={chosen} />
+      {chosen && editsOnly && !notReady ? (
         <p data-testid="settings-cua-edits-only" className="text-[12px] text-blocked">
           Thread access is Edit files: every CUA call needs an approval no thread can give, so
           threads see the tools but cannot use them. Choose Full access for them to work.
@@ -145,65 +149,3 @@ const CuaNotice = ({
     </div>
   );
 };
-
-const noticeTitle = (status: CuaStatus, chosen: boolean): string => {
-  if (status.state === "ready") return status.detail;
-  if (status.usable) return "CUA Driver is not running.";
-  return chosen
-    ? "CUA is not ready: threads run without its tools."
-    : "CUA is not ready on this host.";
-};
-
-const FixSteps = ({ status }: { status: CuaStatus }) =>
-  status.fix.length === 0 ? null : (
-    <ol data-testid="settings-cua-fix" className="flex list-decimal flex-col gap-1 pl-4">
-      {status.fix.map((step) => (
-        <li key={step}>
-          <code className="rounded-md bg-canvas px-1.5 py-0.5 text-[11.5px] break-all text-text">
-            {step}
-          </code>
-        </li>
-      ))}
-    </ol>
-  );
-
-const Notice = ({
-  tone,
-  title,
-  testId,
-  cua,
-  children,
-}: {
-  tone: "ok" | "warn";
-  title: string;
-  testId: string;
-  cua: CuaStatusState;
-  children?: ReactNode;
-}) => (
-  <div
-    role={tone === "warn" ? "alert" : "status"}
-    data-testid={testId}
-    data-tone={tone}
-    className={
-      tone === "warn"
-        ? "flex gap-2.5 rounded-row border border-blocked/30 bg-blocked/10 px-3 py-2.5 text-[12.5px] leading-relaxed text-text"
-        : "flex gap-2.5 rounded-row border border-border px-3 py-2.5 text-[12.5px] leading-relaxed text-text"
-    }
-  >
-    {tone === "warn" ? <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-blocked" /> : null}
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-      <p className={tone === "warn" ? "font-medium text-blocked" : "text-text-muted"}>{title}</p>
-      {children}
-    </div>
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      data-testid="settings-cua-recheck"
-      disabled={cua.checking}
-      onClick={cua.recheck}
-    >
-      {cua.checking ? "Checking…" : "Check again"}
-    </Button>
-  </div>
-);

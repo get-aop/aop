@@ -19,36 +19,68 @@ export const ComputerUseInputSchema = z.object({ computerUse: ComputerUseOptionS
 export type ComputerUseInput = z.infer<typeof ComputerUseInputSchema>;
 
 /**
- * Whether CUA Driver can serve a thread on this host, as the host last saw it.
+ * Whether CUA Driver can serve a thread on the AOP host: the machine whose local-server spawns the
+ * agent sessions, whatever device shows the dashboard.
  *
- * - `ready`: installed, and its daemon reports Accessibility and Screen Recording granted.
- * - `not-running`: installed, but its daemon is not running, so the grants cannot be read. A
- *   thread still gets the tools: CUA Driver starts its app on first use.
- * - `not-installed`: no `cua-driver` on the host's PATH or in /Applications.
- * - `missing-permissions`: the daemon runs without one of the macOS grants it needs.
- * - `error`: `cua-driver` is there but did not answer.
+ * - `ready`: installed, it answers, its app is running, and it has every macOS permission it needs.
+ * - `not-installed`: no `cua-driver` on the host.
+ * - `not-ready`: installed but something is missing; `reason` says what.
  *
- * Only `not-installed`, `missing-permissions` and `error` keep the tools from a thread.
+ * Only `ready` gives threads the tools. Anything else starts their runs without them.
  */
-export const CuaStateSchema = z.enum([
+export const CuaReadinessSchema = z.enum(["ready", "not-installed", "not-ready"]);
+export type CuaReadiness = z.infer<typeof CuaReadinessSchema>;
+
+/**
+ * Why CUA Driver is or is not ready, as a code. `no-answer`: `cua-driver` is there but did not
+ * report a version or a permission report. `not-running`: its app (the daemon that holds the
+ * macOS grants) is not running, so the grants cannot be read. `missing-permissions`: the app runs
+ * without Accessibility or Screen Recording.
+ */
+export const CuaReasonSchema = z.enum([
   "ready",
-  "not-running",
   "not-installed",
+  "no-answer",
+  "not-running",
   "missing-permissions",
-  "error",
 ]);
-export type CuaState = z.infer<typeof CuaStateSchema>;
+export type CuaReason = z.infer<typeof CuaReasonSchema>;
+
+/**
+ * One thing the host checked. `ok` is null when it was not checked: off macOS there are no grants
+ * to read, and some checks (Tahoe's direct capture consent) cannot be read without a prompt.
+ * `required` checks decide readiness; the others only inform.
+ */
+export const CuaCheckSchema = z.object({
+  id: z.enum([
+    "installed",
+    "answers",
+    "running",
+    "accessibility",
+    "screen-recording",
+    "direct-capture",
+    "up-to-date",
+  ]),
+  label: z.string(),
+  required: z.boolean(),
+  ok: z.boolean().nullable(),
+  detail: z.string(),
+});
+export type CuaCheck = z.infer<typeof CuaCheckSchema>;
 
 export const CuaStatusSchema = z.object({
-  state: CuaStateSchema,
-  /** Whether a thread of a project on CUA gets the tools now. */
-  usable: z.boolean(),
+  status: CuaReadinessSchema,
+  reason: CuaReasonSchema,
+  /** One sentence on the status, for the person. */
+  detail: z.string(),
   /** The `cua-driver` a thread would launch; null when none is found. */
   path: z.string().nullable(),
   version: z.string().nullable(),
-  /** One sentence on the state, for the person. */
-  detail: z.string(),
-  /** What the person runs on the host to fix it, in order; empty when there is nothing to do. */
-  fix: z.array(z.string()),
+  /** The newest release on the driver's update channel, when it could say; null otherwise. */
+  latestVersion: z.string().nullable(),
+  checks: z.array(CuaCheckSchema),
+  /** The machine all of this is about, so a remote dashboard can say where to run commands. */
+  host: z.object({ name: z.string(), platform: z.string() }),
+  checkedAt: z.iso.datetime({ offset: true }),
 });
 export type CuaStatus = z.infer<typeof CuaStatusSchema>;

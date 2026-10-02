@@ -1,75 +1,130 @@
 import { describe, expect, test } from "bun:test";
+import { CuaStatusSchema } from "@aop/common";
 import { probeCua } from "./cua-driver.ts";
-import { CUA_PATH, fakeCua } from "./test-utils.ts";
+import { CHECKED_AT, CUA_PATH, fakeCua } from "./test-utils.ts";
 
-describe("probeCua", () => {
-  test("is ready when the daemon reports both macOS permissions", async () => {
+const checkOf = async (deps: ReturnType<typeof fakeCua>, id: string) =>
+  (await probeCua(deps)).checks.find((check) => check.id === id);
+
+describe("probeCua on the host", () => {
+  test("ready: installed, answers, running, both grants", async () => {
     const deps = fakeCua();
+    const status = await probeCua(deps);
 
-    expect(await probeCua(deps)).toEqual({
-      state: "ready",
-      usable: true,
+    expect(CuaStatusSchema.parse(status)).toEqual(status);
+    expect(status).toMatchObject({
+      status: "ready",
+      reason: "ready",
+      detail: "CUA Driver 0.32.0 is ready on this host.",
       path: CUA_PATH,
       version: "0.32.0",
-      detail: "CUA Driver 0.32.0 is installed and has its macOS permissions.",
-      fix: [],
+      latestVersion: "0.32.0",
+      host: { name: "Studio Mac", platform: "darwin" },
+      checkedAt: CHECKED_AT,
     });
-    // Read-only commands only: nothing that could raise a permission prompt.
-    expect(deps.calls).toEqual([
-      [CUA_PATH, "--version"],
-      [CUA_PATH, "permissions", "status", "--json"],
+    expect(status.checks.map(({ id, ok }) => [id, ok])).toEqual([
+      ["installed", true],
+      ["answers", true],
+      ["running", true],
+      ["accessibility", true],
+      ["screen-recording", true],
+      ["direct-capture", null],
+      ["up-to-date", true],
+    ]);
+    // Read-only commands only: nothing that could raise a permission prompt or start the app.
+    expect(deps.calls.map((argv) => argv.slice(1).join(" ")).sort()).toEqual([
+      "--version",
+      "check-update --json",
+      "permissions status --json",
     ]);
   });
 
-  test("says how to install it when there is none", async () => {
-    const status = await probeCua(fakeCua(undefined, { locate: () => null }));
+  test("not installed: no driver on the host, and nothing is run", async () => {
+    const deps = fakeCua({}, { locate: () => null });
+    const status = await probeCua(deps);
 
-    expect(status).toMatchObject({ state: "not-installed", usable: false, path: null });
-    expect(status.fix[0]).toContain("https://cua.ai/driver/install.sh");
+    expect(status).toMatchObject({
+      status: "not-installed",
+      reason: "not-installed",
+      path: null,
+      version: null,
+      host: { name: "Studio Mac" },
+    });
+    expect(deps.calls).toEqual([]);
   });
 
-  test("names the permission that is missing and how to grant it", async () => {
+  test("not ready: the driver does not answer", async () => {
+    const hung = await probeCua(fakeCua({ version: new Error("did not finish within 5s") }));
+    const silent = await probeCua(fakeCua({ version: "" }));
+
+    expect(hung).toMatchObject({ status: "not-ready", reason: "no-answer", version: null });
+    expect(hung.detail).toContain("did not finish within 5s");
+    expect(silent).toMatchObject({ status: "not-ready", reason: "no-answer" });
+  });
+
+  test("not ready: its app is not running, so the grants cannot be read", async () => {
     const status = await probeCua(
-      fakeCua(JSON.stringify({ accessibility: true, screen_recording: false })),
+      fakeCua({ permissions: JSON.stringify({ daemon_running: false, status: "unknown" }) }),
     );
 
-    expect(status).toMatchObject({ state: "missing-permissions", usable: false });
-    expect(status.detail).toContain("Screen Recording permission");
-    expect(status.detail).not.toContain("Accessibility");
-    expect(status.fix).toEqual([
-      "cua-driver permissions grant",
-      "Or in System Settings › Privacy & Security › Screen Recording, turn on Cua Driver",
-    ]);
+    expect(status).toMatchObject({ status: "not-ready", reason: "not-running", version: "0.32.0" });
+    expect(status.checks.map((check) => check.id)).not.toContain("accessibility");
   });
 
-  test("still serves a thread when the app is not running, since it starts on first use", async () => {
+  test("not ready: a missing grant, named", async () => {
     const status = await probeCua(
-      fakeCua(JSON.stringify({ daemon_running: false, status: "unknown" })),
+      fakeCua({ permissions: JSON.stringify({ accessibility: true, screen_recording: false }) }),
     );
 
-    expect(status).toMatchObject({ state: "not-running", usable: true, path: CUA_PATH });
-    expect(status.fix).toEqual(["open -n -g -a CuaDriver --args serve"]);
+    expect(status).toMatchObject({ status: "not-ready", reason: "missing-permissions" });
+    expect(status.detail).toBe("CUA Driver lacks the macOS Screen Recording permission.");
   });
 
-  test("reports a driver that does not answer, or answers with something else", async () => {
-    const hung = await probeCua(
-      fakeCua(undefined, {
-        run: async () => {
-          throw new Error("`cua-driver --version` did not finish within 5s");
-        },
+  test("not ready: no permission report at all", async () => {
+    const garbled = await probeCua(fakeCua({ permissions: "not json" }));
+    const failed = await probeCua(fakeCua({ permissions: new Error("socket closed") }));
+
+    expect(garbled).toMatchObject({ status: "not-ready", reason: "not-running" });
+    expect(failed).toMatchObject({ status: "not-ready", reason: "not-running" });
+  });
+
+  test("an update is reported but does not make it unready, nor does being offline", async () => {
+    const behind = fakeCua({ latest: "0.33.1" });
+    const offline = fakeCua({ latest: null });
+
+    expect(await probeCua(behind)).toMatchObject({ status: "ready", latestVersion: "0.33.1" });
+    expect(await checkOf(behind, "up-to-date")).toMatchObject({
+      ok: false,
+      detail: "0.33.1 is out.",
+    });
+    expect(await probeCua(offline)).toMatchObject({ status: "ready", latestVersion: null });
+    expect(await checkOf(offline, "up-to-date")).toMatchObject({ ok: null });
+  });
+
+  test("Tahoe's direct capture consent counts once the daemon says it is ready", async () => {
+    const deps = fakeCua({
+      permissions: JSON.stringify({
+        accessibility: true,
+        screen_recording: true,
+        direct_capture_status: "ready",
       }),
-    );
-    const garbled = await probeCua(fakeCua("not json"));
+    });
 
-    expect(hung).toMatchObject({ state: "error", usable: false, path: CUA_PATH });
-    expect(hung.detail).toContain("did not finish");
-    expect(garbled).toMatchObject({ state: "error", usable: false, version: "0.32.0" });
+    expect(await checkOf(deps, "direct-capture")).toMatchObject({ ok: true, required: false });
   });
 
-  test("needs no grants off macOS", async () => {
-    const deps = fakeCua("not asked", { platform: "linux" });
+  test("off macOS there are no grants to read", async () => {
+    const deps = fakeCua({}, { platform: "linux" });
 
-    expect(await probeCua(deps)).toMatchObject({ state: "ready", usable: true });
-    expect(deps.calls).toEqual([[CUA_PATH, "--version"]]);
+    expect(await probeCua(deps)).toMatchObject({ status: "ready", host: { platform: "linux" } });
+    expect(deps.calls.some((argv) => argv[1] === "permissions")).toBe(false);
+  });
+
+  test("falls back to the network host name when the host's name cannot be read", async () => {
+    const status = await probeCua(
+      fakeCua({}, { hostName: () => Promise.reject(new Error("no scutil")) }),
+    );
+
+    expect(status.host.name.length).toBeGreaterThan(0);
   });
 });

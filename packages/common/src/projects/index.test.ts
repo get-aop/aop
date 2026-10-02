@@ -13,6 +13,8 @@ test("the package index exports the projects contract", () => {
       "ComputerUseInputSchema",
       "ComputerUseSchema",
       "CuaStatusSchema",
+      "cuaSetupSteps",
+      "CUA_COMMANDS",
       "DeviceSchema",
       "EventLogEntrySchema",
       "getThreadProgress",
