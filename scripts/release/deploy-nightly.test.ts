@@ -129,6 +129,8 @@ describe("deploy-nightly.sh", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain(`dry-run: aws s3 cp ${h.releaseDir}/aop-darwin-arm64 s3://`);
+    expect(result.stdout).toContain("Dry run: nothing was published.");
+    expect(result.stdout).not.toContain("Published AOP Nightly");
     expect(result.stdout).toContain("nightly/install.sh");
     expect(await h.calls()).toEqual([]);
   });

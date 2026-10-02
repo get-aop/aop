@@ -159,4 +159,8 @@ for old in $PRUNE; do
   s3 rm "s3://${BUCKET}/${PREFIX}/releases/v${old}.md"
 done
 
-echo "Published AOP Nightly ${VERSION} (${COMMIT}) to ${PUBLIC_BASE}/${PREFIX}/"
+if [ -n "$DRY_RUN" ]; then
+  echo "Dry run: nothing was published. AOP Nightly ${VERSION} (${COMMIT}) would go to ${PUBLIC_BASE}/${PREFIX}/"
+else
+  echo "Published AOP Nightly ${VERSION} (${COMMIT}) to ${PUBLIC_BASE}/${PREFIX}/"
+fi
