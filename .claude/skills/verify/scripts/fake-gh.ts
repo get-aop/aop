@@ -14,6 +14,9 @@
  * A push to the pull request's branch starts a new round of checks, still pending, with a new run id;
  * a round that finished keeps its run id and completion time however often it is read.
  *
+ * The Pull requests tab's reads (`gh api user`, `gh api graphql`, the `gh api -i` ETag probe) and
+ * their controls (`gh fake seed-pulls`, `auth`, `graphql-fail`, `touch`) are in fake-gh-pulls.ts.
+ *
  * Crash hooks: a file named `hang-after-create` or `hang-after-merge` in that directory makes the next
  * such call do its work and then sleep 60 seconds, once, so the server can be killed in the window
  * where GitHub has changed and the server has not yet recorded it.
@@ -30,6 +33,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  DEFAULT_REPO,
+  type ListedFields,
+  listApi,
+  type PullsState,
+  seedPulls,
+} from "./fake-gh-pulls.ts";
 
 type Outcome = "pending" | "pass" | "fail";
 
@@ -63,7 +73,7 @@ interface ReviewComment {
   user: { login: string };
 }
 
-interface PullRequest {
+interface PullRequest extends ListedFields {
   number: number;
   url: string;
   title: string;
@@ -91,7 +101,18 @@ appendFileSync(
 
 const statePath = join(dir, "state.json");
 const prs: PullRequest[] = existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : [];
-const save = () => writeFileSync(statePath, JSON.stringify(prs, null, 2));
+const pullsStatePath = join(dir, "pulls-state.json");
+const pullsState: PullsState = existsSync(pullsStatePath)
+  ? JSON.parse(readFileSync(pullsStatePath, "utf8"))
+  : {};
+const save = () => {
+  writeFileSync(statePath, JSON.stringify(prs, null, 2));
+  writeFileSync(pullsStatePath, JSON.stringify(pullsState, null, 2));
+};
+/** A change on GitHub moves the pull request's update time, which the list sorts and probes by. */
+const touch = (pr: PullRequest) => {
+  pr.updatedAt = new Date().toISOString();
+};
 const flag = (name: string) => args[args.indexOf(name) + 1] ?? "";
 const byNumber = (value = args[2]) => prs.find((pr) => String(pr.number) === value);
 const fail = (message: string): never => {
@@ -131,7 +152,10 @@ const headSha = (pr: PullRequest): string => {
 };
 
 const commands: Record<string, () => void> = {
-  "auth status": () => undefined,
+  "auth status": () => {
+    if (pullsState.signedOut)
+      fail("You are not logged into any GitHub hosts. To log in, run: gh auth login");
+  },
 
   "pr list": () => {
     const found = prs.filter((pr) => pr.head === flag("--head")).slice(-1);
@@ -154,6 +178,8 @@ const commands: Record<string, () => void> = {
       base: flag("--base"),
       draft,
       origin: spawnSync("git", ["remote", "get-url", "origin"], { encoding: "utf8" }).stdout.trim(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
     save();
     hangOnce("hang-after-create");
@@ -178,6 +204,7 @@ const commands: Record<string, () => void> = {
     if (pr.state !== "OPEN") fail(`pull request is ${pr.state}`);
     squashMerge(pr);
     pr.state = "MERGED";
+    touch(pr);
     save();
     hangOnce("hang-after-merge");
   },
@@ -201,6 +228,13 @@ const commands: Record<string, () => void> = {
 
   // `gh api repos/{owner}/{repo}/pulls/<n>/reviews` and `.../comments`.
   api: () => {
+    const listed = listApi(args, prs, pullsState);
+    if (listed) {
+      process.stdout.write(listed.stdout);
+      if (listed.stderr) process.stderr.write(`${listed.stderr}\n`);
+      process.exitCode = listed.exitCode;
+      return;
+    }
     const [, number, endpoint] = /pulls\/(\d+)\/(\w+)/.exec(args[1] ?? "") ?? [];
     const pr = byNumber(number) ?? fail("Not Found (HTTP 404)");
     if (endpoint === "reviews") return print(pr.reviews ?? []);
@@ -331,10 +365,44 @@ const controls: Record<string, () => void> = {
     const pr = requirePr();
     squashMerge(pr);
     pr.state = "MERGED";
+    touch(pr);
   },
 
   close: () => {
-    requirePr().state = "CLOSED";
+    const pr = requirePr();
+    pr.state = "CLOSED";
+    touch(pr);
+  },
+
+  "seed-pulls": () => {
+    const repo = args[2] ?? DEFAULT_REPO;
+    const count = Number(args[3] ?? 14);
+    const first = 1 + Math.max(100, ...prs.map((pr) => pr.number));
+    prs.push(
+      ...seedPulls(repo, count, first, Date.now()).map((pull) => ({
+        ...pull,
+        body: "",
+        origin: "",
+      })),
+    );
+  },
+
+  auth: () => {
+    pullsState.signedOut = args[2] === "signed-out";
+  },
+
+  "graphql-fail": () => {
+    pullsState.graphqlFailure = !args[2] || args[2] === "off" ? null : args.slice(2).join(" ");
+  },
+
+  touch: () => {
+    const pr =
+      prs.find(
+        (candidate) =>
+          (candidate.repo ?? DEFAULT_REPO) === args[2] && String(candidate.number) === args[3],
+      ) ?? fail(`no pull request ${args[2]}#${args[3]}`);
+    if (args[4]) pr.title = args.slice(4).join(" ");
+    touch(pr);
   },
 
   show: () => {
