@@ -9,6 +9,7 @@ import type { ProjectEntry } from "../projects-state";
 import { PullRequestPane } from "../pull-request-view/PullRequestPane";
 import { PanelDivider } from "./PanelDivider";
 import { CHAT_MIN_WIDTH } from "./panel-layout";
+import type { PanelTabId } from "./panel-tabs";
 import { PanelFrame, ThreadsPanel } from "./ThreadsPanel";
 import { useOverviewFilters } from "./use-overview-filters";
 import { type PanelLayout, usePanelLayout } from "./use-panel-layout";
@@ -39,8 +40,7 @@ export const ProjectLayout = ({
   settingsOpen?: boolean;
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
-  const threadId = route.name === "thread" ? route.threadId : null;
-  const tab = route.name === "project-tab" ? route.tab : "threads";
+  const { threadId, tab } = panelPlaceOf(route);
   const { pullRequest } = route;
   // Closing the thread leaves a pull request that is open beside it where it is.
   const leaveThread = useCallback(
@@ -148,6 +148,12 @@ const useRevealForPullRequest = (
   useEffect(() => {
     if (key) reveal.current();
   }, [key]);
+};
+
+/** What the panel shows: the thread the address names, or else its tab (Threads by default). */
+const panelPlaceOf = (route: ProjectScreen): { threadId: string | null; tab: PanelTabId } => {
+  if (route.name === "thread") return { threadId: route.threadId, tab: "threads" };
+  return { threadId: null, tab: route.name === "project-tab" ? route.tab : "threads" };
 };
 
 /**
