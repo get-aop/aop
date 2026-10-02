@@ -71,8 +71,9 @@ describe("Electron Builder configuration", () => {
     expect(config).toMatchObject({
       appId: "com.getaop.aop.nightly",
       productName: "AOP Nightly",
-      extraMetadata: { version: "0.10.7-nightly.20261002.14" },
+      extraMetadata: { name: "aop-nightly-desktop", version: "0.10.7-nightly.20261002.14" },
       publish: [{ provider: "generic", url: "https://getaop.com/nightly/latest/" }],
+      detectUpdateChannel: false,
     });
     expect(config.mac.icon).toBe("apps/desktop/build/nightly/icon.icns");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Electron Builder expands these placeholders.
@@ -81,6 +82,7 @@ describe("Electron Builder configuration", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Electron Builder expands these placeholders.
     expect(stable.dmg.title).toBe("AOP ${version} ${arch}");
     expect(stable.mac.icon).toBe("apps/desktop/build/icon.icns");
+    expect(stable.extraMetadata).not.toHaveProperty("name");
   });
 
   test("publishes a generic feed on getaop.com, so the Windows build writes latest.yml", () => {

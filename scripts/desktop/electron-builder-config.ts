@@ -36,6 +36,10 @@ export const createElectronBuilderConfig = ({
     output: "dist/electron-builder",
   },
   extraMetadata: {
+    // electron-builder names the folder electron-updater downloads into after the package name
+    // (`@aopdesktop-updater` for stable). AOP Nightly gets its own, so the two apps never share a
+    // pending download. Electron takes the app's name and data folder from productName, not this.
+    ...(channel === "nightly" ? { name: "aop-nightly-desktop" } : {}),
     main: "dist-electron/main.cjs",
     version,
     description: "AOP desktop app for running local coding-agent workflows.",
@@ -47,8 +51,15 @@ export const createElectronBuilderConfig = ({
   // macos-updater.ts, because each architecture is a separate build. The workflow still passes
   // `--publish never`: nothing is uploaded from the build, the release job does that.
   publish: [
-    { provider: "generic" as const, url: desktopUpdaterFeedUrl(CHANNELS[channel].feedOrigin) },
+    {
+      provider: "generic" as const,
+      url: desktopUpdaterFeedUrl(CHANNELS[channel].feedOrigin),
+    },
   ],
+  // A nightly's version has a pre-release part (`-nightly.…`), from which electron-builder would
+  // name the updater file `nightly-mac.yml`. Both channels publish `latest-mac.yml`, each under
+  // its own feed (macos-updater.ts), so the app looks for that name.
+  detectUpdateChannel: false,
   files: ["dist/**/*", "dist-electron/**/*", "package.json"],
   extraResources: [
     {
