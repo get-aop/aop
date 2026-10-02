@@ -140,9 +140,12 @@ describe("the Pull requests tab", () => {
     fireEvent.click(screen.getByTestId("pr-filter-author-clear"));
     await waitFor(() => expect(host.last()?.author).toEqual([]));
 
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    fireEvent.click(screen.getByTestId("pr-filter-author"));
+    await waitFor(() => expect(screen.queryByTestId("pr-filter-author-menu")).toBeNull());
     fireEvent.click(screen.getByTestId("pr-filter-label"));
-    fireEvent.click(await screen.findByText("bug"));
+    const [bug] = await screen.findAllByTestId("pr-filter-label-option");
+    expect(bug?.getAttribute("data-value")).toBe("bug");
+    fireEvent.click(bug as HTMLElement);
     await waitFor(() => expect(host.last()?.label).toEqual(["bug"]));
     expect(screen.getByTestId("pr-filter-label").textContent).toBe("Label: bug");
   });
