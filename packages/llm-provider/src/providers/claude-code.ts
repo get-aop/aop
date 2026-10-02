@@ -311,6 +311,9 @@ const appendClaudeVariadicFlags = (
 // `--system-prompt-snapshot off` (Claude Code 2.1.257 or later) renders the prompt afresh each
 // request, so an edited instruction reaches a resumed turn.
 const appendClaudeSystemPromptFlags = (cmd: string[], options: RunOptions): void => {
+  if (options.noSessionPersistence) cmd.push("--no-session-persistence");
+  const replaced = options.systemPrompt?.trim();
+  if (replaced) cmd.push("--system-prompt", replaced);
   const text = options.appendSystemPrompt?.trim();
   if (!text) return;
   cmd.push("--append-system-prompt", text, "--system-prompt-snapshot", "off");

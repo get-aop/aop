@@ -23,17 +23,34 @@ export interface PullRequestViewRef {
 }
 
 /**
+ * What the artifact view shows in the coordinator's place: a Library item (an artifact at one of
+ * its versions, or any file), a file a reply linked in its chat's workspace (`threadId` null for
+ * the coordinator's), or the diagram Visualize is drawing of a reply.
+ */
+export type ArtifactViewRef =
+  | { kind: "artifact"; id: string; version?: number }
+  | { kind: "file"; threadId: string | null; path: string }
+  | { kind: "visualize"; messageId: string };
+
+/** What a project screen may show where the chat is, one at a time. */
+interface CoordinatorView {
+  pullRequest?: PullRequestViewRef;
+  artifact?: ArtifactViewRef;
+}
+
+/**
  * The app's screens. `project` is the project screen: the coordinator chat with the threads
  * panel on its overview. `thread` is the same screen with one thread open in the panel, and
  * `project-tab` the same screen with another of the panel's tabs showing;
  * `project-settings` is one section of the project's settings, in a dialog over the project screen.
- * Either project screen may name a `pullRequest`, shown where the chat is while the panel stays.
+ * Any project screen may name a `pullRequest` or an `artifact` (one at a time), shown where the
+ * chat is while the panel stays.
  */
 export type Route =
   | { name: "projects" }
-  | { name: "project"; projectId: string; pullRequest?: PullRequestViewRef }
-  | { name: "thread"; projectId: string; threadId: string; pullRequest?: PullRequestViewRef }
-  | { name: "project-tab"; projectId: string; tab: AddableTabId; pullRequest?: PullRequestViewRef }
+  | ({ name: "project"; projectId: string } & CoordinatorView)
+  | ({ name: "thread"; projectId: string; threadId: string } & CoordinatorView)
+  | ({ name: "project-tab"; projectId: string; tab: AddableTabId } & CoordinatorView)
   | { name: "project-settings"; projectId: string; section: ProjectSettingsSection };
 
 /** The screens the panel and the chat (or a pull request in its place) share. */
@@ -52,12 +69,27 @@ export const projectSettingsPath = (
   section: ProjectSettingsSection = "general",
 ): string => `${projectPath(projectId)}/settings${section === "general" ? "" : `/${section}`}`;
 
-/** The address of a project screen, with the pull request it names, if any. */
+/** The address of a project screen, with the pull request or artifact it names, if any. */
 export const projectScreenPath = (screen: ProjectScreen): string => {
   const base = screenBasePath(screen);
   const pr = screen.pullRequest;
-  return pr ? `${base}/pulls/${encodeURIComponent(pr.repoId)}/${pr.number}` : base;
+  if (pr) return `${base}/pulls/${encodeURIComponent(pr.repoId)}/${pr.number}`;
+  return screen.artifact ? `${base}${artifactViewPath(screen.artifact)}` : base;
 };
+
+const artifactViewPath = (ref: ArtifactViewRef): string => {
+  switch (ref.kind) {
+    case "artifact":
+      return `/artifacts/${encodeURIComponent(ref.id)}${ref.version ? `/${ref.version}` : ""}`;
+    case "file":
+      return `/files/${encodeURIComponent(ref.threadId ?? COORDINATOR_SEGMENT)}/${encodeURIComponent(ref.path)}`;
+    case "visualize":
+      return `/visualize/${encodeURIComponent(ref.messageId)}`;
+  }
+};
+
+// A file of the coordinator's workspace names no thread.
+const COORDINATOR_SEGMENT = "coordinator";
 
 const screenBasePath = (screen: ProjectScreen): string => {
   if (screen.name === "thread") return threadPath(screen.projectId, screen.threadId);
@@ -78,6 +110,8 @@ export const parseRoute = (pathname: string): Route | null => {
 const PULL_REQUEST_SEGMENTS = 3;
 
 const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
+  const artifact = parseArtifactSegments(projectId, rest);
+  if (artifact !== undefined) return artifact;
   const pullRequestAt = rest.length - PULL_REQUEST_SEGMENTS;
   if (pullRequestAt >= 0 && rest[pullRequestAt] === "pulls") {
     const pullRequest = parsePullRequest(rest.slice(pullRequestAt + 1));
@@ -93,6 +127,43 @@ const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
 /** Whether the route is a project screen (the chat and the panel), which a pull request can open over. */
 export const isProjectScreen = (route: Route): route is ProjectScreen =>
   route.name === "project" || route.name === "thread" || route.name === "project-tab";
+
+const ARTIFACT_VIEWS = new Set(["artifacts", "files", "visualize"]);
+
+// The artifact view follows the screen it opens over: the project's (no segments), a thread's
+// (`threads/<id>`) or a tab's (`<tab>`). Undefined when the address names no artifact view.
+const parseArtifactSegments = (projectId: string, rest: string[]): Route | null | undefined => {
+  const at = rest[0] === "threads" ? 2 : rest[0] && ARTIFACT_VIEWS.has(rest[0]) ? 0 : 1;
+  const view = rest[at];
+  if (!view || !ARTIFACT_VIEWS.has(view)) return undefined;
+  const artifact = parseArtifactView(view, rest.slice(at + 1));
+  const screen = parseScreenRoute(projectId, rest.slice(0, at));
+  if (!artifact || !screen || !isProjectScreen(screen)) return null;
+  return { ...screen, artifact };
+};
+
+const parseArtifactView = (view: string, segments: string[]): ArtifactViewRef | null => {
+  const [first, second, ...extra] = segments;
+  if (!first || extra.length > 0) return null;
+  return ARTIFACT_VIEW_PARSERS[view]?.(first, second) ?? null;
+};
+
+const ARTIFACT_VIEW_PARSERS: Record<
+  string,
+  (first: string, second: string | undefined) => ArtifactViewRef | null
+> = {
+  files: (threadId, path) =>
+    path
+      ? { kind: "file", threadId: threadId === COORDINATOR_SEGMENT ? null : threadId, path }
+      : null,
+  visualize: (messageId, extra) => (extra === undefined ? { kind: "visualize", messageId } : null),
+  artifacts: (id, version) => parseArtifactVersion(id, version),
+};
+
+const parseArtifactVersion = (id: string, version: string | undefined): ArtifactViewRef | null => {
+  if (version === undefined) return { kind: "artifact", id };
+  return /^[1-9]\d*$/.test(version) ? { kind: "artifact", id, version: Number(version) } : null;
+};
 
 const parsePullRequest = ([repoId, number]: string[]): PullRequestViewRef | null => {
   if (!repoId || !number || !/^[1-9]\d*$/.test(number)) return null;

@@ -45,6 +45,8 @@ function MessageScroller({
   const following = useRef(true);
   const lastTop = useRef(0);
   const lastHeight = useRef(0);
+  // Where the view was when it was hidden (display: none), to go back to when it shows again.
+  const hiddenTop = useRef<number | null>(null);
   const onEdgeChangeRef = useRef(onEdgeChange);
   onEdgeChangeRef.current = onEdgeChange;
 
@@ -76,7 +78,8 @@ function MessageScroller({
   const handleScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       const el = ref.current;
-      if (el) {
+      // Hidden, the view reads scrollTop 0: that is not the person scrolling.
+      if (el && el.clientHeight > 0) {
         setFollowing(followsAfterScroll(el, lastTop.current, following.current));
         lastTop.current = el.scrollTop;
       }
@@ -103,20 +106,23 @@ function MessageScroller({
     if (!el || !content || typeof ResizeObserver === "undefined") return;
     lastHeight.current = el.scrollHeight;
     const observer = new ResizeObserver(() => {
+      // Hidden (display: none), the view has no size and the browser drops its scroll position.
+      if (el.clientHeight === 0) {
+        hiddenTop.current ??= lastTop.current;
+        return;
+      }
       const grewBy = el.scrollHeight - lastHeight.current;
       lastHeight.current = el.scrollHeight;
-      if (following.current) {
-        pinToEnd();
-      } else if (grewBy > 0 && el.scrollTop < 4) {
-        // Older history loaded above the top of the view: keep the message that was there.
-        el.scrollTop += grewBy;
-        lastTop.current = el.scrollTop;
-      }
+      const top = topAfterResize(el, following.current, grewBy, hiddenTop.current);
+      hiddenTop.current = null;
+      if (top === null) return;
+      el.scrollTop = top;
+      lastTop.current = el.scrollTop;
     });
     observer.observe(content);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [pinToEnd]);
+  }, []);
 
   useMouseFocusMark(ref);
 
@@ -138,6 +144,21 @@ function MessageScroller({
     </div>
   );
 }
+
+/** Where the view goes when it or its content changes size; null leaves it where it is. */
+const topAfterResize = (
+  el: HTMLElement,
+  following: boolean,
+  grewBy: number,
+  shownAgainAt: number | null,
+): number | null => {
+  if (following) return el.scrollHeight;
+  // Shown again (the chat back from a pull request or an artifact): where the person left it.
+  if (shownAgainAt !== null) return shownAgainAt;
+  // Older history loaded above the top of the view: keep the message that was there.
+  if (grewBy > 0 && el.scrollTop < 4) return el.scrollTop + grewBy;
+  return null;
+};
 
 /**
  * Whether the view follows the end after a scroll: at the end it does; a scroll up stops it, even

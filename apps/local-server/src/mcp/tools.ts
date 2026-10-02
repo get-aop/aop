@@ -7,6 +7,7 @@ import {
   McpToolError,
   type McpToolResult,
 } from "./registry.ts";
+import { artifactCreateTool, artifactUpdateTool } from "./tools-artifact.ts";
 import {
   projectSettingsGetTool,
   projectSettingsSetTool,
@@ -66,6 +67,8 @@ const TOOLS: readonly McpTool[] = [
   librarySaveTool,
   libraryListTool,
   libraryReadTool,
+  artifactCreateTool,
+  artifactUpdateTool,
 ];
 
 export interface McpToolDefinition {

@@ -3,6 +3,7 @@
 @import "@fontsource/geist-mono/500.css";
 @import "tailwindcss";
 @import "./projects/chat/chat-markdown.css";
+@import "./projects/artifact-view/artifact-view.css";
 
 @custom-variant dark (&:is([data-theme="dark"], [data-theme="dark"] *));
 

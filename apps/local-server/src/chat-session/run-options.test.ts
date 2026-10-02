@@ -273,6 +273,8 @@ describe("buildRunOptions for project sessions", () => {
       "mcp__aop__aop_library_save",
       "mcp__aop__aop_library_list",
       "mcp__aop__aop_library_read",
+      "mcp__aop__aop_artifact_create",
+      "mcp__aop__aop_artifact_update",
     ]);
     expect(options.disallowedTools).toEqual(THREAD_DISALLOWED_TOOLS);
     expect(options.env).not.toHaveProperty("CLAUDE_CODE_DISABLE_CLAUDE_MDS");

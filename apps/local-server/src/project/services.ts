@@ -1,3 +1,6 @@
+import { type ArtifactService, createArtifactService } from "../artifact/service.ts";
+import { createVisualizeModel } from "../artifact/visualize/run.ts";
+import { createVisualizeService, type VisualizeService } from "../artifact/visualize/service.ts";
 import { createChatSessionService } from "../chat-session/service.ts";
 import type { ChatSessionServiceDeps } from "../chat-session/session-types.ts";
 import type { LocalServerContext } from "../context.ts";
@@ -29,6 +32,10 @@ export interface ProjectServices {
   memory: MemoryService;
   /** The project's files: what its agents saved, what the person sent or added. */
   library: LibraryService;
+  /** Documents agents make for the person, with their versions, kept in the Library. */
+  artifacts: ArtifactService;
+  /** Diagrams of replies, drawn by a small one-shot model run. */
+  visualize: VisualizeService;
   /** A new project's first open; the server resumes kickoffs a restart left pending (see server.ts). */
   kickoff: ProjectKickoff;
   /** The git side of threads, for housekeeping that runs without a request. */
@@ -59,6 +66,8 @@ export const createProjectServices = (
   const toolHealth = createThreadToolHealth(ctx, chat.wake);
   ctx.sessionHooks.observeThreadProgress(toolHealth.turnProgress);
   const routines = createRoutines(ctx, { threads, projects, chat }, routineDeps);
+  const library = createLibraryService(ctx);
+  const artifacts = createArtifactService(ctx, library);
   return {
     chat,
     projects,
@@ -70,7 +79,10 @@ export const createProjectServices = (
       memory: ctx.memoryRepository,
       coordinator: projects,
     }),
-    library: createLibraryService(ctx),
+    library,
+    artifacts,
+    // Visualize runs on the same provider seam as chats, so tests hand it the fake.
+    visualize: createVisualizeService(ctx, artifacts, createVisualizeModel(deps.createProviderFn)),
     git,
     // The watcher reads GitHub through the same `gh` seam the threads' pull requests use.
     pullRequestWatcher: createPullRequestWatcher(

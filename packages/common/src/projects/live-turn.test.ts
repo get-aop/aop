@@ -48,6 +48,26 @@ describe("diffTurnParts and applyLiveOps", () => {
     ]);
   });
 
+  test("an artifact card starts once and is then left alone; another version is a reset", () => {
+    const card = (version: number): TurnPart => ({
+      type: "artifact",
+      toolId: "t1",
+      artifactId: "lib_1",
+      version,
+      title: "Plan",
+      kind: "markdown",
+      action: "created",
+    });
+    const before = [tool("done")];
+    const ops = diffTurnParts(before, [tool("done"), card(1)]);
+    expect(ops).toEqual([{ op: "start", index: 1, part: card(1) }]);
+    expect(applyLiveOps(before, ops)).toEqual([tool("done"), card(1)]);
+    expect(diffTurnParts([card(1)], [card(1), text("Done")])).toEqual([
+      { op: "start", index: 1, part: text("Done") },
+    ]);
+    expect(diffTurnParts([card(1)], [card(2)])).toEqual([{ op: "reset", parts: [card(2)] }]);
+  });
+
   test("any sequence of turns is rebuilt exactly from the ops between them", () => {
     const turns: TurnPart[][] = [
       [],

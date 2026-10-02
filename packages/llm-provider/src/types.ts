@@ -86,6 +86,13 @@ export interface RunOptions {
    * since. The text goes on the command line, so a caller keeps it well under 128 KiB.
    */
   appendSystemPrompt?: string;
+  /**
+   * Replaces the CLI's own system prompt (Claude Code `--system-prompt`), for a small one-shot
+   * run that needs none of what an agent is told: it is most of such a run's input tokens.
+   */
+  systemPrompt?: string;
+  /** Keeps no session on disk to resume (Claude Code `--no-session-persistence`): a one-shot run. */
+  noSessionPersistence?: boolean;
   /** Enable Claude Code fast mode for faster output */
   fastMode?: boolean;
   /** Enable Claude Code Ultracode workflow orchestration for the session */

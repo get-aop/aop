@@ -46,8 +46,8 @@ export const resolveAppRequest = (rawUrl: string, roots: AppRoots): ResolvedAppF
 };
 
 /**
- * What each page may load. The dashboard may talk to its host and load its images, nothing
- * else; the desktop screen talks to the app over IPC and needs no network at all. Scripts come
+ * What each page may load. The dashboard may talk to its host, load its images and frame a PDF
+ * it holds in memory, nothing else; the desktop screen talks to the app over IPC and needs no network at all. Scripts come
  * only from the app itself.
  */
 export const contentSecurityPolicy = (surface: AppSurface, hostOrigin: string | null): string => {
@@ -61,7 +61,8 @@ export const contentSecurityPolicy = (surface: AppSurface, hostOrigin: string | 
     `connect-src 'self'${host}`,
     "object-src 'none'",
     "base-uri 'none'",
-    "frame-src 'none'",
+    // The artifact view shows a PDF from memory in the built-in viewer; nothing else is framed.
+    `frame-src ${surface === "dashboard" ? "blob:" : "'none'"}`,
     "form-action 'none'",
   ].join("; ");
 };

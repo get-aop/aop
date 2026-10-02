@@ -94,7 +94,7 @@ const decodeHeader = (value: string | undefined): string | null => {
   }
 };
 
-const libraryError = (c: Context, error: LibraryError): Response => {
+export const libraryError = (c: Context, error: LibraryError): Response => {
   const [status, message] = describe(error);
   return c.json({ error: message, code: error.code }, status);
 };

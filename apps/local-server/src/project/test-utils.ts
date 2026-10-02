@@ -8,6 +8,7 @@ import { ClaudeCodeProvider, type LLMProvider, type RunOptions } from "@aop/llm-
 import { FAKE_CLI_PATH } from "@aop/llm-provider/test-fixtures";
 import { Hono } from "hono";
 import type { Insertable, Kysely } from "kysely";
+import { createArtifactRoutes } from "../artifact/routes.ts";
 import { createAttachmentRoutes } from "../attachment/routes.ts";
 import { createAttachmentService } from "../attachment/service.ts";
 import { waitForPendingChatReplies } from "../chat-session/service.ts";
@@ -237,6 +238,7 @@ export const createProjectStack = async (
   app.route("/api/projects", createProjectRoutes(services));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createLibraryRoutes(services.library));
+  app.route("/api/projects", createArtifactRoutes(services.artifacts, services.visualize));
   app.route("/api", createThreadRoutes(services));
   app.route("/api", createSuggestionRoutes(services));
   app.route("/api", createPullRequestWatchRoutes(services));

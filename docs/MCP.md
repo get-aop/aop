@@ -28,6 +28,7 @@ The coordinator is hermetic: it runs with the AOP tools only, with no Claude set
 | `routine_create`, `routine_list`, `routine_update`, `routine_pause`, `routine_delete`, `routine_run_now` | Put recurring work on a schedule when the person asks, and manage it: each run starts a thread with the brief, or messages the coordinator. The host's caps apply (at most every 15 minutes, a limit on routines turned on per project), and a refusal says why. See [Routines](./ROUTINES.md). |
 | `memory_read`, `memory_write` | Read and write the project's memory files. |
 | `memory_delete` | Deletes a topic file from the project's memory. `MEMORY.md`, the index, cannot be deleted; it is rewritten with `memory_write`. Threads do not hold this tool. |
+| `aop_artifact_create`, `aop_artifact_update` | Make an artifact (a document for the person, kept in the project's Library) or save a new version of one, from `content` or a workspace `path`. The chat shows a card where the call was made, which opens the artifact view. See [Artifacts](./ARTIFACTS.md). |
 
 A thread's report reaches the coordinator as a `Thread report:` message that wakes it, so it does not poll. The wake waits until the coordinator's inbox has been quiet for 2 seconds (up to 10 after the first report), and a run takes every report waiting, in order, as one turn that says how many arrived. Threads that end together, or while the coordinator is busy, are answered by one reply. A report is a stored message, so none is lost if the server stops before the coordinator reads it: boot starts what is waiting. A message from the person ends a batch and gets its own turn.
 
@@ -40,6 +41,7 @@ A thread's report reaches the coordinator as a `Thread report:` message that wak
 | `aop_open_pr` | Opens the thread's pull request from its own branch, with the title and description the thread gives or ones written from its conversation. Called again, it pushes what the thread did since and returns the same pull request; a merged or closed one is refused. |
 | `aop_propose_routine` | Suggests recurring work worth doing on a schedule. It reaches the coordinator as a message the chat does not show, and the coordinator asks the person before creating anything; nothing runs on its own. A schedule the host would refuse is refused here. |
 | `memory_read`, `memory_write` | Same project memory as the coordinator (no `memory_delete`). |
+| `aop_artifact_create`, `aop_artifact_update` | Same artifacts as the coordinator; a card in the thread's chat opens the artifact view in the coordinator's place, beside the thread. |
 
 Claude's own `AskUserQuestion` is withheld from threads: it cannot be answered without a terminal. So are the built-ins that schedule or wake a session (`ScheduleWakeup`, `CronCreate`, `CronDelete`, `CronList`, `Monitor`, `RemoteTrigger`): AOP decides when a thread's next turn starts, and a timer the thread armed would fire into a session AOP is not running.
 

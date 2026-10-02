@@ -5,6 +5,7 @@ import {
   FolderInputIcon,
   MessageSquareIcon,
   MoreHorizontalIcon,
+  PanelLeftIcon,
   PencilIcon,
   PinIcon,
   PinOffIcon,
@@ -20,7 +21,15 @@ import {
 } from "@/ui/dropdown-menu";
 import { IconButton } from "../../components/IconButton";
 
-export type ItemAction = "open" | "download" | "rename" | "move" | "pin" | "source" | "delete";
+export type ItemAction =
+  | "open"
+  | "viewer"
+  | "download"
+  | "rename"
+  | "move"
+  | "pin"
+  | "source"
+  | "delete";
 
 // What opens a dialog: the menu must not hand focus back to its button as the dialog takes it.
 const OPENS_DIALOG: readonly ItemAction[] = ["open", "rename", "move", "delete"];
@@ -66,6 +75,13 @@ export const ItemMenu = ({
         }}
       >
         <MenuItem action="open" item={item} onAction={choose} icon={<EyeIcon />} label="Preview" />
+        <MenuItem
+          action="viewer"
+          item={item}
+          onAction={choose}
+          icon={<PanelLeftIcon />}
+          label="Open beside the chat"
+        />
         <MenuItem
           action="download"
           item={item}

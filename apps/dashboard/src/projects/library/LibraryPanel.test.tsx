@@ -12,6 +12,7 @@ const { act, cleanup, fireEvent, render, screen, waitFor, within } = await impor
 );
 const { ConfirmationHost } = await import("../../components/ConfirmationHost");
 const { LibraryPanel } = await import("./LibraryPanel");
+const { openInLibrary } = await import("../artifact-view/library-link");
 
 const project = makeProject({ id: "p1", name: "Checkout" });
 const thread = makeThread({ id: "thr_9", projectId: "p1", title: "Fix the checkout bug" });
@@ -305,6 +306,32 @@ describe("the Library tab", () => {
     fireEvent.click(within(preview).getByTestId("library-used-in"));
     expect(window.location.pathname).toBe("/projects/p1/threads/thr_9");
     expect(screen.queryByTestId("library-preview") === null).toBe(true);
+  });
+
+  test("a file opens beside the chat in the artifact view, from its menu or its preview", async () => {
+    await renderPanel();
+    openFolder("Artifacts");
+
+    await act$("lib_report", "viewer");
+    expect(window.location.pathname).toBe("/projects/p1/library/artifacts/lib_report");
+
+    window.history.replaceState(null, "", "/projects/p1/library");
+    fireEvent.click(screen.getByTestId("library-item-open"));
+    fireEvent.click(await screen.findByTestId("library-preview-viewer"));
+    expect(window.location.pathname).toBe("/projects/p1/library/artifacts/lib_report");
+    expect(screen.queryByTestId("library-preview")).toBeNull();
+  });
+
+  test("Open in Library from the artifact view shows the file in its folder, previewed", async () => {
+    window.history.replaceState(null, "", "/projects/p1/artifacts/lib_brief");
+    act(() => openInLibrary("p1", "lib_brief"));
+    // The artifact view stays open; the panel shows the Library tab.
+    expect(window.location.pathname).toBe("/projects/p1/library/artifacts/lib_brief");
+
+    await renderPanel();
+    const preview = await screen.findByTestId("library-preview");
+    expect(within(preview).getByText("brief.txt")).toBeTruthy();
+    expect(rowNames()).toContain("lib_brief");
   });
 
   test("an image previews as an image; its message link opens the coordinator chat", async () => {

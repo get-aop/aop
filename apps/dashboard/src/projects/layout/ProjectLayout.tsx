@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { navigate, type ProjectScreen, projectScreenPath } from "../../shell/router";
+import { ArtifactPane } from "../artifact-view/ArtifactPane";
 import { CoordinatorChatPane } from "../chat/CoordinatorChatPane";
 import { focusCoordinatorComposer } from "../chat/focus-composer";
 import type { ChatModel, ProjectChat } from "../chat/project-chat";
@@ -23,7 +24,7 @@ import { type PanelLayout, usePanelLayout } from "./use-panel-layout";
  * One grid holds them: the top bar over the chat, and the panel in a column of its own from the
  * top of the screen, so its header shares the top bar's row. When the panel covers the chat
  * (expanded, or on a phone) or is closed, the top bar spans the screen. A screen that names a
- * pull request shows it in the chat's column, over the chat.
+ * pull request or an artifact shows it in the chat's column, over the chat.
  */
 export const ProjectLayout = ({
   entry,
@@ -41,11 +42,14 @@ export const ProjectLayout = ({
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
   const { threadId, tab } = panelPlaceOf(route);
-  const { pullRequest } = route;
-  // Closing the thread leaves a pull request that is open beside it where it is.
+  const { pullRequest, artifact } = route;
+  // Closing the thread leaves a pull request or an artifact that is open beside it where it is.
   const leaveThread = useCallback(
-    () => navigate(projectScreenPath({ name: "project", projectId: project.id, pullRequest })),
-    [project.id, pullRequest],
+    () =>
+      navigate(
+        projectScreenPath({ name: "project", projectId: project.id, pullRequest, artifact }),
+      ),
+    [project.id, pullRequest, artifact],
   );
   const layout = usePanelLayout({
     projectId: project.id,
@@ -55,7 +59,8 @@ export const ProjectLayout = ({
   });
   const filters = useOverviewFilters();
   const { revealChat } = layout;
-  useRevealForPullRequest(pullRequest, revealChat);
+  useRevealForView(viewKey(route), revealChat);
+  const covered = Boolean(pullRequest || artifact);
 
   // A thread starts from what the person tells the coordinator, so this goes to its composer.
   const startThread = useCallback(() => {
@@ -85,7 +90,7 @@ export const ProjectLayout = ({
         aria-label="Coordinator chat"
         className={cn(
           "col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col",
-          (layout.chatHidden || pullRequest) && "hidden",
+          (layout.chatHidden || covered) && "hidden",
         )}
       >
         <CoordinatorChatPane
@@ -95,21 +100,10 @@ export const ProjectLayout = ({
           threadsError={threadsError}
           chat={chat}
           model={model}
-          active={!layout.chatHidden && !pullRequest}
+          active={!layout.chatHidden && !covered}
         />
       </section>
-      {pullRequest ? (
-        <section
-          data-testid="pull-request-column"
-          aria-label={`Pull request #${pullRequest.number}`}
-          className={cn(
-            "col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col",
-            layout.chatHidden && "hidden",
-          )}
-        >
-          <PullRequestPane entry={entry} pullRequest={pullRequest} />
-        </section>
-      ) : null}
+      <CoveringView entry={entry} route={route} hidden={layout.chatHidden} />
       {layout.visible && layout.mode === "side" && !layout.expanded ? (
         <PanelDivider
           width={layout.width}
@@ -133,21 +127,58 @@ export const ProjectLayout = ({
   );
 };
 
+/** What a screen shows in the chat's place: a pull request, or an artifact. */
+const CoveringView = ({
+  entry,
+  route: { pullRequest, artifact },
+  hidden,
+}: {
+  entry: ProjectEntry;
+  route: ProjectScreen;
+  /** The panel covers the chat's column. */
+  hidden: boolean;
+}) => {
+  if (pullRequest) {
+    return (
+      <section
+        data-testid="pull-request-column"
+        aria-label={`Pull request #${pullRequest.number}`}
+        className={cn("col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col", hidden && "hidden")}
+      >
+        <PullRequestPane entry={entry} pullRequest={pullRequest} />
+      </section>
+    );
+  }
+  if (!artifact) return null;
+  return (
+    <section
+      data-testid="artifact-column"
+      aria-label="Artifact"
+      className={cn("col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col", hidden && "hidden")}
+    >
+      <ArtifactPane projectId={entry.project.id} artifact={artifact} />
+    </section>
+  );
+};
+
 /**
- * A pull request opened from a panel that covers the chat's column (expanded, overlaid, or the
- * one pane on a phone) needs that column back. Only a newly named one asks: the panel may be
- * opened over it again afterwards.
+ * A pull request or an artifact opened from a panel that covers the chat's column (expanded,
+ * overlaid, or the one pane on a phone) needs that column back. Only a newly named one asks: the
+ * panel may be opened over it again afterwards.
  */
-const useRevealForPullRequest = (
-  pullRequest: ProjectScreen["pullRequest"],
-  revealChat: () => void,
-): void => {
+const useRevealForView = (key: string | null, revealChat: () => void): void => {
   const reveal = useRef(revealChat);
   reveal.current = revealChat;
-  const key = pullRequest ? `${pullRequest.repoId}#${pullRequest.number}` : null;
   useEffect(() => {
     if (key) reveal.current();
   }, [key]);
+};
+
+// An artifact's versions are one view: switching between them does not ask again.
+const viewKey = ({ pullRequest, artifact }: ProjectScreen): string | null => {
+  if (pullRequest) return `pr:${pullRequest.repoId}#${pullRequest.number}`;
+  if (!artifact) return null;
+  return artifact.kind === "artifact" ? `artifact:${artifact.id}` : JSON.stringify(artifact);
 };
 
 /** What the panel shows: the thread the address names, or else its tab (Threads by default). */

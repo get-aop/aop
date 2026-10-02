@@ -16,6 +16,12 @@ export interface LibraryItemUpdate {
   pinned?: 0 | 1;
   updated_at?: string;
   last_accessed_at?: string;
+  /** A new version of an artifact: the item serves its content from now on. */
+  sha256?: string;
+  size?: number;
+  mime_type?: string;
+  /** Restarts the retention clock. */
+  added_at?: string;
 }
 
 export interface LibraryRepository {
@@ -128,7 +134,16 @@ export const createLibraryRepository = (db: Kysely<Database>): LibraryRepository
       .where("source", "!=", "chat")
       .where("removed_at", "is", null)
       .executeTakeFirstOrThrow();
-    return Number(row.count);
+    // An artifact's earlier versions keep their files while the artifact lives.
+    const versions = await db
+      .selectFrom("library_artifact_versions")
+      .innerJoin("library_items", "library_items.id", "library_artifact_versions.item_id")
+      .select((eb) => eb.fn.countAll<number>().as("count"))
+      .where("library_items.project_id", "=", projectId)
+      .where("library_items.removed_at", "is", null)
+      .where("library_artifact_versions.sha256", "=", sha256)
+      .executeTakeFirstOrThrow();
+    return Number(row.count) + Number(versions.count);
   },
 
   chatRemoval: async (sessionId, attachmentFile) => {
@@ -145,10 +160,21 @@ export const createLibraryRepository = (db: Kysely<Database>): LibraryRepository
 
   usedBytes: async (projectId) => {
     const scope = projectId === null ? sql`1 = 1` : sql`project_id = ${projectId}`;
+    const versionScope =
+      projectId === null ? sql`1 = 1` : sql`library_items.project_id = ${projectId}`;
+    // An artifact's earlier versions are files on disk too, each blob still counted once.
     const { rows } = await sql<{ bytes: number | null }>`
       SELECT SUM(size) AS bytes FROM (
-        SELECT MAX(size) AS size FROM library_items
-          WHERE ${scope} AND removed_at IS NULL AND source != 'chat'
+        SELECT MAX(size) AS size FROM (
+          SELECT project_id, sha256, size FROM library_items
+            WHERE ${scope} AND removed_at IS NULL AND source != 'chat'
+          UNION ALL
+          SELECT library_items.project_id, library_artifact_versions.sha256,
+              library_artifact_versions.size
+            FROM library_artifact_versions
+            JOIN library_items ON library_items.id = library_artifact_versions.item_id
+            WHERE ${versionScope} AND library_items.removed_at IS NULL
+        )
           GROUP BY project_id, sha256
         UNION ALL
         SELECT size FROM library_items

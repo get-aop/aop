@@ -5,6 +5,7 @@ import { type Context, Hono } from "hono";
 import { createHostAgentCliService } from "./agent-cli/host-agent-cli-service.ts";
 import { createAgentCliRoutes } from "./agent-cli/routes.ts";
 import type { AgentCliService } from "./agent-cli/service.ts";
+import { createArtifactRoutes } from "./artifact/routes.ts";
 import { createAttachmentRoutes } from "./attachment/routes.ts";
 import { createAttachmentService } from "./attachment/service.ts";
 import { type AuthEnv, createApiAuth } from "./auth/api-auth.ts";
@@ -149,6 +150,7 @@ export const createApp = (deps: AppDependencies) => {
     createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
   );
   app.route("/api/projects", createLibraryRoutes(projects.library));
+  app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
   app.route(
     "/api/projects",
     createPullRequestListRoutes(

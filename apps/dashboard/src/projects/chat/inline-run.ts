@@ -78,7 +78,13 @@ export type BlockGroup =
 
 export const groupBlocks = (blocks: readonly MessageBlock[]): BlockGroup[] => {
   const groups: BlockGroup[] = [];
-  for (const [at, block] of blocks.entries()) addToGroups(groups, block, at);
+  // A tool call that made an artifact is drawn as the artifact's card instead.
+  const carded = new Set(
+    blocks.flatMap((block) => (block.type === "artifact" ? [block.toolId] : [])),
+  );
+  for (const [at, block] of blocks.entries()) {
+    if (!(block.type === "tool" && carded.has(block.id))) addToGroups(groups, block, at);
+  }
   return groups;
 };
 

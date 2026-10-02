@@ -10,6 +10,7 @@ import { CircleAlertIcon, CircleCheckIcon, ClockIcon, HandIcon } from "lucide-re
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Bubble } from "@/ui/bubble";
+import { ChatOriginContext } from "./artifact-links";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { useChatThread } from "./chat-context";
 import { MessageBlocks } from "./MessageBlocks";
@@ -79,6 +80,8 @@ export const AssistantRow = memo(function AssistantRow({
   // Fixed at mount: a reply that finishes in front of the person keeps rendering as it did.
   const watched = useRef(writing).current;
   const { renderSteer, untaken } = useSteers(message, steers);
+  const origin = useMemo(() => ({ threadId: message.threadId }), [message.threadId]);
+  const text = textOf(message);
   return (
     <div
       className="group pb-5"
@@ -103,20 +106,30 @@ export const AssistantRow = memo(function AssistantRow({
             This turn failed
           </p>
         ) : null}
-        <MessageBlocks
-          messageId={message.id}
-          blocks={blocks}
-          writing={!settled}
-          watched={watched}
-          renderSteer={renderSteer}
-        />
+        <ChatOriginContext.Provider value={origin}>
+          <MessageBlocks
+            messageId={message.id}
+            blocks={blocks}
+            writing={!settled}
+            watched={watched}
+            renderSteer={renderSteer}
+          />
+        </ChatOriginContext.Provider>
         {untaken.map((steer) => (
           <SteeredMessage key={steer.id} message={steer} state={writing ? "pending" : "missed"} />
         ))}
         {/* The meta's room is kept while the reply is written, so it ends without a jump. */}
         <div className="mt-1.5 min-h-6">
           {settled ? (
-            <MessageMeta timestamp={message.createdAt} copyText={textOf(message)} />
+            <MessageMeta
+              timestamp={message.createdAt}
+              copyText={text}
+              visualize={
+                text && !message.failed
+                  ? { projectId: message.projectId, messageId: message.id }
+                  : undefined
+              }
+            />
           ) : null}
         </div>
       </div>
@@ -257,7 +270,9 @@ export const ThreadReportRow = memo(function ThreadReportRow({
           data-testid="thread-report-text"
           className="mt-1.5 max-w-xl rounded-card border border-border bg-raised/60 px-3 py-2 text-text-muted"
         >
-          <ChatMarkdown content={message.text} />
+          <ChatOriginContext.Provider value={{ threadId: message.reportedThreadId }}>
+            <ChatMarkdown content={message.text} />
+          </ChatOriginContext.Provider>
         </div>
       ) : null}
     </div>

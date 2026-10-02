@@ -1,5 +1,6 @@
 import { type Kysely, sql } from "kysely";
 import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
+import { ARTIFACTS_V24_STATEMENTS } from "./artifacts-v24.ts";
 import { AUTO_CONTINUE_V14_STATEMENTS } from "./auto-continue-v14.ts";
 import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { COMPUTER_USE_V20_STATEMENTS } from "./computer-use-v20.ts";
@@ -60,6 +61,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 21, name: "thread-attention", statements: THREAD_ATTENTION_V21_STATEMENTS },
   { version: 22, name: "routines", statements: ROUTINES_V22_STATEMENTS },
   { version: 23, name: "library", statements: LIBRARY_V22_STATEMENTS },
+  { version: 24, name: "artifacts", statements: ARTIFACTS_V24_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>
