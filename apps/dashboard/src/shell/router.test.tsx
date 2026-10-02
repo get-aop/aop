@@ -14,6 +14,7 @@ const {
   projectPath,
   projectScreenPath,
   projectSettingsPath,
+  projectTabPath,
   routeProjectId,
   threadPath,
   useRoute,
@@ -124,11 +125,31 @@ describe("parseRoute", () => {
       { name: "thread", projectId: "p1", threadId: "t/1" },
       { name: "project", projectId: "p1", pullRequest: { repoId: "repo/x", number: 3 } },
       { name: "thread", projectId: "p1", threadId: "t1", pullRequest: { repoId: "r", number: 9 } },
+      { name: "project-tab", projectId: "p1", tab: "pull-requests" },
+      {
+        name: "project-tab",
+        projectId: "p1",
+        tab: "pull-requests",
+        pullRequest: { repoId: "r", number: 4 },
+      },
     ] as const;
     for (const screen of screens) {
       expect(parseRoute(projectScreenPath(screen))).toEqual(screen);
     }
     expect(projectScreenPath(screens[2])).toBe("/projects/p1/pulls/repo%2Fx/3");
+  });
+
+  test("a tab of the panel has its own address, and only a known tab does", () => {
+    expect(parseRoute("/projects/p1/pull-requests")).toEqual({
+      name: "project-tab",
+      projectId: "p1",
+      tab: "pull-requests",
+    });
+    expect(projectTabPath("p1", "pull-requests")).toBe("/projects/p1/pull-requests");
+    expect(parseRoute("/projects/p1/no-such-tab")).toBeNull();
+    expect(parseRoute("/projects/p1/pull-requests/extra")).toBeNull();
+    // Threads is the project screen itself, not a tab address.
+    expect(parseRoute("/projects/p1/threads")).toBeNull();
   });
 
   test("routeProjectId is the project a route belongs to, or null", () => {

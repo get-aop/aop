@@ -29,6 +29,12 @@ describe("openPullRequestView", () => {
     expect(window.location.pathname).toBe("/projects/p1/threads/t1/pulls/repo_2/8");
   });
 
+  test("keeps the panel's tab open beside it", () => {
+    window.history.pushState({}, "", "/projects/p1/pull-requests");
+    openPullRequestView(target);
+    expect(window.location.pathname).toBe("/projects/p1/pull-requests/pulls/repo_1/752");
+  });
+
   test("opens on another project's home: that project's thread is not this one's", () => {
     window.history.pushState({}, "", "/projects/p2/threads/t9");
     openPullRequestView(target);
@@ -56,6 +62,10 @@ describe("closePullRequestView", () => {
     window.history.pushState({}, "", "/projects/p1/pulls/repo_1/752");
     closePullRequestView();
     expect(window.location.pathname).toBe("/projects/p1");
+
+    window.history.pushState({}, "", "/projects/p1/pull-requests/pulls/repo_1/752");
+    closePullRequestView();
+    expect(window.location.pathname).toBe("/projects/p1/pull-requests");
   });
 
   test("does nothing where no pull request is shown", () => {
