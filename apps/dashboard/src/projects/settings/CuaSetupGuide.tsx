@@ -31,7 +31,7 @@ export const CuaHostStatus = ({
   const steps = cuaSetupSteps(status);
   return (
     <Frame tone={ready ? "ok" : "warn"} title={titleOf(status, chosen)} cua={cua}>
-      {ready ? null : <p className="text-text-muted">{status.detail}</p>}
+      {status.status === "not-ready" ? <p className="text-text-muted">{status.detail}</p> : null}
       <CheckList checks={status.checks} />
       {steps.length > 0 ? (
         <div data-testid="settings-cua-guide" className="flex flex-col gap-3 pt-1">
@@ -41,9 +41,9 @@ export const CuaHostStatus = ({
               : `Run these on the AOP host, ${status.host.name}, not on this device.`}{" "}
             <span className="font-normal text-text-muted">Then press Check again.</span>
           </p>
-          <ol className="flex list-decimal flex-col gap-3 pl-4">
-            {steps.map((step) => (
-              <SetupStep key={step.id} step={step} />
+          <ol className="flex flex-col gap-3">
+            {steps.map((step, index) => (
+              <SetupStep key={step.id} step={step} number={index + 1} />
             ))}
           </ol>
         </div>
@@ -85,22 +85,52 @@ const CheckList = ({ checks }: { checks: CuaCheck[] }) => (
   </ul>
 );
 
-const SetupStep = ({ step }: { step: CuaSetupStep }) => (
-  <li data-testid={`settings-cua-step-${step.id}`} className="flex flex-col gap-1.5">
-    <p className="font-medium text-text">{step.title}</p>
-    <p className="text-text-muted">{step.body}</p>
-    {step.commands.map((command) => (
-      <CopyCommand key={command.command} label={command.label} command={command.command} />
-    ))}
-    {step.places.length > 0 ? (
-      <ul className="flex flex-col gap-0.5 text-text-muted">
-        {step.places.map((place) => (
-          <li key={place}>Or by hand: {place}</li>
-        ))}
-      </ul>
-    ) : null}
+const SetupStep = ({ step, number }: { step: CuaSetupStep; number: number }) => (
+  <li data-testid={`settings-cua-step-${step.id}`} className="flex gap-2">
+    <span className="w-4 shrink-0 font-medium text-text tabular-nums">{number}.</span>
+    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <p className="font-medium text-text">{step.title}</p>
+      <p className="text-text-muted">
+        <WithCode text={step.body} />
+      </p>
+      {step.commands.map((command) => (
+        <CopyCommand key={command.command} label={command.label} command={command.command} />
+      ))}
+      {step.places.length > 0 ? (
+        <ul className="flex flex-col gap-0.5 text-text-muted">
+          {step.places.map((place) => (
+            <li key={place}>Or by hand: {place}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   </li>
 );
+
+// The guide's text marks commands and paths with backticks, as the docs do.
+const WithCode = ({ text }: { text: string }) => (
+  <>
+    {segmentsOf(text).map(({ at, part, code }) =>
+      code ? (
+        <code key={at} className="rounded bg-canvas px-1 text-[11.5px] text-text">
+          {part}
+        </code>
+      ) : (
+        <span key={at}>{part}</span>
+      ),
+    )}
+  </>
+);
+
+/** Splits on backticks; each part is keyed by where it starts in the text. */
+const segmentsOf = (text: string): { at: number; part: string; code: boolean }[] => {
+  let at = 0;
+  return text.split("`").map((part, position) => {
+    const segment = { at, part, code: position % 2 === 1 };
+    at += part.length + 1;
+    return segment;
+  });
+};
 
 const CopyCommand = ({ label, command }: { label: string; command: string }) => {
   const [copied, setCopied] = useState(false);

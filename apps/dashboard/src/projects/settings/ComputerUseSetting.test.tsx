@@ -158,7 +158,10 @@ describe("ComputerUseSetting", () => {
     const steps = ["install", "start", "permissions", "config"].map((id) =>
       screen.getByTestId(`settings-cua-step-${id}`),
     );
-    expect(steps).toHaveLength(4);
+    expect(steps.map((step) => step.textContent?.slice(0, 2))).toEqual(["1.", "2.", "3.", "4."]);
+    // Backticked words in a step's text are shown as code, not with their backticks.
+    expect(steps[0]?.querySelector("p code")?.textContent).toBe("cua-driver");
+    expect(steps[0]?.textContent).not.toContain("`");
     const commands = screen.getAllByTestId("settings-cua-command").map((c) => c.textContent);
     expect(commands).toEqual([
       CUA_COMMANDS.install,
