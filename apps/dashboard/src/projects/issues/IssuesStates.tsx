@@ -1,4 +1,4 @@
-import type { IssueList, IssueStateFilter } from "@aop/common";
+import type { IssueList, IssueSourceStatus, IssueStateFilter } from "@aop/common";
 import { CircleDotIcon, SearchXIcon, TriangleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/ui/button";
@@ -72,9 +72,17 @@ export const IssuesError = ({ message, onRetry }: { message: string; onRetry: ()
 
 const STATE_WORD: Record<IssueStateFilter, string> = { open: "open ", closed: "closed ", all: "" };
 
+/** A source that is not there at all, as opposed to one that is there and failing. */
+const UNATTACHED: ReadonlySet<IssueSourceStatus["status"]> = new Set([
+  "no-github-remote",
+  "not-configured",
+]);
+
 /**
  * Nothing to list. With no source at all (no GitHub repository, no Linear) it says how to add
- * one; otherwise it is just that: no issues in this state.
+ * one. A source that is there but cannot be read (gh signed out, an outage, a refused key) has
+ * its notice above, so nothing more is said here; otherwise it is just that: no issues in this
+ * state.
  */
 export const IssuesEmpty = ({
   list,
@@ -87,8 +95,7 @@ export const IssuesEmpty = ({
   owner: boolean;
   onConnectLinear: () => void;
 }) => {
-  const reading = list.sources.some((source) => source.status === "ok");
-  if (!reading) {
+  if (!list.sources.some((source) => !UNATTACHED.has(source.status))) {
     return (
       <State
         testId="issues-no-sources"
@@ -112,6 +119,7 @@ export const IssuesEmpty = ({
       </State>
     );
   }
+  if (!list.sources.some((source) => source.status === "ok")) return null;
   return (
     <State testId="issues-empty" icon={<CircleDotIcon />} title={`No ${STATE_WORD[state]}issues`}>
       {state === "open" ? "Nothing open in this project's repositories right now." : null}

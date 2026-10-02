@@ -264,6 +264,9 @@ describe("the Issues tab's notices and empty states", () => {
     );
     expect(screen.getByTestId("issues-notice-github-auth").textContent).toContain("gh auth login");
     expect(screen.getByTestId("issues-copy-gh-login")).toBeTruthy();
+    // The repository is attached, so the tab must not also say to attach one.
+    expect(screen.queryByTestId("issues-no-sources") === null).toBe(true);
+    expect(screen.queryByTestId("issues-empty") === null).toBe(true);
   });
 
   test("a missing gh says to install it", async () => {
