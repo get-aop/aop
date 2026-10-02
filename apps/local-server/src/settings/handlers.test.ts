@@ -30,6 +30,8 @@ describe("settings/handlers", () => {
         { key: "chat_global_instructions", value: "" },
         { key: "display_name", value: "" },
         { key: "max_concurrent_runs", value: "4" },
+        { key: "routine_max_active_per_project", value: "10" },
+        { key: "routine_min_interval_minutes", value: "15" },
         { key: "update_check", value: "true" },
         { key: "update_auto_apply", value: "false" },
       ]);
