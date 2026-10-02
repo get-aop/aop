@@ -23,6 +23,7 @@ import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createHostIssueService } from "./issues/host-issue-service.ts";
 import { createIssueRoutes } from "./issues/routes.ts";
 import type { IssueService } from "./issues/service.ts";
+import { createLibraryRoutes } from "./library/routes.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
 import { createMcpSecretRoutes } from "./mcp/secret-routes.ts";
 import { createProjectRoutes } from "./project/routes.ts";
@@ -145,6 +146,7 @@ export const createApp = (deps: AppDependencies) => {
     "/api/projects",
     createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
   );
+  app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api", createThreadRoutes(projects));
   app.route("/api", createSuggestionRoutes(projects));
   app.route("/api", createPullRequestWatchRoutes(projects));

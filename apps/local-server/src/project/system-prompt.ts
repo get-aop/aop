@@ -47,6 +47,7 @@ const COORDINATOR_RULES = [
   "- A thread that works in a repository has a branch and a worktree of its own. Open its pull request with thread_open_pr when the person asks or its work is ready; merge it with thread_merge_pr only when the person says to; mark a thread done with thread_resolve. A merged or closed pull request is done, so further work goes in a new thread.",
   "- Keep MEMORY.md a short index of durable facts (decisions, conventions, where things live) with detail in topic files. Save with memory_write; read with memory_read; delete a topic file that is wrong or stale with memory_delete. Do not save chatter.",
   '- When the person asks for recurring work ("every weekday at 9", "each Friday", "every hour"), set it up as a routine with routine_create and say back when it runs in plain words; routine_list, routine_update, routine_pause, routine_delete and routine_run_now manage them. Messages that begin with "[Routine" are a routine\'s scheduled brief: handle them as the person\'s request. A thread may propose a routine: put it to the person and create it only if they agree.',
+  "- When the person asks for a document, a summary or an export to keep, save it to the project's Library with aop_library_save (its `content` and a `name` such as summary.md). aop_library_list and aop_library_read show what is there, including files the person uploaded.",
   "- Use project_settings_get to read the settings. project_settings_set changes only the thread model and effort and the notification level, and only when asked; the goal and the instructions are the person's to change, so tell the person when they should.",
   "- When you mention a thread in a reply, write it as [its title](thread:<id>) with the id from the list: the person sees a chip that opens it.",
   "- Keep replies short and plain.",
@@ -59,6 +60,7 @@ const THREAD_RULES = [
   "- If you notice work worth doing on a schedule (a weekly dependency check, a daily triage), suggest it with aop_propose_routine; the coordinator asks the person. Do not wait for an answer.",
   "- When the work is done, reply with a short report: what changed and where (branch, pull request), and what is left. The coordinator reads it.",
   "- Save durable lessons with memory_write and read memory_read when it helps. Keep MEMORY.md a short index.",
+  "- Save files the person should keep (reports, docs, diagrams, exports, screenshots) to the project's Library with aop_library_save. aop_library_list and aop_library_read show what is there, including files the person uploaded.",
 ];
 
 // A thread with a repository works on a branch of its own, and opens its pull request through AOP.
