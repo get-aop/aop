@@ -75,11 +75,23 @@ describe("contentSecurityPolicy", () => {
 
     expect(policy).toContain("script-src 'self'");
     expect(policy).toContain("connect-src 'self' https://mac.tail1234.ts.net");
-    expect(policy).toContain("img-src 'self' data: blob: https://mac.tail1234.ts.net");
+    expect(policy).toContain(
+      "img-src 'self' data: blob: https://mac.tail1234.ts.net https://avatars.githubusercontent.com https://public.linear.app;",
+    );
     expect(policy).toContain("object-src 'none'");
     // A PDF artifact is framed from memory; no page of anywhere else can be.
     expect(policy).toContain("frame-src blob:;");
     expect(policy).not.toContain("unsafe-eval");
+  });
+
+  test("lets the dashboard show GitHub and Linear avatars but no other outside image", () => {
+    const imgSrc = contentSecurityPolicy("dashboard", null)
+      .split("; ")
+      .find((directive) => directive.startsWith("img-src"));
+
+    expect(imgSrc).toBe(
+      "img-src 'self' data: blob: https://avatars.githubusercontent.com https://public.linear.app",
+    );
   });
 
   test("gives the dashboard no network at all when no host is chosen", () => {
@@ -92,6 +104,7 @@ describe("contentSecurityPolicy", () => {
     expect(policy).toContain("connect-src 'self';");
     expect(policy).not.toContain("mac.tail1234.ts.net");
     expect(policy).not.toContain("blob:");
+    expect(policy).not.toContain("avatars.githubusercontent.com");
   });
 });
 

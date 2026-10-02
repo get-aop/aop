@@ -46,8 +46,8 @@ export const resolveAppRequest = (rawUrl: string, roots: AppRoots): ResolvedAppF
 };
 
 /**
- * What each page may load. The dashboard may talk to its host, load its images and frame a PDF
- * it holds in memory, nothing else; the desktop screen talks to the app over IPC and needs no network at all. Scripts come
+ * What each page may load. The dashboard may talk to its host, load its images and the avatars
+ * of the people on GitHub and Linear, and frame a PDF it holds in memory, nothing else; the desktop screen talks to the app over IPC and needs no network at all. Scripts come
  * only from the app itself.
  */
 export const contentSecurityPolicy = (surface: AppSurface, hostOrigin: string | null): string => {
@@ -57,7 +57,7 @@ export const contentSecurityPolicy = (surface: AppSurface, hostOrigin: string | 
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
-    `img-src 'self' data:${surface === "dashboard" ? ` blob:${host}` : ""}`,
+    `img-src 'self' data:${surface === "dashboard" ? ` blob:${host} ${AVATAR_ORIGINS}` : ""}`,
     `connect-src 'self'${host}`,
     "object-src 'none'",
     "base-uri 'none'",
@@ -66,6 +66,11 @@ export const contentSecurityPolicy = (surface: AppSurface, hostOrigin: string | 
     "form-action 'none'",
   ].join("; ");
 };
+
+// The PR View, the PRs tab and the Issues tab show people's pictures straight from these hosts.
+// Only the avatar hosts: any other image (one linked in a pull request's markdown) stays blocked,
+// so whoever wrote it cannot tell when, or from where, it was read.
+const AVATAR_ORIGINS = "https://avatars.githubusercontent.com https://public.linear.app";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",

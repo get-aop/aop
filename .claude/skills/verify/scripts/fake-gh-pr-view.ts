@@ -21,7 +21,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { type FixturePullRequest, fixturePullRequests } from "./pr-view-fixtures.ts";
+import {
+  FIXTURE_AVATARS,
+  type FixturePullRequest,
+  fixturePullRequests,
+} from "./pr-view-fixtures.ts";
 
 const dir = process.env.FAKE_GH_DIR ?? join(process.env.AOP_HOME ?? ".", "fake-gh");
 mkdirSync(dir, { recursive: true });
@@ -65,7 +69,7 @@ const http = (status: number, body: unknown, headers: Record<string, string> = {
 };
 
 const nodes = <T>(items: T[]) => ({ nodes: items });
-const user = (login: string) => ({ login, avatarUrl: null });
+const user = (login: string) => ({ login, avatarUrl: FIXTURE_AVATARS[login] ?? null });
 const at = (index: number) =>
   new Date(Date.parse("2026-10-01T08:00:00Z") + index * 60_000).toISOString();
 
@@ -135,7 +139,13 @@ const commitOf = (commit: FixturePullRequest["commits"][number]) => ({
   messageHeadline: commit.headline,
   committedDate: commit.at,
   url: `https://github.com/${REPO}/commit/${commit.oid}`,
-  authors: nodes([{ name: commit.author, user: user(commit.author) }]),
+  authors: nodes([
+    { name: commit.author, user: user(commit.author) },
+    ...(commit.coAuthors ?? []).map(({ name, login }) => ({
+      name,
+      user: login ? user(login) : null,
+    })),
+  ]),
   statusCheckRollup: commit.rollup ? { state: commit.rollup } : null,
 });
 

@@ -61,11 +61,32 @@ export interface FixturePullRequest {
     resolved: boolean;
     comments: { author: string; body: string }[];
   }[];
-  commits: { oid: string; headline: string; at: string; author: string; rollup: string | null }[];
+  commits: {
+    oid: string;
+    headline: string;
+    at: string;
+    author: string;
+    /** `Co-authored-by` trailers; `login: null` is an email no GitHub account claims. */
+    coAuthors?: { name: string; login: string | null }[];
+    rollup: string | null;
+  }[];
   files: FixtureFile[];
   /** Rules on the base branch (`rules/branches/main`). */
   rules: unknown[];
 }
+
+/**
+ * Real avatars of public accounts, so a browser check shows real pictures. `bob`'s address
+ * answers with a web page, not an image (a picture that fails to load); anyone not listed has
+ * no avatar at all.
+ */
+export const FIXTURE_AVATARS: Record<string, string> = {
+  "fixture-owner": "https://avatars.githubusercontent.com/u/583231?v=4",
+  ada: "https://avatars.githubusercontent.com/u/1?v=4",
+  carol: "https://avatars.githubusercontent.com/u/2?v=4",
+  claude: "https://avatars.githubusercontent.com/u/81847?v=4",
+  bob: "https://avatars.githubusercontent.com/u/not-a-user",
+};
 
 const AT = "2026-10-01T10:00:00Z";
 const sha = (seed: string) => seed.repeat(40).slice(0, 40);
@@ -209,6 +230,7 @@ export const fixturePullRequests = (): FixturePullRequest[] => [
         headline: "Use fastTotal at checkout",
         at: "2026-10-01T09:30:00Z",
         author: "ada",
+        coAuthors: [{ name: "Claude", login: "claude" }],
         rollup: "SUCCESS",
       },
       {
@@ -216,6 +238,7 @@ export const fixturePullRequests = (): FixturePullRequest[] => [
         headline: "Cover the cache in tests",
         at: "2026-10-01T09:45:00Z",
         author: "ada",
+        coAuthors: [{ name: "Grace Hopper", login: null }],
         rollup: "SUCCESS",
       },
     ],
