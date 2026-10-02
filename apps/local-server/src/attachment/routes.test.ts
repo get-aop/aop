@@ -146,6 +146,12 @@ describe("a message to the coordinator with images", () => {
     expect(served.headers.get("content-type")).toBe("image/png");
     expect(served.headers.get("x-content-type-options")).toBe("nosniff");
     expect(Buffer.from(await served.arrayBuffer()).equals(Buffer.from(fakePng(321)))).toBe(true);
+    // The Library can remove a sent image, so the browser revalidates instead of caching it.
+    expect(served.headers.get("cache-control")).toBe("private, no-cache");
+    const again = await s.app.request(`/api${path}`, {
+      headers: { "If-None-Match": served.headers.get("etag") ?? "" },
+    });
+    expect(again.status).toBe(304);
   });
 
   test("may be images alone", async () => {

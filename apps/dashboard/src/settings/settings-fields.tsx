@@ -253,7 +253,9 @@ const LineInput = ({ id, meta, value, invalid, onChange }: SettingInputProps) =>
       aria-describedby={invalid ? `${id}-error` : undefined}
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className={`${meta.type === "number" ? "w-24 text-right" : "w-52"} ${meta.suffix ? "pr-6" : ""}`}
+      className={meta.type === "number" ? "w-24 text-right" : "w-52"}
+      // The suffix sits inside the field, so the value stops short of it, however long it is.
+      style={meta.suffix ? { paddingRight: `calc(${meta.suffix.length}ch + 0.875rem)` } : undefined}
     />
     {meta.suffix ? (
       <span className="text-[11.5px] pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-text-subtle">

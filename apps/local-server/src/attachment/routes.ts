@@ -34,14 +34,17 @@ export const createAttachmentRoutes = (attachments: AttachmentService) => {
       c.req.param("fileName"),
     );
     if (!result.success) return attachmentError(c, result.error);
-    return new Response(Bun.file(result.path), {
-      headers: {
-        "Content-Type": result.mimeType,
-        // A sent image never changes; its name is its message's.
-        "Cache-Control": "private, max-age=31536000, immutable",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
+    const file = Bun.file(result.path);
+    // A sent image never changes, but the Library can remove it: the browser asks again each
+    // time and gets a 304 while it is there, so a removed one shows as expired, not from cache.
+    const etag = `"${file.size.toString(36)}-${file.lastModified.toString(36)}"`;
+    const headers = {
+      "Cache-Control": "private, no-cache",
+      ETag: etag,
+      "X-Content-Type-Options": "nosniff",
+    };
+    if (c.req.header("If-None-Match") === etag) return new Response(null, { status: 304, headers });
+    return new Response(file, { headers: { ...headers, "Content-Type": result.mimeType } });
   });
 
   return routes;

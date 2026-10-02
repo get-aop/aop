@@ -37,6 +37,9 @@ export const loadApiImage = (path: string): Promise<string> => {
 
 const fetchImage = async (path: string): Promise<string> => {
   const response = await fetch(apiUrl(path), {
+    // Revalidated, never taken from cache unasked: the Library may have removed the image since,
+    // and older hosts sent images as immutable.
+    cache: "no-cache",
     credentials: isRemoteHost() ? "include" : "same-origin",
     headers: authHeaders(),
   });

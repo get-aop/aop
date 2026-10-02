@@ -40,9 +40,9 @@ export const LibraryPreview = ({
         data-kind={kindOf(item)}
         className="flex max-h-[90vh] w-[min(960px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden p-0"
       >
-        <header className="flex items-start gap-3 border-b border-border px-5 py-4 pr-12">
+        <header className="flex flex-wrap items-start gap-3 border-b border-border px-5 py-4 pr-12">
           <FileKindIcon kind={kindOf(item)} className="mt-0.5 size-5" />
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-1 basis-64 flex-col gap-1.5">
             <DialogTitle className="truncate text-[15px] font-semibold" title={item.name}>
               {item.name}
             </DialogTitle>
