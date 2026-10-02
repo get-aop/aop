@@ -68,6 +68,7 @@ If a message to the coordinator comes back with `Runtime exited with code ...`, 
 | [Running the host](./docs/HOST.md) | Pairing devices, device tokens, reaching the host with `tailscale serve`, and the desktop app |
 | [Threads and git](./docs/THREADS.md) | A thread's worktree and branch, its pull request, the pull request watcher, and what is cleaned up when |
 | [Run scheduling](./docs/SCHEDULING.md) | The cap on running thread turns and what happens on a usage limit |
+| [Routines](./docs/ROUTINES.md) | Recurring work on a schedule: schedules and DST, missed runs, caps, and the coordinator's routine tools |
 | [Runtimes](./docs/RUNTIMES.md) | The supported agent CLI and where its state lives |
 | [MCP](./docs/MCP.md) | The tools the coordinator and threads call, and how the endpoint is authenticated |
 | [CLI](./apps/cli/README.md) | Commands of the `aop` HTTP client |

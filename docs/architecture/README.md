@@ -14,7 +14,7 @@ A project holds a goal, instructions, attached repositories, memory files, and t
 
 - The coordinator is hermetic. It runs with the AOP tools only and does no work itself: it starts, steers, stops and reports on threads, opens and merges their pull requests, proposes threads, and reads and writes memory. See [MCP](../MCP.md).
 - A thread reports back to the coordinator when it finishes, and asks the person when it needs a decision. A thread is `waiting-on-you`, `working`, `queued`, `rate-limited`, `ready-for-review`, `landing`, `idle` or `resolved`.
-- What every session is told about its project is in [What a project session is told](./project-context.md). The worktree, the pull request and the pull request watcher are in [Threads and git](../THREADS.md). The cap on running turns and usage limits are in [Run scheduling](../SCHEDULING.md).
+- What every session is told about its project is in [What a project session is told](./project-context.md). The worktree, the pull request and the pull request watcher are in [Threads and git](../THREADS.md). The cap on running turns and usage limits are in [Run scheduling](../SCHEDULING.md), and work on a schedule in [Routines](../ROUTINES.md).
 
 ## Supported runtimes
 

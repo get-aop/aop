@@ -55,5 +55,5 @@ A line takes a review comment through the `+` in its gutter. Comments queue in t
 ## Where it is not finished
 
 - A thread's model and effort are read-only chips: a thread keeps the runtime it started with, and the host has no route to change one.
-- The Library and Pull requests tabs of the video's Overview and Routines are not built: nothing on the host produces documents (`doc` artifacts) or lists pull requests across threads yet.
+- The Library and Pull requests tabs of the video's Overview are not built: nothing on the host produces documents (`doc` artifacts) or lists pull requests across threads yet. The Routines tab is described in [Routines](../ROUTINES.md).
 - Review comments queue per browser, not on the host.

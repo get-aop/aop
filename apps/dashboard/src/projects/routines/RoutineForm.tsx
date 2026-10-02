@@ -43,6 +43,8 @@ export type RoutineFormMode =
 const USE_DEFAULT = "__default";
 const EVERY_HOURS = [1, 2, 3, 4, 6, 8, 12, 24];
 const PREVIEW_DELAY_MS = 250;
+// Two halves that wrap their words rather than run past a narrow panel.
+const TARGET_ITEM_CLASS = "h-auto min-h-9 min-w-0 self-stretch px-3 py-1.5 whitespace-normal";
 
 export const RoutineFormDialog = ({
   project,
@@ -315,7 +317,7 @@ const KindFields = ({
       type="time"
       aria-label="Time"
       data-testid="routine-time"
-      className="w-32"
+      className="w-36 shrink-0"
       value={draft.time}
       onChange={(event) => set({ time: event.target.value })}
     />
@@ -361,13 +363,14 @@ const TargetFields = ({
         variant="outline"
         aria-label="Each run"
         data-testid="routine-target"
+        className="grid w-full grid-cols-2"
         value={draft.target}
         onValueChange={(target) => target && set({ target: target as RoutineDraft["target"] })}
       >
-        <ToggleGroupItem value="thread" className="px-3">
+        <ToggleGroupItem value="thread" className={TARGET_ITEM_CLASS}>
           Starts a thread
         </ToggleGroupItem>
-        <ToggleGroupItem value="coordinator" className="px-3">
+        <ToggleGroupItem value="coordinator" className={TARGET_ITEM_CLASS}>
           Messages the coordinator
         </ToggleGroupItem>
       </ToggleGroup>
@@ -397,7 +400,7 @@ const TargetFields = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={USE_DEFAULT}>Project's thread model</SelectItem>
+              <SelectItem value={USE_DEFAULT}>Default model</SelectItem>
               {models.map((model) => (
                 <SelectItem key={model} value={model}>
                   {model}
@@ -416,7 +419,7 @@ const TargetFields = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={USE_DEFAULT}>Project's thread effort</SelectItem>
+              <SelectItem value={USE_DEFAULT}>Default effort</SelectItem>
               {efforts.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
