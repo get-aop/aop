@@ -39,7 +39,11 @@ export const outlineOf = (reply: string): string => {
     }
   }
   const kept = items.filter((item) => item.trim() !== "-").slice(0, MAX_ITEMS);
-  return ["# Outline", "", ...(kept.length > 0 ? kept : ["- (The reply has no text to outline.)"])].join("\n");
+  return [
+    "# Outline",
+    "",
+    ...(kept.length > 0 ? kept : ["- (The reply has no text to outline.)"]),
+  ].join("\n");
 };
 
 const bullet = (depth: number, text: string): string =>

@@ -48,7 +48,9 @@ describe("artifact marker", () => {
   test("is null without a marker, with broken JSON, or with a wrong shape", () => {
     expect(parseArtifactMarker("Saved the file")).toBeNull();
     expect(parseArtifactMarker(`${ARTIFACT_RESULT_MARKER}{oops`)).toBeNull();
-    expect(parseArtifactMarker(`${ARTIFACT_RESULT_MARKER}{"artifactId":"x","version":0}`)).toBeNull();
+    expect(
+      parseArtifactMarker(`${ARTIFACT_RESULT_MARKER}{"artifactId":"x","version":0}`),
+    ).toBeNull();
     expect(
       parseArtifactMarker(formatArtifactMarker({ ...ref, kind: "exe" as unknown as "json" })),
     ).toBeNull();

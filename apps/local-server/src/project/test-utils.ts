@@ -15,6 +15,7 @@ import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { ChatSessionKind, ChatSessionsTable, Database } from "../db/schema.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import type { RunGh } from "../github-cli/index.ts";
+import { createArtifactRoutes } from "../artifact/routes.ts";
 import { createLibraryRoutes } from "../library/routes.ts";
 import { createAuthenticatedMcpUrl } from "../mcp/auth.ts";
 import { createMcpRoutes } from "../mcp/routes.ts";
@@ -231,6 +232,7 @@ export const createProjectStack = async (
   app.route("/api/projects", createProjectRoutes(services));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createLibraryRoutes(services.library));
+  app.route("/api/projects", createArtifactRoutes(services.artifacts, services.visualize));
   app.route("/api", createThreadRoutes(services));
   app.route("/api", createSuggestionRoutes(services));
   app.route("/api", createPullRequestWatchRoutes(services));

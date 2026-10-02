@@ -49,11 +49,18 @@ export const createArtifactRoutes = (artifacts: ArtifactService, visualize: Visu
   });
 
   routes.post("/:projectId/workspace-files/save", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as { sessionId?: unknown; path?: unknown } | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      sessionId?: unknown;
+      path?: unknown;
+    } | null;
     if (typeof body?.sessionId !== "string" || typeof body.path !== "string") {
       return artifactError(c, { code: "INVALID_INPUT", message: "Give a sessionId and a path" });
     }
-    const result = await artifacts.saveWorkspaceFile(c.req.param("projectId"), body.sessionId, body.path);
+    const result = await artifacts.saveWorkspaceFile(
+      c.req.param("projectId"),
+      body.sessionId,
+      body.path,
+    );
     return result.success
       ? c.json({ artifact: result.artifact }, 201)
       : artifactError(c, result.error);
@@ -101,7 +108,8 @@ const fileResponse = (
       "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(name)}`,
       "Cache-Control": "private, no-cache",
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+      "Content-Security-Policy":
+        "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
       // What the view needs to draw it; the Content-Type is deliberately inert.
       "X-Artifact-Mime-Type": mimeType,
     },

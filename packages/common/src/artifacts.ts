@@ -152,7 +152,9 @@ export const formatArtifactMarker = (ref: ArtifactResultRef): string =>
 
 /** The artifact a tool result's text names, or null when it names none or names it wrongly. */
 export const parseArtifactMarker = (text: string): ArtifactResultRef | null => {
-  const line = text.split("\n").findLast((candidate) => candidate.startsWith(ARTIFACT_RESULT_MARKER));
+  const line = text
+    .split("\n")
+    .findLast((candidate) => candidate.startsWith(ARTIFACT_RESULT_MARKER));
   if (!line) return null;
   try {
     const parsed = ArtifactPartSchema.omit({ type: true, toolId: true }).safeParse(

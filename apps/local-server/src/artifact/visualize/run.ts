@@ -63,7 +63,9 @@ export const createVisualizeModel =
       }
       return { text, durationMs: Date.now() - started, costUsd: result.usage?.costUsd ?? null };
     } catch (error) {
-      log.warn("Visualize run failed", { error: error instanceof Error ? error.message : String(error) });
+      log.warn("Visualize run failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     } finally {
       await rm(logFilePath, { force: true });

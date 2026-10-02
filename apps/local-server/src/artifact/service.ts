@@ -63,9 +63,15 @@ export interface ArtifactSaved {
 }
 
 export interface ArtifactService {
-  create: (session: ChatSession, input: CreateArtifactInput) => Promise<ArtifactResult<ArtifactSaved>>;
+  create: (
+    session: ChatSession,
+    input: CreateArtifactInput,
+  ) => Promise<ArtifactResult<ArtifactSaved>>;
   /** A new version; a Library file that is not an artifact yet becomes one, its file version 1. */
-  update: (session: ChatSession, input: UpdateArtifactInput) => Promise<ArtifactResult<ArtifactSaved>>;
+  update: (
+    session: ChatSession,
+    input: UpdateArtifactInput,
+  ) => Promise<ArtifactResult<ArtifactSaved>>;
   /** Any Library item as the view reads it: an artifact with its versions, or a file as one. */
   get: (projectId: string, itemId: string) => Promise<ArtifactResult<{ artifact: ArtifactDetail }>>;
   /** Where a version's bytes are, for the content route. */
@@ -75,10 +81,7 @@ export interface ArtifactService {
     version: number,
   ) => Promise<ArtifactResult<{ path: string; mimeType: string; name: string }>>;
   /** The diagram Visualize drew from a reply, if one is still in the Library. */
-  byOriginMessage: (
-    projectId: string,
-    messageId: string,
-  ) => Promise<ArtifactDetail | null>;
+  byOriginMessage: (projectId: string, messageId: string) => Promise<ArtifactDetail | null>;
   /**
    * A file in the workspace of one of the project's chats (a path a reply linked), read under the
    * rules an agent's save follows: inside the workspace, never `.git`, within the size limit.
@@ -124,12 +127,20 @@ export const createArtifactService = (
       const read = await readAgentFile(session.workspace_path, path);
       if (!read.success) return fail(read.error);
       const name = baseName(path);
-      return { success: true, bytes: read.bytes, mimeType: libraryMimeType(name, read.bytes), name };
+      return {
+        success: true,
+        bytes: read.bytes,
+        mimeType: libraryMimeType(name, read.bytes),
+        name,
+      };
     },
     saveWorkspaceFile: async (projectId, sessionId, path) => {
       const session = await sessionOf(env, projectId, sessionId);
       if (!session) return fail({ code: "NO_WORKSPACE" });
-      return create(env, session, { title: baseName(path).slice(0, ARTIFACT_LIMITS.titleMaxLength), path });
+      return create(env, session, {
+        title: baseName(path).slice(0, ARTIFACT_LIMITS.titleMaxLength),
+        path,
+      });
     },
   };
 };
@@ -328,7 +339,8 @@ const versionContent = async (
   const stored = (await env.artifacts.versions(itemId)).find((at) => at.version === version);
   if (!stored) {
     // A file that is not an artifact is its one version, served as the Library serves it.
-    if (version !== 1 || (await env.artifacts.get(itemId))) return fail({ code: "ARTIFACT_NOT_FOUND" });
+    if (version !== 1 || (await env.artifacts.get(itemId)))
+      return fail({ code: "ARTIFACT_NOT_FOUND" });
     const content = await env.library.content(projectId, itemId);
     return content.success ? content : fail({ code: "ARTIFACT_NOT_FOUND" });
   }

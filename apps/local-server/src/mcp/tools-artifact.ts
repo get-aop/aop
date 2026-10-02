@@ -7,8 +7,8 @@ import {
 } from "@aop/common";
 import { z } from "zod";
 import type { ArtifactError, ArtifactSaved } from "../artifact/service.ts";
-import { describeLibraryError } from "./tools-library.ts";
 import { defineTool, McpToolError, type McpToolResult } from "./registry.ts";
+import { describeLibraryError } from "./tools-library.ts";
 
 /**
  * Artifacts, for the coordinator and every thread: documents made for the person that the chat
@@ -86,7 +86,12 @@ export const artifactUpdateTool = defineTool({
     .object({
       artifactId: z.string().min(1).describe("The artifact's id."),
       ...body,
-      title: z.string().min(1).max(ARTIFACT_LIMITS.titleMaxLength).optional().describe("A new title."),
+      title: z
+        .string()
+        .min(1)
+        .max(ARTIFACT_LIMITS.titleMaxLength)
+        .optional()
+        .describe("A new title."),
       kind,
       note: z
         .string()
@@ -128,7 +133,10 @@ const toolError = (error: ArtifactError): McpToolError => {
     case "ARTIFACT_NOT_FOUND":
       return new McpToolError("No such artifact or Library file in this project", error.code);
     case "INVALID_TITLE":
-      return new McpToolError(`Give a title of 1 to ${ARTIFACT_LIMITS.titleMaxLength} characters`, error.code);
+      return new McpToolError(
+        `Give a title of 1 to ${ARTIFACT_LIMITS.titleMaxLength} characters`,
+        error.code,
+      );
     case "INVALID_CONTENT":
     case "MESSAGE_NOT_FOUND":
       return new McpToolError(error.message, error.code);

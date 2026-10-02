@@ -21,7 +21,7 @@ export const VISUALIZE_SYSTEM_PROMPT = [
 const TYPE_INSTRUCTIONS: Record<VisualizeType, string> = {
   auto: "Choose the Mermaid diagram that fits the reply best: `flowchart TD` for steps, decisions or a process; `sequenceDiagram` for parties talking over time; `mindmap` for a topic and its branches; `timeline` for dated events.",
   flowchart:
-    "Draw a Mermaid flowchart. Start with `flowchart TD`, or `flowchart LR` for a short chain of steps. Use {\"...\"} for decisions and label their edges: A -->|Yes| B.",
+    'Draw a Mermaid flowchart. Start with `flowchart TD`, or `flowchart LR` for a short chain of steps. Use {"..."} for decisions and label their edges: A -->|Yes| B.',
   sequence:
     "Draw a Mermaid sequence diagram. Start with `sequenceDiagram`. Declare each party as `participant A as Name` with a plain name, and write messages as `A->>B: text` with no colon in the text.",
   mindmap:
@@ -71,7 +71,9 @@ export const extractCandidate = (text: string, type: VisualizeType): VisualizeCa
 
 const isMarkdownTable = (source: string): boolean => {
   const lines = source.split("\n").map((line) => line.trim());
-  return lines.some((line, index) => line.startsWith("|") && /^\|?\s*:?-{3,}/.test(lines[index + 1] ?? ""));
+  return lines.some(
+    (line, index) => line.startsWith("|") && /^\|?\s*:?-{3,}/.test(lines[index + 1] ?? ""),
+  );
 };
 
 const clip = (text: string, max: number): string =>

@@ -81,7 +81,8 @@ export const createVisualizeService = (
       if (!reply.success) return reply;
       const content = input.result === "outline" ? outlineOf(reply.text) : input.candidate.source;
       const kind = input.result === "diagram" ? input.candidate.kind : "markdown";
-      const note = input.result === "outline" ? "Outline (no valid diagram)" : TYPE_NOTES[input.type];
+      const note =
+        input.result === "outline" ? "Outline (no valid diagram)" : TYPE_NOTES[input.type];
       const existing = await artifacts.byOriginMessage(projectId, input.messageId);
       const saved = existing
         ? await artifacts.update(reply.session, {
@@ -119,7 +120,9 @@ const replyOf = async (
   ctx: LocalServerContext,
   projectId: string,
   messageId: string,
-): Promise<{ success: true; session: ChatSession; text: string } | { success: false; error: ArtifactError }> => {
+): Promise<
+  { success: true; session: ChatSession; text: string } | { success: false; error: ArtifactError }
+> => {
   const message = await ctx.chatSessionRepository.getMessage(messageId);
   const session = message ? await ctx.chatSessionRepository.getById(message.session_id) : null;
   if (!message || !session || session.project_id !== projectId) {
@@ -134,9 +137,7 @@ const replyOf = async (
 // The diagram's title: the reply's first heading, else its first words.
 const titleOf = (reply: string): string => {
   const heading = /^#{1,6}\s+(.+)$/m.exec(reply)?.[1];
-  const words = (heading ?? reply.replace(/[#*_`>[\]()]/g, " "))
-    .replace(/\s+/g, " ")
-    .trim();
+  const words = (heading ?? reply.replace(/[#*_`>[\]()]/g, " ")).replace(/\s+/g, " ").trim();
   const short = words.length > 60 ? `${words.slice(0, 59).trimEnd()}…` : words;
   return `Diagram: ${short || "reply"}`;
 };
