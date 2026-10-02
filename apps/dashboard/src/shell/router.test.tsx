@@ -164,6 +164,12 @@ describe("parseRoute", () => {
       threadId: "t1",
       browser: true,
     });
+    expect(parseRoute("/projects/p1/issues/browser")).toEqual({
+      name: "project-tab",
+      projectId: "p1",
+      tab: "issues",
+      browser: true,
+    });
     // A thread whose id happens to be "browser" is still that thread.
     expect(parseRoute("/projects/p1/threads/browser")).toEqual({
       name: "thread",
@@ -181,6 +187,7 @@ describe("parseRoute", () => {
     for (const screen of [
       { name: "project", projectId: "p 1", browser: true },
       { name: "thread", projectId: "p1", threadId: "t/1", browser: true },
+      { name: "project-tab", projectId: "p1", tab: "routines", browser: true },
     ] as const) {
       expect(parseRoute(projectScreenPath(screen))).toEqual(screen);
     }

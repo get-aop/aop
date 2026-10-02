@@ -25,6 +25,14 @@ describe("openBrowserView", () => {
     expect(window.location.pathname).toBe("/projects/p1/threads/t1/browser");
   });
 
+  test("keeps another tab of the panel in place, and takes the chat's place from a pull request", () => {
+    window.history.pushState({}, "", "/projects/p1/issues/pulls/repo_1/7");
+    openBrowserView({ projectId: "p1" });
+    expect(window.location.pathname).toBe("/projects/p1/issues/browser");
+    closeBrowserView();
+    expect(window.location.pathname).toBe("/projects/p1/issues");
+  });
+
   test("another project's thread is not this one's", () => {
     window.history.pushState({}, "", "/projects/p2/threads/t9");
     openBrowserView({ projectId: "p1" });
