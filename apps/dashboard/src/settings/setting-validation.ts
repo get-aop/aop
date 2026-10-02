@@ -1,7 +1,11 @@
 import {
+  LIBRARY_CAP_MB_MAX,
+  LIBRARY_RETENTION_DAYS_MAX,
   MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   MAX_CONCURRENT_RUNS_LIMIT,
   parseAgentCliCheckInterval,
+  parseLibraryCapMb,
+  parseLibraryRetentionDays,
   parseMaxConcurrentRuns,
 } from "@aop/common";
 
@@ -19,5 +23,13 @@ export const settingError = (key: string, value: string): string | null => {
   if (key === AGENT_CLI_CHECK_INTERVAL_KEY && parseAgentCliCheckInterval(value) === null) {
     return `Enter a whole number of minutes from 0 to ${MAX_AGENT_CLI_CHECK_INTERVAL_MINUTES}.`;
   }
+  if (key === "library_retention_days" && parseLibraryRetentionDays(value) === null) {
+    return `Enter a whole number of days from 0 to ${LIBRARY_RETENTION_DAYS_MAX}.`;
+  }
+  if (LIBRARY_CAP_KEYS.has(key) && parseLibraryCapMb(value) === null) {
+    return `Enter a whole number of MB from 0 to ${LIBRARY_CAP_MB_MAX}.`;
+  }
   return null;
 };
+
+const LIBRARY_CAP_KEYS = new Set(["library_project_cap_mb", "library_host_cap_mb"]);

@@ -39,6 +39,10 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
     label: "Agent CLIs",
     keys: ["agent_cli_check_interval_minutes", "agent_cli_auto_update"],
   },
+  {
+    label: "Library",
+    keys: ["library_retention_days", "library_project_cap_mb", "library_host_cap_mb"],
+  },
 ];
 
 export const SETTING_META: Record<string, SettingMeta> = {
@@ -80,6 +84,27 @@ export const SETTING_META: Record<string, SettingMeta> = {
     description:
       "When a check finds a newer version, the host installs it. A native install updates right away; a package-manager install waits until no turn is running. Running turns are never interrupted.",
     type: "toggle",
+  },
+  library_retention_days: {
+    label: "Keep chat attachments and agent files for",
+    description:
+      "The default for every project. After this many days the daily cleanup removes images sent in chat and files agents saved, unless pinned. Uploads are kept. 0 keeps everything.",
+    type: "number",
+    suffix: "days",
+  },
+  library_project_cap_mb: {
+    label: "Library size per project",
+    description:
+      "The default for every project. Over it, the least recently used chat attachments and agent files go first; pinned files and uploads are never removed. 0 is no cap.",
+    type: "number",
+    suffix: "MB",
+  },
+  library_host_cap_mb: {
+    label: "Library size on this host",
+    description:
+      "Every project's Library together. Over it, the daily cleanup removes the least recently used chat attachments and agent files across projects. 0 is no cap.",
+    type: "number",
+    suffix: "MB",
   },
   chat_global_instructions: {
     label: "Global instructions",

@@ -267,14 +267,18 @@ describe("UsageSection window", () => {
   test("asks for all time first, then for a shorter window when chosen", async () => {
     renderUsage();
     await screen.findByTestId("usage-summary");
-    expect(api.calls.map((call) => call.path)).toEqual(["/usage/projects/prj_1"]);
+    // The Library's storage settings above the usage ask for their own route.
+    const usageCalls = api.calls.filter((call) => call.path.startsWith("/usage"));
+    expect(usageCalls.map((call) => call.path)).toEqual(["/usage/projects/prj_1"]);
     expect(screen.getByTestId("usage-window-all").getAttribute("aria-pressed")).toBe("true");
     usage = EMPTY_USAGE;
 
     fireEvent.click(screen.getByTestId("usage-window-7d"));
 
     await screen.findByTestId("usage-empty");
-    const url = new URL(`http://x${api.calls.at(-1)?.path}`);
+    const url = new URL(
+      `http://x${api.calls.filter((call) => call.path.startsWith("/usage")).at(-1)?.path}`,
+    );
     expect(url.pathname).toBe("/usage/projects/prj_1");
     expect([...url.searchParams.keys()]).toEqual(["since"]);
     const daysAgo = (Date.now() - Date.parse(url.searchParams.get("since") as string)) / 86_400_000;

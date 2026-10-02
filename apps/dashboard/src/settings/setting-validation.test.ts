@@ -17,4 +17,16 @@ describe("settingError", () => {
     expect(settingError("chat_global_instructions", "")).toBeNull();
     expect(settingError("chat_global_instructions", "Be brief.")).toBeNull();
   });
+
+  test("the Library's defaults are whole numbers, 0 meaning keep or no cap", () => {
+    expect(settingError("library_retention_days", "0")).toBeNull();
+    expect(settingError("library_retention_days", "30")).toBeNull();
+    expect(settingError("library_retention_days", "3651")).toBe(
+      "Enter a whole number of days from 0 to 3650.",
+    );
+    expect(settingError("library_project_cap_mb", "1024")).toBeNull();
+    expect(settingError("library_host_cap_mb", "-5")).toBe(
+      "Enter a whole number of MB from 0 to 1048576.",
+    );
+  });
 });

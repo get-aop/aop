@@ -1,6 +1,6 @@
 import type { UploadedChatImage } from "@aop/common";
 import { apiUrl, authHeaders, isRemoteHost } from "./host";
-import { request } from "./request";
+import { ApiError, request } from "./request";
 
 /**
  * Sends an image to the project's host, to go with a message the person is writing. The body is
@@ -40,6 +40,14 @@ const fetchImage = async (path: string): Promise<string> => {
     credentials: isRemoteHost() ? "include" : "same-origin",
     headers: authHeaders(),
   });
-  if (!response.ok) throw new Error(`Image request failed (${response.status})`);
+  if (!response.ok) {
+    // 410 is an image the Library removed (retention, or the person); its body says which.
+    const body = (await response.json().catch(() => ({}))) as { code?: string; reason?: string };
+    throw new ApiError(
+      response.status,
+      body.code ?? "IMAGE_FAILED",
+      body.reason ?? `Image request failed (${response.status})`,
+    );
+  }
   return URL.createObjectURL(await response.blob());
 };

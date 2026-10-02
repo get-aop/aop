@@ -72,4 +72,24 @@ describe("a person's message with images", () => {
 
     expect(await screen.findByTestId("message-image-missing")).toBeTruthy();
   });
+
+  test("an image the Library removed keeps its place and says it expired, or was deleted", async () => {
+    fetchMock.mockImplementation(async (url) =>
+      Response.json(
+        {
+          error: "This file expired and was removed from the Library",
+          code: "IMAGE_REMOVED",
+          reason: String(url).includes("old") ? "expired" : "deleted",
+        },
+        { status: 410 },
+      ),
+    );
+    render(<UserRow message={userMessage("u5", 1, { images: [image("old"), image("gone")] })} />);
+
+    await waitFor(() => expect(screen.getAllByTestId("message-image-removed")).toHaveLength(2));
+    const [expired, deleted] = screen.getAllByTestId("message-image-removed");
+    expect(expired?.getAttribute("data-reason")).toBe("expired");
+    expect(expired?.textContent).toBe("File expired");
+    expect(deleted?.textContent).toBe("File deleted");
+  });
 });
