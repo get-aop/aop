@@ -153,6 +153,36 @@ describe("the groups", () => {
   });
 });
 
+describe("a working thread that waits on the person", () => {
+  test("is listed under Waiting on you, and the greeting counts it", () => {
+    const waits = makeThread({
+      id: "waits",
+      projectId: "p1",
+      title: "Deploy the site",
+      status: "working",
+      waitingOn: {
+        reason: "Approve the deployment",
+        link: null,
+        since: "2026-09-29T10:00:00.000Z",
+      },
+    });
+    const works = makeThread({
+      id: "works",
+      projectId: "p1",
+      title: "Refactor",
+      status: "working",
+    });
+
+    render(<Overview entry={entryOf([waits, works])} />);
+
+    expect(titlesIn(groupOf("waiting-on-you"))).toEqual(["Deploy the site"]);
+    expect(titlesIn(groupOf("working"))).toEqual(["Refactor"]);
+    expect(screen.getByTestId("thread-overview").textContent).toContain(
+      "1 thread is waiting on you.",
+    );
+  });
+});
+
 describe("folding", () => {
   test("resolved work starts folded away and opens when asked for; the rest starts open", () => {
     render(<Overview entry={entryOf(onePerStatus())} />);

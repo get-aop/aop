@@ -317,6 +317,7 @@ describe("auth routes", () => {
       "GET /api/health",
       "POST /api/auth/pair",
       "POST /api/mcp",
+      "GET /api/mcp",
       "GET /api/mcp/tools",
     ]);
     const concrete = (path: string) => path.replace(/:[^/]+/g, "x");
@@ -348,6 +349,7 @@ describe("auth routes", () => {
         "POST /api/updates/apply",
         "POST /api/agent-clis/:provider/update",
         "PUT /api/projects/:projectId/computer-use",
+        "POST /api/mcp-secret/rotate",
       ];
 
       for (const route of hostOnly) {

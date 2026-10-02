@@ -1,4 +1,4 @@
-import type { Thread, ThreadStatus } from "@aop/common";
+import { shownThreadStatus, type Thread, type ThreadStatus } from "@aop/common";
 import { ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -76,7 +76,9 @@ const OverviewBody = ({
   const greeting = greetingOf(useDisplayName(), threads);
   const visible = useMemo(
     () =>
-      threads.filter((thread) => !hidden.has(thread.status) && matchesThreadSearch(thread, query)),
+      threads.filter(
+        (thread) => !hidden.has(shownThreadStatus(thread)) && matchesThreadSearch(thread, query),
+      ),
     [threads, query, hidden],
   );
 

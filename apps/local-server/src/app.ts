@@ -1,7 +1,7 @@
 import { extname } from "node:path";
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { createHostAgentCliService } from "./agent-cli/host-agent-cli-service.ts";
 import { createAgentCliRoutes } from "./agent-cli/routes.ts";
 import type { AgentCliService } from "./agent-cli/service.ts";
@@ -20,6 +20,7 @@ import { createFsRoutes } from "./fs/routes.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
+import { createMcpSecretRoutes } from "./mcp/secret-routes.ts";
 import { createProjectRoutes } from "./project/routes.ts";
 import { createProjectServices, type ProjectServices } from "./project/services.ts";
 import { createPullRequestWatchRoutes } from "./pull-request-watch/routes.ts";
@@ -125,6 +126,7 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/chat-sessions", createSessionGitRoutes(ctx));
   const projects = deps.projectServices ?? createProjectServices(ctx);
   app.route("/api/mcp", createMcpRoutes(ctx, projects));
+  app.route("/api/mcp-secret", createMcpSecretRoutes());
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api", createThreadRoutes(projects));
@@ -144,6 +146,13 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
+
+  // An MCP client whose token is refused looks for OAuth metadata, and then registers itself, at
+  // these paths. The host has neither, and a dashboard page in their place fails the client with
+  // a SyntaxError instead of a plain refusal.
+  const noOAuth = (c: Context) => c.json({ error: NO_OAUTH }, 404);
+  app.all("/.well-known/*", noOAuth);
+  app.post("/register", noOAuth);
 
   if (dashboardStaticPath) {
     app.get("*", async (c) => {
@@ -173,6 +182,10 @@ export const createApp = (deps: AppDependencies) => {
 
   return app;
 };
+
+// What the model of a refused run reads, since Claude Code passes it on as the call's error.
+const NO_OAUTH =
+  "This AOP host has no OAuth server. Its MCP endpoint refused the token in the URL: the session ended, or the host's MCP secret was rotated. The next turn gets a new token.";
 
 const MIME_TYPES: Record<string, string> = {
   html: "text/html",

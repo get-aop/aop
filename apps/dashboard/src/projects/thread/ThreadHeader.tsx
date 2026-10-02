@@ -1,4 +1,4 @@
-import type { Project, Thread, ThreadStatus } from "@aop/common";
+import { type Project, shownThreadStatus, type Thread, type ThreadStatus } from "@aop/common";
 import {
   CheckCheckIcon,
   CheckCircle2Icon,
@@ -119,10 +119,10 @@ const ThreadDetails = ({ thread }: { thread: Thread }) => {
       <p className="break-words text-body font-medium text-text">{thread.title}</p>
       <DetailItem
         testId="thread-status"
-        className={cn(thread.status === "waiting-on-you" && "text-waiting")}
+        className={cn(shownThreadStatus(thread) === "waiting-on-you" && "text-waiting")}
       >
-        <ThreadStatusDot status={thread.status} />
-        {THREAD_STATUS_LABEL[thread.status]}
+        <ThreadStatusDot status={shownThreadStatus(thread)} />
+        {THREAD_STATUS_LABEL[shownThreadStatus(thread)]}
       </DetailItem>
       {thread.repoId ? (
         <DetailItem testId="thread-repo">

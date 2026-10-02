@@ -18,6 +18,7 @@ import { SCHEDULING_V5_STATEMENTS } from "./scheduling-v5.ts";
 import type { Database } from "./schema.ts";
 import { STEER_DELIVERY_V18_STATEMENTS } from "./steer-delivery-v18.ts";
 import { SUGGESTION_ANSWERS_V10_STATEMENTS } from "./suggestion-answers-v10.ts";
+import { THREAD_ATTENTION_V21_STATEMENTS } from "./thread-attention-v21.ts";
 import { THREAD_GIT_V6_STATEMENTS } from "./thread-git-v6.ts";
 import { TURN_PARTS_V16_STATEMENTS } from "./turn-parts-v16.ts";
 import { USAGE_V3_STATEMENTS } from "./usage-v3.ts";
@@ -54,6 +55,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 18, name: "steer-delivery", statements: STEER_DELIVERY_V18_STATEMENTS },
   { version: 19, name: "run-permissions", statements: RUN_PERMISSIONS_V19_STATEMENTS },
   { version: 20, name: "computer-use", statements: COMPUTER_USE_V20_STATEMENTS },
+  { version: 21, name: "thread-attention", statements: THREAD_ATTENTION_V21_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

@@ -29,16 +29,30 @@ import {
   toWireMessage,
 } from "./wire-messages.ts";
 
+/** Hears a thread's turn so far, every time the engine reports it. */
+export type ThreadProgressListener = (session: ChatSession, parts: readonly TurnPart[]) => void;
+
+export interface ProjectSessionHooks extends SessionHooks {
+  /** Adds a listener to every thread's turn as it is written; returns what removes it. */
+  observeThreadProgress: (listener: ThreadProgressListener) => () => void;
+}
+
 /**
  * The project domain's side of the engine's session hooks (see chat-session/session-hooks.ts):
  * keeps a thread's status, the coordinator's inbox and the event log in step with the chat
  * engine, and shows a reply being written as it is.
  */
-export const createProjectSessionHooks = (publisher: EventPublisher): SessionHooks => {
+export const createProjectSessionHooks = (publisher: EventPublisher): ProjectSessionHooks => {
   // What of each running reply clients already have, so a progress snapshot goes out as what changed.
   const liveSoFar = new Map<string, readonly TurnPart[]>();
+  const progressListeners = new Set<ThreadProgressListener>();
 
   return {
+    observeThreadProgress: (listener) => {
+      progressListeners.add(listener);
+      return () => progressListeners.delete(listener);
+    },
+
     onUserMessageStored: async (tx, message) => {
       const session = await loadProjectSession(tx, message.session_id);
       if (!session) return;
@@ -81,6 +95,7 @@ export const createProjectSessionHooks = (publisher: EventPublisher): SessionHoo
 
     onAssistantProgress: (session, run, parts) => {
       if (!session.project_id) return;
+      if (session.kind === "thread") hear(progressListeners, session, parts);
       const ops = diffTurnParts(liveSoFar.get(run.id) ?? [], parts);
       if (ops.length === 0) return;
       liveSoFar.set(run.id, parts);
@@ -93,6 +108,14 @@ export const createProjectSessionHooks = (publisher: EventPublisher): SessionHoo
       });
     },
   };
+};
+
+const hear = (
+  listeners: ReadonlySet<ThreadProgressListener>,
+  session: ChatSession,
+  parts: readonly TurnPart[],
+): void => {
+  for (const listener of listeners) listener(session, parts);
 };
 
 const loadProjectSession = async (

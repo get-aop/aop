@@ -1,6 +1,7 @@
 import {
   type Artifact,
   getThreadProgress,
+  shownThreadStatus,
   type Thread,
   type ThreadCardVariant,
   threadCardVariant,
@@ -46,7 +47,7 @@ export const ChatThreadCard = ({
     );
   }
 
-  const shown = threadCardVariant(thread.status);
+  const shown = threadCardVariant(shownThreadStatus(thread));
   const failing = hasFailingChecks(thread);
   return (
     <article
@@ -110,7 +111,7 @@ const VariantIcon = ({
       <CircleCheckIcon data-testid="chat-thread-card-icon" className="size-4 shrink-0 text-ok" />
     );
   }
-  return <ThreadStatusDot status={thread.status} className="mx-1" />;
+  return <ThreadStatusDot status={shownThreadStatus(thread)} className="mx-1" />;
 };
 
 const CardTrailing = ({ thread, variant }: { thread: Thread; variant: ThreadCardVariant }) => {
@@ -163,6 +164,9 @@ const CardBody = ({ thread, variant }: { thread: Thread; variant: ThreadCardVari
       </>
     );
   }
+  if (thread.status === "working" && thread.waitingOn) {
+    return <WaitingOnBody reason={thread.waitingOn.reason} link={thread.waitingOn.link} />;
+  }
   const line = thread.liveStatusLine
     ? plainStatusLine(thread.liveStatusLine)
     : variant === "live"
@@ -179,6 +183,33 @@ const CardBody = ({ thread, variant }: { thread: Thread; variant: ThreadCardVari
     </>
   );
 };
+
+/** A working thread that waits on the person for something outside AOP: what, and where to do it. */
+const WaitingOnBody = ({ reason, link }: { reason: string; link: string | null }) => (
+  <>
+    <p data-testid="chat-thread-card-waiting-on" className="text-body text-text">
+      {reason}
+    </p>
+    <p className="text-meta text-text-muted">The thread keeps working meanwhile.</p>
+    {link ? (
+      <Button
+        asChild
+        size="sm"
+        variant="outline"
+        className="relative z-10 mt-1 self-start border-waiting/40 text-waiting hover:text-waiting"
+      >
+        <a
+          href={link}
+          target="_blank"
+          rel="noreferrer noopener"
+          data-testid="chat-thread-card-wait-link"
+        >
+          Open
+        </a>
+      </Button>
+    ) : null}
+  </>
+);
 
 const UnavailableCard = ({
   threadId,

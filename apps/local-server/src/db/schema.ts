@@ -112,6 +112,10 @@ export interface ChatSessionsTable {
    * exactly while `state` is `rate-limited`; a coordinator may hold it at any time.
    */
   resumes_at: string | null;
+  /** JSON `ThreadWait`, added by migration v21: what a working thread waits on the person for. */
+  waiting_on_json: string | null;
+  /** JSON `ThreadDegraded`, added by migration v21: a working thread's AOP tools stopped reaching the host. */
+  tools_degraded_json: string | null;
 }
 
 export interface ChatMessagesTable {

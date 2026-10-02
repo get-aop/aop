@@ -44,4 +44,19 @@ describe("ThreadChipDetails", () => {
     );
     expect(screen.getByTestId("thread-chip-activity").textContent).toBe("1 reply · 2h");
   });
+
+  test("shows a working thread that waits on the person outside AOP as waiting on them", () => {
+    render(
+      <ThreadChipDetails
+        thread={makeThread({
+          status: "working",
+          waitingOn: { reason: "Approve the deployment", link: null, since: AT },
+        })}
+        now={later(0)}
+      />,
+    );
+
+    expect(screen.getByTestId("thread-chip-status").textContent).toBe("Waiting on you");
+    expect(screen.getByTestId("thread-chip-status").className).toContain("text-waiting");
+  });
 });

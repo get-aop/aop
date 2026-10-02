@@ -97,6 +97,9 @@ const decideForThread = (
     );
   }
 
+  const attention = decideForWorkingThread(thread, context);
+  if (attention) return attention;
+
   const before = previous ? pullRequestOf(previous) : undefined;
   const after = pullRequestOf(thread);
   // A pull request first seen already merged is not news; only a change from open is.
@@ -132,6 +135,27 @@ const decideForMessage = (
   // `needs-you` is announced by the thread's own change of status, so it is not announced twice.
   if (message.outcome === "finished" && context.project.notificationLevel === "every-turn") {
     return intent("turn-finished", context, `${title} finished a turn`, target);
+  }
+  return null;
+};
+
+/**
+ * A working thread that starts waiting on the person for something outside AOP, or whose AOP tools
+ * stop reaching the host. Each is announced once, when it begins; the coordinator's report about it
+ * is not announced again.
+ */
+const decideForWorkingThread = (
+  thread: Thread,
+  context: PolicyContext,
+): NotificationIntent | null => {
+  if (thread.status !== "working") return null;
+  const previous = context.previousThread?.status === "working" ? context.previousThread : null;
+  const target = { projectId: thread.projectId, threadId: thread.id };
+  if (thread.degraded && !previous?.degraded) {
+    return intent("thread-error", context, `${thread.title} lost its AOP tools`, target);
+  }
+  if (thread.waitingOn && thread.waitingOn.reason !== previous?.waitingOn?.reason) {
+    return intent("needs-you", context, `${thread.title} · ${thread.waitingOn.reason}`, target);
   }
   return null;
 };
