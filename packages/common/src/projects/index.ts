@@ -174,6 +174,32 @@ export {
   ReportedRuntimeSchema,
   ThreadAccessSchema,
 } from "./project.ts";
+export type {
+  PullRequestFacet,
+  PullRequestListItem,
+  PullRequestListItemState,
+  PullRequestListQuery,
+  PullRequestListQueryInput,
+  PullRequestListRepo,
+  PullRequestListResponse,
+  PullRequestListSort,
+  PullRequestListState,
+  PullRequestListUnavailableReason,
+  PullRequestReviewState,
+} from "./pull-request-list.ts";
+export {
+  PULL_REQUEST_LIST_MAX_LIMIT,
+  PULL_REQUEST_LIST_SORTS,
+  PULL_REQUEST_LIST_STATES,
+  PullRequestFacetSchema,
+  PullRequestListItemSchema,
+  PullRequestListItemStateSchema,
+  PullRequestListQuerySchema,
+  PullRequestListRepoSchema,
+  PullRequestListResponseSchema,
+  PullRequestListUnavailableReasonSchema,
+  PullRequestReviewStateSchema,
+} from "./pull-request-list.ts";
 export {
   DEFAULT_MAX_CONCURRENT_RUNS,
   MAX_CONCURRENT_RUNS_LIMIT,

@@ -29,6 +29,8 @@ import { createMcpRoutes } from "./mcp/routes.ts";
 import { createMcpSecretRoutes } from "./mcp/secret-routes.ts";
 import { createProjectRoutes } from "./project/routes.ts";
 import { createProjectServices, type ProjectServices } from "./project/services.ts";
+import { createPullRequestListRoutes } from "./pull-request-list/routes.ts";
+import { createPullRequestListService } from "./pull-request-list/service.ts";
 import { createPullRequestWatchRoutes } from "./pull-request-watch/routes.ts";
 import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
@@ -149,6 +151,12 @@ export const createApp = (deps: AppDependencies) => {
   );
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
+  app.route(
+    "/api/projects",
+    createPullRequestListRoutes(
+      createPullRequestListService({ github, threads: ctx.threadRepository }),
+    ),
+  );
   app.route("/api", createThreadRoutes(projects));
   app.route("/api", createSuggestionRoutes(projects));
   app.route("/api", createPullRequestWatchRoutes(projects));

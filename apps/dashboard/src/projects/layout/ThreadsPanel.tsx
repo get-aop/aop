@@ -18,6 +18,7 @@ import { IconButton } from "../../components/IconButton";
 import { IssuesTab } from "../issues/IssuesTab";
 import { LibraryPanel } from "../library/LibraryPanel";
 import type { ProjectEntry } from "../projects-state";
+import { PullRequestsTab } from "../pull-requests/PullRequestsTab";
 import { RoutinesTab } from "../routines/RoutinesTab";
 import { attentionOf, THREAD_STATUS_LABEL, THREAD_STATUS_ORDER } from "../selectors";
 import { ThreadOverview } from "../ThreadOverview";
@@ -156,6 +157,8 @@ const PanelTabBody = ({
       return <IssuesTab key={entry.project.id} projectId={entry.project.id} />;
     case "library":
       return <LibraryPanel entry={entry} revealChat={revealChat} />;
+    case "pull-requests":
+      return <PullRequestsTab entry={entry} />;
   }
 };
 
