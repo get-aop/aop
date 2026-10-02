@@ -150,24 +150,9 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createRoutineRoutes(projects.routines));
-  const github = deps.github ?? createGithubService(ctx);
-  app.route("/api/projects", createGithubRoutes(github));
-  app.route(
-    "/api/projects",
-    createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
-  );
-  app.route(
-    "/api/projects",
-    createPullRequestViewRoutes(deps.pullRequestView ?? createPullRequestViewService({ github })),
-  );
+  app.route("/api/projects", createGithubBackedRoutes(deps, projects));
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
-  app.route(
-    "/api/projects",
-    createPullRequestListRoutes(
-      createPullRequestListService({ github, threads: ctx.threadRepository }),
-    ),
-  );
   app.route("/api", createThreadRoutes(projects));
   app.route("/api", createSuggestionRoutes(projects));
   app.route("/api", createPullRequestWatchRoutes(projects));
@@ -223,6 +208,28 @@ export const createApp = (deps: AppDependencies) => {
 };
 
 // What the model of a refused run reads, since Claude Code passes it on as the call's error.
+/** The routes that read and act on GitHub through the host's `gh`: status, issues, PRs, the PR View. */
+const createGithubBackedRoutes = (deps: AppDependencies, projects: ProjectServices) => {
+  const github = deps.github ?? createGithubService(deps.ctx);
+  const routes = new Hono<AuthEnv>();
+  routes.route("/", createGithubRoutes(github));
+  routes.route(
+    "/",
+    createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
+  );
+  routes.route(
+    "/",
+    createPullRequestViewRoutes(deps.pullRequestView ?? createPullRequestViewService({ github })),
+  );
+  routes.route(
+    "/",
+    createPullRequestListRoutes(
+      createPullRequestListService({ github, threads: deps.ctx.threadRepository }),
+    ),
+  );
+  return routes;
+};
+
 const NO_OAUTH =
   "This AOP host has no OAuth server. Its MCP endpoint refused the token in the URL: the session ended, or the host's MCP secret was rotated. The next turn gets a new token.";
 
