@@ -153,6 +153,26 @@ describe("the Issues tab", () => {
     expect(groups()).toEqual([["Closed1", "true"]]);
   });
 
+  test("the state switch is a radio group the arrow keys move through", async () => {
+    await renderTab(issueList(SAMPLE));
+    const open = screen.getByTestId("issues-state-open");
+    expect(screen.getByTestId("issues-state").getAttribute("role")).toBe("radiogroup");
+    expect(
+      open.getAttribute("aria-checked") ?? open.getAttribute("aria-pressed") ?? open.dataset.state,
+    ).toMatch(/true|on/);
+
+    // Radix moves the focus on the next tick.
+    open.focus();
+    fireEvent.keyDown(open, { key: "ArrowRight" });
+    await waitFor(() =>
+      expect(document.activeElement === screen.getByTestId("issues-state-closed")).toBe(true),
+    );
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "ArrowRight" });
+    await waitFor(() =>
+      expect(document.activeElement === screen.getByTestId("issues-state-all")).toBe(true),
+    );
+  });
+
   test("Refresh asks the host to read again; a failed refresh keeps the list and says so", async () => {
     let fail = false;
     await renderTab(issueList(SAMPLE), {
