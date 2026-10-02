@@ -152,6 +152,47 @@ describe("parseRoute", () => {
     expect(parseRoute("/projects/p1/threads")).toBeNull();
   });
 
+  test("a project or thread screen may name the browser shown in the chat's place", () => {
+    expect(parseRoute("/projects/p1/browser")).toEqual({
+      name: "project",
+      projectId: "p1",
+      browser: true,
+    });
+    expect(parseRoute("/projects/p1/threads/t1/browser")).toEqual({
+      name: "thread",
+      projectId: "p1",
+      threadId: "t1",
+      browser: true,
+    });
+    expect(parseRoute("/projects/p1/issues/browser")).toEqual({
+      name: "project-tab",
+      projectId: "p1",
+      tab: "issues",
+      browser: true,
+    });
+    // A thread whose id happens to be "browser" is still that thread.
+    expect(parseRoute("/projects/p1/threads/browser")).toEqual({
+      name: "thread",
+      projectId: "p1",
+      threadId: "browser",
+    });
+    for (const path of [
+      "/projects/p1/chat/browser",
+      "/projects/p1/settings/browser",
+      "/projects/p1/browser/x",
+      "/projects/p1/pulls/repo_1/7/browser",
+    ]) {
+      expect(parseRoute(path)).toBeNull();
+    }
+    for (const screen of [
+      { name: "project", projectId: "p 1", browser: true },
+      { name: "thread", projectId: "p1", threadId: "t/1", browser: true },
+      { name: "project-tab", projectId: "p1", tab: "routines", browser: true },
+    ] as const) {
+      expect(parseRoute(projectScreenPath(screen))).toEqual(screen);
+    }
+  });
+
   test("routeProjectId is the project a route belongs to, or null", () => {
     expect(routeProjectId({ name: "projects" })).toBeNull();
     expect(routeProjectId({ name: "project", projectId: "p1" })).toBe("p1");

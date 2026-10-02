@@ -1,3 +1,4 @@
+import type { BrowserHostEvent } from "@aop/common";
 import type { ElectronDesktopBridge } from "../src/backend/electron-backend";
 import type {
   AppUpdateState,
@@ -40,4 +41,13 @@ export const createDesktopBridge = (
     subscribe(IPC_CHANNELS.updateStateChanged, (payload) => listener(payload as AppUpdateState)),
   openUpdateDownload: () => invoke(IPC_CHANNELS.openUpdateDownload) as Promise<void>,
   restartToUpdate: () => invoke(IPC_CHANNELS.restartToUpdate) as Promise<void>,
+  browser: {
+    onEvent: (listener) =>
+      subscribe(IPC_CHANNELS.browserEvent, (payload) => listener(payload as BrowserHostEvent)),
+    setActive: (active) => invoke(IPC_CHANNELS.browserSetActive, active) as Promise<void>,
+    answerPrompt: (id, allow) =>
+      invoke(IPC_CHANNELS.browserAnswerPrompt, { id, allow }) as Promise<void>,
+    downloadAction: (id, action) =>
+      invoke(IPC_CHANNELS.browserDownloadAction, { id, action }) as Promise<void>,
+  },
 });

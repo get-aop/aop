@@ -22,6 +22,7 @@ export interface MenuActions {
   stopHost: () => void;
   openUpdateDownload: () => void;
   restartToUpdate: () => void;
+  quit: () => void;
 }
 
 /** The application menu. Built from plain data so what it offers in each state can be tested. */
@@ -30,13 +31,30 @@ export const buildMenuTemplate = (
   actions: MenuActions,
 ): MenuItemConstructorOptions[] => [
   ...(model.platform === "darwin"
-    ? [{ role: "appMenu" as const }]
+    ? [{ role: "appMenu" as const, submenu: macAppMenu(actions) }]
     : [{ label: "File", submenu: [{ role: "quit" as const }] }]),
   { label: "Host", submenu: hostMenu(model, actions) },
   ...updateMenu(model.update, actions),
   { role: "editMenu" },
   { role: "viewMenu" },
   { role: "windowMenu" },
+];
+
+/**
+ * The Mac's app menu, as Electron builds it, except Quit: the native item sends `terminate:` down
+ * the responder chain, and with an AOP Browser page in the window it can stall halfway, the
+ * window closed and the app still running. Quitting through the app itself always finishes.
+ */
+const macAppMenu = (actions: MenuActions): MenuItemConstructorOptions[] => [
+  { role: "about" },
+  { type: "separator" },
+  { role: "services" },
+  { type: "separator" },
+  { role: "hide" },
+  { role: "hideOthers" },
+  { role: "unhide" },
+  { type: "separator" },
+  { label: "Quit", accelerator: "Command+Q", click: actions.quit },
 ];
 
 const hostMenu = (model: MenuModel, actions: MenuActions): MenuItemConstructorOptions[] => {

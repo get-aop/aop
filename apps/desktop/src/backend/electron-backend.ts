@@ -1,10 +1,12 @@
+import type { DesktopBrowserBridge } from "@aop/common";
 import type { DesktopBackend } from "./types";
 
-/** The dashboard's half of the preload bridge: which host to use, and a refused token. */
+/** The dashboard's half of the preload bridge: which host to use, a refused token, its browser. */
 export interface DashboardBridge {
   getHostConfig: () => Promise<{ baseUrl: string; token: string | null }>;
   hostRejected: () => Promise<void>;
   setZoom: (zoomFactor: number) => Promise<void>;
+  browser: DesktopBrowserBridge;
 }
 
 /**

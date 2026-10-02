@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { navigate, type ProjectScreen, projectScreenPath } from "../../shell/router";
 import { ArtifactPane } from "../artifact-view/ArtifactPane";
+import { BrowserColumn } from "../browser/BrowserColumn";
+import { useBrowserScreen } from "../browser/use-browser-screen";
 import { CoordinatorChatPane } from "../chat/CoordinatorChatPane";
 import { focusCoordinatorComposer } from "../chat/focus-composer";
 import type { ChatModel, ProjectChat } from "../chat/project-chat";
@@ -25,7 +27,8 @@ import { type PanelLayout, usePanelLayout } from "./use-panel-layout";
  * One grid holds them: the top bar over the chat, and the panel in a column of its own from the
  * top of the screen, so its header shares the top bar's row. When the panel covers the chat
  * (expanded, or on a phone) or is closed, the top bar spans the screen. A screen that names a
- * pull request or an artifact shows it in the chat's column, over the chat.
+ * pull request or an artifact shows it in the chat's column, over the chat; one that names the
+ * browser shows the AOP Browser there the same way.
  */
 export const ProjectLayout = ({
   entry,
@@ -43,14 +46,20 @@ export const ProjectLayout = ({
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
   const { threadId, tab } = panelPlaceOf(route);
-  const { pullRequest, artifact } = route;
-  // Closing the thread leaves a pull request or an artifact that is open beside it where it is.
+  const { pullRequest, artifact, browser } = route;
+  // Closing the thread leaves a pull request, an artifact or the browser open beside it where it is.
   const leaveThread = useCallback(
     () =>
       navigate(
-        projectScreenPath({ name: "project", projectId: project.id, pullRequest, artifact }),
+        projectScreenPath({
+          name: "project",
+          projectId: project.id,
+          pullRequest,
+          artifact,
+          browser,
+        }),
       ),
-    [project.id, pullRequest, artifact],
+    [project.id, pullRequest, artifact, browser],
   );
   const layout = usePanelLayout({
     projectId: project.id,
@@ -61,7 +70,8 @@ export const ProjectLayout = ({
   const filters = useOverviewFilters();
   const { revealChat } = layout;
   useRevealForView(viewKey(route), revealChat);
-  const covered = Boolean(pullRequest || artifact);
+  const browserButton = useBrowserScreen(project.id, browser === true, revealChat);
+  const covered = Boolean(pullRequest || artifact || browser);
 
   // A thread starts from what the person tells the coordinator, so this goes to its composer.
   const startThread = useCallback(() => {
@@ -83,6 +93,7 @@ export const ProjectLayout = ({
         <ProjectTopBar
           entry={entry}
           panel={{ visible: layout.visible, toggle: layout.toggle }}
+          browser={browserButton}
           settingsOpen={settingsOpen}
           className={cn("row-start-1", layout.besideTopBar ? "col-start-1" : "col-span-full")}
         />
@@ -106,6 +117,13 @@ export const ProjectLayout = ({
           />
         </section>
         <CoveringView entry={entry} route={route} chat={chat} hidden={layout.chatHidden} />
+        {/* Beside CoveringView, not one of its views: it stays mounted (parked) while hidden, so its pages live on. */}
+        <BrowserColumn
+          key={project.id}
+          projectId={project.id}
+          shown={browser === true}
+          coveredByPanel={panelCoversColumn(layout)}
+        />
         {layout.visible && layout.mode === "side" && !layout.expanded ? (
           <PanelDivider
             width={layout.width}
@@ -166,6 +184,9 @@ const CoveringView = ({
     </section>
   );
 };
+
+// An overlay panel expanded over the column covers it too, though the chat stays put under it.
+const panelCoversColumn = (layout: PanelLayout): boolean => layout.chatHidden || layout.expanded;
 
 /**
  * A pull request or an artifact opened from a panel that covers the chat's column (expanded,

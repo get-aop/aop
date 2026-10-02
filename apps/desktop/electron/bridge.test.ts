@@ -56,6 +56,24 @@ describe("createDesktopBridge", () => {
     ]);
   });
 
+  test("gives the dashboard its browser: four channels, its payloads as objects", async () => {
+    const { bridge, invoke, listeners } = setup();
+    const events: unknown[] = [];
+
+    bridge.browser.onEvent((event) => events.push(event));
+    listeners.get(IPC_CHANNELS.browserEvent)?.({ kind: "prompt-closed", id: "p1" });
+    await bridge.browser.setActive(true);
+    await bridge.browser.answerPrompt("p1", false);
+    await bridge.browser.downloadAction("d1", "reveal");
+
+    expect(events).toEqual([{ kind: "prompt-closed", id: "p1" }]);
+    expect(invoke.mock.calls).toEqual([
+      [IPC_CHANNELS.browserSetActive, true],
+      [IPC_CHANNELS.browserAnswerPrompt, { id: "p1", allow: false }],
+      [IPC_CHANNELS.browserDownloadAction, { id: "d1", action: "reveal" }],
+    ]);
+  });
+
   test("gives a page the changes the app pushes, and a way to stop listening", () => {
     const { bridge, listeners, unsubscribed } = setup();
     const seen: unknown[] = [];

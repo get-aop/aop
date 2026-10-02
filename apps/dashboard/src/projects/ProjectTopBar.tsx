@@ -1,6 +1,6 @@
-import { EllipsisIcon, ListChecksIcon, SettingsIcon } from "lucide-react";
+import { EllipsisIcon, GlobeIcon, ListChecksIcon, SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { iconButtonClass } from "../components/IconButton";
+import { IconButton, iconButtonClass } from "../components/IconButton";
 import { PlanUsageMeter } from "../plan-usage/PlanUsageMeter";
 import { Link, projectPath, projectSettingsPath } from "../shell/router";
 import { ShellNav } from "../shell/ShellNav";
@@ -17,22 +17,27 @@ const STREAM_LABEL: Record<StreamConnection, string | null> = {
 };
 
 type Panel = { visible: boolean; toggle: () => void };
+/** The AOP Browser's button, in the desktop app only. */
+type Browser = { shown: boolean; toggle: () => void };
 
 /**
  * The top of a project's screens: the sidebar toggle and back/forward, who the project is,
  * then right beside the name its controls as one group: the labelled Overview toggle for the
- * threads panel (with a dot when a thread waits on the person), the project's settings and its
- * menu (the gear is marked while the settings dialog is open), then the stream's state. The far
+ * threads panel (with a dot when a thread waits on the person), the AOP Browser (in the desktop
+ * app), the project's settings and its menu (the gear is marked while the settings dialog is
+ * open), then the stream's state. The far
  * end holds host-wide status, the Claude plan's usage meter first.
  */
 export const ProjectTopBar = ({
   entry,
   panel,
+  browser,
   settingsOpen,
   className,
 }: {
   entry: ProjectEntry;
   panel: Panel;
+  browser?: Browser;
   settingsOpen: boolean;
   /** Where the project grid puts it: over the chat only, or across the screen. */
   className?: string;
@@ -72,6 +77,18 @@ export const ProjectTopBar = ({
       ) : null}
       <div data-testid="project-topbar-actions" className="flex shrink-0 items-center gap-0.5">
         <OverviewToggle panel={panel} waiting={waiting} />
+        {browser ? (
+          <IconButton
+            testId="browser-toggle"
+            label={browser.shown ? "Back to the coordinator (⌘⇧B)" : "AOP Browser (⌘⇧B)"}
+            aria-keyshortcuts="Meta+Shift+B"
+            pressed={browser.shown}
+            active={browser.shown}
+            onClick={browser.toggle}
+          >
+            <GlobeIcon />
+          </IconButton>
+        ) : null}
         <Link
           to={projectSettingsPath(project.id)}
           data-testid="project-settings-link"

@@ -29,6 +29,9 @@ const setup = (development = false) => {
     getUpdateState: mock(() => ({ status: "idle" as const })),
     openUpdateDownload: mock(async () => {}),
     restartToUpdate: mock(async () => {}),
+    browserSetActive: mock(() => {}),
+    browserAnswerPrompt: mock(() => {}),
+    browserDownloadAction: mock(() => {}),
   };
   registerDesktopIpc(
     {
@@ -232,5 +235,67 @@ describe("the app's update", () => {
     }
 
     expect(host.restartToUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("the AOP Browser's channels", () => {
+  const BROWSER_PAGE = "http://localhost:5173/";
+
+  test("answer the dashboard only: not the connect screen, a host's page or a browser tab", async () => {
+    const { call, host } = setup();
+
+    for (const sender of [SHELL, HOST_PAGE, BROWSER_PAGE, ""]) {
+      await expect(call(IPC_CHANNELS.browserSetActive, sender, true)).rejects.toThrow(
+        "Blocked desktop IPC sender.",
+      );
+      await expect(
+        call(IPC_CHANNELS.browserAnswerPrompt, sender, { id: "p1", allow: true }),
+      ).rejects.toThrow("Blocked desktop IPC sender.");
+      await expect(
+        call(IPC_CHANNELS.browserDownloadAction, sender, { id: "d1", action: "reveal" }),
+      ).rejects.toThrow("Blocked desktop IPC sender.");
+    }
+    expect(host.browserSetActive).not.toHaveBeenCalled();
+    expect(host.browserAnswerPrompt).not.toHaveBeenCalled();
+    expect(host.browserDownloadAction).not.toHaveBeenCalled();
+  });
+
+  test("pass what the dashboard sends through, once it is the right shape", async () => {
+    const { call, host } = setup();
+
+    await call(IPC_CHANNELS.browserSetActive, DASHBOARD, true);
+    await call(IPC_CHANNELS.browserAnswerPrompt, DASHBOARD, { id: "p-1_a", allow: true });
+    await call(IPC_CHANNELS.browserDownloadAction, DASHBOARD, { id: "d1", action: "cancel" });
+
+    expect(host.browserSetActive).toHaveBeenCalledWith(true);
+    expect(host.browserAnswerPrompt).toHaveBeenCalledWith("p-1_a", true);
+    expect(host.browserDownloadAction).toHaveBeenCalledWith("d1", "cancel");
+  });
+
+  test("refuse malformed answers and actions", async () => {
+    const { call, host } = setup();
+
+    for (const bad of ["yes", 1, null]) {
+      await expect(call(IPC_CHANNELS.browserSetActive, DASHBOARD, bad)).rejects.toThrow(/Invalid/);
+    }
+    for (const bad of [
+      null,
+      { id: "p1" },
+      { id: "p1", allow: "yes" },
+      { id: "../etc", allow: true },
+      { id: "x".repeat(65), allow: true },
+    ]) {
+      await expect(call(IPC_CHANNELS.browserAnswerPrompt, DASHBOARD, bad)).rejects.toThrow(
+        /Invalid/,
+      );
+    }
+    for (const bad of [{ id: "d1", action: "open" }, { id: 7, action: "reveal" }, undefined]) {
+      await expect(call(IPC_CHANNELS.browserDownloadAction, DASHBOARD, bad)).rejects.toThrow(
+        /Invalid/,
+      );
+    }
+    expect(host.browserSetActive).not.toHaveBeenCalled();
+    expect(host.browserAnswerPrompt).not.toHaveBeenCalled();
+    expect(host.browserDownloadAction).not.toHaveBeenCalled();
   });
 });
