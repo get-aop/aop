@@ -297,7 +297,8 @@ describe("App pairing gate", () => {
     const requested = (globalThis.fetch as unknown as ReturnType<typeof mock>).mock.calls.map(
       ([url]) => String(url),
     );
-    expect(requested).toEqual(["/api/auth/me"]);
+    // Only the public probe, which tells the pairing screen the host's port.
+    expect(requested).toEqual(["/api/auth/me", "/api/health"]);
     expect(TestEventSource.instances).toHaveLength(0);
   });
 });

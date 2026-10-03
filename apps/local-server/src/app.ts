@@ -59,6 +59,8 @@ export interface EventsSSEOptions {
 export interface AppDependencies {
   ctx: LocalServerContext;
   startTimeMs: number;
+  /** The port the host listens on, reported on `/api/health`. */
+  port?: number;
   dashboardStaticPath?: string;
   dashboardDevOrigin?: string;
   /** Origins besides the API's own that may call it from a browser (`AOP_ALLOWED_ORIGINS`). */
@@ -136,7 +138,10 @@ export const createApp = (deps: AppDependencies) => {
     }
   });
 
-  app.route("/api/health", createHealthRoutes({ ctx, startTimeMs: deps.startTimeMs }));
+  app.route(
+    "/api/health",
+    createHealthRoutes({ ctx, startTimeMs: deps.startTimeMs, port: deps.port }),
+  );
 
   app.get("/api/status", async (c) => c.json(await listRepoSummaries(ctx)));
 

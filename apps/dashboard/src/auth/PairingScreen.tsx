@@ -1,22 +1,45 @@
-import { type FormEvent, useState } from "react";
+import { buildChannel, type ChannelConfig } from "@aop/common";
+import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
-import { pairDevice } from "../api/auth";
+import { getHostPort, pairDevice } from "../api/auth";
 import { getHostConfig, isRemoteHost, setHostConfig } from "../api/host";
 import { AopLogoMark } from "../components/brand/AopLogoMark";
 import { defaultDeviceName } from "./device-name";
+import { pairingCodeCommand, pairingHostPort } from "./host-port";
 
 /**
  * Shown when the host answers 401: this browser is not a paired device. The host owner
  * reads a one-time code off the host; trading it here gives this browser a cookie (or, for a
  * host on another origin, a token to send as a bearer header) that authenticates everything after.
  */
-export const PairingScreen = ({ onPaired }: { onPaired: () => void }) => {
+export const PairingScreen = ({
+  onPaired,
+  channel = buildChannel(),
+  apiOrigin,
+}: {
+  onPaired: () => void;
+  channel?: ChannelConfig;
+  /** Where the host's API is; the page's own origin unless this client names another host. */
+  apiOrigin?: string | null;
+}) => {
   const [code, setCode] = useState("");
   const [deviceName, setDeviceName] = useState(() => defaultDeviceName());
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [reportedPort, setReportedPort] = useState<number | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    // Without it, the command falls back to what the address and the channel suggest.
+    getHostPort()
+      .then((port) => current && setReportedPort(port))
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -62,9 +85,12 @@ export const PairingScreen = ({ onPaired }: { onPaired: () => void }) => {
             data-testid="pairing-command"
             className="block rounded-md border border-border bg-input-surface px-2.5 py-2 text-[11.5px] break-all text-text select-all"
           >
-            curl -s -X POST http://127.0.0.1:25150/api/auth/pairing-codes
+            {pairingCodeCommand(pairingHostPort({ reportedPort, apiOrigin, channel }))}
           </code>
-          <p className="text-text-subtle">The default port is 25150. See docs/HOST.md.</p>
+          <p data-testid="pairing-port-hint" className="text-text-subtle">
+            Use the port the host listens on; {channel.productName}'s default is {channel.hostPort}.
+            See docs/HOST.md.
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">

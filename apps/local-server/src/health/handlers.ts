@@ -5,10 +5,11 @@ import type { LocalServerContext } from "../context.ts";
 export interface HealthDeps {
   ctx: LocalServerContext;
   startTimeMs: number;
+  port?: number;
 }
 
 export const getHealth = async (deps: HealthDeps): Promise<Record<string, unknown>> => {
-  const { ctx, startTimeMs } = deps;
+  const { ctx, startTimeMs, port } = deps;
   const uptimeSecs = Math.floor((Date.now() - startTimeMs) / 1000);
 
   return {
@@ -18,6 +19,9 @@ export const getHealth = async (deps: HealthDeps): Promise<Record<string, unknow
     version: process.env.AOP_BUILD_VERSION?.trim() || "dev",
     // `nightly` for AOP Nightly, so a client can tell the two hosts on one machine apart.
     channel: buildChannel().id,
+    // A pairing code is asked for on the host machine at this port; behind a proxy, a client
+    // can't read it from its own address (docs/HOST.md).
+    port,
     apiVersion: API_VERSION,
     minClientApiVersion: MIN_CLIENT_API_VERSION,
     uptime: uptimeSecs,
