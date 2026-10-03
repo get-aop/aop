@@ -361,8 +361,11 @@ ol {
 
 .app-update-text {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   min-width: 0;
+  /* An updater error can carry a checksum with no space to break at. */
+  overflow-wrap: anywhere;
 }
 
 .app-update-text a {
