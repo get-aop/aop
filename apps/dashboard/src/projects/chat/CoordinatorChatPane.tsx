@@ -98,7 +98,7 @@ export const CoordinatorChatPane = ({
         threadsLoaded={threadsLoaded}
         threadsError={threadsError}
       >
-<QuestionAnsweringContext.Provider value={answering}>
+        <QuestionAnsweringContext.Provider value={answering}>
           <Body
             model={model}
             project={project}
