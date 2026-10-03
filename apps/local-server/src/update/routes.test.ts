@@ -33,6 +33,9 @@ const STATUS: UpdateStatus = {
   restart: "service",
   runningTurns: [],
   queued: null,
+  download: { state: "idle", version: null, error: null },
+  previous: null,
+  includes: { cuaDriver: null },
 };
 
 describe("update routes", () => {

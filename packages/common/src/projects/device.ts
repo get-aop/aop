@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ClientInfoSchema } from "../desktop-app.ts";
 import { IdSchema, TimestampSchema } from "./primitives.ts";
 
 /**
@@ -11,5 +12,9 @@ export const DeviceSchema = z.object({
   name: z.string().trim().min(1).max(100),
   createdAt: TimestampSchema,
   lastSeenAt: TimestampSchema.nullable(),
+  /** The app and version it last connected with, null until it has (migration, CLIENT_HEADER). */
+  client: ClientInfoSchema.nullable().optional(),
+  /** A desktop app older than the host on the same channel: it should update. */
+  outOfDate: z.boolean().optional(),
 });
 export type Device = z.infer<typeof DeviceSchema>;

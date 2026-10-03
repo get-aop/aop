@@ -100,6 +100,9 @@ describe("update service status", () => {
       restart: "service",
       runningTurns: [],
       queued: null,
+      download: { state: "idle", version: null, error: null },
+      previous: null,
+      includes: { cuaDriver: null },
     });
   });
 

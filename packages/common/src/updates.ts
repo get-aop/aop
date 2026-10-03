@@ -138,6 +138,59 @@ export const QueuedUpdateSchema = z.object({
 });
 export type QueuedUpdate = z.infer<typeof QueuedUpdateSchema>;
 
+/**
+ * When the host installs a release by itself (the host setting `update_install`): `ask` leaves it
+ * to a person (the Updates button shows it; the default on Stable); `idle` installs once the turns
+ * running when it was found have finished (the default on Nightly); `window` does the same, but
+ * only between the `update_install_window` hours, host time.
+ */
+export const UpdateInstallModeSchema = z.enum(["ask", "idle", "window"]);
+export type UpdateInstallMode = z.infer<typeof UpdateInstallModeSchema>;
+
+/** The `update_install_window` setting: `HH:MM-HH:MM`, host time; it may wrap past midnight. */
+export const DEFAULT_UPDATE_INSTALL_WINDOW = "01:00-06:00";
+
+/** `[startMinute, endMinute)` of a window setting, or null when it is not one. */
+export const parseInstallWindow = (value: string): [number, number] | null => {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/.exec(value.trim());
+  if (!match) return null;
+  const [, sh, sm, eh, em] = match.map(Number);
+  const start = (sh ?? 0) * 60 + (sm ?? 0);
+  const end = (eh ?? 0) * 60 + (em ?? 0);
+  return start === end ? null : [start, end];
+};
+
+/** Whether `minuteOfDay` (0..1439, host time) falls inside the window. */
+export const inInstallWindow = (window: [number, number], minuteOfDay: number): boolean => {
+  const [start, end] = window;
+  return start < end
+    ? minuteOfDay >= start && minuteOfDay < end
+    : minuteOfDay >= start || minuteOfDay < end;
+};
+
+/**
+ * The newest release staged ahead of time (the host setting `update_background_download`):
+ * downloaded and checked, not installed, so "Update host" only has to swap and restart.
+ */
+export const UpdateDownloadSchema = z.object({
+  state: z.enum(["idle", "downloading", "ready", "failed"]),
+  version: z.string().nullable(),
+  error: z.string().nullable(),
+});
+export type UpdateDownload = z.infer<typeof UpdateDownloadSchema>;
+
+/** How the last update run went, for "Previous update" on the Updates page. */
+export const PreviousUpdateSchema = z.object({
+  at: z.string(),
+  from: z.string(),
+  to: z.string().nullable(),
+  ok: z.boolean(),
+  /** How long the run took, when it recorded its start. */
+  seconds: z.number().nullable(),
+  error: z.string().nullable(),
+});
+export type PreviousUpdate = z.infer<typeof PreviousUpdateSchema>;
+
 /** When `POST /api/updates/apply` starts the update: at once, or once the running turns finish. */
 export const ApplyUpdateRequestSchema = z.object({
   when: z.enum(["now", "idle"]).default("now"),
@@ -163,8 +216,12 @@ export const UpdateStatusSchema = z.object({
   releaseUrl: z.string().nullable(),
   checkedAt: z.string().nullable(),
   checkError: z.string().nullable(),
-  /** `updating` from the moment an update starts until the host restarts on the new release. */
-  state: z.enum(["idle", "updating", "failed"]),
+  /**
+   * `updating` from the moment an update starts until the host restarts on the new release;
+   * `installed` when a host started by hand has the new release on disk and needs a restart to
+   * use it (`updateError` then says how); `failed` when the run failed or was rolled back.
+   */
+  state: z.enum(["idle", "updating", "installed", "failed"]),
   updateError: z.string().nullable(),
   /** The host's name, as people call it ("soulf"). */
   hostName: z.string(),
@@ -181,5 +238,11 @@ export const UpdateStatusSchema = z.object({
   /** Turns an update now would restart the host under. */
   runningTurns: z.array(RunningTurnSchema),
   queued: QueuedUpdateSchema.nullable(),
+  download: UpdateDownloadSchema,
+  previous: PreviousUpdateSchema.nullable(),
+  /** What else the update brings, when the feed says: the CUA Driver version AOP pins. */
+  includes: z.object({
+    cuaDriver: z.object({ from: z.string(), to: z.string() }).nullable(),
+  }),
 });
 export type UpdateStatus = z.infer<typeof UpdateStatusSchema>;

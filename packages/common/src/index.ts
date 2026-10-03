@@ -56,6 +56,21 @@ export type { ChannelConfig, ReleaseChannel } from "./channel.ts";
 export { buildChannel, CHANNELS, channelDefine, parseReleaseChannel } from "./channel.ts";
 export * from "./computer-use-lease.ts";
 export type {
+  AppUpdateState,
+  ClientInfo,
+  DesktopAppInfo,
+  DesktopAppUpdateBridge,
+} from "./desktop-app.ts";
+export {
+  AppUpdateStateSchema,
+  browserPlatformOf,
+  CLIENT_HEADER,
+  ClientInfoSchema,
+  DesktopAppInfoSchema,
+  formatClientHeader,
+  parseClientHeader,
+} from "./desktop-app.ts";
+export type {
   BrowserAsk,
   BrowserDownload,
   BrowserDownloadAction,
@@ -75,6 +90,19 @@ export {
   HostHealthSchema,
   MIN_CLIENT_API_VERSION,
 } from "./host-api.ts";
+export type {
+  HostSetup,
+  SetupAction,
+  SetupCheck,
+  SetupCheckId,
+} from "./host-setup.ts";
+export {
+  HostSetupSchema,
+  SetupActionSchema,
+  SetupCheckIdSchema,
+  SetupCheckSchema,
+  setupIsComplete,
+} from "./host-setup.ts";
 export type { FieldLabels, ValidationIssue } from "./issues.ts";
 export { describeFirstIssue, describeIssue, describeIssuesByField } from "./issues.ts";
 export * from "./library.ts";
@@ -186,27 +214,36 @@ export type {
   ApplyUpdateRequest,
   HostManagement,
   HostRestart,
+  PreviousUpdate,
   QueuedUpdate,
   ReleaseAsset,
   ReleaseInfo,
   RunningTurn,
+  UpdateDownload,
+  UpdateInstallMode,
   UpdateStatus,
 } from "./updates.ts";
 export {
   ApplyUpdateRequestSchema,
   DEFAULT_HOST_MANAGEMENT,
+  DEFAULT_UPDATE_INSTALL_WINDOW,
   GITHUB_API_URL,
   GithubReleaseSchema,
   HostManagementSchema,
   HostRestartSchema,
+  inInstallWindow,
   latestReleaseApiUrl,
   mayManageHost,
+  PreviousUpdateSchema,
   parseGithubRelease,
   parseHostManagement,
+  parseInstallWindow,
   QUEUED_UPDATE_MAX_WAIT_MS,
   QueuedUpdateSchema,
   RELEASE_REPO,
   RunningTurnSchema,
+  UpdateDownloadSchema,
+  UpdateInstallModeSchema,
   UpdateStatusSchema,
 } from "./updates.ts";
 export {

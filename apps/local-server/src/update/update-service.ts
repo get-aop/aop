@@ -147,6 +147,9 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
       restart: await deps.restart(),
       runningTurns: running.map(({ title, kind }) => ({ title, kind })),
       queued: applyingSince === null ? queue.view(running) : null,
+      download: { state: "idle", version: null, error: null },
+      previous: null,
+      includes: { cuaDriver: null },
     };
   };
 
