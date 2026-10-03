@@ -1,6 +1,7 @@
 import { ShieldOffIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { skipsPermissions, useAgentClis } from "../agent-clis/agent-cli-store";
+import { InboxButton } from "../inbox/InboxButton";
 import { LiveViewNotice } from "../live-view/LiveViewNotice";
 import { PlanUsageMeter } from "../plan-usage/PlanUsageMeter";
 import { useProjectsState } from "../projects/ProjectsProvider";
@@ -10,14 +11,15 @@ import { openSettingsDialog } from "./dialog-store";
 import { CONNECTION_DOT } from "./project-switcher/SwitcherConnection";
 
 /**
- * The far end of every top bar: host-wide state. The live view's "Show" button while it is
- * closed and a thread uses computer use, the Updates button (shown only when something can be
+ * The far end of every top bar: host-wide state. The Inbox with its unread count, the live
+ * view's "Show" button while it is closed and a thread uses computer use, the Updates button (shown only when something can be
  * updated, is updating or failed), agents that skip permission checks (opens the Runtimes
  * settings), a host out of reach, then the Claude plan's usage meter. The notices drop their
  * words when the bar is narrow; their titles keep them.
  */
 export const ShellStatus = ({ testId }: { testId: string }) => (
   <div data-testid={testId} className="ml-auto flex shrink-0 items-center gap-0.5">
+    <InboxButton />
     <LiveViewNotice className={noticeClass} />
     <UpdatesButton />
     <PermissionBypassNotice />

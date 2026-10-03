@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SlackHealthSchema } from "./inbox-slack.ts";
 
 /**
  * The Inbox: the activity from the person's message sources (Slack first) that needs them, and
@@ -68,6 +69,13 @@ export const InboxLinkSchema = z.object({
   projectId: z.string().nullable(),
   title: z.string().nullable(),
   url: z.string().nullable(),
+  /**
+   * For a thread, its status; for a pull request, its state (`open`, `merged`, ...); null when the
+   * host cannot tell (an issue, or a thread that is gone).
+   */
+  status: z.string().nullable(),
+  /** For a thread dispatched from the item: AOP posts its PR notes in the Slack thread, as the person. */
+  postBack: z.boolean(),
   createdAt: z.string(),
 });
 export type InboxLink = z.infer<typeof InboxLinkSchema>;
@@ -88,6 +96,8 @@ export const InboxItemSchema = z.object({
   conversation: InboxConversationSchema,
   /** The thread the item's messages belong to, when they are in one. */
   threadId: z.string().nullable(),
+  /** The latest matching message (Slack: its `ts`): a reply from the item answers it. */
+  messageId: z.string(),
   /** The latest matching message's author and text. */
   author: InboxAuthorSchema,
   text: z.string(),
@@ -116,6 +126,10 @@ export type InboxItemPage = z.infer<typeof InboxItemPageSchema>;
 export const InboxSummarySchema = z.object({
   /** What the top bar's badge counts: unread items, snoozed ones that are due included. */
   unread: z.number().int(),
+  /** Whether any source is connected; the top bar shows the Inbox only then. */
+  connected: z.boolean(),
+  /** The connected source's feed, for the Inbox header; null when none is connected. */
+  health: SlackHealthSchema.nullable(),
 });
 export type InboxSummary = z.infer<typeof InboxSummarySchema>;
 
@@ -135,6 +149,8 @@ export type InboxChannelMode = z.infer<typeof InboxChannelModeSchema>;
 
 export const InboxChannelRuleSchema = z.object({
   mode: InboxChannelModeSchema,
+  /** The channel's name when the rule was set, so the rules read without asking the source. */
+  name: z.string().max(200).optional(),
   /** Preselects this project when the person dispatches a thread from the channel. */
   projectId: z.string().nullable().optional(),
 });
@@ -170,3 +186,87 @@ export const INBOX_DEFAULT_RULES: InboxRules = {
 
 /** Matched messages go after 30 days; 0 keeps them. The range is the Library's. */
 export const INBOX_DEFAULTS = { retentionDays: 30 } as const;
+
+/** A message of an item's conversation, read from its source when the item is opened. Never stored. */
+export const InboxContextMessageSchema = z.object({
+  id: z.string(),
+  author: InboxAuthorSchema,
+  text: z.string(),
+  sentAt: z.string(),
+  fromMe: z.boolean(),
+  /** The person sent it from AOP's reply box. */
+  fromAop: z.boolean(),
+});
+export type InboxContextMessage = z.infer<typeof InboxContextMessageSchema>;
+
+export const InboxContextSchema = z.object({
+  /** The thread's first message, for an item in a thread. */
+  parent: InboxContextMessageSchema.nullable(),
+  /** The latest messages, oldest first; every one of them when `all` was asked for. */
+  messages: z.array(InboxContextMessageSchema),
+  /** Messages between the parent and `messages` not shown. */
+  earlier: z.number().int(),
+});
+export type InboxContext = z.infer<typeof InboxContextSchema>;
+
+export const InboxReplyInputSchema = z.object({
+  text: z.string().trim().min(1).max(4000),
+  /** Also send a thread reply to the channel. */
+  broadcast: z.boolean().default(false),
+});
+export type InboxReplyInput = z.infer<typeof InboxReplyInputSchema>;
+
+export const INBOX_DISPATCH_MODES = ["thread", "coordinator"] as const;
+
+export const INBOX_BRIEF_LIMITS = { titleMax: 200, briefMax: 20_000, contextMax: 6000 } as const;
+
+/**
+ * Dispatch a thread from an item. `brief` is the person's edited text; the host adds the parts
+ * they left ticked (the thread's context, a linked issue, the Slack link), quoted the same way.
+ */
+export const InboxDispatchInputSchema = z.object({
+  projectId: z.string().min(1),
+  mode: z.enum(INBOX_DISPATCH_MODES),
+  /** The thread's repository; required when the project has more than one. */
+  repoId: z.string().min(1).nullable().default(null),
+  title: z.string().trim().min(1).max(INBOX_BRIEF_LIMITS.titleMax),
+  brief: z.string().trim().min(1).max(INBOX_BRIEF_LIMITS.briefMax),
+  includeContext: z.boolean().default(true),
+  /** An issue link of the item whose title, link and description go into the brief. */
+  issueLinkId: z.string().min(1).nullable().default(null),
+  attachLink: z.boolean().default(true),
+  /** Post "Opened a PR" and "Merged" notes in the Slack thread, as the person. Off unless confirmed. */
+  postBack: z.boolean().default(false),
+});
+export type InboxDispatchInput = z.infer<typeof InboxDispatchInputSchema>;
+
+/** What the dispatch dialog starts from. */
+export const InboxDispatchDraftSchema = z.object({
+  title: z.string(),
+  brief: z.string(),
+  /** Characters the thread's context adds when ticked; 0 when there is none. */
+  contextLength: z.number().int(),
+  /** The project the channel is mapped to, preselected. */
+  projectId: z.string().nullable(),
+  /** The exact notes the post-back would send, with the pull request filled in later. */
+  postBackPreview: z.array(z.string()),
+});
+export type InboxDispatchDraft = z.infer<typeof InboxDispatchDraftSchema>;
+
+export const InboxLinkPatchSchema = z.object({ postBack: z.boolean() });
+
+/** A desktop notification the host decided a new item deserves. */
+export const InboxNotificationSchema = z.object({
+  seq: z.number().int(),
+  itemId: z.string(),
+  title: z.string(),
+  body: z.string(),
+});
+export type InboxNotification = z.infer<typeof InboxNotificationSchema>;
+
+export const InboxNotificationsPageSchema = z.object({
+  /** Pass back as `after` to get only what came since. */
+  cursor: z.number().int(),
+  notifications: z.array(InboxNotificationSchema),
+});
+export type InboxNotificationsPage = z.infer<typeof InboxNotificationsPageSchema>;

@@ -7,6 +7,7 @@ export type SettingsSection =
   | "repositories"
   | "runtimes"
   | "computer-use"
+  | "connections"
   | "about";
 
 interface DialogState {

@@ -6,13 +6,16 @@ export type NotificationKind =
   | "thread-error"
   | "pr-merged"
   | "pr-closed"
-  | "turn-finished";
+  | "turn-finished"
+  | "inbox";
 
-/** Where a click on the notification lands: a thread, or the coordinator chat when `threadId` is null. */
-export interface NotificationTarget {
-  projectId: string;
-  threadId: string | null;
-}
+/**
+ * Where a click on the notification lands: a thread, the coordinator chat when `threadId` is
+ * null, or an item of the Inbox.
+ */
+export type NotificationTarget =
+  | { projectId: string; threadId: string | null }
+  | { inboxItemId: string };
 
 export interface NotificationIntent {
   kind: NotificationKind;
@@ -70,7 +73,9 @@ export const decideNotification = (
 };
 
 /** The address, inside the dashboard, a notification opens. Built from ids the host made, encoded. */
-export const notificationPath = ({ projectId, threadId }: NotificationTarget): string => {
+export const notificationPath = (target: NotificationTarget): string => {
+  if ("inboxItemId" in target) return `/inbox/${encodeURIComponent(target.inboxItemId)}`;
+  const { projectId, threadId } = target;
   const project = `/projects/${encodeURIComponent(projectId)}`;
   return threadId === null
     ? `${project}/chat`

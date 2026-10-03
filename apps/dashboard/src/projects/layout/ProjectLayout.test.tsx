@@ -38,7 +38,7 @@ const stateWith = (...threads: ReturnType<typeof makeThread>[]): ProjectsState =
 // The page as the app mounts it: the route follows the address, so a click that navigates moves it.
 const Routed = () => {
   const route = useRoute();
-  return route.name === "projects" ? null : <ProjectPage route={route} />;
+  return route.name === "projects" || route.name === "inbox" ? null : <ProjectPage route={route} />;
 };
 
 const mount = (state: ProjectsState = stateWith(blocked, busy)) => {

@@ -1,4 +1,4 @@
-import type { EventLogEntry, Project, Thread } from "@aop/common";
+import type { EventLogEntry, InboxNotification, Project, Thread } from "@aop/common";
 import type { FetchLike } from "../connection/host-client";
 
 export interface OpenStream {
@@ -27,6 +27,17 @@ export const createFakeHost = () => {
     /** Status to answer a stream with instead of opening it. */
     streamStatus: {} as Record<string, number>,
     listStatus: 200,
+    /** The Inbox's notification queue, as `GET /api/inbox/notifications` answers it. */
+    inbox: [] as InboxNotification[],
+  };
+
+  const inboxPage = (url: URL): Response => {
+    const after = Number(url.searchParams.get("after") ?? Number.NaN);
+    const cursor = host.inbox.at(-1)?.seq ?? 0;
+    return Response.json({
+      cursor,
+      notifications: Number.isNaN(after) ? [] : host.inbox.filter((entry) => entry.seq > after),
+    });
   };
 
   const encoder = new TextEncoder();
@@ -42,6 +53,7 @@ export const createFakeHost = () => {
     signal: AbortSignal | null | undefined,
   ): Response => {
     if (url.pathname === "/api/projects") return listProjects();
+    if (url.pathname === "/api/inbox/notifications") return inboxPage(url);
     const threads = /^\/api\/projects\/([^/]+)\/threads$/.exec(url.pathname);
     if (threads?.[1]) return Response.json({ threads: host.threads[threads[1]] ?? [] });
     const stream = /^\/api\/projects\/([^/]+)\/stream$/.exec(url.pathname);

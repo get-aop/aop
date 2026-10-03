@@ -1,3 +1,4 @@
+import { afterEach } from "bun:test";
 import type { Project } from "@aop/common";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentType } from "react";
@@ -6,6 +7,14 @@ import { RuntimeConfigurationProvider } from "../../hooks/runtime-configuration"
 import { type ApiCall, mockApi } from "../../test/mock-api";
 import { ProjectsProvider } from "../ProjectsProvider";
 import { makeEntry, makeState, stubLiveProjects } from "../test-utils";
+
+// The fake host of the test in flight. It goes after each test, so later test files (which
+// run in the same process) reach the real `fetch` again.
+let installed: ReturnType<typeof mockApi> | null = null;
+afterEach(() => {
+  installed?.restore();
+  installed = null;
+});
 
 /**
  * A project settings section on a host that saves every PATCH as sent. Tests import this after
@@ -18,6 +27,7 @@ export const renderSection = async (
   respond: (call: ApiCall) => Response | Promise<Response> | undefined = () => undefined,
   options: { withRuntimes?: boolean } = {},
 ) => {
+  installed?.restore();
   const api = mockApi(
     (call) =>
       respond(call) ??
@@ -25,6 +35,7 @@ export const renderSection = async (
         ? Response.json({ project: { ...project, ...(call.body as object) } })
         : undefined),
   );
+  installed = api;
   const stub = stubLiveProjects(makeState([makeEntry(project)]));
   const section = (current: Project, open: boolean) => (
     <ProjectsProvider live={stub.live}>

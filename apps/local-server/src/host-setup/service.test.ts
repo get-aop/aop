@@ -25,6 +25,7 @@ describe("host setup service", () => {
       ["github", "ok"],
       ["computer-use", "ok"],
       ["updates", "ok"],
+      ["slack-inbox", "optional"],
     ]);
   });
 
@@ -205,7 +206,7 @@ describe("host setup service", () => {
         error: "CUA's installer failed",
       });
       if (result.ok || result.code !== "FIX_FAILED") throw new Error("expected FIX_FAILED");
-      expect(result.setup.checks).toHaveLength(6);
+      expect(result.setup.checks).toHaveLength(7);
     });
   });
 });

@@ -6,6 +6,7 @@ import { type Generated, Kysely } from "kysely";
 // The ESM build, for the reason given in db/connection.ts.
 import { BunSqliteDialect } from "kysely-bun-sqlite/dist/index.js";
 import { INBOX_V1_STATEMENTS } from "./inbox-v1.ts";
+import { INBOX_V2_STATEMENTS } from "./inbox-v2.ts";
 
 /**
  * The Inbox keeps its messages in a database of its own, `$AOP_HOME/inbox/inbox.db`, in a
@@ -23,6 +24,7 @@ interface InboxMigration {
 /** Append-only, like the main database's MIGRATIONS: add a version, never change one. */
 export const INBOX_MIGRATIONS: readonly InboxMigration[] = [
   { version: 1, name: "inbox", statements: INBOX_V1_STATEMENTS },
+  { version: 2, name: "slack", statements: INBOX_V2_STATEMENTS },
 ];
 
 export interface InboxItemsTable {
@@ -60,7 +62,28 @@ export interface InboxLinksTable {
   project_id: string | null;
   title: string | null;
   url: string | null;
+  post_back: Generated<number>;
+  /** How far the host followed a thread link's pull request: null, `opened`, `merged`, `closed`. */
+  pr_noted: string | null;
   created_at: string;
+}
+
+export interface InboxSourcesTable {
+  source_id: string;
+  /** The person's InboxRules as JSON; null until they change the defaults. */
+  rules: string | null;
+  notifications: Generated<string>;
+  /** The newest message the feed saw (Slack: its `ts`); catch-up reads start there. */
+  last_seen: string | null;
+  updated_at: string;
+}
+
+export interface InboxSentTable {
+  source_id: string;
+  conversation_id: string;
+  message_id: string;
+  item_id: string | null;
+  sent_at: string;
 }
 
 export interface InboxThreadsTable {
@@ -81,6 +104,8 @@ export interface InboxDatabase {
   inbox_items: InboxItemsTable;
   inbox_links: InboxLinksTable;
   inbox_threads: InboxThreadsTable;
+  inbox_sources: InboxSourcesTable;
+  inbox_sent: InboxSentTable;
   schema_migrations: InboxMigrationsTable;
 }
 

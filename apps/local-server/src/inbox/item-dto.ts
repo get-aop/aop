@@ -15,6 +15,7 @@ export const toInboxItem = (
   row: InboxItemRow,
   links: readonly InboxLinkRow[],
   now: string,
+  statuses: ReadonlyMap<string, string | null> = new Map(),
 ): InboxItem => {
   const due = row.state === "snoozed" && row.snoozed_until !== null && row.snoozed_until <= now;
   return {
@@ -26,6 +27,7 @@ export const toInboxItem = (
       kind: InboxConversationKindSchema.catch("channel").parse(row.conversation_kind),
     },
     threadId: row.thread_id,
+    messageId: row.message_id,
     author: { id: row.author_id, name: row.author_name, avatarUrl: row.author_avatar_url },
     text: row.text,
     reason: InboxReasonSchema.catch("mention").parse(row.reason),
@@ -45,6 +47,8 @@ export const toInboxItem = (
         projectId: link.project_id,
         title: link.title,
         url: link.url,
+        status: statuses.get(link.id) ?? null,
+        postBack: link.post_back === 1,
         createdAt: link.created_at,
       })),
   };

@@ -6,6 +6,7 @@ import { githubCheck } from "./github-check.ts";
 import type { HostFacts, HostSetupProbes, ServeLook } from "./probes.ts";
 import { reachableCheck } from "./reachable-check.ts";
 import { serviceCheck } from "./service-check.ts";
+import { slackInboxCheck } from "./slack-inbox-check.ts";
 import { updatesCheck } from "./updates-check.ts";
 
 const logger = getLogger("host-setup");
@@ -115,6 +116,7 @@ const readSetup = async (deps: HostSetupServiceDeps, fresh: boolean): Promise<Ho
       (look) => computerUseCheck(look, `${facts.channel.binaryName} computer-use setup`),
     ),
     bounded("updates", probes.updates, (look) => updatesCheck(look, facts.channel)),
+    bounded("slack-inbox", probes.slackInbox, (slack) => slackInboxCheck(slack, Date.now())),
   ]);
 
   const counted = checks.filter((check) => check.state !== "optional");
@@ -144,6 +146,7 @@ const TITLES: Record<SetupCheckId, string> = {
   github: "GitHub",
   "computer-use": "Computer use",
   updates: "Updates",
+  "slack-inbox": "Slack Inbox",
 };
 
 // A look that failed or took too long is reported, not taken for a problem it may not be.

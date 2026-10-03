@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { INBOX_DEFAULT_RULES } from "@aop/common";
 import { itemKey } from "./service.ts";
-import { createTestInbox, incomingMessage, SOURCE } from "./test-utils.ts";
+import { createTestInbox, incomingMessage, SOURCE, type TestInbox } from "./test-utils.ts";
 
-type TestInbox = ReturnType<typeof createTestInbox>;
 let current: TestInbox | null = null;
 const setup = (options: Parameters<typeof createTestInbox>[0] = {}) => {
   current = createTestInbox(options);
@@ -33,7 +32,7 @@ describe("ingest", () => {
       permalink: "https://acme.slack.com/archives/C1/p1700000000000100",
       links: [],
     });
-    expect(await inbox.summary()).toEqual({ unread: 1 });
+    expect(await inbox.unread()).toBe(1);
   });
 
   test("stores nothing for a message that does not need the person", async () => {
@@ -58,7 +57,7 @@ describe("ingest", () => {
     );
 
     expect(item).toMatchObject({ reason: "dm", messageCount: 2, text: "are we on at 3?" });
-    expect(await inbox.summary()).toEqual({ unread: 1 });
+    expect(await inbox.unread()).toBe(1);
   });
 
   test("replies to a message that mentioned the person join its item and keep the stronger reason", async () => {
@@ -104,7 +103,7 @@ describe("ingest", () => {
 
     const read = await inbox.get(item?.id ?? "");
     expect(read.success && read.item.state).toBe("read");
-    expect(await inbox.summary()).toEqual({ unread: 0 });
+    expect(await inbox.unread()).toBe(0);
   });
 
   test("a redelivered or older message changes nothing", async () => {
@@ -216,7 +215,7 @@ describe("list", () => {
       state: "snoozed",
       snoozedUntil: "2026-10-01T14:00:00.000Z",
     });
-    expect(await inbox.summary()).toEqual({ unread: 0 });
+    expect(await inbox.unread()).toBe(0);
     const hidden = await inbox.list("needs-me", {});
     expect(hidden.success && hidden.page.items).toEqual([]);
 
@@ -226,7 +225,7 @@ describe("list", () => {
       state: "unread",
       snoozedUntil: null,
     });
-    expect(await inbox.summary()).toEqual({ unread: 1 });
+    expect(await inbox.unread()).toBe(1);
   });
 });
 

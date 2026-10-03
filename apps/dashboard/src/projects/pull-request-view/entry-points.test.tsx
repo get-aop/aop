@@ -49,7 +49,7 @@ const owner = makeThread({
 
 const Routed = () => {
   const route = useRoute();
-  return route.name === "projects" ? null : <ProjectPage route={route} />;
+  return route.name === "projects" || route.name === "inbox" ? null : <ProjectPage route={route} />;
 };
 
 const mount = async () => {

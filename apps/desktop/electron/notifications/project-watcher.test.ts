@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createManualScheduler, flush } from "../connection/test-utils";
 import { createFakeHost } from "./fake-host";
-import type { NotificationIntent } from "./policy";
+import { INBOX_POLL_MS } from "./inbox-poll";
+import { type NotificationIntent, notificationPath } from "./policy";
 import { createProjectWatcher, MAX_WATCHED_PROJECTS, type WatchTarget } from "./project-watcher";
 import {
   coordinatorPost,
@@ -14,8 +15,9 @@ import {
 } from "./test-utils";
 
 // The watcher also re-reads the project list once a minute; that timer is not a reconnect.
+// The project list's refresh and the Inbox's queue read run on their own steady timers.
 const retryDelays = (clock: ReturnType<typeof createManualScheduler>): number[] =>
-  clock.waiting().filter((delay) => delay !== 60_000);
+  clock.waiting().filter((delay) => delay !== 60_000 && delay !== INBOX_POLL_MS);
 
 const TARGET: WatchTarget = { baseUrl: "https://mac.tail1234.ts.net", token: "aop_t" };
 
@@ -326,5 +328,48 @@ describe("staying connected", () => {
     await flush();
 
     expect(fake.host.requests.filter((r) => r.endsWith("/threads"))).toHaveLength(2);
+  });
+});
+
+describe("the Inbox's notifications", () => {
+  const queued = (seq: number, itemId: string) => ({
+    seq,
+    itemId,
+    title: "Priya Rao in #infra",
+    body: "@Marcelo can you take the deploy check?",
+  });
+
+  test("shows what the host queued after it started reading, and opens the item", async () => {
+    const { fake, clock, notifications, started } = setup();
+    fake.host.inbox = [queued(1, "inbx_old")];
+    await started();
+    expect(fake.host.requests).toContain("/api/inbox/notifications");
+    expect(notifications).toEqual([]);
+
+    fake.host.inbox.push(queued(2, "inbx_new"));
+    clock.fire();
+    await flush();
+    await flush();
+
+    expect(fake.host.requests).toContain("/api/inbox/notifications?after=1");
+    expect(notifications).toEqual([
+      {
+        kind: "inbox",
+        title: "Priya Rao in #infra",
+        body: "@Marcelo can you take the deploy check?",
+        target: { inboxItemId: "inbx_new" },
+      },
+    ]);
+    expect(notificationPath({ inboxItemId: "inbx_new" })).toBe("/inbox/inbx_new");
+  });
+
+  test("stays quiet while the app is in front", async () => {
+    const { fake, clock, notifications, started } = setup({ focused: true });
+    await started();
+    fake.host.inbox.push(queued(1, "inbx_1"));
+    clock.fire();
+    await flush();
+    await flush();
+    expect(notifications).toEqual([]);
   });
 });
