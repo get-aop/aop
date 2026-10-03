@@ -1,0 +1,10 @@
+{
+  "turns": [
+    {
+      "projectId": "prj_aop",
+      "threadId": "thr_w",
+      "messageId": "msg_7",
+      "ops": [{ "op": "reset", "parts": [{ "type": "text", "text": "Building" }] }]
+    }
+  ]
+}

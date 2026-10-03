@@ -1,0 +1,60 @@
+[
+  {
+    "id": 41,
+    "projectId": "prj_aop",
+    "type": "thread.upserted",
+    "payload": {
+      "thread": {
+        "id": "thr_q",
+        "title": "Pick the push design",
+        "status": "working",
+        "projectId": "prj_aop",
+        "runtime": {
+          "provider": "claude-code",
+          "runtimeId": "rt_builtin",
+          "model": null,
+          "effort": "high"
+        },
+        "target": { "kind": "host" },
+        "repoId": "repo_1",
+        "liveStatusLine": null,
+        "repliesCount": 2,
+        "createdAt": "2026-10-03T07:00:00.000Z",
+        "branch": "aop/push-design",
+        "steps": [],
+        "artifacts": [],
+        "unread": false,
+        "lastActivityAt": "2026-10-03T08:09:00.000Z"
+      }
+    }
+  },
+  {
+    "id": 42,
+    "projectId": "prj_aop",
+    "type": "message.created",
+    "payload": {
+      "message": {
+        "id": "msg_5",
+        "projectId": "prj_aop",
+        "threadId": null,
+        "createdAt": "2026-10-03T08:10:00.000Z",
+        "role": "thread-report",
+        "reportedThreadId": "thr_w",
+        "outcome": "failed",
+        "text": "Gradle failed"
+      }
+    }
+  },
+  {
+    "id": 43,
+    "projectId": "prj_aop",
+    "type": "thread.removed",
+    "payload": { "threadId": "thr_d" }
+  },
+  {
+    "id": 44,
+    "projectId": "prj_aop",
+    "type": "routine.removed",
+    "payload": { "routineId": "rtn_1" }
+  }
+]

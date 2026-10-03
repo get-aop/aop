@@ -1,0 +1,8 @@
+{
+  "service": "aop",
+  "version": "0.10.8-nightly.20261003.24",
+  "channel": "nightly",
+  "port": 25650,
+  "apiVersion": 1,
+  "minClientApiVersion": 1
+}

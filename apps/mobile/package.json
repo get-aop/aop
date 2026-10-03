@@ -1,0 +1,19 @@
+{
+  "name": "@aop/mobile",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "typecheck": "bun run ./scripts/gradle.ts typecheck",
+    "lint:android": "bun run ./scripts/gradle.ts lint",
+    "test:android": "bun run ./scripts/gradle.ts test",
+    "apk": "bun run ./scripts/gradle.ts apk"
+  },
+  "dependencies": {
+    "@aop/common": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}

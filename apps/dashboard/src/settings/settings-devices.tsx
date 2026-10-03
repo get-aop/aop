@@ -1,12 +1,14 @@
 import type { Device, PairingCode } from "@aop/common";
 import { LaptopIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { renderSVG } from "uqr";
 import { Button } from "@/ui/button";
 import { createPairingCode } from "../api/auth";
 import { requestConfirmation } from "../components/ConfirmationHost";
 import { useNow } from "../projects/use-now";
 import { describeLastSeen, formatCountdown, formatPaired, secondsLeft } from "./devices-format";
+import { pairingLink } from "./pairing-link";
 import { useDevices } from "./use-devices";
 
 /**
@@ -88,10 +90,39 @@ const PairingPanel = ({ devices }: { devices: Device[] | null }) => {
 };
 
 const CodeCard = ({ grant, remaining }: { grant: Grant; remaining: number }) => (
+  <div className="flex max-w-xl flex-col gap-3">
+    <CodeRow grant={grant} remaining={remaining} />
+    {remaining > 0 ? <PairingQr code={grant.code} /> : null}
+  </div>
+);
+
+/** The same code as a QR code, for the AOP phone app's scanner. */
+const PairingQr = ({ code }: { code: string }) => {
+  const src = useMemo(() => {
+    const link = pairingLink(code, typeof window === "undefined" ? null : window.location.origin);
+    const svg = renderSVG(link, { border: 2, whiteColor: "#ffffff", blackColor: "#0d0d0e" });
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }, [code]);
+  return (
+    <div className="flex items-center gap-4">
+      <img
+        data-testid="devices-code-qr"
+        src={src}
+        alt={`QR code for pairing code ${code}`}
+        className="size-36 shrink-0 rounded-row bg-white"
+      />
+      <p className="text-[12.5px] leading-relaxed text-text-subtle">
+        On a phone, scan this with the AOP app instead of typing the code.
+      </p>
+    </div>
+  );
+};
+
+const CodeRow = ({ grant, remaining }: { grant: Grant; remaining: number }) => (
   <div
     data-testid="devices-code-card"
     data-expired={remaining === 0}
-    className="flex max-w-xl items-center gap-4 rounded-row border border-border-strong bg-raised px-4 py-3"
+    className="flex items-center gap-4 rounded-row border border-border-strong bg-raised px-4 py-3"
   >
     <span
       data-testid="devices-code"
