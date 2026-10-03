@@ -72,6 +72,11 @@ export const ThreadTranscript = ({
   const answer = useMemo(() => sender(threadActions.reply), [sender]);
   const disabledReason = composerDisabledReason(project, thread);
   const uploadImage = useCallback((file: File) => uploadChatImage(project.id, file), [project.id]);
+  // A thread is @-mentioned to point at another one's work; it has no need to name itself.
+  const otherThreads = useMemo(
+    () => threads.filter((other) => other.id !== thread.id),
+    [threads, thread.id],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -117,6 +122,7 @@ export const ThreadTranscript = ({
             working={working}
             uploadImage={uploadImage}
             chips={<ThreadRuntimeChips thread={thread} />}
+            mentionThreads={otherThreads}
             onStop={
               STOPPABLE.has(thread.status) ? () => void threadActions.stop(thread) : undefined
             }

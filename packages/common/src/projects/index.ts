@@ -331,6 +331,7 @@ export {
   BlockedQuestionSchema,
   getThreadProgress,
   shownThreadStatus,
+  THREAD_DESCRIPTION_MAX,
   THREAD_STATUSES,
   THREAD_WAIT_REASON_MAX,
   ThreadDegradedSchema,

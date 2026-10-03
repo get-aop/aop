@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { PullRequestRef } from "@aop/common";
+import { type PullRequestRef, THREAD_DESCRIPTION_MAX } from "@aop/common";
 import type { Kysely } from "kysely";
 import { READ_ONLY_ACCESS } from "../chat-session/run-profile.ts";
 import type { Database } from "../db/schema.ts";
@@ -75,6 +75,7 @@ describe("thread repository", () => {
       branch: null,
       steps: [],
       liveStatusLine: null,
+      description: "go",
       artifacts: [],
       repliesCount: 2,
       unread: false,
@@ -82,6 +83,55 @@ describe("thread repository", () => {
       createdAt: CREATED,
       status: "working",
     });
+  });
+
+  test("describes a thread by its first message, on one line, without what is stored after it", async () => {
+    await addThread("t1");
+    await addThread("t2");
+    await addThread("t3");
+    await addThread("t4");
+    const message = (id: string, sessionId: string, content: string, extra = {}) => ({
+      id,
+      session_id: sessionId,
+      role: "user" as const,
+      content,
+      created_at: CREATED,
+      origin_json: null,
+      ...extra,
+    });
+    await db
+      .insertInto("chat_messages")
+      .values([
+        message("m1", "t1", "Fix the  login\n\nflow on Safari"),
+        message("m2", "t1", "A later steer", { created_at: "2026-09-30T10:00:00.000Z" }),
+        message("m3", "t2", 'Look\n\n<!--aop-chat-images:[{"id":"i"}]-->'),
+        message("m4", "t3", '[Routine "Digest", run 3] Summarise the inbox', {
+          origin_json: JSON.stringify({
+            type: "routine",
+            routineId: "r1",
+            name: "Digest",
+            prompt: "Summarise the inbox",
+          }),
+        }),
+        message("m5", "t4", "word ".repeat(400)),
+      ])
+      .execute();
+
+    const described = new Map(
+      (await threads.listByProject("p1")).map((thread) => [thread.id, thread.description]),
+    );
+
+    expect(described.get("t1")).toBe("Fix the login flow on Safari");
+    expect(described.get("t2")).toBe("Look");
+    expect(described.get("t3")).toBe("Summarise the inbox");
+    expect(described.get("t4")?.length).toBe(THREAD_DESCRIPTION_MAX);
+    expect(described.get("t4")?.endsWith("…")).toBe(true);
+  });
+
+  test("a thread nothing has been said in has no description", async () => {
+    await addThread("t1");
+
+    expect(await threads.getById("t1")).not.toHaveProperty("description");
   });
 
   test("never returns a coordinator or an unknown session as a thread", async () => {

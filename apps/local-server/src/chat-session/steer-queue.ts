@@ -223,7 +223,7 @@ export const claimNextQueuedSteer = async (
     return { success: false, reason: "UNSTARTABLE", message: workspace.error };
   }
   const globalInstructions = await loadChatGlobalInstructions(ctx.settingsRepository);
-  const turnContext = await loadTurnContext(ctx, session);
+  const turnContext = await loadTurnContext(ctx, session, decoded.text);
   const basePrompt = buildRuntimePrompt(
     decoded.text,
     sessionId,

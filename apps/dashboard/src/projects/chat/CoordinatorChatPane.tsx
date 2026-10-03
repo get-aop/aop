@@ -128,6 +128,7 @@ export const CoordinatorChatPane = ({
             working={working}
             uploadImage={uploadImage}
             chips={<CoordinatorChips project={project} />}
+            mentionThreads={threads}
           />
         </footer>
       </ChatProvider>

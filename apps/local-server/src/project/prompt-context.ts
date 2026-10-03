@@ -11,6 +11,7 @@ import {
   type PromptRepo,
 } from "./system-prompt.ts";
 import { buildThreadDigest } from "./thread-digest.ts";
+import { buildMentionNote, MENTIONS_MAX, mentionedThreadIds } from "./thread-mentions.ts";
 
 /** What the engine adds to a project session's run: the system prompt for its role, the extra folders it may read, and its computer-use tools. */
 export interface ProjectRunContext {
@@ -61,16 +62,36 @@ export const loadProjectRunContext = async (
 
 /**
  * Lines added to the message of each turn, for what changes too often to sit in the system
- * prompt: the coordinator's list of its threads. A thread has none. Undefined for a session that
- * is not a project session, which keeps the message's default note.
+ * prompt: the coordinator's list of its threads; for a thread, the other threads `text` mentions.
+ * Undefined for a session that is not a project session, which keeps the message's default note.
  */
 export const loadTurnContext = async (
   ctx: LocalServerContext,
   session: ChatSession,
+  text: string,
 ): Promise<string[] | undefined> => {
   if (!session.project_id) return undefined;
-  if (session.kind !== "coordinator") return [];
+  if (session.kind !== "coordinator") return loadMentionContext(ctx, session, text);
   return buildThreadDigest(await ctx.threadRepository.listByProject(session.project_id));
+};
+
+/**
+ * For a message to a thread: what it needs to know about the other threads of its project that
+ * `text` mentions. The coordinator has the thread list and tools for that instead, so it gets none.
+ */
+export const loadMentionContext = async (
+  ctx: LocalServerContext,
+  session: ChatSession,
+  text: string,
+): Promise<string[]> => {
+  if (session.kind !== "thread" || !session.project_id) return [];
+  const ids = mentionedThreadIds(text)
+    .filter((id) => id !== session.id)
+    .slice(0, MENTIONS_MAX);
+  const found = await Promise.all(ids.map((id) => ctx.threadRepository.getById(id)));
+  return buildMentionNote(
+    found.flatMap((thread) => (thread?.projectId === session.project_id ? [thread] : [])),
+  );
 };
 
 const loadMemory = async (ctx: LocalServerContext, projectId: string): Promise<ProjectMemory> => {

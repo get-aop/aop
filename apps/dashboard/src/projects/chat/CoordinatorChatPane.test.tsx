@@ -213,8 +213,9 @@ describe("saying something", () => {
     );
   });
 
-  test("the person's words are shown as typed, not read as markdown", async () => {
+  test("the person's words are shown as typed, not read as markdown, but a thread they mention is its chip", async () => {
     setup({
+      threads: [makeThread({ id: "thr_1", title: "Fix login" })],
       fetches: [
         Promise.resolve([
           userMessage("u1", 1, {
@@ -225,9 +226,11 @@ describe("saying something", () => {
     });
     await settled();
 
-    expect(screen.getByTestId("user-message-text").textContent).toBe(
-      "Tell [Fix login](thread:thr_1) it is **urgent**\n\nthanks",
-    );
+    const text = screen.getByTestId("user-message-text");
+    expect(text.textContent).toBe("Tell Fix login it is **urgent**\n\nthanks");
+    const chip = within(text).getByTestId("thread-chip");
+    expect(chip.getAttribute("data-thread-id")).toBe("thr_1");
+    expect(chip.getAttribute("href")).toBe("/projects/prj_1/threads/thr_1");
   });
 
   test("sending takes the list to its end, even when the person had scrolled up", async () => {

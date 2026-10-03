@@ -45,6 +45,12 @@ describe("the coordinator's system prompt", () => {
     expect(prompt).toContain("Thread report:");
   });
 
+  test("tells the coordinator a thread the person @-mentions is a thread link with its id", () => {
+    expect(buildCoordinatorSystemPrompt({ project, repos, memory: noMemory })).toContain(
+      "The person may @-mention a thread the same way: [its title](thread:<id>)",
+    );
+  });
+
   test("starts with a heading, never a dash, so it cannot be read as a flag", () => {
     expect(buildCoordinatorSystemPrompt({ project, repos, memory: noMemory })).toStartWith(
       "# AOP project brief",
