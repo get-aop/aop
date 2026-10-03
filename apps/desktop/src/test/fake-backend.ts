@@ -26,10 +26,13 @@ export const makeState = (overrides: Partial<DesktopState> = {}): DesktopState =
 });
 
 /** A backend whose answers a test sets, and whose pushed state changes it can send by hand. */
-export const createFakeBackend = (initial: DesktopState = makeState()) => {
+export const createFakeBackend = (
+  initial: DesktopState = makeState(),
+  initialUpdate: AppUpdateState = { status: "idle", checkedAt: null },
+) => {
   let state = initial;
   const listeners = new Set<(state: DesktopState) => void>();
-  let update: AppUpdateState = { status: "idle" };
+  let update = initialUpdate;
   const updateListeners = new Set<(state: AppUpdateState) => void>();
   const backend = {
     getState: mock(async () => state),
@@ -53,13 +56,22 @@ export const createFakeBackend = (initial: DesktopState = makeState()) => {
     reconnect: mock(async () => {}),
     openLogsFolder: mock(async () => {}),
     quitApp: mock(async () => {}),
+    getAppInfo: mock(async () => ({
+      name: "AOP",
+      version: state.appVersion,
+      platform: state.platform,
+      autoDownload: true,
+    })),
     getUpdateState: mock(async () => update),
     onUpdateStateChanged: mock((listener: (state: AppUpdateState) => void) => {
       updateListeners.add(listener);
       return () => void updateListeners.delete(listener);
     }),
+    checkForUpdates: mock(async () => update),
+    downloadAndRestart: mock(async () => {}),
     openUpdateDownload: mock(async () => {}),
     restartToUpdate: mock(async () => {}),
+    setAutoDownload: mock(async (_enabled: boolean) => {}),
   } satisfies DesktopBackend;
   return {
     backend,

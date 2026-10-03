@@ -29,3 +29,18 @@ describe("chooseUpdateMode", () => {
     expect(chooseUpdateMode({ ...input, platform: "linux" })).toBe("off");
   });
 });
+
+describe("a forced mode (AOP_DESKTOP_UPDATE_MODE)", () => {
+  test("lets a development run on Linux show the row, but never beats the opt-out", () => {
+    expect(chooseUpdateMode({ ...input, platform: "linux", forced: "notice" })).toBe("notice");
+    expect(chooseUpdateMode({ ...input, platform: "linux", forced: "auto" })).toBe("auto");
+    expect(
+      chooseUpdateMode({ ...input, platform: "linux", forced: "notice", disabled: true }),
+    ).toBe("off");
+  });
+
+  test("ignores a value it does not know", () => {
+    expect(chooseUpdateMode({ ...input, platform: "linux", forced: "yes" })).toBe("off");
+    expect(chooseUpdateMode({ ...input, platform: "win32", forced: "" })).toBe("auto");
+  });
+});

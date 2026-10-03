@@ -16,17 +16,23 @@ export const IPC_CHANNELS = {
   hostRejected: "desktop:host-rejected",
   // Either page.
   setZoom: "desktop:set-zoom",
+  getAppInfo: "desktop:get-app-info",
   getUpdateState: "desktop:get-update-state",
+  checkForUpdates: "desktop:check-for-updates",
+  downloadAndRestart: "desktop:download-and-restart",
   openUpdateDownload: "desktop:open-update-download",
   restartToUpdate: "desktop:restart-to-update",
+  setAutoDownload: "desktop:set-auto-download",
   // The bundled dashboard's AOP Browser: whether it is shown, and the person's answers.
   browserSetActive: "desktop:browser-set-active",
   browserAnswerPrompt: "desktop:browser-answer-prompt",
   browserDownloadAction: "desktop:browser-download-action",
   // The app to the dashboard: what its browser's pages did that only the app sees.
   browserEvent: "desktop:browser-event",
-  // The app to the dashboard: the app menu's Settings… was chosen.
+  // The app to the dashboard: the app menu's Settings…, Check for Updates… or Host Setup… was chosen.
   openSettings: "desktop:open-settings",
+  openUpdates: "desktop:open-updates",
+  openHostSetup: "desktop:open-host-setup",
   // The app to the connect screen: something it shows changed.
   stateChanged: "desktop:state-changed",
   updateStateChanged: "desktop:update-state-changed",

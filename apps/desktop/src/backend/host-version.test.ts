@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compareHostToApp, hostVersionNotice } from "./host-version";
+import { appBehindHostNote, compareHostToApp, hostBehindAppNote } from "./host-version";
 
 describe("compareHostToApp", () => {
   test("orders release versions and ignores build metadata", () => {
@@ -14,18 +14,21 @@ describe("compareHostToApp", () => {
   });
 });
 
-describe("hostVersionNotice", () => {
-  test("tells the person which side to update", () => {
-    expect(hostVersionNotice("0.10.0+abc1234", "0.9.51")).toBe(
-      "The host (0.10.0) is newer than this app (0.9.51). Update the app.",
+describe("version drift notes", () => {
+  test("the app row says when the host is newer, naming the host", () => {
+    expect(appBehindHostNote("soulf", "0.10.0+abc1234", "0.9.51")).toBe(
+      "soulf runs 0.10.0; this app is older",
     );
-    expect(hostVersionNotice("0.9.0", "0.10.0")).toBe(
-      'The host (0.9.0) is older than this app (0.10.0). Update the host with "aop update".',
-    );
+    expect(appBehindHostNote("soulf", "0.9.0", "0.10.0")).toBeNull();
   });
 
-  test("has no line when the releases match or cannot be compared", () => {
-    expect(hostVersionNotice("0.9.51", "0.9.51")).toBeNull();
-    expect(hostVersionNotice("dev", "0.9.51")).toBeNull();
+  test("the host says when it is older than the app", () => {
+    expect(hostBehindAppNote("0.9.0", "0.10.0")).toBe("Older than this app");
+    expect(hostBehindAppNote("0.10.0", "0.9.0")).toBeNull();
+  });
+
+  test("say nothing when the releases match or cannot be compared", () => {
+    expect(appBehindHostNote("soulf", "0.9.51", "0.9.51")).toBeNull();
+    expect(hostBehindAppNote("dev", "0.9.51")).toBeNull();
   });
 });

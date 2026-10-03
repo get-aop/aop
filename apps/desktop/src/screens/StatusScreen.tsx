@@ -1,31 +1,28 @@
-import type { ReactNode } from "react";
-import { connectionLabel, hostName } from "../backend/connection-label";
-import { hostVersionNotice } from "../backend/host-version";
-import type {
-  AppUpdateState,
-  ConnectionState,
-  DesktopBackend,
-  DesktopState,
-} from "../backend/types";
-import { updateLabel } from "../backend/update-label";
+import type { AppUpdateState } from "@aop/common";
+import { type ReactNode, useState } from "react";
+import { connectionLabel, hostName, hostShortName } from "../backend/connection-label";
+import { hostBehindAppNote } from "../backend/host-version";
+import type { ConnectionState, DesktopBackend, DesktopState } from "../backend/types";
 import { Brand, Notice, StatusLine, type Tone } from "../ui";
+import { AppUpdateRow } from "./AppUpdateRow";
 
 interface StatusScreenProps {
   state: DesktopState;
   backend: DesktopBackend;
-  update: AppUpdateState;
+  update: AppUpdateState | null;
   onChangeHost: () => void;
 }
 
 /** How the app stands with its remote host, and what to do when it does not stand well. */
 export const StatusScreen = ({ state, backend, update, onChangeHost }: StatusScreenProps) => {
   const { connection } = state;
+  const host = state.remoteUrl ? hostShortName(state.remoteUrl) : null;
   return (
     <main className="screen" data-testid="status-screen">
       <div className="card">
         <Brand
-          title={state.remoteUrl ? hostName(state.remoteUrl) : "AOP"}
-          subtitle="Your AOP host"
+          title={host ? `Host ${host}` : "AOP"}
+          subtitle={state.remoteUrl ? hostName(state.remoteUrl) : undefined}
         />
 
         <StatusLine
@@ -34,18 +31,18 @@ export const StatusScreen = ({ state, backend, update, onChangeHost }: StatusScr
           testId="status-label"
         />
         <Explanation connection={connection} />
-        <VersionNotices state={state} backend={backend} update={update} />
 
-        <dl className="meta">
-          {connection.status === "connected" ? (
-            <>
-              <dt>Host</dt>
-              <dd data-testid="status-host-version">{connection.hostVersion}</dd>
-            </>
-          ) : null}
-          <dt>App</dt>
-          <dd>{state.appVersion}</dd>
-        </dl>
+        {connection.status === "connected" ? (
+          <dl className="meta">
+            <dt>Host version</dt>
+            <dd data-testid="status-host-version">
+              {connection.hostVersion}
+              <HostDrift hostVersion={connection.hostVersion} appVersion={state.appVersion} />
+            </dd>
+          </dl>
+        ) : null}
+
+        <AppUpdateRow state={state} update={update} backend={backend} />
 
         <div className="actions">
           {connection.status === "connected" ? (
@@ -55,7 +52,7 @@ export const StatusScreen = ({ state, backend, update, onChangeHost }: StatusScr
               data-testid="status-open-dashboard"
               onClick={() => void backend.openDashboard()}
             >
-              Open dashboard
+              Show dashboard
             </button>
           ) : null}
           {connection.status === "unauthorized" ? (
@@ -85,75 +82,66 @@ export const StatusScreen = ({ state, backend, update, onChangeHost }: StatusScr
           >
             Change host
           </button>
-          <button
-            type="button"
-            className="button button-danger"
-            data-testid="status-disconnect"
-            onClick={() => void backend.forgetHost()}
-          >
-            Disconnect
-          </button>
         </div>
+
+        <Disconnect host={host ?? "this host"} backend={backend} />
       </div>
     </main>
   );
 };
 
-/** Quiet notes beside the connection: the host is on another release, or this app can update. */
-const VersionNotices = ({
-  state,
-  backend,
-  update,
-}: {
-  state: DesktopState;
-  backend: DesktopBackend;
-  update: AppUpdateState;
-}): ReactNode => {
-  const { connection } = state;
-  const drift =
-    connection.status === "connected"
-      ? hostVersionNotice(connection.hostVersion, state.appVersion)
-      : null;
-  const updateText = updateLabel(update);
+const HostDrift = ({ hostVersion, appVersion }: { hostVersion: string; appVersion: string }) => {
+  const note = hostBehindAppNote(hostVersion, appVersion);
+  return note ? (
+    <span className="subtle" data-testid="status-host-drift">
+      {" "}
+      · {note}
+    </span>
+  ) : null;
+};
+
+/** Disconnecting forgets the pairing, which only a new code from the host gives back, so it asks first. */
+const Disconnect = ({ host, backend }: { host: string; backend: DesktopBackend }) => {
+  const [asking, setAsking] = useState(false);
+  if (!asking) {
+    return (
+      <div className="actions">
+        <button
+          type="button"
+          className="button button-danger"
+          data-testid="status-disconnect"
+          onClick={() => setAsking(true)}
+        >
+          Disconnect
+        </button>
+      </div>
+    );
+  }
   return (
-    <>
-      {drift ? (
-        <Notice tone="info" testId="status-version-drift">
-          {drift}
-        </Notice>
-      ) : null}
-      {updateText ? (
-        <Notice tone="info" testId="status-update">
-          {updateText}
-          {update.status === "available" ? (
-            <>
-              {" "}
-              <button
-                type="button"
-                className="button"
-                data-testid="status-update-download"
-                onClick={() => void backend.openUpdateDownload()}
-              >
-                Download
-              </button>
-            </>
-          ) : null}
-          {update.status === "ready" ? (
-            <>
-              {" "}
-              <button
-                type="button"
-                className="button"
-                data-testid="status-update-restart"
-                onClick={() => void backend.restartToUpdate()}
-              >
-                Restart to update
-              </button>
-            </>
-          ) : null}
-        </Notice>
-      ) : null}
-    </>
+    <div className="confirm" data-testid="status-disconnect-confirm">
+      <Notice tone="warning">
+        Disconnect from {host}? This app forgets it and removes itself from the host's devices. To
+        connect again you need a new pairing code.
+      </Notice>
+      <div className="actions">
+        <button
+          type="button"
+          className="button"
+          data-testid="status-disconnect-cancel"
+          onClick={() => setAsking(false)}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="button button-danger"
+          data-testid="status-disconnect-confirm-button"
+          onClick={() => void backend.forgetHost()}
+        >
+          Disconnect
+        </button>
+      </div>
+    </div>
   );
 };
 

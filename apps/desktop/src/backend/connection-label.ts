@@ -19,16 +19,35 @@ export const connectionLabel = (connection: ConnectionState): string => {
   }
 };
 
-/** `notes` are short asides after the connection, such as an available update. */
+/**
+ * The window title: the app and its host, "AOP Nightly · soulf". How the connection stands is in
+ * the Host menu and on the status screen, and updates are in the Updates popover, so the title
+ * stays still.
+ */
 export const windowTitle = (
   connection: ConnectionState,
-  notes: (string | null)[] = [],
   appName: string = buildChannel().productName,
 ): string =>
-  [
-    connection.status === "unconfigured" ? appName : `${appName} · ${connectionLabel(connection)}`,
-    ...notes.filter((note) => note !== null),
-  ].join(" · ");
+  connection.status === "unconfigured" ? appName : `${appName} · ${hostShortName(connection.host)}`;
+
+/**
+ * The name a person calls their host: the machine's name, `soulf` for
+ * `https://soulf.tailffbdec.ts.net:25650`. An address by number stays as it is, and this
+ * computer's own address is "This Mac" (host mode).
+ */
+export const hostShortName = (hostUrl: string): string => {
+  let hostname: string;
+  try {
+    hostname = new URL(hostUrl).hostname;
+  } catch {
+    return hostUrl;
+  }
+  if (LOOPBACK.has(hostname)) return "This Mac";
+  if (/^[\d.]+$/.test(hostname) || hostname.includes(":")) return hostname;
+  return hostname.split(".")[0] || hostname;
+};
+
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 /** The host's name and port, without the scheme: what a person recognises their host by. */
 export const hostName = (hostUrl: string): string => {
