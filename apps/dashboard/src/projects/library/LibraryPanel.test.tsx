@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { LibraryItem } from "@aop/common";
 import { type ApiCall, headersOf, mockApi } from "../../test/mock-api";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { makeEntry, makeProject, makeThread } from "../test-utils";
-import { makeItem, makeListing } from "./test-utils";
+import { makeItem, makeListing, NOW } from "./test-utils";
 
 setupDashboardDom();
 
@@ -52,6 +52,8 @@ const brief = () =>
   });
 
 beforeEach(() => {
+  // The items' dates are relative to NOW, so "Removed in 2 days" must not drift with the real clock.
+  setSystemTime(new Date(NOW));
   window.localStorage.clear();
   window.history.replaceState(null, "", "/projects/p1/library");
   items = [report(), screenshot(), brief()];
@@ -104,6 +106,7 @@ const contentOf = (item: LibraryItem | undefined): Response =>
 afterEach(() => {
   cleanup();
   api.restore();
+  setSystemTime();
 });
 
 const renderPanel = async () => {
