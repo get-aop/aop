@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import type { LibraryItem } from "@aop/common";
 import { type ApiCall, headersOf, mockApi } from "../../test/mock-api";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { makeEntry, makeProject, makeThread } from "../test-utils";
-import { makeItem, makeListing } from "./test-utils";
+import { makeItem, makeListing, NOW } from "./test-utils";
 
 setupDashboardDom();
 
@@ -52,6 +52,8 @@ const brief = () =>
   });
 
 beforeEach(() => {
+  // The fixtures' dates are relative to NOW, and the panel counts days from the clock.
+  setSystemTime(NOW);
   window.localStorage.clear();
   window.history.replaceState(null, "", "/projects/p1/library");
   items = [report(), screenshot(), brief()];
@@ -102,6 +104,7 @@ const contentOf = (item: LibraryItem | undefined): Response =>
     : new Response(`# Report\n\nAll **good**. ${item?.name}`);
 
 afterEach(() => {
+  setSystemTime();
   cleanup();
   api.restore();
 });
@@ -164,7 +167,7 @@ describe("the Library tab", () => {
 
     expect(rowNames()).toEqual(["lib_report"]);
     const expiry = screen.getByTestId("library-item-expiry");
-    expect(expiry.textContent).toMatch(/^Removed in [23] days$/);
+    expect(expiry.textContent).toBe("Removed in 2 days");
     expect(expiry.className).toContain("text-waiting");
     fireEvent.click(screen.getByTestId("library-crumb"));
     expect(screen.getAllByTestId("library-folder")).toHaveLength(3);

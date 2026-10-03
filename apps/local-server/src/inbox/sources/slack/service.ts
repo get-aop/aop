@@ -74,6 +74,7 @@ export interface SlackServiceDeps {
   createSocket?: (url: string) => WebSocketLike;
   testWaitMs?: number;
   catchUpPauseMs?: number;
+  now?: () => number;
 }
 
 const logger = getLogger("inbox", "slack");
@@ -96,6 +97,7 @@ export const createSlackService = (deps: SlackServiceDeps): SlackService => {
         onNewItem: deps.onNewItem,
         createSocket: deps.createSocket,
         catchUpPauseMs: deps.catchUpPauseMs,
+        now: deps.now,
       }),
     );
   };
