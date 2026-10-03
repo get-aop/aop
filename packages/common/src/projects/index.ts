@@ -170,7 +170,7 @@ export {
   JiraTestInputSchema,
   JiraTestResultSchema,
 } from "./jira.ts";
-export { applyLiveOps, compactLiveOps, diffTurnParts } from "./live-turn.ts";
+export { applyLiveOps, compactLiveOps, diffTurnParts, settledParts } from "./live-turn.ts";
 export type { MemoryFile, MemoryFileInput } from "./memory.ts";
 export {
   MEMORY_BODY_MAX_LENGTH,

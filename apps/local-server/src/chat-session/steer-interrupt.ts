@@ -38,7 +38,7 @@ export const interruptForMessage = async (
   if (!runId) return notWaiting;
   const run = await ctx.db
     .selectFrom("chat_runs")
-    .select(["status", "log_file_path"])
+    .select("log_file_path")
     .where("id", "=", runId)
     .executeTakeFirst();
   if (!run) return notWaiting;
