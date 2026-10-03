@@ -1,3 +1,4 @@
+import type { Thread } from "@aop/common";
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -6,6 +7,9 @@ import { Kbd } from "@/ui/kbd";
 import type { SendOptions } from "../../api/project-chat";
 import { AttachImageButton, ComposerImages } from "./ComposerImages";
 import { type UploadImage, useImageAttachments, useImageInput } from "./image-attachments";
+import { MentionPicker } from "./mentions/MentionPicker";
+import { MentionTextarea } from "./mentions/MentionTextarea";
+import { useMentions } from "./mentions/use-mentions";
 import type { SendResult } from "./project-chat";
 import { useDraft } from "./use-draft";
 
@@ -19,7 +23,8 @@ import { useDraft } from "./use-draft";
  * With `onStop`, a Stop button sits beside Send and Escape does the same: the agent is at work
  * and the person may want it to end. With `uploadImage`, images can go with the message: pasted,
  * dropped on the box, or picked with the "+" before the chips. Each uploads as it is added, and a
- * message of images alone may be sent.
+ * message of images alone may be sent. With `mentionThreads`, typing `@` picks one of them, which
+ * goes into the message as a chip and is sent as the thread's link, `[title](thread:<id>)`.
  */
 export const Composer = ({
   draftId,
@@ -31,6 +36,7 @@ export const Composer = ({
   onStop,
   uploadImage,
   working,
+  mentionThreads,
   compact = false,
 }: {
   /** Identifies the conversation the draft belongs to. */
@@ -48,6 +54,8 @@ export const Composer = ({
   onStop?: () => void;
   /** Uploads an image for the message; without it the composer takes text only. */
   uploadImage?: UploadImage;
+  /** The threads `@` can mention; without them `@` is only a character. */
+  mentionThreads?: readonly Thread[];
   /** One line with Send beside it and no footer, for a box that sits inside a card. */
   compact?: boolean;
 }) => {
@@ -69,7 +77,13 @@ export const Composer = ({
     if (focusKey !== undefined && !disabled) input.current?.focus();
   }, [focusKey, disabled]);
 
-  const onKeyDown = composerKeys({ submit, onStop, working: working === true });
+  const mentions = useMentions({
+    markup: draft,
+    setMarkup: setDraft,
+    threads: mentionThreads,
+    input,
+  });
+  const sendKeys = composerKeys({ submit, onStop, working: working === true });
 
   return (
     <fieldset
@@ -79,28 +93,23 @@ export const Composer = ({
       data-dragging={dragging || undefined}
       {...dropZone}
       className={cn(
-        "rounded-composer border border-border-strong bg-input-surface transition-colors duration-[120ms] focus-within:border-border-bold",
+        "relative rounded-composer border border-border-strong bg-input-surface transition-colors duration-[120ms] focus-within:border-border-bold",
         compact && "flex flex-wrap items-end",
         disabled && "opacity-70",
         dragging && "border-border-bold bg-hover",
       )}
     >
       <ComposerImages images={attachments.images} onRemove={attachments.remove} />
-      <textarea
-        ref={input}
-        data-testid="composer-input"
-        value={draft}
-        rows={1}
-        disabled={disabled}
+      {mentions.picker ? <MentionPicker picker={mentions.picker} /> : null}
+      <MentionTextarea
+        mentions={mentions}
+        input={input}
+        label={placeholder}
         placeholder={disabledReason ?? placeholder}
-        aria-label={placeholder}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={onKeyDown}
+        disabled={disabled}
+        compact={compact}
+        onKeyDown={sendKeys}
         onPaste={onPaste}
-        className={cn(
-          "block max-h-[220px] resize-none bg-transparent px-5 text-body text-text outline-none [field-sizing:content] placeholder:text-text-subtle disabled:cursor-not-allowed",
-          compact ? "min-h-[44px] min-w-0 flex-1 pb-2 pt-2.5" : "min-h-[60px] w-full pb-1 pt-4",
-        )}
       />
       <ComposerError error={error} compact={compact} />
       <SteerHint

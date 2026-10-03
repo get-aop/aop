@@ -18,6 +18,7 @@ import { Folded } from "./Folded";
 import { MessageBlocks } from "./MessageBlocks";
 import { MessageImages } from "./MessageImages";
 import { MessageMeta } from "./MessageMeta";
+import { MentionedText } from "./mentions/MentionedText";
 import { isSent, SentCard, SentRow } from "./SentMessage";
 import { QueuedNote, SteerWaiting } from "./SteerStatus";
 import { ThreadChip } from "./ThreadChip";
@@ -305,7 +306,7 @@ const PersonWords = ({ message }: { message: UserMessage }) => (
 const FoldedText = ({ text }: { text: string }) => (
   <Folded text={text}>
     <p data-testid="user-message-text" className="min-w-0 whitespace-pre-wrap break-words">
-      {text}
+      <MentionedText text={text} />
     </p>
   </Folded>
 );

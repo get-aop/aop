@@ -5,6 +5,7 @@ import { ChatOriginContext } from "./artifact-links";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { Folded } from "./Folded";
 import { MessageMeta } from "./MessageMeta";
+import { MentionedText } from "./mentions/MentionedText";
 import { QueuedNote } from "./SteerStatus";
 
 /** A message to an agent that the person did not type, and who sent it. */
@@ -90,7 +91,7 @@ const ForwardedQuote = ({ text }: { text: string }) => (
       data-testid="forwarded-quote-text"
       className="mt-0.5 whitespace-pre-wrap break-words text-text-muted"
     >
-      {text}
+      <MentionedText text={text} />
     </blockquote>
   </figure>
 );

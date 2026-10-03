@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { loadProjectRunContext, loadTurnContext } from "./prompt-context.ts";
+import { loadMentionContext, loadProjectRunContext, loadTurnContext } from "./prompt-context.ts";
 import {
   createProjectStack,
   type ProjectStack,
@@ -132,7 +132,7 @@ describe("loadProjectRunContext", () => {
     });
 
     expect(await loadProjectRunContext(s.ctx, plain)).toBeNull();
-    expect(await loadTurnContext(s.ctx, plain)).toBeUndefined();
+    expect(await loadTurnContext(s.ctx, plain, "hi")).toBeUndefined();
   });
 });
 
@@ -141,9 +141,28 @@ describe("loadTurnContext", () => {
     const { s, project, coordinator } = await setup();
     const { thread, session } = await insertThread(s, project.id, null);
 
-    const digest = await loadTurnContext(s.ctx, coordinator);
+    const digest = await loadTurnContext(s.ctx, coordinator, "hi");
 
     expect(digest?.join("\n")).toContain(`- ${thread.id} "Audit"`);
-    expect(await loadTurnContext(s.ctx, session)).toEqual([]);
+    expect(await loadTurnContext(s.ctx, session, "hi")).toEqual([]);
+  });
+
+  test("tells a thread the branch and brief of the other threads its message mentions", async () => {
+    const { s, project, coordinator } = await setup();
+    const { thread: audit } = await insertThread(s, project.id, s.repos[0]?.id ?? null);
+    const { session } = await insertThread(s, project.id, null);
+    const text = `See [Audit](thread:${audit.id}), [me](thread:${session.id}) and [gone](thread:isess_missing)`;
+
+    const note = await loadTurnContext(s.ctx, session, text);
+
+    expect(note?.[0]).toBe("--- added by AOP, not written by the person ---");
+    const lines = note?.filter((line) => line.startsWith("- ")) ?? [];
+    // The thread itself and a thread that is not found are left out.
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toStartWith(`- ${audit.id} "Audit" [`);
+    expect(lines[0]).toContain(`branch ${audit.branch}`);
+    expect(lines[0]).toContain("asked: Audit");
+    // The coordinator has its thread list and tools instead.
+    expect(await loadMentionContext(s.ctx, coordinator, text)).toEqual([]);
   });
 });

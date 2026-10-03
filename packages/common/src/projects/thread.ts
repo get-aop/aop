@@ -39,6 +39,9 @@ export type BlockedQuestion = z.infer<typeof BlockedQuestionSchema>;
 
 export const THREAD_WAIT_REASON_MAX = 300;
 
+/** How much of a thread's first message its `description` keeps: enough to find it by, not the whole brief. */
+export const THREAD_DESCRIPTION_MAX = 1000;
+
 /**
  * What a working thread waits on the person for outside AOP while it keeps working: a deployment
  * to approve on GitHub, a login, a secret. Unlike a question it does not end the turn; it clears
@@ -77,6 +80,11 @@ const ThreadBaseSchema = z.object({
   steps: z.array(ThreadStepSchema),
   /** The one line under the title, e.g. "Bisecting · 7 commits left". */
   liveStatusLine: z.string().max(500).nullable(),
+  /**
+   * The start of the thread's first message (its brief), on one line: what it was asked to do,
+   * so it can be found by it. Absent while nothing has been said in it.
+   */
+  description: z.string().min(1).max(THREAD_DESCRIPTION_MAX).optional(),
   artifacts: z.array(ArtifactSchema),
   repliesCount: z.number().int().nonnegative(),
   unread: z.boolean(),

@@ -145,7 +145,7 @@ const prepareRuntimeSend = async (
   const workspacePath = await resolveSessionWorkspaceBinding(ctx, session);
   if (!workspacePath) return { success: false, error: { code: "SESSION_NOT_FOUND" } };
   const globalInstructions = await loadChatGlobalInstructions(ctx.settingsRepository);
-  const turnContext = await loadTurnContext(ctx, session);
+  const turnContext = await loadTurnContext(ctx, session, text);
   const baseRuntimePrompt = buildRuntimePrompt(
     text,
     sessionId,

@@ -13,6 +13,7 @@ import {
 import type { LocalServerContext } from "../context.ts";
 import type { ChatMessage, ChatRun, ChatSession } from "../db/schema.ts";
 import type { PublisherTransaction } from "../event-log/publisher.ts";
+import { loadMentionContext } from "../project/prompt-context.ts";
 import { createKeyedQueue } from "../thread/keyed-queue.ts";
 import {
   buildRuntimePrompt,
@@ -80,10 +81,14 @@ export const deliverToRunningTurn = async (
   const uuid = typeIdToUuid(message.id);
   if (!run?.input_path || !uuid) return null;
   const inputPath = run.input_path;
+  const decoded = decodeStoredAttachmentMetadata(message.content);
+  const mentions = await loadMentionContext(ctx, session, decoded.text);
   return perRun(run.id, async () => {
     if (endedInputs.has(run.id) || !(await isStillRunning(ctx, run.id))) return null;
     if (await hasRun(ctx, message.id)) return null;
-    if (!(await writeInputLine(inputPath, steerLine(session.id, message, uuid)))) return null;
+    if (!(await writeInputLine(inputPath, steerLine(session.id, decoded, mentions, uuid)))) {
+      return null;
+    }
     // Only onto a run that has not ended meanwhile: a run's end puts back what it did not take,
     // and one that ended before this line was linked would never see it.
     const linked = await ctx.eventPublisher.transaction(async (tx) => {
@@ -207,9 +212,16 @@ export const releaseUntakenSteers = async (
   return released;
 };
 
-/** The stream-json line of a steer: the message as the person wrote it, with its attachments. */
-const steerLine = (sessionId: string, message: ChatMessage, uuid: string): string => {
-  const decoded = decodeStoredAttachmentMetadata(message.content);
+/**
+ * The stream-json line of a steer: the message as the person wrote it, with its attachments and,
+ * for a thread, what it needs to know about the threads the message mentions.
+ */
+const steerLine = (
+  sessionId: string,
+  decoded: ReturnType<typeof decodeStoredAttachmentMetadata>,
+  mentions: readonly string[],
+  uuid: string,
+): string => {
   const prompt = buildRuntimePrompt(
     decoded.text,
     sessionId,
@@ -217,7 +229,7 @@ const steerLine = (sessionId: string, message: ChatMessage, uuid: string): strin
     decoded.documents,
     decoded.pastes,
     null,
-    [],
+    mentions,
   ).trim();
   return buildClaudeUserMessage(prompt, runImagesOf(sessionId, decoded.images), undefined, uuid);
 };

@@ -53,6 +53,7 @@ const COORDINATOR_RULES = [
   "- When the person asks for a document, a summary or an export to keep, save it to the project's Library with aop_library_save (its `content` and a `name` such as summary.md). aop_library_list and aop_library_read show what is there, including files the person uploaded.",
   "- Use project_settings_get to read the settings. project_settings_set changes only the thread model and effort and the notification level, and only when asked; the goal and the instructions are the person's to change, so tell the person when they should.",
   "- When you mention a thread in a reply, write it as [its title](thread:<id>) with the id from the list: the person sees a chip that opens it.",
+  "- The person may @-mention a thread the same way: [its title](thread:<id>) in their message means exactly that thread, so use that id with thread_report, thread_steer and the other thread tools.",
   "- Keep replies short and plain.",
 ];
 

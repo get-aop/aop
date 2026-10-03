@@ -15,6 +15,7 @@ import {
 import { type Kysely, sql } from "kysely";
 import { READ_ONLY_ACCESS } from "../chat-session/run-profile.ts";
 import type { ChatSession, ChatSessionUpdate, Database } from "../db/schema.ts";
+import { descriptionOf, firstMessageColumn } from "./description.ts";
 
 /**
  * A status change together with the one field only that status carries. Any other status
@@ -66,7 +67,7 @@ export interface ThreadRepository {
   setAccessForProject: (projectId: string, access: ThreadAccess) => Promise<void>;
 }
 
-type ThreadRow = ChatSession & { replies_count: number };
+type ThreadRow = ChatSession & { replies_count: number; first_message: string | null };
 
 export const createThreadRepository = (
   db: Kysely<Database>,
@@ -114,13 +115,14 @@ const selectThreads = (db: Kysely<Database>) =>
   db
     .selectFrom("chat_sessions")
     .selectAll()
-    .select(
+    .select([
       sql<number>`(
         SELECT COUNT(*)
         FROM chat_messages AS reply
         WHERE reply.session_id = chat_sessions.id AND reply.role = 'assistant'
       )`.as("replies_count"),
-    )
+      firstMessageColumn,
+    ])
     .where("chat_sessions.kind", "=", "thread");
 
 // The status goes last: a change away from `working` clears what the turn told the person, even
@@ -188,6 +190,7 @@ const toThread = (row: ThreadRow): Thread =>
     branch: row.branch,
     steps: JSON.parse(row.steps_json),
     liveStatusLine: row.status_line,
+    ...descriptionOf(row.first_message),
     artifacts:
       row.pr_number === null
         ? []

@@ -10,14 +10,15 @@ import { oneLine } from "./prompt-text.ts";
 export const THREAD_DIGEST_MAX = 20;
 const STATUS_LINE_MAX_CHARS = 120;
 const TITLE_MAX_CHARS = 100;
-const MARK = "--- added by AOP, not written by the person ---";
+/** Opens what AOP adds to a message, so the agent never reads it as the person's words. */
+export const ADDED_BY_AOP = "--- added by AOP, not written by the person ---";
 
 export const buildThreadDigest = (threads: readonly Thread[]): string[] => {
-  if (threads.length === 0) return [MARK, "This project has no threads yet."];
+  if (threads.length === 0) return [ADDED_BY_AOP, "This project has no threads yet."];
   const shown = threads.slice(0, THREAD_DIGEST_MAX);
   const more = threads.length - shown.length;
   return [
-    MARK,
+    ADDED_BY_AOP,
     "Threads of this project, latest activity first:",
     ...shown.map(digestLine),
     ...(more > 0 ? [`(${more} older threads not shown; use thread_list)`] : []),
