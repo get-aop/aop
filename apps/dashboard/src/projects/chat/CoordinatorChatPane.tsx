@@ -1,5 +1,5 @@
 import type { Message, Project, Thread } from "@aop/common";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { uploadChatImage } from "../../api/attachments";
 import type { SendOptions } from "../../api/project-chat";
@@ -17,6 +17,7 @@ import { ChatProvider } from "./chat-context";
 import { earlierOf, isWorking } from "./chat-state";
 import { MessageList } from "./MessageList";
 import type { ChatModel, ProjectChat } from "./project-chat";
+import { answersOf, type QuestionAnswering, QuestionAnsweringContext } from "./question-answers";
 import { UsageTip } from "./UsageTip";
 
 /**
@@ -68,6 +69,12 @@ export const CoordinatorChatPane = ({
     [chat],
   );
   const uploadImage = useCallback((file: File) => uploadChatImage(project.id, file), [project.id]);
+  const disabledReason = disabledReasonOf(project);
+  // A question the coordinator asked is answered like anything the person types: by a message.
+  const answering = useMemo<QuestionAnswering>(
+    () => ({ answers: answersOf(model.messages), answer: (text) => send(text), disabledReason }),
+    [model.messages, send, disabledReason],
+  );
   const startWith = useCallback(
     async (text: string) => {
       const result = await send(text);
@@ -91,15 +98,17 @@ export const CoordinatorChatPane = ({
         threadsLoaded={threadsLoaded}
         threadsError={threadsError}
       >
-        <Body
-          model={model}
-          project={project}
-          working={working}
-          firstNewId={firstNewId}
-          sentCount={sentCount}
-          chat={chat}
-          onStart={startWith}
-        />
+        <QuestionAnsweringContext.Provider value={answering}>
+          <Body
+            model={model}
+            project={project}
+            working={working}
+            firstNewId={firstNewId}
+            sentCount={sentCount}
+            chat={chat}
+            onStart={startWith}
+          />
+        </QuestionAnsweringContext.Provider>
         {/* The live view's popup rests above it, clear of the send button. */}
         <footer
           data-live-view-keep-clear
@@ -114,7 +123,7 @@ export const CoordinatorChatPane = ({
             draftId={project.id}
             focusKey={project.id}
             placeholder="Ask the coordinator a question or start a task…"
-            disabledReason={disabledReasonOf(project)}
+            disabledReason={disabledReason}
             send={send}
             working={working}
             uploadImage={uploadImage}

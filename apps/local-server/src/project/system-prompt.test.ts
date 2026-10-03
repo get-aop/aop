@@ -101,6 +101,13 @@ describe("what the coordinator is told about pull requests", () => {
     expect(prompt).toContain("thread_merge_pr only when the person says to");
     expect(prompt).toContain("thread_resolve");
   });
+
+  test("asks yes/no and pick-one questions with ask_person, and offers threads with propose_threads", () => {
+    const prompt = buildCoordinatorSystemPrompt({ project, repos, memory: noMemory });
+
+    expect(prompt).toContain("call ask_person with the options instead of asking in your text");
+    expect(prompt).toContain("use propose_threads, whose card has a Start button, not ask_person");
+  });
 });
 
 describe("a thread's system prompt", () => {
@@ -191,6 +198,7 @@ describe("a thread's system prompt", () => {
     });
 
     expect(prompt).not.toContain("thread_spawn");
+    expect(prompt).not.toContain("ask_person");
     expect(prompt).not.toContain("coordinator of the AOP project");
   });
 });

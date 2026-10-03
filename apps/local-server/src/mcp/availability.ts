@@ -34,6 +34,7 @@ export const COORDINATOR_TOOL_NAMES = [
   "thread_merge_pr",
   "thread_resolve",
   "propose_threads",
+  "ask_person",
   "project_settings_get",
   "project_settings_set",
   "routine_create",

@@ -2,6 +2,7 @@ import type { MessageBlock, ThreadCardVariant } from "@aop/common";
 import { memo, type ReactNode, useMemo } from "react";
 import { PullRequestChip } from "../PullRequestChip";
 import { ArtifactCard } from "./ArtifactCard";
+import { AskedQuestion } from "./AskedQuestion";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ChatThreadCard } from "./ChatThreadCard";
 import {
@@ -20,8 +21,8 @@ import { useThreadPresence } from "./thread-presence";
 /**
  * The content of an assistant message: its blocks in reading order, each drawn as what it is.
  * Prose and the chips inside it flow as one paragraph; tool calls made one after another fold
- * together, and reasoning folds on its own; the receipt leads; cards, proposals and quotes
- * stand on their own. The thread behind a card or chip is looked up when it is drawn. While the
+ * together, and reasoning folds on its own; the receipt leads; cards, proposals, questions and
+ * quotes stand on their own. The thread behind a card or chip is looked up when it is drawn. While the
  * reply is being written (`writing`), its last group is what the agent is doing now.
  */
 export const MessageBlocks = memo(function MessageBlocks({
@@ -96,6 +97,8 @@ const GroupView = ({
       );
     case "suggested-threads":
       return <SuggestedThreads messageId={messageId} suggestions={block.suggestions} />;
+    case "question":
+      return <AskedQuestion messageId={messageId} block={block} />;
     case "steer":
       return renderSteer?.(block.messageId) ?? null;
     case "artifact":

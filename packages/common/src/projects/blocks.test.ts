@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   MessageBlockSchema,
+  QUESTION_OPTION_MAX,
+  QUESTION_OPTIONS_MAX,
   SUGGESTED_THREADS_MAX,
   SUGGESTION_REASON_MAX,
   TOOL_DETAIL_MAX_LENGTH,
@@ -92,6 +94,42 @@ describe("MessageBlockSchema", () => {
     ]);
     expect(rejectedPaths(MessageBlockSchema, answered({ state: "done" }))).toEqual([
       "suggestions.0.answer.state",
+    ]);
+  });
+
+  test("accepts a question with two to five options, at most one recommended, each its own", () => {
+    const question = (options: unknown[], other = false) => ({
+      type: "question",
+      question: "Merge it by itself, or wait for you?",
+      options,
+      other,
+    });
+    const yesNo = [{ label: "Merge by itself", recommended: true }, { label: "Wait for me" }];
+    expect(parsed(MessageBlockSchema, question(yesNo, true))).toEqual(question(yesNo, true));
+
+    const six = Array.from({ length: QUESTION_OPTIONS_MAX + 1 }, (_, i) => ({ label: `${i}` }));
+    expect(rejectedPaths(MessageBlockSchema, question([{ label: "Yes" }]))).toEqual(["options"]);
+    expect(rejectedPaths(MessageBlockSchema, question(six))).toEqual(["options"]);
+    expect(
+      rejectedPaths(
+        MessageBlockSchema,
+        question([
+          { label: "Yes", recommended: true },
+          { label: "No", recommended: true },
+        ]),
+      ),
+    ).toEqual(["options"]);
+    expect(
+      rejectedPaths(MessageBlockSchema, question([{ label: "Yes" }, { label: "Yes" }])),
+    ).toEqual(["options"]);
+    expect(
+      rejectedPaths(
+        MessageBlockSchema,
+        question([{ label: "Yes" }, { label: "x".repeat(QUESTION_OPTION_MAX + 1) }]),
+      ),
+    ).toEqual(["options.1.label"]);
+    expect(rejectedPaths(MessageBlockSchema, { ...question(yesNo), question: " " })).toEqual([
+      "question",
     ]);
   });
 

@@ -164,6 +164,42 @@ const SuggestedThreadsBlockSchema = z.object({
     }),
 });
 
+export const QUESTION_OPTIONS_MIN = 2;
+export const QUESTION_OPTIONS_MAX = 5;
+/** An option is a button the person clicks, so it is kept to what a short button holds. */
+export const QUESTION_OPTION_MAX = 120;
+export const QUESTION_MAX = 1000;
+
+/** One answer the person can give with a click. Clicking it sends `label` as their reply. */
+export const QuestionOptionSchema = z.object({
+  label: z.string().trim().min(1).max(QUESTION_OPTION_MAX),
+  recommended: z.boolean().optional(),
+});
+export type QuestionOption = z.infer<typeof QuestionOptionSchema>;
+
+/**
+ * A question the coordinator asks the person, with the answers it expects as buttons under its
+ * reply; `other` adds one that puts the cursor in the box for an answer of their own. Nothing is
+ * stored when it is answered: the person's next message is the answer, and a client reads the
+ * question as answered once a message of theirs follows it (an option, if the text is its label).
+ */
+const QuestionBlockSchema = z.object({
+  type: z.literal("question"),
+  question: z.string().trim().min(1).max(QUESTION_MAX),
+  options: z
+    .array(QuestionOptionSchema)
+    .min(QUESTION_OPTIONS_MIN)
+    .max(QUESTION_OPTIONS_MAX)
+    .refine((options) => options.filter((option) => option.recommended).length <= 1, {
+      error: "At most one option can be recommended",
+    })
+    .refine((options) => new Set(options.map(({ label }) => label)).size === options.length, {
+      error: "Each option needs a label of its own",
+    }),
+  other: z.boolean(),
+});
+export type QuestionBlock = z.infer<typeof QuestionBlockSchema>;
+
 export const MessageBlockSchema = z.discriminatedUnion("type", [
   TextBlockSchema,
   ToolBlockSchema,
@@ -175,5 +211,6 @@ export const MessageBlockSchema = z.discriminatedUnion("type", [
   ThreadCardBlockSchema,
   RoutingReceiptBlockSchema,
   SuggestedThreadsBlockSchema,
+  QuestionBlockSchema,
 ]);
 export type MessageBlock = z.infer<typeof MessageBlockSchema>;
