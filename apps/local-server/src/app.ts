@@ -32,9 +32,8 @@ import { createHostSetupRoutes } from "./host-setup/routes.ts";
 import type { HostSetupService } from "./host-setup/service.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { openInboxDatabase } from "./inbox/database.ts";
-import { createHostInboxService } from "./inbox/host-inbox-service.ts";
+import { createHostInbox, type HostInbox } from "./inbox/host-inbox.ts";
 import { createInboxRoutes } from "./inbox/routes.ts";
-import type { InboxService } from "./inbox/service.ts";
 import { createHostIssueService } from "./issues/host-issue-service.ts";
 import { createIssueRoutes } from "./issues/routes.ts";
 import type { IssueService } from "./issues/service.ts";
@@ -101,7 +100,7 @@ export interface AppDependencies {
   /** The Issues tab's GitHub and Linear reads; tests pass one over a fake `gh` and Linear. */
   issues?: IssueService;
   /** The Inbox; the server passes its own, over `$AOP_HOME/inbox/inbox.db`. Tests get one in memory. */
-  inbox?: InboxService;
+  inbox?: HostInbox;
   /** The PR View's reads and writes; tests pass one over a fake `gh`. */
   pullRequestView?: PullRequestViewService;
   /** The setup checklist (AOP settings › Host); tests pass one over fake probes. */
@@ -179,8 +178,8 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createRoutineRoutes(projects.routines));
-  const github = deps.github ?? createGithubService(ctx);
-  app.route("/api/projects", createGithubBackedRoutes(deps, projects, github));
+  const { github, issues } = githubAccess(deps, projects);
+  app.route("/api/projects", createGithubBackedRoutes(deps, github, issues));
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
   app.route("/api", createThreadRoutes(projects));
@@ -202,10 +201,7 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/host/setup", createHostSetupRoutes(hostSetupOf(deps, github)));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
-  app.route(
-    "/api/inbox",
-    createInboxRoutes(deps.inbox ?? createHostInboxService(ctx, openInboxDatabase(":memory:"))),
-  );
+  app.route("/api/inbox", createInboxRoutes(deps.inbox ?? memoryInbox(ctx, projects, issues)));
 
   // An MCP client whose token is refused looks for OAuth metadata, and then registers itself, at
   // these paths. The host has neither, and a dashboard page in their place fails the client with
@@ -265,15 +261,12 @@ const mountHostUpkeepRoutes = (app: Hono<AuthEnv>, deps: AppDependencies): void 
 /** The routes that read and act on GitHub through the host's `gh`: status, issues, PRs, the PR View. */
 const createGithubBackedRoutes = (
   deps: AppDependencies,
-  projects: ProjectServices,
   github: GithubService,
+  issues: IssueService,
 ) => {
   const routes = new Hono<AuthEnv>();
   routes.route("/", createGithubRoutes(github));
-  routes.route(
-    "/",
-    createIssueRoutes(deps.issues ?? createHostIssueService(projects.projects, github)),
-  );
+  routes.route("/", createIssueRoutes(issues));
   routes.route(
     "/",
     createPullRequestViewRoutes(deps.pullRequestView ?? createPullRequestViewService({ github })),
@@ -297,6 +290,20 @@ const hostSetupOf = (deps: AppDependencies, github: GithubService): HostSetupSer
     lease: leaseState(deps),
     port: deps.port ?? hostPort(),
     startTimeMs: deps.startTimeMs,
+  });
+
+/** The host's GitHub access and the Issues tab's reads, the server's own or made here. */
+const githubAccess = (deps: AppDependencies, projects: ProjectServices) => {
+  const github = deps.github ?? createGithubService(deps.ctx);
+  return { github, issues: deps.issues ?? createHostIssueService(projects.projects, github) };
+};
+
+/** An Inbox of its own in memory, for an app made without the server's (tests). */
+const memoryInbox = (ctx: LocalServerContext, projects: ProjectServices, issues: IssueService) =>
+  createHostInbox(ctx, openInboxDatabase(":memory:"), {
+    threads: projects.threads,
+    projects: projects.projects,
+    issues,
   });
 
 /** The live view over the host's own capture and the activity every run's log tail reports to. */

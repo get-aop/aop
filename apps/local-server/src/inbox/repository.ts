@@ -8,7 +8,12 @@ import type {
   SqlBool,
   Updateable,
 } from "kysely";
-import type { InboxDatabase, InboxItemsTable, InboxLinksTable } from "./database.ts";
+import type {
+  InboxDatabase,
+  InboxItemsTable,
+  InboxLinksTable,
+  InboxSentTable,
+} from "./database.ts";
 
 export type InboxItemRow = Selectable<InboxItemsTable>;
 export type InboxLinkRow = Selectable<InboxLinksTable>;
@@ -35,11 +40,32 @@ export interface InboxRepository {
     now: string,
     limit: number,
     after: ListCursor | null,
+    conversations?: readonly string[],
   ) => Promise<InboxItemRow[]>;
   countUnread: (now: string) => Promise<number>;
   linksOf: (itemIds: readonly string[]) => Promise<InboxLinkRow[]>;
   insertLink: (row: Insertable<InboxLinksTable>) => Promise<void>;
   deleteLink: (itemId: string, linkId: string) => Promise<boolean>;
+  updateLink: (
+    itemId: string,
+    linkId: string,
+    patch: Updateable<InboxLinksTable>,
+  ) => Promise<boolean>;
+  /** Thread links whose pull request the host still follows (none yet, or open). */
+  watchedThreadLinks: () => Promise<InboxLinkRow[]>;
+  /** Threads the person is part of, active since `since`, most recent first. */
+  activeThreads: (
+    sourceId: string,
+    since: string,
+    limit: number,
+  ) => Promise<Array<{ conversationId: string; threadId: string }>>;
+  noteSent: (row: Insertable<InboxSentTable>) => Promise<void>;
+  /** Which of these messages the person sent from AOP. */
+  sentFrom: (
+    sourceId: string,
+    conversationId: string,
+    messageIds: readonly string[],
+  ) => Promise<Set<string>>;
   isKnownThread: (sourceId: string, conversationId: string, threadId: string) => Promise<boolean>;
   touchThread: (
     sourceId: string,
@@ -82,11 +108,15 @@ export const createInboxRepository = (db: Kysely<InboxDatabase>): InboxRepositor
     await db.updateTable("inbox_items").set(patch).where("id", "=", id).execute();
   },
 
-  list: async (view, now, limit, after) => {
+  list: async (view, now, limit, after, conversations) => {
     let query = db
       .selectFrom("inbox_items")
       .selectAll()
       .where((eb) => viewFilter(eb, view, now));
+    if (conversations) {
+      if (conversations.length === 0) return [];
+      query = query.where("conversation_id", "in", [...conversations]);
+    }
     if (after) {
       query = query.where((eb) =>
         eb.or([
@@ -115,6 +145,7 @@ export const createInboxRepository = (db: Kysely<InboxDatabase>): InboxRepositor
           .selectAll()
           .where("item_id", "in", [...itemIds])
           .orderBy("created_at")
+          .orderBy("id")
           .execute(),
 
   insertLink: async (row) => {
@@ -133,6 +164,59 @@ export const createInboxRepository = (db: Kysely<InboxDatabase>): InboxRepositor
       .executeTakeFirst();
     return Number(result.numDeletedRows) > 0;
   },
+
+  updateLink: async (itemId, linkId, patch) => {
+    const result = await db
+      .updateTable("inbox_links")
+      .set(patch)
+      .where("item_id", "=", itemId)
+      .where("id", "=", linkId)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
+  },
+
+  watchedThreadLinks: () =>
+    db
+      .selectFrom("inbox_links")
+      .selectAll()
+      .where("kind", "=", "thread")
+      .where((eb) => eb.or([eb("pr_noted", "is", null), eb("pr_noted", "=", "opened")]))
+      .execute(),
+
+  activeThreads: async (sourceId, since, limit) =>
+    (
+      await db
+        .selectFrom("inbox_threads")
+        .select(["conversation_id", "thread_id"])
+        .where("source_id", "=", sourceId)
+        .where("touched_at", ">=", since)
+        .orderBy("touched_at", "desc")
+        .limit(limit)
+        .execute()
+    ).map((row) => ({ conversationId: row.conversation_id, threadId: row.thread_id })),
+
+  noteSent: async (row) => {
+    await db
+      .insertInto("inbox_sent")
+      .values(row)
+      .onConflict((oc) => oc.columns(["source_id", "conversation_id", "message_id"]).doNothing())
+      .execute();
+  },
+
+  sentFrom: async (sourceId, conversationId, messageIds) =>
+    messageIds.length === 0
+      ? new Set()
+      : new Set(
+          (
+            await db
+              .selectFrom("inbox_sent")
+              .select("message_id")
+              .where("source_id", "=", sourceId)
+              .where("conversation_id", "=", conversationId)
+              .where("message_id", "in", [...messageIds])
+              .execute()
+          ).map((row) => row.message_id),
+        ),
 
   isKnownThread: async (sourceId, conversationId, threadId) =>
     (await db

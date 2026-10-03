@@ -21,6 +21,9 @@ const PUBLIC_ROUTES: readonly RoutePattern[] = [
   ["GET", /^\/api\/health\/?$/],
   // A client without a token trades its pairing code for one here.
   ["POST", /^\/api\/auth\/pair\/?$/],
+  // Slack sends the person's browser back here after "Allow"; the single-use state the host
+  // made for that sign-in authenticates it (inbox/sources/slack/sign-in.ts).
+  ["GET", /^\/api\/inbox\/sources\/slack\/oauth\/callback\/?$/],
   // The MCP endpoint checks its own per-session token (docs/adr/mcp-loopback-authentication.md).
   ["*", /^\/api\/mcp(\/.*)?$/],
 ];

@@ -105,6 +105,7 @@ export {
   tailscaleServeCommand,
 } from "./host-setup.ts";
 export * from "./inbox.ts";
+export * from "./inbox-slack.ts";
 export type { FieldLabels, ValidationIssue } from "./issues.ts";
 export { describeFirstIssue, describeIssue, describeIssuesByField } from "./issues.ts";
 export * from "./library.ts";

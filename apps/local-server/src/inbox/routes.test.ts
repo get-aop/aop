@@ -6,21 +6,18 @@ import { createLoopbackApp } from "../auth/test-utils.ts";
 import { createCommandContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
-import { createTestInbox, incomingMessage } from "./test-utils.ts";
+import { createTestHostInbox, incomingMessage } from "./test-utils.ts";
 
 describe("Inbox routes", () => {
   let db: Kysely<Database>;
-  let testInbox: ReturnType<typeof createTestInbox>;
+  let testInbox: ReturnType<typeof createTestHostInbox>;
   let app: ReturnType<typeof createLoopbackApp>;
 
   beforeEach(async () => {
     db = await createTestDb();
-    testInbox = createTestInbox();
-    app = createLoopbackApp({
-      ctx: createCommandContext(db),
-      startTimeMs: Date.now(),
-      inbox: testInbox.inbox,
-    });
+    const ctx = createCommandContext(db);
+    testInbox = createTestHostInbox(ctx);
+    app = createLoopbackApp({ ctx, startTimeMs: Date.now(), inbox: testInbox.host });
   });
 
   afterEach(async () => {
@@ -36,7 +33,7 @@ describe("Inbox routes", () => {
     });
 
   const seedItem = async () => {
-    const item = await testInbox.inbox.ingest(incomingMessage({ mentionsMe: true }));
+    const item = await testInbox.host.inbox.ingest(incomingMessage({ mentionsMe: true }));
     return item?.id ?? "";
   };
 
@@ -51,7 +48,11 @@ describe("Inbox routes", () => {
 
     const one = await send(`/items/${id}`, "GET");
     expect(InboxItemSchema.parse(((await one.json()) as { item: unknown }).item).id).toBe(id);
-    expect(await (await send("/summary", "GET")).json()).toEqual({ unread: 1 });
+    expect(await (await send("/summary", "GET")).json()).toEqual({
+      unread: 1,
+      connected: false,
+      health: null,
+    });
   });
 
   test("marks done, snoozes and refuses a bad state", async () => {
@@ -59,11 +60,11 @@ describe("Inbox routes", () => {
 
     const done = await send(`/items/${id}/state`, "PUT", { state: "done" });
     expect(done.status).toBe(200);
-    expect(await (await send("/summary", "GET")).json()).toEqual({ unread: 0 });
+    expect(((await (await send("/summary", "GET")).json()) as { unread: number }).unread).toBe(0);
 
     const snoozed = await send(`/items/${id}/state`, "PUT", {
       state: "snoozed",
-      until: "2026-10-02T09:00:00Z",
+      until: "2099-10-02T09:00:00Z",
     });
     expect(((await snoozed.json()) as { item: { state: string } }).item.state).toBe("snoozed");
 
@@ -100,7 +101,45 @@ describe("Inbox routes", () => {
     expect((await send("/items?cursor=nope", "GET")).status).toBe(400);
   });
 
+  test("sources, rules and notifications: nothing to show until Slack is connected", async () => {
+    expect(await (await send("/sources", "GET")).json()).toEqual({
+      slack: null,
+      slackImportAvailable: false,
+    });
+    const rules = (await (await send("/rules", "GET")).json()) as { rules: unknown };
+    expect(rules.rules).toMatchObject({ mentions: true, keywords: [] });
+    expect((await send("/rules", "PUT", rules.rules)).status).toBe(409);
+    expect((await send("/sources/slack/notifications", "PUT", { mode: "all" })).status).toBe(409);
+    expect((await send("/sources/slack/channels", "GET")).status).toBe(409);
+    expect((await send("/sources/slack/import", "POST")).status).toBe(404);
+    expect(
+      (await send("/sources/slack", "PUT", { userToken: "xoxb-1", appToken: "x" })).status,
+    ).toBe(400);
+    expect((await send("/sources/slack", "DELETE")).status).toBe(200);
+    expect(await (await send("/notifications", "GET")).json()).toEqual({
+      cursor: 0,
+      notifications: [],
+    });
+  });
+
+  test("the sign-in callback answers a page, and refuses a state it did not make", async () => {
+    const response = await send("/sources/slack/oauth/callback?code=x&state=forged", "GET");
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain("Slack is not connected");
+    const bad = await send("/sources/slack/sign-in", "POST", {
+      clientId: "abc",
+      appToken: "xapp-1",
+      redirectUrl: "https://host/api/inbox/sources/slack/oauth/callback",
+    });
+    expect(bad.status).toBe(400);
+  });
+
   test("a paired device may read and triage the Inbox", () => {
+    // Slack sends the browser back with no session: the one-time state authenticates it.
+    expect(routeAccess("GET", "/api/inbox/sources/slack/oauth/callback")).toBe("public");
+    // Tokens may be saved from a device (decision D3); they are never sent back.
+    expect(routeAccess("PUT", "/api/inbox/sources/slack")).toBe("device");
+    expect(routeAccess("POST", "/api/inbox/items/inbx_1/reply")).toBe("device");
     expect(routeAccess("GET", "/api/inbox/items")).toBe("device");
     expect(routeAccess("GET", "/api/inbox/summary")).toBe("device");
     expect(routeAccess("PUT", "/api/inbox/items/inbx_1/state")).toBe("device");

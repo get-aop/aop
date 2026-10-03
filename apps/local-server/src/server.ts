@@ -18,9 +18,10 @@ import {
 import { createCommandContext } from "./context.ts";
 import { createDatabase, getDefaultDbPath } from "./db/connection.ts";
 import { runMigrations } from "./db/migrations.ts";
+import { createGithubService } from "./github/index.ts";
 import { inboxDbPath, openInboxDatabase } from "./inbox/database.ts";
-import { createHostInboxService } from "./inbox/host-inbox-service.ts";
-import { startInboxRetention } from "./inbox/retention.ts";
+import { createHostInbox } from "./inbox/host-inbox.ts";
+import { createHostIssueService } from "./issues/host-issue-service.ts";
 import { runLibraryRetention, startLibraryRetention } from "./library/retention.ts";
 import { createProjectServices } from "./project/services.ts";
 import { startPullRequestWatcher } from "./pull-request-watch/watcher.ts";
@@ -68,13 +69,21 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   );
   const updates = createHostUpdateService(ctx);
   const agentClis = createHostAgentCliService(ctx);
+  const github = createGithubService(ctx);
+  const issues = createHostIssueService(projectServices.projects, github);
   const inboxDb = openInboxDatabase(dbPath === ":memory:" ? ":memory:" : inboxDbPath());
-  const inbox = createHostInboxService(ctx, inboxDb);
+  const inbox = createHostInbox(ctx, inboxDb, {
+    threads: projectServices.threads,
+    projects: projectServices.projects,
+    issues,
+  });
   const app = createApp({
     ctx,
     projectServices,
     updates,
     agentClis,
+    github,
+    issues,
     inbox,
     startTimeMs,
     port,
@@ -120,8 +129,8 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   await projectServices.routineScheduler.start();
   // Once a day the Library removes what outlived its retention or its caps.
   const stopLibraryRetention = startLibraryRetention(() => runLibraryRetention(ctx));
-  // Every hour the Inbox forgets the Slack messages that outlived its retention.
-  const stopInboxRetention = startInboxRetention(inbox);
+  // The Slack feed, the Inbox's hourly retention and its pull request notes.
+  const stopInbox = await inbox.start();
   // A project created just before a restart may not have started its survey yet.
   void projectServices.kickoff.resumePending();
 
@@ -131,7 +140,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
       stopMaintenance();
       await projectServices.routineScheduler.stop();
       stopLibraryRetention();
-      stopInboxRetention();
+      stopInbox();
       updates.stop();
       agentClis.stop();
       await stopWatcher();
