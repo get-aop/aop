@@ -221,6 +221,7 @@ export type {
   RunningTurn,
   UpdateDownload,
   UpdateInstallMode,
+  UpdateLog,
   UpdateStatus,
 } from "./updates.ts";
 export {
@@ -244,6 +245,7 @@ export {
   RunningTurnSchema,
   UpdateDownloadSchema,
   UpdateInstallModeSchema,
+  UpdateLogSchema,
   UpdateStatusSchema,
 } from "./updates.ts";
 export {

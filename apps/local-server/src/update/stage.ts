@@ -45,6 +45,31 @@ export const stageRelease = async (
   }
 };
 
+/** The files of a release this host runs from: its own binary and the runtime assets. */
+export const hostReleaseFiles = (platform: HostPlatform): string[] => [
+  hostAssetName(platform),
+  RUNTIME_ASSETS_NAME,
+];
+
+/**
+ * Downloads each of `names` into `dir` and checks it against the sha256 the feed lists for it
+ * (or, for a source that lists none, the release's `checksums.sha256`). A file that fails the
+ * check is deleted, and this throws.
+ */
+export const downloadVerified = async (
+  release: ReleaseInfo,
+  names: string[],
+  dir: string,
+  fetchFn: FetchFn,
+): Promise<void> => {
+  const expected = await expectedDigests(release, names, dir, fetchFn);
+  for (const name of names) {
+    const path = join(dir, name);
+    await downloadNamed(release, name, path, fetchFn);
+    await verifyDigest(name, path, expected.get(name) ?? null);
+  }
+};
+
 const makeStagingDir = async (layout: InstallLayout): Promise<string> => {
   try {
     return await mkdtemp(join(layout.installDir, ".aop-update-"));
@@ -61,15 +86,10 @@ const fill = async (
   platform: HostPlatform,
   tools: StageTools,
 ): Promise<StagedRelease> => {
-  const binaryName = hostAssetName(platform);
-  const expected = await expectedDigests(release, [binaryName, RUNTIME_ASSETS_NAME], dir, tools);
+  await downloadVerified(release, hostReleaseFiles(platform), dir, tools.fetch);
 
-  const binary = join(dir, binaryName);
+  const binary = join(dir, hostAssetName(platform));
   const archive = join(dir, RUNTIME_ASSETS_NAME);
-  await downloadNamed(release, binaryName, binary, tools.fetch);
-  await verifyDigest(binaryName, binary, expected.get(binaryName) ?? null);
-  await downloadNamed(release, RUNTIME_ASSETS_NAME, archive, tools.fetch);
-  await verifyDigest(RUNTIME_ASSETS_NAME, archive, expected.get(RUNTIME_ASSETS_NAME) ?? null);
 
   const unpacked = join(dir, "unpacked");
   await tools.extract(archive, unpacked);
@@ -90,12 +110,12 @@ const expectedDigests = async (
   release: ReleaseInfo,
   names: string[],
   dir: string,
-  tools: StageTools,
+  fetchFn: FetchFn,
 ): Promise<Map<string, string | null>> => {
   const listed = new Map(names.map((name) => [name, release.assets[name]?.sha256 ?? null]));
   if ([...listed.values()].every(Boolean)) return listed;
   const checksumsFile = join(dir, CHECKSUMS_NAME);
-  await downloadNamed(release, CHECKSUMS_NAME, checksumsFile, tools.fetch);
+  await downloadNamed(release, CHECKSUMS_NAME, checksumsFile, fetchFn);
   const checksums = await Bun.file(checksumsFile).text();
   for (const [name, digest] of listed) {
     listed.set(name, digest ?? digestInChecksums(checksums, name));

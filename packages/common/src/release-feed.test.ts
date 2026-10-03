@@ -48,6 +48,11 @@ describe("parseReleaseFeed", () => {
     });
   });
 
+  test("carries the CUA Driver version the release pins, when the feed names one", () => {
+    expect(parseReleaseFeed({ ...feed, cuaDriver: "0.33.0" })?.cuaDriver).toBe("0.33.0");
+    expect(parseReleaseFeed(feed)).not.toHaveProperty("cuaDriver");
+  });
+
   test("refuses another schema, a version that is not a release, and a file without a sha256", () => {
     expect(parseReleaseFeed({ ...feed, schemaVersion: 2 })).toBeNull();
     expect(parseReleaseFeed({ ...feed, version: "nightly" })).toBeNull();

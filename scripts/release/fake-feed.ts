@@ -24,6 +24,8 @@ export const startFakeFeed = async (options: {
   version: string;
   port?: number;
   notes?: string;
+  /** The CUA Driver version the fake release pins; this checkout's pin unless said. */
+  cuaDriver?: string;
 }): Promise<FakeFeed> => {
   const names = await readdir(options.dir);
   if (!names.includes("checksums.sha256")) await generateReleaseChecksums(options.dir);
@@ -54,6 +56,7 @@ export const startFakeFeed = async (options: {
     notes: options.notes ?? `Release notes of ${options.version} (fake feed).`,
     publishedAt: new Date().toISOString(),
     origin: url,
+    cuaDriver: options.cuaDriver,
   });
   documents = { ...docs.versioned, ...docs.pointers };
   names.splice(0, names.length, ...(await readdir(options.dir)));
@@ -65,7 +68,11 @@ const main = async (): Promise<void> => {
   cli
     .option("--dir <path>", "Directory whose files are the release assets")
     .option("--version <version>", "Version the release reports, such as 0.10.0")
-    .option("--port <port>", "Port to listen on");
+    .option("--port <port>", "Port to listen on")
+    .option(
+      "--cua-driver <version>",
+      "CUA Driver version the release pins (default: this checkout's)",
+    );
   const { options } = cli.parse();
   if (!options.dir || !options.version) {
     throw new Error("Usage: fake-feed --dir <assets> --version <x.y.z> [--port <port>]");
@@ -74,6 +81,7 @@ const main = async (): Promise<void> => {
     dir: String(options.dir),
     version: String(options.version),
     port: options.port ? Number(options.port) : undefined,
+    cuaDriver: options.cuaDriver ? String(options.cuaDriver) : undefined,
   });
   console.log(`Fake release feed on ${feed.url} (set AOP_RELEASE_FEED_URL=${feed.url})`);
 };

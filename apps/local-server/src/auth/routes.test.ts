@@ -355,6 +355,7 @@ describe("auth routes", () => {
         "POST /api/updates/apply",
         "DELETE /api/updates/apply",
         "POST /api/updates/check",
+        "GET /api/updates/log",
         "POST /api/agent-clis/:provider/update",
         "POST /api/agent-clis/check",
       ];
@@ -394,7 +395,9 @@ describe("auth routes", () => {
       expect(routeAccess("PUT", "/api/settings/host_management")).toBe("owner");
       for (const key of [
         "update_check",
-        "update_auto_apply",
+        "update_install",
+        "update_install_window",
+        "update_background_download",
         "agent_cli_auto_update",
         "agent_cli_check_interval_minutes",
       ]) {

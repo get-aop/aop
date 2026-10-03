@@ -1,9 +1,9 @@
 import { closeSync, mkdirSync, openSync } from "node:fs";
-import { join } from "node:path";
 import { aopPaths } from "@aop/infra";
 import type { InstallLayout } from "./install-layout.ts";
 import { detectRestartPlan } from "./restart.ts";
 import { systemPlanInput } from "./system.ts";
+import { updateLogPath } from "./update-log.ts";
 
 /**
  * Starts `aop update` in a process that survives the restart it performs. The host cannot do
@@ -17,7 +17,7 @@ export const startUpdaterProcess = async (
   hostEnv: NodeJS.ProcessEnv = process.env,
 ): Promise<void> => {
   const env = updaterEnv(hostEnv);
-  const logPath = join(aopPaths.logs(), "update.log");
+  const logPath = updateLogPath();
   mkdirSync(aopPaths.logs(), { recursive: true });
   const plan = await detectRestartPlan({ ...systemPlanInput(env), layout });
   if (plan.kind === "systemd" && Bun.which("systemd-run")) {
