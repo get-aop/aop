@@ -84,6 +84,8 @@ interface OpenWindow {
   events: number;
 }
 
+type ClosedWindow = OpenWindow & { until: number };
+
 class FeedRunner {
   readonly directory: SlackDirectory;
   private readonly sourceId: string;
@@ -98,6 +100,8 @@ class FeedRunner {
   private stopped = false;
   private queue: Promise<void> = Promise.resolve();
   private catchingUp = false;
+  /** A catch-up asked for while one ran, to run once it ends. */
+  private nextCatchUp: { previous: ClosedWindow | null } | null = null;
   private openWindow: OpenWindow | null = null;
   private offlineSince: number | null = null;
   private connectedOnce = false;
@@ -222,13 +226,19 @@ class FeedRunner {
     return this.queue;
   }
 
-  private async runCatchUp(previous: (OpenWindow & { until: number }) | null): Promise<void> {
-    if (this.catchingUp || this.stopped) return;
+  private async runCatchUp(previous: ClosedWindow | null): Promise<void> {
+    if (this.stopped) return;
+    if (this.catchingUp) {
+      this.catchUpAfter(previous);
+      return;
+    }
     this.catchingUp = true;
     // A socket that delivered nothing is checked from its start, even what an earlier read saw.
+    // Slack's `oldest` is exclusive, so the read starts a millisecond early: a message sent in the
+    // millisecond the socket opened counts as sent while it was open.
     const quiet = previous && previous.events === 0 ? previous : null;
     try {
-      const timestamps = await this.readMissed(quiet ? toTs(quiet.since) : null);
+      const timestamps = await this.readMissed(quiet ? toTs(quiet.since - 1) : null);
       if (quiet && missedWhileOpen(timestamps, quiet)) {
         this.state.health = "no-events";
         this.state.problem = NO_EVENTS_FIX;
@@ -237,7 +247,16 @@ class FeedRunner {
       logger.warn("Slack catch-up stopped: {error}", { error: String(error) });
     } finally {
       this.catchingUp = false;
+      const next = this.nextCatchUp;
+      this.nextCatchUp = null;
+      if (next) void this.runCatchUp(next.previous);
     }
+  }
+
+  // The running read may be past the conversations this gap touched, and it does not check this
+  // socket: read again after it. A quiet socket waiting its turn is not displaced.
+  private catchUpAfter(previous: ClosedWindow | null): void {
+    if (this.nextCatchUp?.previous?.events !== 0) this.nextCatchUp = { previous };
   }
 
   private async readMissed(from: string | null): Promise<string[]> {

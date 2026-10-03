@@ -6,6 +6,7 @@ import type { Database } from "../../../db/schema.ts";
 import { createTestDb } from "../../../db/test-utils.ts";
 import { createTestHostInbox, eventually } from "../../test-utils.ts";
 import { FAKE_SLACK_TOKENS, type FakeSlack, startFakeSlack } from "./fake-slack.ts";
+import type { WebSocketLike } from "./socket.ts";
 
 const TOKENS = { userToken: FAKE_SLACK_TOKENS.user, appToken: FAKE_SLACK_TOKENS.app };
 
@@ -13,10 +14,15 @@ describe("the Slack feed", () => {
   let db: Kysely<Database>;
   let slack: FakeSlack;
   let inbox: ReturnType<typeof createTestHostInbox>;
+  // The feed and the fake Slack share a clock that stands still unless a test moves it, so
+  // whether a message fell inside a socket's open window never depends on the machine's speed.
+  let clock: { ms: number };
+  const now = () => clock.ms;
 
   beforeEach(async () => {
     db = await createTestDb();
-    slack = startFakeSlack();
+    clock = { ms: Date.now() };
+    slack = startFakeSlack({ now });
   });
 
   afterEach(async () => {
@@ -26,7 +32,7 @@ describe("the Slack feed", () => {
   });
 
   const connect = async () => {
-    inbox = createTestHostInbox(createCommandContext(db), { slack });
+    inbox = createTestHostInbox(createCommandContext(db), { slack, now });
     const connected = await inbox.host.slack.connect(TOKENS);
     expect(connected.success).toBe(true);
     await eventually(
@@ -98,7 +104,7 @@ describe("the Slack feed", () => {
   });
 
   test("reads what it missed while it was not listening, then follows live", async () => {
-    inbox = createTestHostInbox(createCommandContext(db), { slack });
+    inbox = createTestHostInbox(createCommandContext(db), { slack, now });
     slack.say({ channel: "D0JONAS", user: "U0JONAS", text: "sent while AOP was off" });
     await inbox.host.slack.connect(TOKENS);
     const [missed] = await settled(1);
@@ -134,17 +140,56 @@ describe("the Slack feed", () => {
     await connect();
     slack.setEvents(false);
     slack.say({ channel: "D0JONAS", user: "U0JONAS", text: "this event never comes" });
-    await Bun.sleep(5_100);
+    // Long enough after the message that Slack would have delivered it.
+    clock.ms += 5_100;
     slack.refresh();
     const connection = await eventually(
       () => inbox.host.slack.connection(),
       (value) => value?.health === "no-events",
-      5_000,
     );
     expect(connection?.problem).toContain("Socket Mode");
     // The catch-up read keeps the Inbox filling, late.
     expect((await items()).map((item) => item.text)).toEqual(["this event never comes"]);
-  }, 15_000);
+  });
+
+  test("a socket that reconnects while a catch-up runs is still checked, after it", async () => {
+    const sockets: ScriptedSocket[] = [];
+    inbox = createTestHostInbox(createCommandContext(db), {
+      slack,
+      now,
+      createSocket: () => {
+        const socket = scriptedSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    const firstRead = slack.holdNext("users.conversations");
+    await inbox.host.slack.connect(TOKENS);
+    await eventually(
+      () => sockets.length,
+      (count) => count === 1,
+    );
+    sockets[0]?.receive({ type: "hello" });
+    await firstRead.reached;
+
+    slack.say({ channel: "D0JONAS", user: "U0JONAS", text: "this event never comes" });
+    clock.ms += 5_100;
+    sockets[0]?.receive({ type: "disconnect", reason: "refresh_requested" });
+    await eventually(
+      () => sockets.length,
+      (count) => count === 2,
+    );
+    // The quiet socket's check is asked for while the first read still waits on Slack.
+    sockets[1]?.receive({ type: "hello" });
+    firstRead.release();
+
+    const connection = await eventually(
+      () => inbox.host.slack.connection(),
+      (value) => value?.health === "no-events",
+    );
+    expect(connection?.problem).toContain("Socket Mode");
+    expect((await items()).map((item) => item.text)).toEqual(["this event never comes"]);
+  });
 
   test("stops and says so when Slack refuses the app token", async () => {
     await connect();
@@ -158,3 +203,21 @@ describe("the Slack feed", () => {
     expect(connection?.problem).toContain("token_revoked");
   });
 });
+
+interface ScriptedSocket extends WebSocketLike {
+  receive: (envelope: Record<string, unknown>) => void;
+}
+
+/** A Socket Mode socket the test speaks for, so it decides when each envelope arrives. */
+const scriptedSocket = (): ScriptedSocket => {
+  const socket: ScriptedSocket = {
+    onopen: null,
+    onmessage: null,
+    onclose: null,
+    onerror: null,
+    send: () => undefined,
+    close: () => socket.onclose?.({ code: 1000 }),
+    receive: (envelope) => socket.onmessage?.({ data: JSON.stringify(envelope) }),
+  };
+  return socket;
+};

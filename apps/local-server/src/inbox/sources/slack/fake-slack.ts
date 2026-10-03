@@ -40,6 +40,8 @@ export interface FakeSlackOptions {
   scopes?: readonly string[];
   /** Socket Mode on in the app's settings; off, sockets connect and say hello but get no events. */
   events?: boolean;
+  /** The clock message timestamps follow; a test that moves time passes the feed's own. */
+  now?: () => number;
 }
 
 export interface FakeSlack {
@@ -57,6 +59,8 @@ export interface FakeSlack {
   drop: () => void;
   /** Refuses the next call of a method once, with a Slack error or a 429 and its wait. */
   failNext: (method: string, failure: { error: string } | { retryAfter: number }) => void;
+  /** Holds the next call of a method unanswered until released (`reached` once it arrives). */
+  holdNext: (method: string) => { reached: Promise<void>; release: () => void };
   calls: Array<{ method: string; params: Record<string, string> }>;
   posted: FakeMessage[];
   deleted: string[];
@@ -135,6 +139,7 @@ export const startFakeSlack = (options: FakeSlackOptions = {}): FakeSlack => {
       for (const socket of state.sockets) socket.close();
     },
     failNext: (method, failure) => state.failures.set(method, failure),
+    holdNext: (method) => state.holdNext(method),
     calls: state.calls,
     posted: state.posted,
     deleted: state.deleted,
@@ -158,14 +163,17 @@ class FakeState {
   /** Codes Slack's "Allow" page gave out, with the PKCE challenge each must answer. */
   private readonly codes = new Map<string, { challenge: string; redirect: string }>();
   readonly failures = new Map<string, { error: string } | { retryAfter: number }>();
+  private readonly holds = new Map<string, { arrived: () => void; released: Promise<void> }>();
   private micros = 0;
   private sequence = 0;
   private envelopes = 0;
   private readonly scopes: readonly string[];
+  private readonly now: () => number;
 
   constructor(options: FakeSlackOptions) {
     this.events = options.events ?? true;
     this.scopes = options.scopes ?? ALL_SCOPES;
+    this.now = options.now ?? Date.now;
   }
 
   async fetch(request: Request, bun: Bun.Server<{ id: number }>): Promise<Response | undefined> {
@@ -240,6 +248,13 @@ class FakeState {
     });
   }
 
+  holdNext(method: string): { reached: Promise<void>; release: () => void } {
+    const reached = Promise.withResolvers<void>();
+    const released = Promise.withResolvers<void>();
+    this.holds.set(method, { arrived: reached.resolve, released: released.promise });
+    return { reached: reached.promise, release: released.resolve };
+  }
+
   refresh(): void {
     for (const socket of this.sockets) {
       socket.send(JSON.stringify({ type: "disconnect", reason: "refresh_requested" }));
@@ -300,6 +315,12 @@ class FakeState {
   private async api(method: string, request: Request): Promise<Response> {
     const params = Object.fromEntries(new URLSearchParams(await request.text())) as Params;
     this.calls.push({ method, params });
+    const hold = this.holds.get(method);
+    if (hold) {
+      this.holds.delete(method);
+      hold.arrived();
+      await hold.released;
+    }
     const failure = this.failures.get(method);
     if (failure) {
       this.failures.delete(method);
@@ -439,7 +460,7 @@ class FakeState {
 
   // Slack's ts: the time in seconds to the microsecond, always increasing.
   private nextTs(): string {
-    this.micros = Math.max(this.micros + 1, Date.now() * 1000);
+    this.micros = Math.max(this.micros + 1, this.now() * 1000);
     return `${Math.floor(this.micros / 1e6)}.${String(this.micros % 1e6).padStart(6, "0")}`;
   }
 }
