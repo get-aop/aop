@@ -1,4 +1,5 @@
 import type { TurnPart } from "@aop/common";
+import { cuaRunEnded } from "../computer-use/host-gate.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatRun } from "../db/schema.ts";
 import { pollForProcessExit } from "../process/liveness.ts";
@@ -137,6 +138,8 @@ const recoverChatRun = async (
   }
   if (signal.aborted) return;
   await waitForEndedInputExit(run);
+  // A run that outlived a host restart gives back the computer-use lease when it ends, too.
+  void cuaRunEnded(run.session_id).catch(() => {});
   // A project's session that a limit refused waits for it, as it does when the server stayed up.
   const recovered = {
     ...terminal,

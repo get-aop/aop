@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { registerCommands, setupLogging } from "@aop/cli/commands";
 import { buildChannel } from "@aop/common";
 import { configureLogging, getLogger } from "@aop/infra";
+import { runComputerUseSetup, runComputerUseStatus } from "@aop/local-server/computer-use/setup";
 import { startServer } from "@aop/local-server/server";
 import { runUpdate } from "@aop/local-server/update";
 import cac from "cac";
@@ -155,6 +156,37 @@ cli
     });
     process.exit(exitCode);
   });
+
+cli
+  .command("computer-use [action]", "Set up computer use (CUA Driver) on this host: status | setup")
+  .option("--json", "status: print the readiness as JSON")
+  .option("--screen <screen>", "setup: virtual (default) or desktop")
+  .option("--display <display>", "setup: the X display to use, such as :99")
+  .option("--no-sudo", "setup: only print the sudo command, never run it")
+  .action(
+    async (
+      action: string | undefined,
+      options: { json?: boolean; screen?: string; display?: string; sudo?: boolean },
+    ) => {
+      const print = (line: string) => process.stdout.write(`${line}\n`);
+      if (action === "setup") {
+        const screen =
+          options.screen === "desktop" || options.screen === "virtual" ? options.screen : undefined;
+        process.exit(
+          await runComputerUseSetup({
+            screen,
+            display: options.display,
+            noSudo: options.sudo === false,
+          }),
+        );
+      }
+      if (action === undefined || action === "status") {
+        process.exit(await runComputerUseStatus({ json: Boolean(options.json) }, print));
+      }
+      print(`Unknown action "${action}". Use: ${CHANNEL.binaryName} computer-use status | setup`);
+      process.exit(1);
+    },
+  );
 
 cli.command("stop", "Stop the local server").action(async () => {
   // A host run by launchd or systemd never writes the PID file below, and launchd would start a

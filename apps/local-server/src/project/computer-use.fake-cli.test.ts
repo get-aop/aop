@@ -95,10 +95,16 @@ describe("computer use for a project's threads", () => {
     await s.api("POST", `/api/projects/${project.id}/messages`, { text: "how is it going?" });
     await s.settle();
 
-    expect(runsOf(s, threadId).map((run) => run.extraMcpServers)).toEqual([
-      undefined,
-      { "cua-driver": { type: "stdio", command: driver, args: ["mcp"] } },
-    ]);
+    // The thread reaches the driver through the host's gate, on its own session's token.
+    const [first, second] = runsOf(s, threadId).map((run) => run.extraMcpServers);
+    expect(first).toBeUndefined();
+    const gate = second?.["cua-driver"];
+    expect(gate?.type).toBe("http");
+    const url = new URL(gate?.type === "http" ? gate.url : "http://none");
+    expect(url.pathname).toBe("/api/mcp/cua");
+    expect(url.searchParams.get("sessionId")).toBe(threadId);
+    expect(url.searchParams.get("accessToken")).toBeTruthy();
+    expect(driver).toBeTruthy();
     expect(launchedServersOf(s, threadId)).toEqual([["aop"], ["aop", "cua-driver"]]);
     const coordinator = await s.ctx.chatSessionRepository.getCoordinator(project.id);
     const coordinatorRuns = runsOf(s, coordinator?.id ?? "");

@@ -9,6 +9,12 @@ import { z } from "zod";
 export const ComputerUseOptionSchema = z.enum(["model-default", "cua", "codex", "claude"]);
 export type ComputerUseOption = z.infer<typeof ComputerUseOptionSchema>;
 
+/**
+ * The CUA Driver release this AOP release installs and upgrades to (`aop computer-use setup`,
+ * the install script). Bumped with AOP, so a host update can bring a newer driver along.
+ */
+export const CUA_DRIVER_VERSION = "0.32.0";
+
 /** The options a project can hold today. */
 export const AVAILABLE_COMPUTER_USE = ["model-default", "cua"] as const;
 export const ComputerUseSchema = z.enum(AVAILABLE_COMPUTER_USE);
@@ -35,7 +41,8 @@ export type CuaReadiness = z.infer<typeof CuaReadinessSchema>;
  * Why CUA Driver is or is not ready, as a code. `no-answer`: `cua-driver` is there but did not
  * report a version or a permission report. `not-running`: its app (the daemon that holds the
  * macOS grants) is not running, so the grants cannot be read. `missing-permissions`: the app runs
- * without Accessibility or Screen Recording.
+ * without Accessibility or Screen Recording. `no-display`: on Linux, no X display is up for it to
+ * drive (`aop computer-use setup` makes a virtual one).
  */
 export const CuaReasonSchema = z.enum([
   "ready",
@@ -43,6 +50,7 @@ export const CuaReasonSchema = z.enum([
   "no-answer",
   "not-running",
   "missing-permissions",
+  "no-display",
 ]);
 export type CuaReason = z.infer<typeof CuaReasonSchema>;
 
@@ -60,6 +68,10 @@ export const CuaCheckSchema = z.object({
     "screen-recording",
     "direct-capture",
     "up-to-date",
+    "display",
+    "window-manager",
+    "browser",
+    "system-packages",
   ]),
   label: z.string(),
   required: z.boolean(),
@@ -67,6 +79,22 @@ export const CuaCheckSchema = z.object({
   detail: z.string(),
 });
 export type CuaCheck = z.infer<typeof CuaCheckSchema>;
+
+/**
+ * How to fix what the host lacks for computer use. `command` (`aop computer-use setup`) installs or
+ * upgrades CUA Driver at the version AOP pins and, on Linux, sets up the virtual display; it needs
+ * no root. `sudoCommand` installs the system packages it cannot install by itself (the X server,
+ * window manager, libraries and a browser CUA Driver accepts), as ONE command the person runs;
+ * null when nothing needs root. `missing` names each missing piece, for a checklist.
+ */
+export const CuaFixSchema = z.object({
+  command: z.string().nullable(),
+  sudoCommand: z.string().nullable(),
+  missing: z.array(z.string()),
+  /** The CUA Driver version this AOP release installs. */
+  pinnedVersion: z.string(),
+});
+export type CuaFix = z.infer<typeof CuaFixSchema>;
 
 export const CuaStatusSchema = z.object({
   status: CuaReadinessSchema,
@@ -79,6 +107,8 @@ export const CuaStatusSchema = z.object({
   /** The newest release on the driver's update channel, when it could say; null otherwise. */
   latestVersion: z.string().nullable(),
   checks: z.array(CuaCheckSchema),
+  /** What fixes what is missing, run on the host: see `CuaFixSchema`. */
+  fix: CuaFixSchema,
   /** The machine all of this is about, so a remote dashboard can say where to run commands. */
   host: z.object({ name: z.string(), platform: z.string() }),
   checkedAt: z.iso.datetime({ offset: true }),

@@ -70,5 +70,6 @@ The desktop app also has the AOP Browser: a Chromium browser shown in the coordi
 - [Choosing a runtime](./runtime-choice.md)
 - [The Issues tab](./issues-tab.md)
 - [The live view of the host's screen](./live-view.md)
+- [Computer use: CUA Driver built into the host](./computer-use.md)
 - [Runtimes](../RUNTIMES.md)
 - [MCP](../MCP.md)

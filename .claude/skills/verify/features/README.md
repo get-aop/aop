@@ -15,7 +15,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Start every recipe from the baseline state unless its preconditions say otherwise.
 - Prefer `data-testid` handles; they are the stable handles in the dashboard. Role and text selectors work too.
 - Run CLI actions through `bun $S/verify-stack.ts aop --name <run> -- <aop args>`.
-- Run dashboard actions only when the task needs a browser check or the person asks, with the session's computer-use tools in a throwaway browser on `<dashboard>` (the URL in `env.AOP_DASHBOARD_URL`); see Drive in `../SKILL.md`. Find elements by `data-testid`. The recipes name Claude in Chrome tools (`find`, `read_page`, `javascript_tool`, `browser_batch`); SKILL.md maps them to the CUA tools.
+- Run dashboard actions for every UI change, or when the person asks, with the session's computer-use tools in a throwaway browser on `<dashboard>` (the URL in `env.AOP_DASHBOARD_URL`); see Drive in `../SKILL.md`. Find elements by `data-testid`. The recipes name Claude in Chrome tools (`find`, `read_page`, `javascript_tool`, `browser_batch`); SKILL.md maps them to the CUA tools.
 - Do not send a chat or coordinator message unless the recipe says to. A message reaches the real `claude-code` runtime with the user's auth, unless the stack was seeded with `--fake-runtime` (see the Sessions and Projects recipes). Put stub `claude`, `codex` and `pi` scripts that log and exit non-zero first on `PATH` when starting the stack, so a misrouted call cannot reach a real CLI.
 - Stop with `bun $S/verify-stack.ts stop --name <run>`; it keeps evidence.
 

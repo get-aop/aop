@@ -1,10 +1,20 @@
 import { existsSync } from "node:fs";
 import { hostname } from "node:os";
 import { isAbsolute } from "node:path";
-import type { CuaCheck, CuaReason, CuaStatus } from "@aop/common";
+import {
+  buildChannel,
+  CUA_DRIVER_VERSION,
+  type CuaCheck,
+  type CuaReason,
+  type CuaStatus,
+} from "@aop/common";
 import { buildSpawnEnv } from "@aop/infra";
 import { resolveRuntimeExecutable } from "@aop/llm-provider";
 import { messageOf, runWithTimeout } from "../agent-cli/probe.ts";
+import { readComputerUseConfig } from "./config.ts";
+import { compareVersions, parseVersion } from "./setup/driver-install.ts";
+import { type HostInspection, inspectHost } from "./setup/inspect.ts";
+import { hostSystem } from "./setup/system.ts";
 
 /** Where the CUA Driver installer puts the app; its `cua-driver` link in ~/.local/bin points here. */
 export const CUA_APP_BINARY = "/Applications/CuaDriver.app/Contents/MacOS/cua-driver";
@@ -20,6 +30,8 @@ export interface CuaProbeDeps {
   /** The host's name as its owner knows it. */
   hostName: () => Promise<string>;
   now: () => Date;
+  /** The screen, system packages and browser (Linux), and the command that fixes what is missing. */
+  inspect: (driverNeedsSetup: boolean) => Promise<HostInspection>;
 }
 
 /**
@@ -32,19 +44,27 @@ export const probeCua = async (deps: CuaProbeDeps = defaultDeps): Promise<CuaSta
   const base = { host, checkedAt: deps.now().toISOString() };
   const path = deps.locate();
   if (!path) {
+    const machine = await deps.inspect(true);
     return {
       ...base,
       ...verdict("not-installed", "CUA Driver is not installed on this host."),
       path: null,
       version: null,
       latestVersion: null,
-      checks: [check("installed", "Installed", true, false, "No `cua-driver` on the host.")],
+      checks: [
+        check("installed", "Installed", true, false, "No `cua-driver` on the host."),
+        ...machine.checks,
+      ],
+      fix: machine.fix,
     };
   }
   const [version, latestVersion] = await Promise.all([
     readVersion(deps, path),
     readLatestVersion(deps, path),
   ]);
+  const installed = version.ok ? version.value : null;
+  const behind = installed === null || compareVersions(installed, CUA_DRIVER_VERSION) < 0;
+  const machine = await deps.inspect(behind);
   const checks = [
     check("installed", "Installed", true, true, path),
     check(
@@ -55,15 +75,17 @@ export const probeCua = async (deps: CuaProbeDeps = defaultDeps): Promise<CuaSta
       version.ok ? `cua-driver ${version.value}` : version.error,
     ),
     ...(version.ok ? await grantChecks(deps, path) : []),
-    updateCheck(version.ok ? version.value : null, latestVersion),
+    pinCheck(installed, latestVersion),
+    ...machine.checks,
   ];
   return {
     ...base,
-    ...judge(checks, version.ok ? version.value : null),
+    ...judge(checks, installed),
     path,
-    version: version.ok ? version.value : null,
+    version: installed,
     latestVersion,
     checks,
+    fix: machine.fix,
   };
 };
 
@@ -146,18 +168,22 @@ const directCapture = (status: unknown): CuaCheck =>
         "Not checked: reading it could raise a prompt on the host.",
       );
 
-const updateCheck = (version: string | null, latest: string | null): CuaCheck => {
-  if (!version || !latest) {
-    return check("up-to-date", "Up to date", false, null, "Could not ask for the latest release.");
+// AOP pins the driver it installs; a newer upstream release is news, not something to fix here.
+const pinCheck = (version: string | null, latest: string | null): CuaCheck => {
+  if (!version) {
+    return check("up-to-date", "Up to date", false, null, "The installed version is unknown.");
   }
-  const behind = compareVersions(version, latest) < 0;
-  return check(
-    "up-to-date",
-    "Up to date",
-    false,
-    !behind,
-    behind ? `${latest} is out.` : `${version} is the latest.`,
-  );
+  const upstream =
+    latest && compareVersions(latest, version) > 0 ? ` (${latest} is out upstream)` : "";
+  return compareVersions(version, CUA_DRIVER_VERSION) < 0
+    ? check(
+        "up-to-date",
+        "Up to date",
+        false,
+        false,
+        `${version} is older than ${CUA_DRIVER_VERSION}, the version this AOP installs.`,
+      )
+    : check("up-to-date", "Up to date", false, true, `${version}, as AOP pins it${upstream}.`);
 };
 
 /** The first required check that failed decides the reason. */
@@ -173,6 +199,12 @@ const judge = (
     return verdict(
       "not-running",
       `CUA Driver is installed but its app is not running. ${checks.find((c) => c.id === "running")?.detail ?? ""}`.trim(),
+    );
+  }
+  if (failed("display")) {
+    return verdict(
+      "no-display",
+      `CUA Driver has no screen to drive. ${checks.find((c) => c.id === "display")?.detail ?? ""}`.trim(),
     );
   }
   const missing = checks.filter((c) => c.required && c.ok === false).map((c) => c.label);
@@ -201,19 +233,6 @@ const check = (
   ok: boolean | null,
   detail: string,
 ): CuaCheck => ({ id, label, required, ok, detail });
-
-const parseVersion = (output: string): string | null =>
-  output.match(/\b(\d+\.\d+\.\d+(?:[-+][\w.]+)?)\b/)?.[1] ?? null;
-
-const compareVersions = (a: string, b: string): number => {
-  const parts = (v: string) => v.split(/[-+]/)[0]?.split(".").map(Number) ?? [];
-  const [x, y] = [parts(a), parts(b)];
-  for (let i = 0; i < 3; i += 1) {
-    const diff = (x[i] ?? 0) - (y[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-};
 
 const parseJson = (output: string): Record<string, unknown> | null => {
   try {
@@ -251,4 +270,10 @@ const defaultDeps: CuaProbeDeps = {
   platform: process.platform,
   hostName: readHostName,
   now: () => new Date(),
+  inspect: (driverNeedsSetup) =>
+    inspectHost(hostSystem(), {
+      config: readComputerUseConfig(),
+      setupCommand: `${buildChannel().binaryName} computer-use setup`,
+      driverNeedsSetup,
+    }),
 };

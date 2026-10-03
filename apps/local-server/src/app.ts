@@ -1,5 +1,5 @@
 import { extname } from "node:path";
-import { parseLiveViewMode } from "@aop/common";
+import { type CuaLeaseState, EMPTY_CUA_LEASE, parseLiveViewMode } from "@aop/common";
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
 import { type Context, Hono } from "hono";
@@ -15,6 +15,8 @@ import { createOriginGuard } from "./auth/origin-guard.ts";
 import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
 import { cuaActivity } from "./computer-use/cua-activity.ts";
+import { createCuaGateRoutes } from "./computer-use/gate-routes.ts";
+import { type HostCua, hostCua, hostCuaStarted } from "./computer-use/host-gate.ts";
 import { createLiveViewService, type LiveViewService } from "./computer-use/live-view.ts";
 import { createComputerUseRoutes } from "./computer-use/routes.ts";
 import { createScreenCapture } from "./computer-use/screen-capture.ts";
@@ -83,6 +85,8 @@ export interface AppDependencies {
   computerUse?: ComputerUseService;
   /** The live view of the host's screen; tests pass one over a fake capture. */
   liveView?: LiveViewService;
+  /** The computer-use lease, driver processes and MCP gate; tests pass ones over a fake driver. */
+  cua?: HostCua;
   /** The host's GitHub access; tests pass one over a fake `gh`. */
   github?: GithubService;
   /** The Issues tab's GitHub and Linear reads; tests pass one over a fake `gh` and Linear. */
@@ -160,6 +164,10 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/chat-sessions", createChatSessionRoutes(ctx));
   app.route("/api/chat-sessions", createSessionGitRoutes(ctx));
   const projects = deps.projectServices ?? createProjectServices(ctx);
+  app.route(
+    "/api/mcp/cua",
+    createCuaGateRoutes(ctx, projects, () => (deps.cua ?? hostCua(deps.computerUse)).gate),
+  );
   app.route("/api/mcp", createMcpRoutes(ctx, projects));
   app.route("/api/mcp-secret", createMcpSecretRoutes());
   app.route("/api/projects", createProjectRoutes(projects));
@@ -186,6 +194,7 @@ export const createApp = (deps: AppDependencies) => {
     createComputerUseRoutes(
       deps.computerUse ?? computerUse,
       deps.liveView ?? createHostLiveView(ctx),
+      leaseState(deps),
     ),
   );
   app.route(
@@ -263,7 +272,12 @@ const createHostLiveView = (ctx: LocalServerContext): LiveViewService =>
     activity: cuaActivity,
     startCapture: createScreenCapture(),
     readMode: async () => parseLiveViewMode(await ctx.settingsRepository.get(SettingKey.LIVE_VIEW)),
+    readLease: leaseState({}),
   });
+
+// Reading the lease never starts it: a host where no thread used CUA has nobody holding it.
+const leaseState = (deps: Pick<AppDependencies, "cua">) => (): CuaLeaseState =>
+  (deps.cua ?? hostCuaStarted())?.lease.state() ?? EMPTY_CUA_LEASE;
 
 const NO_OAUTH =
   "This AOP host has no OAuth server. Its MCP endpoint refused the token in the URL: the session ended, or the host's MCP secret was rotated. The next turn gets a new token.";

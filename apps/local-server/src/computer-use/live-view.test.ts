@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { LiveViewMode } from "@aop/common";
+import { type CuaLeaseState, EMPTY_CUA_LEASE, type LiveViewMode } from "@aop/common";
 import { createCuaActivity, LINGER_MS } from "./cua-activity.ts";
 import { createLiveViewService, RETRY_MS, VIEWER_TTL_MS } from "./live-view.ts";
 import { fakeCapture, manualTime } from "./test-utils.ts";
@@ -158,5 +158,54 @@ describe("who gets the live view", () => {
     settings.mode = "always";
     expect((await service.status("owner")).shown).toBe(true);
     expect(await service.frame("owner")).toMatchObject({ code: "LIVE_VIEW_STARTING" });
+  });
+});
+
+describe("the lease in the live view's status", () => {
+  test("names the holder and the line, and leaves a thread that waits in line out of the sessions", async () => {
+    const time = manualTime();
+    const activity = createCuaActivity(time.now);
+    const waiter = { id: "thr_2", projectId: "prj_1", title: "Fix the footer" };
+    const lease: CuaLeaseState = {
+      holder: {
+        kind: "thread",
+        threadId: THREAD.id,
+        projectId: THREAD.projectId,
+        title: THREAD.title,
+        since: "2026-10-03T12:00:00.000Z",
+        lastCallAt: "2026-10-03T12:00:00.000Z",
+      },
+      queue: [
+        {
+          threadId: waiter.id,
+          projectId: waiter.projectId,
+          title: waiter.title,
+          since: "2026-10-03T12:00:01.000Z",
+          position: 1,
+        },
+      ],
+      idleReleaseMs: 180_000,
+    };
+    const service = createLiveViewService({
+      activity,
+      startCapture: fakeCapture().start,
+      readMode: async () => "always",
+      readLease: () => lease,
+      now: time.now,
+      every: time.every,
+    });
+    activity.observeLine(THREAD, cuaCall("click"));
+    activity.observeLine(waiter, cuaCall("click"));
+
+    const status = await service.status("owner");
+
+    expect(status.lease).toEqual(lease);
+    expect(status.sessions.map((session) => session.threadId)).toEqual([THREAD.id]);
+  });
+
+  test("nobody holds it on a host whose lease has not started", async () => {
+    const { service } = setup();
+
+    expect((await service.status("owner")).lease).toEqual(EMPTY_CUA_LEASE);
   });
 });

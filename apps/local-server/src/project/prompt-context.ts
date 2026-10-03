@@ -1,5 +1,6 @@
 import { MEMORY_INDEX_NAME } from "@aop/common";
-import type { McpStdioServer } from "@aop/llm-provider";
+import type { McpServerConfig } from "@aop/llm-provider";
+import { resolveAopMcpUrl } from "../chat-session/run-options.ts";
 import { type ComputerUseService, computerUse } from "../computer-use/service.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
@@ -18,7 +19,7 @@ export interface ProjectRunContext {
   /** Other repos of the project, readable but not the thread's workspace. */
   readableDirectories: string[];
   /** MCP servers for computer use (see computer-use/service.ts); a coordinator never has any. */
-  mcpServers?: Record<string, McpStdioServer>;
+  mcpServers?: Record<string, McpServerConfig>;
 }
 
 /**
@@ -41,14 +42,20 @@ export const loadProjectRunContext = async (
   }
   const thread = await ctx.threadRepository.getById(session.id);
   if (!thread) return null;
+  const mcpServers = await computerUseService.serversFor(
+    project,
+    "thread",
+    resolveAopMcpUrl(session.runtime, session.id),
+  );
   return {
     systemPrompt: buildThreadSystemPrompt({
       ...base,
       thread,
       workspace: session.workspace_path ?? "",
+      computerUse: mcpServers !== undefined,
     }),
     readableDirectories: repos.filter((repo) => repo.id !== thread.repoId).map((repo) => repo.path),
-    mcpServers: await computerUseService.serversFor(project, "thread"),
+    mcpServers,
   };
 };
 

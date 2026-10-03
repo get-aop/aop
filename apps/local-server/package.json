@@ -11,7 +11,8 @@
     "./db/schema": "./src/db/schema.ts",
     "./github-cli": "./src/github-cli/index.ts",
     "./settings/types": "./src/settings/types.ts",
-    "./update": "./src/update/run-update.ts"
+    "./update": "./src/update/run-update.ts",
+    "./computer-use/setup": "./src/computer-use/setup/run-setup.ts"
   },
   "scripts": {
     "build": "bun build ./src/run.ts --outdir ./dist --target bun",

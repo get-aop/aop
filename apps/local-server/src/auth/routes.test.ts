@@ -319,6 +319,9 @@ describe("auth routes", () => {
       "POST /api/mcp",
       "GET /api/mcp",
       "GET /api/mcp/tools",
+      // CUA Driver's gate for threads checks the same per-session MCP token itself.
+      "POST /api/mcp/cua",
+      "GET /api/mcp/cua",
     ]);
     const concrete = (path: string) => path.replace(/:[^/]+/g, "x");
 

@@ -1,4 +1,4 @@
-import type { LiveViewViewer } from "@aop/common";
+import type { CuaLeaseState, LiveViewViewer } from "@aop/common";
 import { Hono } from "hono";
 import type { AuthEnv } from "../auth/api-auth.ts";
 import type { LiveViewService } from "./live-view.ts";
@@ -12,9 +12,17 @@ import type { ComputerUseService } from "./service.ts";
  * The live view of the host's screen (`/live`, `/live/frame`) is for any authenticated caller:
  * the person watching from a paired device is who it is for, and a device already sees every
  * thread's work and screenshots. The `live_view` host setting decides who gets frames at all.
+ *
+ * `/lease` says which thread holds the computer-use lease and who waits for it, for any device.
  */
-export const createComputerUseRoutes = (service: ComputerUseService, liveView: LiveViewService) => {
+export const createComputerUseRoutes = (
+  service: ComputerUseService,
+  liveView: LiveViewService,
+  lease: () => CuaLeaseState,
+) => {
   const routes = new Hono<AuthEnv>();
+
+  routes.get("/lease", (c) => c.json(lease()));
 
   routes.get("/cua", async (c) =>
     c.json(await service.cuaStatus({ fresh: c.req.query("fresh") === "1" })),

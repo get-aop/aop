@@ -1,5 +1,5 @@
 import type { ChatActionPayload, TurnPart } from "@aop/common";
-import type { McpStdioServer, RunImage } from "@aop/llm-provider";
+import type { McpServerConfig, RunImage } from "@aop/llm-provider";
 import type { LocalServerContext } from "../context.ts";
 import type {
   ChatRun,
@@ -206,7 +206,7 @@ const runMainRuntimeReply = async (
   }: {
     allowedDirectories?: string[];
     images: RunImage[];
-    extraMcpServers?: Record<string, McpStdioServer>;
+    extraMcpServers?: Record<string, McpServerConfig>;
   },
   appendSystemPrompt: string | undefined,
   runtimePrompt: string,

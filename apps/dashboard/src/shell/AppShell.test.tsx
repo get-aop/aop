@@ -188,7 +188,7 @@ describe("AppShell keyboard and dialogs", () => {
     act(() => openSettingsDialog("general"));
 
     const dialog = await screen.findByTestId("settings-dialog");
-    for (const section of ["general", "repositories", "runtimes", "about"]) {
+    for (const section of ["general", "repositories", "runtimes", "computer-use", "about"]) {
       expect(within(dialog).getByTestId(`settings-nav-${section}`)).toBeTruthy();
     }
     expect(within(dialog).queryByText("Workflows")).toBeNull();

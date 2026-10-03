@@ -134,13 +134,25 @@ const segmentsOf = (text: string): { at: number; part: string; code: boolean }[]
   });
 };
 
-const CopyCommand = ({ label, command }: { label: string; command: string }) => {
+/**
+ * A command to run on the host, with a button that copies it. `testId` prefixes the command's
+ * (`-command`) and the button's (`-copy`) test ids.
+ */
+export const CopyCommand = ({
+  label,
+  command,
+  testId = "settings-cua",
+}: {
+  label: string;
+  command: string;
+  testId?: string;
+}) => {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">
       <span className="w-28 shrink-0 text-[12px] text-text-subtle">{label}</span>
       <code
-        data-testid="settings-cua-command"
+        data-testid={`${testId}-command`}
         className="min-w-0 flex-1 rounded-md bg-canvas px-1.5 py-0.5 text-[11.5px] break-all text-text"
       >
         {command}
@@ -149,7 +161,7 @@ const CopyCommand = ({ label, command }: { label: string; command: string }) => 
         type="button"
         size="xs"
         variant="ghost"
-        data-testid="settings-cua-copy"
+        data-testid={`${testId}-copy`}
         onClick={() =>
           void navigator.clipboard.writeText(command).then(
             () => setCopied(true),

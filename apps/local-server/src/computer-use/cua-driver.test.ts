@@ -88,17 +88,62 @@ describe("probeCua on the host", () => {
     expect(failed).toMatchObject({ status: "not-ready", reason: "not-running" });
   });
 
-  test("an update is reported but does not make it unready, nor does being offline", async () => {
-    const behind = fakeCua({ latest: "0.33.1" });
+  test("a newer upstream release is news only: AOP pins the version it installs", async () => {
+    const newer = fakeCua({ latest: "0.33.1" });
     const offline = fakeCua({ latest: null });
 
-    expect(await probeCua(behind)).toMatchObject({ status: "ready", latestVersion: "0.33.1" });
-    expect(await checkOf(behind, "up-to-date")).toMatchObject({
-      ok: false,
-      detail: "0.33.1 is out.",
+    expect(await probeCua(newer)).toMatchObject({ status: "ready", latestVersion: "0.33.1" });
+    expect(await checkOf(newer, "up-to-date")).toMatchObject({
+      ok: true,
+      detail: "0.32.0, as AOP pins it (0.33.1 is out upstream).",
     });
+    expect((await probeCua(newer)).fix.command).toBeNull();
     expect(await probeCua(offline)).toMatchObject({ status: "ready", latestVersion: null });
-    expect(await checkOf(offline, "up-to-date")).toMatchObject({ ok: null });
+    expect(await checkOf(offline, "up-to-date")).toMatchObject({ ok: true });
+  });
+
+  test("a driver older than the pin stays ready, and setup is the fix", async () => {
+    const older = fakeCua({ version: "cua-driver 0.31.2\n" });
+
+    expect(await probeCua(older)).toMatchObject({ status: "ready", version: "0.31.2" });
+    expect(await checkOf(older, "up-to-date")).toMatchObject({
+      ok: false,
+      detail: "0.31.2 is older than 0.32.0, the version this AOP installs.",
+    });
+    expect((await probeCua(older)).fix.command).toBe("aop computer-use setup");
+  });
+
+  test("on Linux, no screen to drive makes it not ready, with setup as the fix", async () => {
+    const deps = fakeCua(
+      {},
+      {
+        platform: "linux",
+        inspect: async () => ({
+          checks: [
+            {
+              id: "display",
+              label: "Screen",
+              required: true,
+              ok: false,
+              detail: "X display :99 is not running.",
+            },
+          ],
+          fix: {
+            command: "aop computer-use setup",
+            sudoCommand: null,
+            missing: [],
+            pinnedVersion: "0.32.0",
+          },
+          noDisplay: true,
+        }),
+      },
+    );
+
+    expect(await probeCua(deps)).toMatchObject({
+      status: "not-ready",
+      reason: "no-display",
+      detail: "CUA Driver has no screen to drive. X display :99 is not running.",
+    });
   });
 
   test("Tahoe's direct capture consent counts once the daemon says it is ready", async () => {

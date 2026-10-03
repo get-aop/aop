@@ -26,6 +26,7 @@ const READY: CuaStatus = {
     { id: "accessibility", label: "Accessibility", required: true, ok: true, detail: "" },
     { id: "up-to-date", label: "Up to date", required: false, ok: true, detail: "" },
   ],
+  fix: { command: null, sudoCommand: null, missing: [], pinnedVersion: "0.32.0" },
   host: { name: "Studio Mac", platform: "darwin" },
   checkedAt: "2026-10-01T12:00:00.000Z",
 };
@@ -38,6 +39,7 @@ const NOT_INSTALLED: CuaStatus = {
   version: null,
   latestVersion: null,
   checks: [{ id: "installed", label: "Installed", required: true, ok: false, detail: "" }],
+  fix: { ...READY.fix, command: "aop-nightly computer-use setup", missing: ["CUA Driver"] },
 };
 const MISSING_GRANT: CuaStatus = {
   ...READY,
@@ -49,6 +51,25 @@ const MISSING_GRANT: CuaStatus = {
     { id: "screen-recording", label: "Screen Recording", required: true, ok: false, detail: "" },
   ],
 };
+const NO_DISPLAY: CuaStatus = {
+  ...READY,
+  status: "not-ready",
+  reason: "no-display",
+  detail: "No X display is up for CUA Driver to drive.",
+  checks: [
+    { id: "installed", label: "Installed", required: true, ok: true, detail: "" },
+    { id: "display", label: "Display", required: true, ok: false, detail: "No DISPLAY" },
+    { id: "system-packages", label: "System packages", required: true, ok: false, detail: "" },
+  ],
+  fix: {
+    command: "aop-nightly computer-use setup",
+    sudoCommand: "sudo apt-get install -y xvfb openbox",
+    missing: ["Xvfb", "a window manager"],
+    pinnedVersion: "0.32.0",
+  },
+  host: { name: "build-box", platform: "linux" },
+};
+const SETUP = "aop-nightly computer-use setup";
 
 let api: ReturnType<typeof mockApi> | undefined;
 
@@ -176,11 +197,12 @@ describe("ComputerUseSetting", () => {
     );
     expect(steps.map((step) => step.textContent?.slice(0, 2))).toEqual(["1.", "2.", "3.", "4."]);
     // Backticked words in a step's text are shown as code, not with their backticks.
-    expect(steps[0]?.querySelector("p code")?.textContent).toBe("cua-driver");
-    expect(steps[0]?.textContent).not.toContain("`");
+    expect(steps[1]?.querySelector("p code")?.textContent).toBe("cua-driver mcp");
+    expect(steps[1]?.textContent).not.toContain("`");
     const commands = screen.getAllByTestId("settings-cua-command").map((c) => c.textContent);
+    // The host's own setup command, as its status names it.
     expect(commands).toEqual([
-      CUA_COMMANDS.install,
+      SETUP,
       CUA_COMMANDS.start,
       CUA_COMMANDS.grant,
       CUA_COMMANDS.permissionsStatus,
@@ -222,8 +244,24 @@ describe("ComputerUseSetting", () => {
 
     fireEvent.click((await screen.findAllByTestId("settings-cua-copy"))[0] as HTMLElement);
 
-    await waitFor(() => expect(copied).toEqual([CUA_COMMANDS.install]));
+    await waitFor(() => expect(copied).toEqual([SETUP]));
     expect(await screen.findByText("Copied")).toBeTruthy();
+  });
+
+  test("on Linux, one sudo command for the system packages, then the host's setup for the screen", async () => {
+    await renderSetting({
+      project: makeProject({ id: "p1", computerUse: "cua" }),
+      cua: NO_DISPLAY,
+    });
+
+    await screen.findByTestId("settings-cua-guide");
+    const steps = ["packages", "display", "config"].map((id) =>
+      screen.getByTestId(`settings-cua-step-${id}`),
+    );
+    expect(steps[0]?.textContent).toContain("needs Xvfb and a window manager");
+    expect(screen.queryByTestId("settings-cua-step-permissions")).toBeNull();
+    const commands = screen.getAllByTestId("settings-cua-command").map((c) => c.textContent);
+    expect(commands).toEqual(["sudo apt-get install -y xvfb openbox", SETUP]);
   });
 
   test("a paired device is told to run the commands on the host, by name", async () => {

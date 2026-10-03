@@ -10,13 +10,14 @@ import {
   extractRuntimeSessionIdFromRawJsonl,
   type InputChannel,
   type LLMProvider,
-  type McpStdioServer,
+  type McpServerConfig,
   parseRawJsonlContent,
   type RunImage,
   type RunOptions,
 } from "@aop/llm-provider";
 import { waitForSpawnGate } from "../agent-cli/spawn-gate.ts";
 import { type CuaThread, cuaActivity } from "../computer-use/cua-activity.ts";
+import { cuaRunEnded } from "../computer-use/host-gate.ts";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
 import { runAndReap } from "../process/reaper.ts";
 import { turnBlockReason } from "../runtime-configuration/readiness.ts";
@@ -171,7 +172,7 @@ export const runSessionPrompt = async (input: {
   /** Added to the CLI's system prompt for this launch; pass it on every turn (see RunOptions). */
   appendSystemPrompt?: string;
   /** MCP servers this launch adds beside the aop server (see RunOptions). */
-  extraMcpServers?: Record<string, McpStdioServer>;
+  extraMcpServers?: Record<string, McpServerConfig>;
   /** Durable path allocated before launch so a reloaded server can resume the run. */
   logFilePath?: string;
   createProviderFn?: CreateProviderFn;
@@ -536,8 +537,15 @@ const executeProviderRun = async (
     stopLogSizeWatchdog?.();
     await stopSessionTail?.();
     await stopTail?.();
-    // CUA Driver's MCP server ends with the run, and so does the thread's CUA session.
+    // The thread's CUA session ends with the run: it gives back the computer-use lease (or its
+    // place in line), and the host ends what it left open and its driver process.
     cuaActivity.runEnded(session.id);
+    void cuaRunEnded(session.id).catch((error) =>
+      runtimeLogger.warn("Ending the computer-use lease of {sessionId} failed: {error}", {
+        sessionId: session.id,
+        error: String(error),
+      }),
+    );
   }
 };
 
@@ -584,7 +592,7 @@ const raceProviderAgainstInterrupt = async (input: {
   prompt: string;
   allowedDirectories: string[] | undefined;
   images: RunImage[] | undefined;
-  extraMcpServers: Record<string, McpStdioServer> | undefined;
+  extraMcpServers: Record<string, McpServerConfig> | undefined;
   appendSystemPrompt: string | undefined;
   inputChannel: InputChannel | undefined;
   hostAccess: (() => Promise<HostRunAccess>) | undefined;

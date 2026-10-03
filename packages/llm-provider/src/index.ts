@@ -54,6 +54,8 @@ export { resolveRuntimeExecutable } from "./runtime-alias";
 export { sanitizeSessionId } from "./session-id";
 export type {
   LLMProvider,
+  McpHttpServer,
+  McpServerConfig,
   McpStdioServer,
   RunAccessMode,
   RunImage,

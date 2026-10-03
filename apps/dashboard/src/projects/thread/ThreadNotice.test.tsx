@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, setSystemTime, test } from "bun:test";
 import type { Thread } from "@aop/common";
+import { installFakeLiveHost, makeLease } from "../../live-view/test-utils";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { makeThread } from "../test-utils";
 import { json, mockHost } from "./test-utils";
@@ -7,7 +8,8 @@ import { json, mockHost } from "./test-utils";
 setupDashboardDom();
 
 const { act, cleanup, fireEvent, render, screen } = await import("@testing-library/react");
-const { formatCountdown, ThreadNotice } = await import("./ThreadNotice");
+const { formatCountdown, ThreadCuaNotice, ThreadNotice } = await import("./ThreadNotice");
+const { refreshLiveView, resetLiveViewForTests } = await import("../../live-view/live-view-store");
 
 const NOW = Date.parse("2026-09-30T10:00:00.000Z");
 let host: ReturnType<typeof mockHost>;
@@ -18,6 +20,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  resetLiveViewForTests();
   host.restore();
   jest.useRealTimers();
   setSystemTime();
@@ -247,5 +250,38 @@ describe("a working thread that needs the person", () => {
     render(<ThreadNotice thread={makeThread({ status: "working" })} />);
 
     expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+describe("a thread and the computer-use lease", () => {
+  const mine = { threadId: "thr_1", title: "Mine" };
+  const login = { threadId: "thr_9", title: "Check the login page" };
+
+  const renderWith = async (lease: ReturnType<typeof makeLease>) => {
+    installFakeLiveHost({ lease });
+    await act(() => refreshLiveView());
+    render(<ThreadCuaNotice threadId="thr_1" />);
+  };
+
+  test("waiting in line, it says its place and who uses the host's screen", async () => {
+    await renderWith(makeLease(login, [{ threadId: "thr_2", title: "Other" }, mine]));
+
+    expect(screen.getByTestId("thread-notice-cua-waiting").textContent).toBe(
+      "Waiting for computer use (2nd in line). Check the login page is using the host's screen. The thread goes on by itself when its turn comes.",
+    );
+  });
+
+  test("holding it, it says how many threads wait behind it", async () => {
+    await renderWith(makeLease(mine, [login]));
+
+    expect(screen.getByTestId("thread-notice-cua-holding").textContent).toBe(
+      "Using computer use. 1 other thread waits for the host's screen until it is done.",
+    );
+  });
+
+  test("neither holding nor waiting, it says nothing", async () => {
+    await renderWith(makeLease(login));
+
+    expect(screen.queryAllByRole("status").length).toBe(0);
   });
 });

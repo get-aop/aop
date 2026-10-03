@@ -1,4 +1,6 @@
 import {
+  type CuaLeaseState,
+  EMPTY_CUA_LEASE,
   type LiveViewCapture,
   type LiveViewMode,
   type LiveViewStatus,
@@ -43,6 +45,8 @@ export interface LiveViewDeps {
   activity: CuaActivity;
   startCapture: StartCapture;
   readMode: () => Promise<LiveViewMode>;
+  /** The computer-use lease, reported with the status; nobody holds it when absent. */
+  readLease?: () => CuaLeaseState;
   now?: () => number;
   /** How the idle check is scheduled; tests drive it by hand. */
   every?: (ms: number, run: () => void) => () => void;
@@ -111,12 +115,16 @@ export const createLiveViewService = (deps: LiveViewDeps): LiveViewService => {
     status: async (viewer) => {
       const mode = await deps.readMode();
       tick();
+      const lease = deps.readLease?.() ?? EMPTY_CUA_LEASE;
+      // A thread whose CUA call waits in line has called a tool but is not on the screen yet.
+      const waiting = new Set(lease.queue.map((waiter) => waiter.threadId));
       return {
         mode,
         viewer,
         shown: liveViewShownTo(mode, viewer),
-        sessions: deps.activity.sessions(),
+        sessions: deps.activity.sessions().filter((session) => !waiting.has(session.threadId)),
         capture: captureState(),
+        lease,
       };
     },
     frame: async (viewer) => {
