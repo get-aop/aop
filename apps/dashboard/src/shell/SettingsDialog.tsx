@@ -13,8 +13,8 @@ import { SettingsHost } from "../settings/settings-host";
 import { SettingsRepositories } from "../settings/settings-repositories";
 import { SettingsRuntimes } from "../settings/settings-runtimes";
 import { SettingsUpdates } from "../settings/settings-updates";
-import { useUpdateRows } from "../updates/use-update-rows";
 import { SettingsConnections } from "../settings/slack/SettingsConnections";
+import { useUpdateRows } from "../updates/use-update-rows";
 import {
   closeSettingsDialog,
   openSettingsDialog,
