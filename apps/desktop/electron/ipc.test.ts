@@ -26,9 +26,18 @@ const setup = (development = false) => {
     getHostConfig: mock(async () => ({ baseUrl: "https://mac.tail1234.ts.net", token: "aop_t" })),
     hostRejected: mock(async () => {}),
     setZoom: mock(async () => {}),
-    getUpdateState: mock(() => ({ status: "idle" as const })),
+    getAppInfo: mock(() => ({
+      name: "AOP",
+      version: "1",
+      platform: "darwin",
+      autoDownload: true,
+    })),
+    getUpdateState: mock(() => ({ status: "off" as const })),
+    checkForUpdates: mock(async () => ({ status: "checking" as const })),
+    downloadAndRestart: mock(async () => {}),
     openUpdateDownload: mock(async () => {}),
     restartToUpdate: mock(async () => {}),
+    setAutoDownload: mock(async (_enabled: boolean) => {}),
     browserSetActive: mock(() => {}),
     browserAnswerPrompt: mock(() => {}),
     browserDownloadAction: mock(() => {}),
@@ -210,31 +219,54 @@ describe("zoom", () => {
 });
 
 describe("the app's update", () => {
+  const UPDATE_CHANNELS = [
+    IPC_CHANNELS.getAppInfo,
+    IPC_CHANNELS.getUpdateState,
+    IPC_CHANNELS.checkForUpdates,
+    IPC_CHANNELS.downloadAndRestart,
+    IPC_CHANNELS.openUpdateDownload,
+    IPC_CHANNELS.restartToUpdate,
+    IPC_CHANNELS.setAutoDownload,
+  ];
+  const argsFor = (channel: string): unknown[] =>
+    channel === IPC_CHANNELS.setAutoDownload ? [false] : [];
+
   test("either of the app's own pages may read it and act on it", async () => {
     const { call, host } = setup();
 
     for (const page of [SHELL, DASHBOARD]) {
-      expect(await call(IPC_CHANNELS.getUpdateState, page)).toEqual({ status: "idle" });
-      await call(IPC_CHANNELS.openUpdateDownload, page);
-      await call(IPC_CHANNELS.restartToUpdate, page);
+      expect(await call(IPC_CHANNELS.getUpdateState, page)).toEqual({ status: "off" });
+      expect(await call(IPC_CHANNELS.getAppInfo, page)).toMatchObject({ name: "AOP" });
+      for (const channel of UPDATE_CHANNELS) await call(channel, page, ...argsFor(channel));
     }
 
+    expect(host.checkForUpdates).toHaveBeenCalledTimes(2);
+    expect(host.downloadAndRestart).toHaveBeenCalledTimes(2);
     expect(host.openUpdateDownload).toHaveBeenCalledTimes(2);
     expect(host.restartToUpdate).toHaveBeenCalledTimes(2);
+    expect(host.setAutoDownload).toHaveBeenCalledWith(false);
+  });
+
+  test("automatic download takes a yes or a no, nothing else", async () => {
+    const { call, host } = setup();
+
+    await expect(call(IPC_CHANNELS.setAutoDownload, DASHBOARD, "off")).rejects.toThrow(
+      "Invalid setting.",
+    );
+    expect(host.setAutoDownload).not.toHaveBeenCalled();
   });
 
   test("a page a host served may not", async () => {
     const { call, host } = setup();
 
-    for (const channel of [
-      IPC_CHANNELS.getUpdateState,
-      IPC_CHANNELS.openUpdateDownload,
-      IPC_CHANNELS.restartToUpdate,
-    ]) {
-      await expect(call(channel, HOST_PAGE)).rejects.toThrow("Blocked desktop IPC sender.");
+    for (const channel of UPDATE_CHANNELS) {
+      await expect(call(channel, HOST_PAGE, ...argsFor(channel))).rejects.toThrow(
+        "Blocked desktop IPC sender.",
+      );
     }
 
     expect(host.restartToUpdate).not.toHaveBeenCalled();
+    expect(host.setAutoDownload).not.toHaveBeenCalled();
   });
 });
 

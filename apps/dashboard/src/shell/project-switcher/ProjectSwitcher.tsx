@@ -10,6 +10,7 @@ import {
   CommandSeparator,
 } from "@/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
+import { needsAttention, useHostSetupState } from "../../host-setup/host-setup-store";
 import { useProjectsState } from "../../projects/ProjectsProvider";
 import { ProjectTile } from "../../projects/ProjectTile";
 import { usePinnedProjects } from "../../projects/project-preferences";
@@ -149,6 +150,7 @@ const SwitcherMenu = ({
   const route = useRoute();
   const { pinnedIds } = usePinnedProjects();
   const [query, setQuery] = useState("");
+  const hostNeedsSetup = needsAttention(useHostSetupState().setup);
   const entries = useMemo(() => Object.values(state.byId), [state.byId]);
   const sections = useMemo(
     () => switcherSections(entries, pinnedIds, query),
@@ -231,9 +233,10 @@ const SwitcherMenu = ({
             icon={<Settings2Icon />}
             label="AOP settings"
             shortcut="⌘,"
+            dot={hostNeedsSetup}
             onSelect={() => {
               close(true);
-              openSettingsDialog("general");
+              openSettingsDialog(hostNeedsSetup ? "host" : "general");
             }}
           />
         </CommandGroup>
@@ -284,6 +287,7 @@ const ActionItem = ({
   icon,
   label,
   shortcut,
+  dot = false,
   onSelect,
 }: {
   value: string;
@@ -291,6 +295,8 @@ const ActionItem = ({
   icon: React.ReactNode;
   label: string;
   shortcut?: string;
+  /** Amber: a host setup check needs attention (AOP settings › Host). */
+  dot?: boolean;
   onSelect: () => void;
 }) => (
   <CommandItem
@@ -301,6 +307,13 @@ const ActionItem = ({
   >
     {icon}
     <span className="flex-1">{label}</span>
+    {dot ? (
+      <span
+        data-testid={`${testId}-dot`}
+        title="Host setup needs attention"
+        className="size-1.5 shrink-0 rounded-full bg-waiting"
+      />
+    ) : null}
     {shortcut ? <kbd className="text-[11px] text-text-subtle">{shortcut}</kbd> : null}
   </CommandItem>
 );

@@ -5,11 +5,11 @@ import { setupDashboardDom } from "../test/setup-dom";
 
 setupDashboardDom();
 
-const { cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
+const { cleanup, render, screen, waitFor } = await import("@testing-library/react");
 const { ShellStatus } = await import("./ShellStatus");
 const { ProjectsProvider } = await import("../projects/ProjectsProvider");
 const { resetAgentClisForTests } = await import("../agent-clis/agent-cli-store");
-const { closeSettingsDialog, getDialogs } = await import("./dialog-store");
+const { closeSettingsDialog } = await import("./dialog-store");
 type ProjectsState = ReturnType<typeof makeState>;
 
 const originalFetch = globalThis.fetch;
@@ -30,36 +30,19 @@ const renderStatus = (state: ProjectsState = makeState([])) =>
     </ProjectsProvider>,
   );
 
-describe("ShellStatus agent CLI notice", () => {
-  test("names the CLI and the version out, and opens the Runtimes panel", async () => {
+describe("ShellStatus updates", () => {
+  test("shows the Updates button for a newer agent CLI, and nothing when all is current", async () => {
     installFakeCliHost();
+    const { unmount } = renderStatus();
+    expect(await screen.findByTestId("updates-button")).toBeTruthy();
+    unmount();
+
+    const host = installFakeCliHost({ clis: [makeCli({ updateAvailable: false })] });
+    resetAgentClisForTests(10);
     renderStatus();
-
-    await waitFor(() =>
-      expect(screen.getByTestId("cli-update-notice").getAttribute("title")).toBe(
-        "Claude Code 2.1.286 available",
-      ),
-    );
-    expect(screen.getByTestId("cli-update-notice").textContent).toBe(
-      "Claude Code 2.1.286 available",
-    );
-    fireEvent.click(screen.getByTestId("cli-update-notice"));
-    expect(getDialogs().settings).toEqual({ open: true, section: "runtimes" });
-  });
-
-  test("is absent when every CLI is up to date, or while its update runs", async () => {
-    for (const cli of [
-      makeCli({ updateAvailable: false }),
-      makeCli({ update: { ...makeCli().update, state: "updating" } }),
-    ]) {
-      const host = installFakeCliHost({ clis: [cli] });
-      const { unmount } = renderStatus();
-      await waitFor(() => expect(host.calls).toContain("GET /agent-clis"));
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(screen.queryByTestId("cli-update-notice") === null).toBe(true);
-      unmount();
-      resetAgentClisForTests(10);
-    }
+    await waitFor(() => expect(host.calls).toContain("GET /agent-clis"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByTestId("updates-button")).toBeNull();
   });
 });
 

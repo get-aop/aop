@@ -2,18 +2,18 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
-import { CliUpdateDot } from "../agent-clis/AgentCliPanel";
-import { pendingCliUpdates, useAgentClis } from "../agent-clis/agent-cli-store";
 import { getSettings } from "../api/client";
 import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
+import { needsAttention, useHostSetup } from "../host-setup/host-setup-store";
 import { noteSavedSettings } from "../settings/display-name";
 import { SettingsAbout } from "../settings/settings-about";
 import { SettingsComputerUse } from "../settings/settings-computer-use";
-import { SettingsDevices } from "../settings/settings-devices";
 import { mergeSavedSettings, SettingsGeneral } from "../settings/settings-general";
+import { SettingsHost } from "../settings/settings-host";
 import { SettingsRepositories } from "../settings/settings-repositories";
 import { SettingsRuntimes } from "../settings/settings-runtimes";
-import { useIsHostOwner } from "../settings/use-host-owner";
+import { SettingsUpdates } from "../settings/settings-updates";
+import { useUpdateRows } from "../updates/use-update-rows";
 import {
   closeSettingsDialog,
   openSettingsDialog,
@@ -23,25 +23,24 @@ import {
 
 const SECTION_LABELS: Record<SettingsSection, string> = {
   general: "General",
+  host: "Host",
+  updates: "Updates",
   repositories: "Repositories",
   runtimes: "Runtimes",
   "computer-use": "Computer use",
-  devices: "Devices",
   about: "About",
 };
+
+const SECTIONS = Object.keys(SECTION_LABELS) as SettingsSection[];
 
 /** Host settings, 780×580 with a side nav. A project's own settings live on the project. */
 export const SettingsDialog = () => {
   const dialogs = useDialogs();
-  // Pairing and revoking devices is the host owner's alone, so no one else is shown the section.
-  const owner = useIsHostOwner(dialogs.settings.open);
-  const sections = (Object.keys(SECTION_LABELS) as SettingsSection[]).filter(
-    (section) => section !== "devices" || owner,
-  );
-  const current = sections.includes(dialogs.settings.section)
-    ? dialogs.settings.section
-    : "general";
-  const cliUpdates = pendingCliUpdates(useAgentClis().data).length > 0;
+  const current = dialogs.settings.section;
+  const dots: Partial<Record<SettingsSection, string>> = {
+    host: needsAttention(useHostSetup().setup) ? "bg-waiting" : undefined,
+    updates: useUpdateRows().rows.some((row) => row.attention) ? "bg-running" : undefined,
+  };
 
   return (
     <Dialog
@@ -53,7 +52,7 @@ export const SettingsDialog = () => {
         className="flex h-[580px] max-h-[85vh] w-[780px] gap-0 overflow-hidden p-0"
       >
         <nav className="flex w-44 shrink-0 flex-col gap-0.5 border-r border-border p-2 pt-4">
-          {sections.map((section) => (
+          {SECTIONS.map((section) => (
             <button
               key={section}
               type="button"
@@ -67,7 +66,13 @@ export const SettingsDialog = () => {
               )}
             >
               <span className="flex-1">{SECTION_LABELS[section]}</span>
-              {section === "runtimes" && cliUpdates ? <CliUpdateDot /> : null}
+              {dots[section] ? (
+                <span
+                  data-testid={`settings-nav-dot-${section}`}
+                  aria-hidden="true"
+                  className={cn("size-1.5 shrink-0 rounded-full", dots[section])}
+                />
+              ) : null}
             </button>
           ))}
         </nav>
@@ -107,7 +112,8 @@ const SettingsSectionHost = ({ section }: { section: SettingsSection }) => {
   if (section === "repositories") return <SettingsRepositories />;
   if (section === "runtimes") return <SettingsRuntimes />;
   if (section === "computer-use") return <SettingsComputerUse />;
-  if (section === "devices") return <SettingsDevices />;
+  if (section === "host") return <SettingsHost />;
+  if (section === "updates") return <SettingsUpdates />;
   if (section === "about") return <SettingsAbout />;
   return (
     <SettingsGeneral

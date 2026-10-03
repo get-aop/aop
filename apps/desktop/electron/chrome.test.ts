@@ -1,36 +1,40 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { MenuItemConstructorOptions } from "electron";
-import { buildMenuTemplate, type MenuActions, type MenuModel } from "./chrome";
+import { aboutPanelOptions, buildMenuTemplate, type MenuActions, type MenuModel } from "./chrome";
 
 const HOST = "https://mac.tail1234.ts.net";
 
-describe("buildMenuTemplate", () => {
-  const actions = (): MenuActions => ({
-    showDashboard: mock(() => {}),
-    openSettings: mock(() => {}),
-    reconnect: mock(() => {}),
-    changeHost: mock(() => {}),
-    manageHost: mock(() => {}),
-    startHost: mock(() => {}),
-    stopHost: mock(() => {}),
-    openUpdateDownload: mock(() => {}),
-    restartToUpdate: mock(() => {}),
-    quit: mock(() => {}),
-  });
-  const model = (overrides: Partial<MenuModel> = {}): MenuModel => ({
-    platform: "darwin",
-    connection: { status: "connected", host: HOST, hostVersion: "0.9.51" },
-    hostProcess: { status: "stopped" },
-    hostModeAvailable: false,
-    update: { status: "idle" },
-    appVersion: "0.9.51",
-    ...overrides,
-  });
-  const hostMenu = (template: MenuItemConstructorOptions[]) =>
-    (template.find((item) => item.label === "Host")?.submenu ?? []) as MenuItemConstructorOptions[];
-  const labels = (items: MenuItemConstructorOptions[]) =>
-    items.filter((item) => item.label).map((item) => item.label);
+const actions = (): MenuActions => ({
+  showDashboard: mock(() => {}),
+  openSettings: mock(() => {}),
+  openHostSetup: mock(() => {}),
+  reconnect: mock(() => {}),
+  changeHost: mock(() => {}),
+  manageHost: mock(() => {}),
+  startHost: mock(() => {}),
+  stopHost: mock(() => {}),
+  checkForUpdates: mock(() => {}),
+  restartToUpdate: mock(() => {}),
+  quit: mock(() => {}),
+});
+const model = (overrides: Partial<MenuModel> = {}): MenuModel => ({
+  platform: "darwin",
+  connection: { status: "connected", host: HOST, hostVersion: "0.9.51" },
+  hostProcess: { status: "stopped" },
+  hostModeAvailable: false,
+  update: { status: "idle", checkedAt: null },
+  ...overrides,
+});
+const submenu = (item: MenuItemConstructorOptions | undefined) =>
+  (item?.submenu ?? []) as MenuItemConstructorOptions[];
+const hostMenu = (template: MenuItemConstructorOptions[]) =>
+  submenu(template.find((item) => item.label === "Host"));
+const labels = (items: MenuItemConstructorOptions[]) =>
+  items.filter((item) => item.label).map((item) => item.label);
+const click = (item: MenuItemConstructorOptions | undefined) =>
+  item?.click?.({} as never, undefined, {} as never);
 
+describe("buildMenuTemplate", () => {
   test("keeps the standard edit, view and window menus, which copy and paste depend on", () => {
     const roles = buildMenuTemplate(model(), actions()).map((item) => item.role);
 
@@ -42,47 +46,53 @@ describe("buildMenuTemplate", () => {
   test("on a Mac, Quit (⌘Q) quits through the app, not the native terminate action", () => {
     const menuActions = actions();
     const appMenu = buildMenuTemplate(model(), menuActions)[0];
-    const items = (appMenu?.submenu ?? []) as MenuItemConstructorOptions[];
+    const items = submenu(appMenu);
     const quit = items.find((item) => item.label === "Quit");
 
     expect(appMenu?.role).toBe("appMenu");
     expect(items.some((item) => item.role === "quit")).toBe(false);
     expect(quit?.accelerator).toBe("Command+Q");
-    quit?.click?.({} as never, undefined, {} as never);
+    click(quit);
     expect(menuActions.quit).toHaveBeenCalledTimes(1);
   });
 
-  test("on a Mac, the app menu has Settings… (⌘,), which opens the AOP settings", () => {
+  test("on a Mac, the app menu has About, one update item, then Settings… (⌘,)", () => {
     const menuActions = actions();
-    const items = (buildMenuTemplate(model(), menuActions)[0]?.submenu ??
-      []) as MenuItemConstructorOptions[];
+    const items = submenu(buildMenuTemplate(model(), menuActions)[0]);
     const settings = items.find((item) => item.label === "Settings…");
 
-    expect(items.indexOf(settings as MenuItemConstructorOptions)).toBe(2);
+    expect(items[0]?.role).toBe("about");
+    expect(items[1]?.label).toBe("Check for Updates…");
+    expect(items.indexOf(settings as MenuItemConstructorOptions)).toBe(3);
     expect(settings?.accelerator).toBe("CommandOrControl+,");
     expect(settings?.enabled).toBe(true);
-    settings?.click?.({} as never, undefined, {} as never);
+    click(settings);
     expect(menuActions.openSettings).toHaveBeenCalledTimes(1);
   });
 
   test("Settings… is off until the app has a host to talk to", () => {
-    const items = (buildMenuTemplate(
-      model({ connection: { status: "unreachable", host: HOST, message: "down" } }),
-      actions(),
-    )[0]?.submenu ?? []) as MenuItemConstructorOptions[];
+    const items = submenu(
+      buildMenuTemplate(
+        model({ connection: { status: "unreachable", host: HOST, message: "down" } }),
+        actions(),
+      )[0],
+    );
 
     expect(items.find((item) => item.label === "Settings…")?.enabled).toBe(false);
   });
 
-  test("a Windows app has a File menu to quit from instead of an app menu", () => {
+  test("a Windows app has a File menu to quit from, and Help with About and the update item", () => {
     const template = buildMenuTemplate(model({ platform: "win32" }), actions());
 
     expect(template[0]?.label).toBe("File");
-    const file = (template[0]?.submenu ?? []) as MenuItemConstructorOptions[];
-    expect(file[0]?.label).toBe("Settings…");
+    expect(submenu(template[0])[0]?.label).toBe("Settings…");
+    const help = template.at(-1);
+    expect(help?.label).toBe("Help");
+    expect(submenu(help)[0]?.role).toBe("about");
+    expect(submenu(help)[1]?.label).toBe("Check for Updates…");
   });
 
-  test("shows how the app stands with its host, and offers to change it", () => {
+  test("shows how the app stands with its host, and offers to change it and set it up", () => {
     const items = hostMenu(buildMenuTemplate(model(), actions()));
 
     expect(labels(items)).toEqual([
@@ -90,11 +100,12 @@ describe("buildMenuTemplate", () => {
       "Show Dashboard",
       "Reconnect",
       "Change Host…",
+      "Host Setup…",
     ]);
     expect(items[0]?.enabled).toBe(false);
   });
 
-  test("offers the dashboard only while connected", () => {
+  test("offers the dashboard and Host Setup… only while connected", () => {
     const items = hostMenu(
       buildMenuTemplate(
         model({ connection: { status: "unreachable", host: HOST, message: "x" } }),
@@ -103,6 +114,7 @@ describe("buildMenuTemplate", () => {
     );
 
     expect(items.find((item) => item.label === "Show Dashboard")?.enabled).toBe(false);
+    expect(items.find((item) => item.label === "Host Setup…")?.enabled).toBe(false);
     expect(items.find((item) => item.label === "Reconnect")?.enabled).toBe(true);
   });
 
@@ -118,6 +130,7 @@ describe("buildMenuTemplate", () => {
     const withHost = hostMenu(buildMenuTemplate(model({ hostModeAvailable: true }), actions()));
     const without = hostMenu(buildMenuTemplate(model({ hostModeAvailable: false }), actions()));
 
+    expect(labels(withHost)).toContain("Host on This Mac…");
     expect(labels(withHost)).toContain("Run Host on This Mac");
     expect(labels(without)).not.toContain("Run Host on This Mac");
   });
@@ -144,67 +157,104 @@ describe("buildMenuTemplate", () => {
     expect(labels(failed)).toContain("Run Host on This Mac");
   });
 
-  test("wires each item to its action", () => {
+  test("wires each Host item to its action", () => {
     const wired = actions();
     const items = hostMenu(buildMenuTemplate(model({ hostModeAvailable: true }), wired));
 
-    for (const item of items) {
-      if (typeof item.click === "function") item.click({} as never, undefined, {} as never);
-    }
+    for (const item of items) click(item);
 
     expect(wired.showDashboard).toHaveBeenCalledTimes(1);
     expect(wired.reconnect).toHaveBeenCalledTimes(1);
     expect(wired.changeHost).toHaveBeenCalledTimes(1);
+    expect(wired.openHostSetup).toHaveBeenCalledTimes(1);
     expect(wired.manageHost).toHaveBeenCalledTimes(1);
     expect(wired.startHost).toHaveBeenCalledTimes(1);
   });
 
-  const topLevel = (template: MenuItemConstructorOptions[]) => template.map((item) => item.label);
+  test("never shows the host's version drift or a top-level update menu", () => {
+    const template = buildMenuTemplate(
+      model({
+        connection: { status: "connected", host: HOST, hostVersion: "0.10.0+abc1234" },
+        update: { status: "ready", version: "0.10.0", releaseUrl: null },
+      }),
+      actions(),
+    );
 
-  test("has no update menu until there is an update to offer", () => {
-    expect(topLevel(buildMenuTemplate(model(), actions()))).not.toContain(
-      "Update available (0.10.0)",
+    expect(labels(hostMenu(template)).some((label) => label?.includes("0.10.0"))).toBe(false);
+    expect(template.map((item) => item.label ?? item.role)).toEqual([
+      "appMenu",
+      "Host",
+      "editMenu",
+      "viewMenu",
+      "windowMenu",
+    ]);
+  });
+});
+
+describe("the update item", () => {
+  const updateItem = (update: MenuModel["update"], wired = actions()) =>
+    submenu(buildMenuTemplate(model({ update }), wired)[0])[1];
+
+  test("checks for updates, and is greyed while a check runs", () => {
+    const wired = actions();
+    const item = updateItem({ status: "error", message: "x", version: null }, wired);
+
+    click(item);
+
+    expect(item?.label).toBe("Check for Updates…");
+    expect(wired.checkForUpdates).toHaveBeenCalledTimes(1);
+    expect(updateItem({ status: "checking" })?.enabled).toBe(false);
+    expect(updateItem({ status: "downloading", version: "0.10.0", percent: 4 })?.label).toBe(
+      "Check for Updates…",
     );
   });
 
-  test("offers the download of an available update, and the restart of a downloaded one", () => {
+  test("restarts onto a downloaded build", () => {
     const wired = actions();
-    const available = buildMenuTemplate(
-      model({ update: { status: "available", version: "0.10.0", releaseUrl: null } }),
-      wired,
-    ).find((item) => item.label === "Update available (0.10.0)");
-    const ready = buildMenuTemplate(
-      model({ update: { status: "ready", version: "0.10.0" } }),
-      wired,
-    ).find((item) => item.label === "Restart to update (0.10.0)");
+    const item = updateItem({ status: "ready", version: "0.10.0+abc", releaseUrl: null }, wired);
 
-    const [download] = (available?.submenu ?? []) as MenuItemConstructorOptions[];
-    const [restart] = (ready?.submenu ?? []) as MenuItemConstructorOptions[];
-    download?.click?.({} as never, undefined, {} as never);
-    restart?.click?.({} as never, undefined, {} as never);
+    click(item);
 
-    expect(download?.label).toBe("Download 0.10.0…");
-    expect(wired.openUpdateDownload).toHaveBeenCalledTimes(1);
+    expect(item?.label).toBe("Restart to Update (0.10.0)");
     expect(wired.restartToUpdate).toHaveBeenCalledTimes(1);
   });
 
-  test("tells the person when the host is on another release than the app", () => {
-    const newer = hostMenu(
-      buildMenuTemplate(
-        model({ connection: { status: "connected", host: HOST, hostVersion: "0.10.0+abc1234" } }),
-        actions(),
-      ),
-    );
-    const same = hostMenu(
-      buildMenuTemplate(
-        model({ connection: { status: "connected", host: HOST, hostVersion: "0.9.51" } }),
-        actions(),
-      ),
-    );
+  test("is not there where the app never updates itself", () => {
+    expect(updateItem({ status: "off" })?.type).toBe("separator");
+  });
+});
 
-    expect(labels(newer)).toContain(
-      "The host (0.10.0) is newer than this app (0.9.51). Update the app.",
-    );
-    expect(labels(same).some((label) => label?.startsWith("The host ("))).toBe(false);
+describe("aboutPanelOptions", () => {
+  test("shows the app and its version, and the host with its version", () => {
+    expect(
+      aboutPanelOptions({
+        appName: "AOP Nightly",
+        appVersion: "0.10.8-nightly.20261003.4",
+        platform: "darwin",
+        connection: {
+          status: "connected",
+          host: "https://soulf.tailffbdec.ts.net:25650",
+          hostVersion: "0.10.8-nightly.20261002.17+abc",
+        },
+      }),
+    ).toEqual({
+      applicationName: "AOP Nightly",
+      applicationVersion: "0.10.8-nightly.20261003.4",
+      credits: "Host soulf · 0.10.8-nightly.20261002.17",
+    });
+  });
+
+  test("says how the connection stands when there is no host version to show, also on Linux", () => {
+    expect(
+      aboutPanelOptions({
+        appName: "AOP",
+        appVersion: "0.10.8",
+        platform: "linux",
+        connection: { status: "unreachable", host: HOST, message: "x" },
+      }),
+    ).toMatchObject({
+      credits: "Cannot reach mac.tail1234.ts.net",
+      copyright: "Cannot reach mac.tail1234.ts.net",
+    });
   });
 });

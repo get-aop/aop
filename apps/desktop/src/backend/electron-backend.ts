@@ -1,4 +1,4 @@
-import type { DesktopBrowserBridge } from "@aop/common";
+import type { DesktopAppUpdateBridge, DesktopBrowserBridge } from "@aop/common";
 import type { DesktopBackend } from "./types";
 
 /** The dashboard's half of the preload bridge: which host to use, a refused token, its browser. */
@@ -8,7 +8,8 @@ export interface DashboardBridge {
   setZoom: (zoomFactor: number) => Promise<void>;
   /**
    * The app menu's Settings… (⌘,). A choice made before the dashboard listens (the menu can load
-   * the dashboard first) is kept and handed to the first listener.
+   * the dashboard first) is kept and handed to the first listener. So are `onOpenUpdates` (Check
+   * for Updates…) and `onOpenHostSetup` (Host Setup…).
    */
   onOpenSettings: (listener: () => void) => () => void;
   browser: DesktopBrowserBridge;
@@ -16,10 +17,13 @@ export interface DashboardBridge {
 
 /**
  * Everything the preload script exposes as `window.aopDesktop`. Each page may use its own half;
- * the app's update (`getUpdateState`, `onUpdateStateChanged`, `openUpdateDownload`,
- * `restartToUpdate`) is open to both, so the bundled dashboard can show it too.
+ * "This app"'s update (DesktopAppUpdateBridge) is open to both, so the bundled dashboard's
+ * Updates popover and the app's own screens show the same row.
  */
-export interface ElectronDesktopBridge extends DesktopBackend, DashboardBridge {}
+export interface ElectronDesktopBridge
+  extends DesktopBackend,
+    DashboardBridge,
+    DesktopAppUpdateBridge {}
 
 declare global {
   interface Window {

@@ -88,6 +88,7 @@ export const createDesktopController = (deps: ControllerDeps): DesktopController
   let shellView: ShellView | null = null;
   let active: WatchedHost | null = null;
   let watching = false;
+  let reloadedAfterRejection = false;
 
   const localUrl = (): string => `http://127.0.0.1:${config.localPort}`;
   const connectDeps: ConnectDeps = {
@@ -114,6 +115,7 @@ export const createDesktopController = (deps: ControllerDeps): DesktopController
 
   const showShell = async (view: ShellView): Promise<void> => {
     shellView = view;
+    reloadedAfterRejection = false;
     await deps.window.showShell(view);
   };
 
@@ -269,9 +271,18 @@ export const createDesktopController = (deps: ControllerDeps): DesktopController
     };
   };
 
+  // The dashboard inside the app never pairs by itself (a token it made there would have nowhere
+  // to go and would leave a stray device on the host); it hands a refused token to the app, and
+  // waits. Either the host refuses this device too, and the status screen offers "Pair again",
+  // or the host accepts it, and the dashboard reloads with the token the app holds now. Once:
+  // a dashboard refused again goes to the status screen, rather than reloading in a loop.
   const hostRejected = async (): Promise<void> => {
     const now = await deps.monitor.check();
-    if (now.status !== "connected" && deps.window.current() === "dashboard") {
+    if (deps.window.current() !== "dashboard") return;
+    if (now.status === "connected" && !reloadedAfterRejection) {
+      reloadedAfterRejection = true;
+      await showDashboard();
+    } else {
       await showShell("status");
     }
   };

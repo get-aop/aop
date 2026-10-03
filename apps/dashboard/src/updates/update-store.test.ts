@@ -13,7 +13,8 @@ const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 // The probe interval is short so the test waits for real polls instead of faking the clock.
 beforeEach(() => {
   reload.mockClear();
-  store.resetUpdatesForTests({ reload, pollMs: 10, giveUpMs: 400 });
+  store.resetUpdatesForTests({ onHostBack: reload, pollMs: 10, giveUpMs: 400 });
+  window.sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -51,6 +52,48 @@ describe("update store", () => {
     host.health = { version: "0.10.0+abc1234" };
     await settle(60);
     expect(reload).toHaveBeenCalledTimes(1);
+    // The reloaded page says so once: "Host soulf updated to 0.10.0".
+    expect(JSON.parse(window.sessionStorage.getItem("aop:host-updated:v1") ?? "null")).toEqual({
+      version: "0.10.0",
+      hostName: "soulf",
+      releaseUrl: "https://github.com/get-aop/aop-mono/releases/tag/v0.10.0",
+    });
+  });
+
+  test("a host that comes back on a release newer than the one on screen is back too", async () => {
+    const host = installFakeHost();
+    await store.refreshUpdates();
+    await store.startUpdate();
+
+    host.health = { version: "0.10.1+def5678" };
+    await settle(60);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(
+      JSON.parse(window.sessionStorage.getItem("aop:host-updated:v1") ?? "null")?.version,
+    ).toBe("0.10.1");
+  });
+
+  test("update when they finish asks the host to queue it, and waits for no restart yet", async () => {
+    const host = installFakeHost({ queues: true });
+    await store.refreshUpdates();
+
+    await store.startUpdate("idle");
+
+    expect(host.calls).toContain("POST /updates/apply");
+    const state = await snapshot();
+    expect(state.target).toBeNull();
+    expect(state.sending).toBe(false);
+    expect(host.calls.filter((call) => call === "GET /health")).toHaveLength(0);
+  });
+
+  test("cancelling a queued update asks the host to drop it and reads the status again", async () => {
+    const host = installFakeHost();
+    await store.refreshUpdates();
+
+    await store.cancelQueued();
+
+    expect(host.calls.slice(-2)).toEqual(["DELETE /updates/apply", "GET /updates"]);
   });
 
   test("a refused update reports why and waits for nothing", async () => {
@@ -95,7 +138,7 @@ describe("update store", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  test("a page opened while the host is already updating starts waiting for it", async () => {
+  test("a page opened while another device updates the host starts waiting for it", async () => {
     installFakeHost({ status: makeUpdateStatus({ state: "updating" }) });
 
     await store.refreshUpdates();

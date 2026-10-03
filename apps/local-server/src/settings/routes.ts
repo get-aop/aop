@@ -1,5 +1,10 @@
 import { type Context, Hono } from "hono";
 import type { AuthEnv } from "../auth/api-auth.ts";
+import {
+  type HostCaller,
+  readHostManagement,
+  settingsWriteRefusal,
+} from "../auth/host-management.ts";
 import type { LocalServerContext } from "../context.ts";
 import {
   getAllSettings,
@@ -9,10 +14,10 @@ import {
   setAllSettings,
   setSetting,
 } from "./handlers.ts";
-import { isOwnerOnlySettingKey } from "./types.ts";
 
 export const createSettingsRoutes = (ctx: LocalServerContext, effects: SettingsEffects = {}) => {
   const routes = new Hono<AuthEnv>();
+  const hostManagement = () => readHostManagement(ctx.settingsRepository);
 
   routes.get("/", async (c) => {
     const result = await getAllSettings(ctx);
@@ -26,7 +31,12 @@ export const createSettingsRoutes = (ctx: LocalServerContext, effects: SettingsE
       return c.json({ error: "Missing required field: settings" }, 400);
     }
     // A bulk write carries its keys in the body, where auth/route-policy.ts cannot see them.
-    if (body.settings.some((entry) => refusedTo(c, entry.key))) return hostOnly(c);
+    const refusal = await settingsWriteRefusal(
+      body.settings.map((entry) => entry.key),
+      callerOf(c),
+      hostManagement,
+    );
+    if (refusal) return c.json(refusal, 403);
 
     const result = await setAllSettings(ctx, body.settings, effects);
     if (!result.success) return rejected(c, result.error);
@@ -52,9 +62,10 @@ export const createSettingsRoutes = (ctx: LocalServerContext, effects: SettingsE
     if (body.value === undefined) {
       return c.json({ error: "Missing required field: value" }, 400);
     }
-    // auth/route-policy.ts already gives this path to the owner; checked again on the decoded
-    // key, so no spelling of the path steps around it.
-    if (refusedTo(c, key)) return hostOnly(c);
+    // auth/route-policy.ts already guards this path; checked again on the decoded key, so no
+    // spelling of the path steps around it.
+    const refusal = await settingsWriteRefusal([key], callerOf(c), hostManagement);
+    if (refusal) return c.json(refusal, 403);
 
     const result = await setSetting(ctx, key, body.value, effects);
     if (!result.success) return rejected(c, result.error);
@@ -65,12 +76,9 @@ export const createSettingsRoutes = (ctx: LocalServerContext, effects: SettingsE
   return routes;
 };
 
-// Owner-only keys (settings/types.ts) are the host owner's to write; a paired device reads them.
-const refusedTo = (c: Context<AuthEnv>, key: string): boolean =>
-  isOwnerOnlySettingKey(key) && c.get("principal")?.kind !== "owner";
-
-const hostOnly = (c: Context) =>
-  c.json({ error: "Only available on the host machine", code: "HOST_ONLY" }, 403);
+// Routes mounted without the auth guard (none in the app) are treated as a plain device.
+const callerOf = (c: Context<AuthEnv>): HostCaller =>
+  c.get("caller") ?? { kind: "device", agent: false };
 
 type SettingError = Extract<SetSettingResult, { success: false }>["error"];
 

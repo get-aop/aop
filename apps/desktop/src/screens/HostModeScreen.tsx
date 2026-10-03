@@ -1,4 +1,4 @@
-import { buildChannel } from "@aop/common";
+import { type AppUpdateState, buildChannel } from "@aop/common";
 import { useState } from "react";
 import type {
   DesktopBackend,
@@ -7,10 +7,12 @@ import type {
   PairingCodeResult,
 } from "../backend/types";
 import { Brand, CommandBlock, Notice, StatusLine, Switch, type Tone } from "../ui";
+import { AppUpdateRow } from "./AppUpdateRow";
 
 interface HostModeScreenProps {
   state: DesktopState;
   backend: DesktopBackend;
+  update: AppUpdateState | null;
   onChangeHost: () => void;
 }
 
@@ -19,7 +21,7 @@ interface HostModeScreenProps {
  * only. Other devices reach it through `tailscale serve`, which the person runs; the app shows
  * the command and hands out pairing codes. The dashboard here is the owner's own, so it needs no token.
  */
-export const HostModeScreen = ({ state, backend, onChangeHost }: HostModeScreenProps) => {
+export const HostModeScreen = ({ state, backend, update, onChangeHost }: HostModeScreenProps) => {
   const { hostProcess } = state;
   const running = hostProcess.status === "running";
   const busy = hostProcess.status === "starting" || hostProcess.status === "stopping";
@@ -95,8 +97,16 @@ export const HostModeScreen = ({ state, backend, onChangeHost }: HostModeScreenP
 
         <ReachFromOtherDevices state={state} backend={backend} />
 
+        <div className="stack">
+          <AppUpdateRow state={state} update={update} backend={backend} />
+          {/* The host here is the one inside the app, so it never has an update of its own. */}
+          <p className="subtle" data-testid="host-updates-with-app">
+            The host on this Mac updates with this app.
+          </p>
+        </div>
+
         <button type="button" className="link" data-testid="host-change" onClick={onChangeHost}>
-          Connect to a different host instead
+          Change host…
         </button>
       </div>
     </main>

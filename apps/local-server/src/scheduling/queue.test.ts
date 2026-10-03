@@ -5,7 +5,7 @@ import { createTestDb } from "../db/test-utils.ts";
 import { insertProjectRow, insertProjectSession } from "../project/test-utils.ts";
 import { createSettingsRepository } from "../settings/repository.ts";
 import { SettingKey } from "../settings/types.ts";
-import { countRunningThreadRuns, readRunCap } from "./capacity.ts";
+import { countRunningThreadRuns, listRunningTurns, readRunCap } from "./capacity.ts";
 import { hasQueuedMessage, listQueuedThreadTurns } from "./queue.ts";
 import { insertQueuedMessage, insertRun } from "./test-utils.ts";
 
@@ -143,5 +143,26 @@ describe("the run cap", () => {
     expect(await readRunCap(settings)).toBe(4);
     await settings.set(SettingKey.MAX_CONCURRENT_RUNS, "lots");
     expect(await readRunCap(settings)).toBe(4);
+  });
+
+  test("names the running turns of every kind for a host update, and leaves finished ones out", async () => {
+    await insertProjectSession(db, { id: "design", projectId: "p1", kind: "thread" });
+    await insertProjectSession(db, { id: "coord", projectId: "p1", kind: "coordinator" });
+    await insertRun(db, "design", await insertQueuedMessage(db, "design", T(1)), "running");
+    await insertRun(db, "coord", await insertQueuedMessage(db, "coord", T(2)), "running");
+    await insertProjectSession(db, { id: "done", projectId: "p1", kind: "thread" });
+    await insertRun(db, "done", await insertQueuedMessage(db, "done", T(3)), "completed");
+
+    const turns = await listRunningTurns(db);
+
+    expect(
+      turns
+        .map(({ title, kind }) => ({ title, kind }))
+        .sort((a, b) => a.title.localeCompare(b.title)),
+    ).toEqual([
+      { title: "design", kind: "thread" },
+      { title: "p1 coordinator", kind: "coordinator" },
+    ]);
+    expect(new Set(turns.map((turn) => turn.runId)).size).toBe(2);
   });
 });

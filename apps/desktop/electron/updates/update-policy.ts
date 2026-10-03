@@ -17,6 +17,11 @@ export interface UpdatePolicyInput {
    * itself; nothing in the code needs to change (docs/RELEASE.md, "Desktop app updates").
    */
   macSigned: boolean;
+  /**
+   * `AOP_DESKTOP_UPDATE_MODE`: a development run on Linux, where updates are otherwise off, can
+   * show the "This app" row against a fake feed (`notice`), or its failure (`auto`).
+   */
+  forced?: string | null;
 }
 
 export const chooseUpdateMode = ({
@@ -24,8 +29,10 @@ export const chooseUpdateMode = ({
   packaged,
   disabled,
   macSigned,
+  forced,
 }: UpdatePolicyInput): UpdateMode => {
   if (disabled) return "off";
+  if (isUpdateMode(forced)) return forced;
   if (platform === "win32") return packaged ? "auto" : "off";
   if (platform === "darwin") {
     if (!macSigned) return "notice";
@@ -34,3 +41,6 @@ export const chooseUpdateMode = ({
   // The desktop app ships for macOS and Windows only.
   return "off";
 };
+
+const isUpdateMode = (value: string | null | undefined): value is UpdateMode =>
+  value === "auto" || value === "notice" || value === "off";

@@ -11,6 +11,14 @@ export const AuthPrincipalSchema = z.discriminatedUnion("kind", [
 ]);
 export type AuthPrincipal = z.infer<typeof AuthPrincipalSchema>;
 
+/**
+ * The header the `aop` CLI adds when it runs inside an agent's turn (the host sets
+ * `AOP_CHAT_SESSION_ID` there). The host refuses such a request whatever manages the host,
+ * so an agent cannot update or reconfigure the host it runs on by accident. It is a guard, not a
+ * boundary: an agent on the host could still call the API itself.
+ */
+export const AGENT_SESSION_HEADER = "x-aop-agent-session";
+
 /** A one-time code the host owner reads off the host and types into a new client. */
 export const PairingCodeSchema = z.object({
   code: z.string().min(1),

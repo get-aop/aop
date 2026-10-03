@@ -15,7 +15,7 @@ export const createElectronUpdaterPort = (feedOrigin?: string): AutoUpdaterPort 
     provider: "generic",
     url: desktopUpdaterFeedUrl(feedOrigin ?? channel.feedOrigin),
   });
-  autoUpdater.autoDownload = true;
+  // A downloaded build installs when the app quits, as well as on "Restart to update".
   autoUpdater.autoInstallOnAppQuit = true;
   // Stable's feed is releases only, and a pre-release never reaches a stable app. AOP Nightly's
   // feed (getaop.com/nightly/latest/) is nothing but pre-releases, `0.10.7-nightly.<date>.<run>`.
@@ -29,8 +29,14 @@ export const createElectronUpdaterPort = (feedOrigin?: string): AutoUpdaterPort 
       autoUpdater.on("update-downloaded", (info) => handlers.downloaded(info.version));
       autoUpdater.on("error", (error) => handlers.failed(error.message));
     },
+    setAutoDownload: (enabled) => {
+      autoUpdater.autoDownload = enabled;
+    },
     check: async () => {
       await autoUpdater.checkForUpdates();
+    },
+    download: async () => {
+      await autoUpdater.downloadUpdate();
     },
     quitAndInstall: () => autoUpdater.quitAndInstall(),
   };

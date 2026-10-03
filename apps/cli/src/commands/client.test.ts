@@ -72,3 +72,24 @@ describe("fetchServer", () => {
     });
   });
 });
+
+describe("asAgentWhenInTurn", () => {
+  const { asAgentWhenInTurn } = clientModule as typeof import("./client.ts");
+
+  test("marks a request made inside an agent's turn, keeping its other headers", () => {
+    const options = asAgentWhenInTurn(
+      { method: "PUT", headers: { "Content-Type": "application/json" } },
+      { AOP_CHAT_SESSION_ID: "session-1" },
+    );
+
+    const headers = new Headers(options?.headers);
+    expect(options?.method).toBe("PUT");
+    expect(headers.get("x-aop-agent-session")).toBe("session-1");
+    expect(headers.get("content-type")).toBe("application/json");
+  });
+
+  test("leaves a person's request as it is", () => {
+    const options = { method: "GET" };
+    expect(asAgentWhenInTurn(options, {})).toBe(options);
+  });
+});

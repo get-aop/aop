@@ -31,9 +31,13 @@ describe("createDesktopBridge", () => {
     await bridge.getHostConfig();
     await bridge.hostRejected();
     await bridge.setZoom(1.1);
+    await bridge.getAppInfo();
     await bridge.getUpdateState();
+    await bridge.checkForUpdates();
+    await bridge.downloadAndRestart();
     await bridge.openUpdateDownload();
     await bridge.restartToUpdate();
+    await bridge.setAutoDownload(false);
 
     expect(invoke.mock.calls).toEqual([
       [IPC_CHANNELS.getState],
@@ -50,9 +54,13 @@ describe("createDesktopBridge", () => {
       [IPC_CHANNELS.getHostConfig],
       [IPC_CHANNELS.hostRejected],
       [IPC_CHANNELS.setZoom, 1.1],
+      [IPC_CHANNELS.getAppInfo],
       [IPC_CHANNELS.getUpdateState],
+      [IPC_CHANNELS.checkForUpdates],
+      [IPC_CHANNELS.downloadAndRestart],
       [IPC_CHANNELS.openUpdateDownload],
       [IPC_CHANNELS.restartToUpdate],
+      [IPC_CHANNELS.setAutoDownload, false],
     ]);
   });
 
@@ -101,6 +109,21 @@ describe("createDesktopBridge", () => {
     stop();
     bridge.onOpenSettings(() => opened.push("second"));
     expect(opened).toEqual(["first", "first"]);
+  });
+
+  test("holds Check for Updates… and Host Setup… the same way, each on its own channel", () => {
+    const { bridge, listeners } = setup();
+    const opened: string[] = [];
+
+    listeners.get(IPC_CHANNELS.openUpdates)?.(undefined);
+    listeners.get(IPC_CHANNELS.openHostSetup)?.(undefined);
+    bridge.onOpenUpdates(() => opened.push("updates"));
+    expect(opened).toEqual(["updates"]);
+
+    bridge.onOpenHostSetup(() => opened.push("host setup"));
+    expect(opened).toEqual(["updates", "host setup"]);
+    listeners.get(IPC_CHANNELS.openUpdates)?.(undefined);
+    expect(opened).toEqual(["updates", "host setup", "updates"]);
   });
 
   test("uses distinct channels, so one page's call cannot be mistaken for another's", () => {

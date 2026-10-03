@@ -2,10 +2,11 @@ import { useSyncExternalStore } from "react";
 
 export type SettingsSection =
   | "general"
+  | "host"
+  | "updates"
   | "repositories"
   | "runtimes"
   | "computer-use"
-  | "devices"
   | "about";
 
 interface DialogState {

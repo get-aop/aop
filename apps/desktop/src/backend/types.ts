@@ -2,6 +2,9 @@
  * What the desktop app's main process tells its screens, and what the screens may ask of it.
  * Both sides import this file, so a change to it is a change to the contract.
  */
+import type { DesktopAppUpdateBridge } from "@aop/common";
+
+export type { AppUpdateState, DesktopAppInfo } from "@aop/common";
 
 /** Which host this app is a client of. `local` is this Mac running the host itself. */
 export type HostChoice = "remote" | "local";
@@ -79,19 +82,23 @@ export type PairingCodeResult =
   | { ok: false; message: string };
 
 /**
- * The app's own update, as the screens and the menu show it. `available` is a notice with a
- * download link (a macOS app that is not Developer ID signed); `downloading` and `ready` belong
- * to the automatic path (the Windows app and a signed macOS app), where `ready` waits for a
- * restart.
+ * "This app"'s update, as the app's own screens use it. The dashboard gets the same methods
+ * (DesktopAppUpdateBridge in @aop/common) through the same bridge.
  */
-export type AppUpdateState =
-  | { status: "idle" }
-  | { status: "available"; version: string; releaseUrl: string | null }
-  | { status: "downloading"; version: string; percent: number }
-  | { status: "ready"; version: string };
+export type AppUpdateBackend = Pick<
+  DesktopAppUpdateBridge,
+  | "getAppInfo"
+  | "getUpdateState"
+  | "onUpdateStateChanged"
+  | "checkForUpdates"
+  | "downloadAndRestart"
+  | "restartToUpdate"
+  | "openUpdateDownload"
+  | "setAutoDownload"
+>;
 
 /** What the connect, host and status screens call. Every method is one IPC round trip. */
-export interface DesktopBackend {
+export interface DesktopBackend extends AppUpdateBackend {
   getState: () => Promise<DesktopState>;
   onStateChanged: (listener: (state: DesktopState) => void) => () => void;
   connectHost: (input: ConnectInput) => Promise<ConnectResult>;
@@ -106,10 +113,4 @@ export interface DesktopBackend {
   reconnect: () => Promise<void>;
   openLogsFolder: () => Promise<void>;
   quitApp: () => Promise<void>;
-  getUpdateState: () => Promise<AppUpdateState>;
-  onUpdateStateChanged: (listener: (state: AppUpdateState) => void) => () => void;
-  /** Opens the new version's download in the person's browser. */
-  openUpdateDownload: () => Promise<void>;
-  /** Installs a downloaded update and restarts the app. */
-  restartToUpdate: () => Promise<void>;
 }

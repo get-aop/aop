@@ -203,6 +203,7 @@ describe("registerCommands", () => {
     expect(commandNames).toEqual([
       "config:get",
       "config:set",
+      "pair",
       "repo:init",
       "repo:remove",
       "session",

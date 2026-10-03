@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
-import { buildChannel } from "@aop/common";
+import { buildChannel, tailscaleServeCommand } from "@aop/common";
 import type { TailscaleHint } from "../../src/backend/types";
 import type { HostClient } from "../connection/host-client";
 import type { ManagedChild } from "./supervisor";
@@ -107,8 +107,9 @@ export const createHealthWaiter =
     return null;
   };
 
+// The Mac app's host is this app's channel: AOP Nightly publishes on its own port, not 443.
 export const tailscaleHint = (port: number): TailscaleHint => ({
-  serveCommand: `tailscale serve --bg --https=443 http://127.0.0.1:${port}`,
+  serveCommand: tailscaleServeCommand(port, buildChannel().id),
   resetCommand: "tailscale serve reset",
 });
 

@@ -1,7 +1,6 @@
-import type { BrowserHostEvent } from "@aop/common";
+import type { AppUpdateState, BrowserHostEvent, DesktopAppInfo } from "@aop/common";
 import type { ElectronDesktopBridge } from "../src/backend/electron-backend";
 import type {
-  AppUpdateState,
   ConnectInput,
   ConnectResult,
   DesktopState,
@@ -37,11 +36,17 @@ export const createDesktopBridge = (
     invoke(IPC_CHANNELS.getHostConfig) as ReturnType<ElectronDesktopBridge["getHostConfig"]>,
   hostRejected: () => invoke(IPC_CHANNELS.hostRejected) as Promise<void>,
   setZoom: (zoomFactor) => invoke(IPC_CHANNELS.setZoom, zoomFactor) as Promise<void>,
+  getAppInfo: () => invoke(IPC_CHANNELS.getAppInfo) as Promise<DesktopAppInfo>,
   getUpdateState: () => invoke(IPC_CHANNELS.getUpdateState) as Promise<AppUpdateState>,
   onUpdateStateChanged: (listener) =>
     subscribe(IPC_CHANNELS.updateStateChanged, (payload) => listener(payload as AppUpdateState)),
+  checkForUpdates: () => invoke(IPC_CHANNELS.checkForUpdates) as Promise<AppUpdateState>,
+  downloadAndRestart: () => invoke(IPC_CHANNELS.downloadAndRestart) as Promise<void>,
   openUpdateDownload: () => invoke(IPC_CHANNELS.openUpdateDownload) as Promise<void>,
   restartToUpdate: () => invoke(IPC_CHANNELS.restartToUpdate) as Promise<void>,
+  setAutoDownload: (enabled) => invoke(IPC_CHANNELS.setAutoDownload, enabled) as Promise<void>,
+  onOpenUpdates: heldSignal(subscribe, IPC_CHANNELS.openUpdates),
+  onOpenHostSetup: heldSignal(subscribe, IPC_CHANNELS.openHostSetup),
   browser: {
     onEvent: (listener) =>
       subscribe(IPC_CHANNELS.browserEvent, (payload) => listener(payload as BrowserHostEvent)),

@@ -1,6 +1,5 @@
-import type { BrowserDownloadAction } from "@aop/common";
+import type { AppUpdateState, BrowserDownloadAction, DesktopAppInfo } from "@aop/common";
 import type {
-  AppUpdateState,
   ConnectInput,
   ConnectResult,
   DesktopState,
@@ -37,9 +36,13 @@ export interface DesktopIpcHost {
   getHostConfig: () => Promise<{ baseUrl: string; token: string | null }>;
   hostRejected: () => Promise<void>;
   setZoom: (factor: number) => Promise<void>;
+  getAppInfo: () => DesktopAppInfo;
   getUpdateState: () => AppUpdateState;
+  checkForUpdates: () => Promise<AppUpdateState>;
+  downloadAndRestart: () => Promise<void>;
   openUpdateDownload: () => Promise<void>;
   restartToUpdate: () => Promise<void>;
+  setAutoDownload: (enabled: boolean) => Promise<void>;
   browserSetActive: (active: boolean) => void;
   browserAnswerPrompt: (id: string, allow: boolean) => void;
   browserDownloadAction: (id: string, action: BrowserDownloadAction) => void;
@@ -122,15 +125,23 @@ export const registerDesktopIpc = (
   );
 
   // The app's own update is no secret and changes no host, so either of the app's two pages may use it.
-  const fromEitherPage = (operation: () => unknown): IpcHandler => {
-    return async (event) => {
+  const fromEitherPage = (operation: (...args: unknown[]) => unknown): IpcHandler => {
+    return async (event, ...args) => {
       assertSender(isAllowedNavigation(senderUrl(event), development));
-      return operation();
+      return operation(...args);
     };
   };
-  register(ipcMain, IPC_CHANNELS.getUpdateState, fromEitherPage(host.getUpdateState));
-  register(ipcMain, IPC_CHANNELS.openUpdateDownload, fromEitherPage(host.openUpdateDownload));
-  register(ipcMain, IPC_CHANNELS.restartToUpdate, fromEitherPage(host.restartToUpdate));
+  const updateHandlers: [string, (...args: unknown[]) => unknown][] = [
+    [IPC_CHANNELS.getAppInfo, () => host.getAppInfo()],
+    [IPC_CHANNELS.getUpdateState, () => host.getUpdateState()],
+    [IPC_CHANNELS.checkForUpdates, () => host.checkForUpdates()],
+    [IPC_CHANNELS.downloadAndRestart, () => host.downloadAndRestart()],
+    [IPC_CHANNELS.openUpdateDownload, () => host.openUpdateDownload()],
+    [IPC_CHANNELS.restartToUpdate, () => host.restartToUpdate()],
+    [IPC_CHANNELS.setAutoDownload, (enabled) => host.setAutoDownload(requiredBoolean(enabled))],
+  ];
+  for (const [channel, operation] of updateHandlers)
+    register(ipcMain, channel, fromEitherPage(operation));
 
   register(ipcMain, IPC_CHANNELS.setZoom, async (event, factor) => {
     assertSender(isAllowedNavigation(senderUrl(event), development));

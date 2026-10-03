@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   AuthPrincipalSchema,
+  CLIENT_HEADER,
   DeviceSchema,
   PairedDeviceSchema,
   PairingCodeSchema,
@@ -14,6 +15,8 @@ import { routeAccess } from "./route-policy.ts";
 import { LOOPBACK_PEER, REMOTE_PEER } from "./test-utils.ts";
 
 const JSON_HEADERS = { "content-type": "application/json" };
+const LINUX_CHROME =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36";
 
 describe("auth routes", () => {
   let db: Kysely<Database>;
@@ -59,17 +62,19 @@ describe("auth routes", () => {
       expect(Date.parse(grant.expiresAt)).toBeGreaterThan(Date.now());
     });
 
-    test("is not available to a remote client, paired or not", async () => {
+    test("a paired device may make one by default, and not once the owner narrows it to the host machine", async () => {
       const { token } = await pair();
+      const fromDevice = () =>
+        remote("/api/auth/pairing-codes", { method: "POST", headers: bearer(token) });
 
       const anonymous = await remote("/api/auth/pairing-codes", { method: "POST" });
-      const device = await remote("/api/auth/pairing-codes", {
-        method: "POST",
-        headers: bearer(token),
-      });
+      const allowed = await fromDevice();
+      await local("/api/settings/host_management", { ...post({ value: "owner" }), method: "PUT" });
+      const narrowed = await fromDevice();
 
       expect(anonymous.status).toBe(401);
-      expect(device.status).toBe(403);
+      expect(allowed.status).toBe(201);
+      expect(narrowed.status).toBe(403);
     });
   });
 
@@ -273,7 +278,46 @@ describe("auth routes", () => {
       ]);
       for (const device of devices) expect(DeviceSchema.safeParse(device).success).toBe(true);
       for (const device of devices)
-        expect(Object.keys(device).sort()).toEqual(["createdAt", "id", "lastSeenAt", "name"]);
+        expect(Object.keys(device).sort()).toEqual([
+          "client",
+          "createdAt",
+          "id",
+          "lastSeenAt",
+          "name",
+          "outOfDate",
+        ]);
+    });
+
+    test("names the client each device last connected with", async () => {
+      const { token } = await pair("Work Mac");
+      const chrome = await pair("Chrome on Linux");
+      await remote("/api/auth/me", {
+        headers: { ...bearer(token), [CLIENT_HEADER]: "desktop; version=0.10.8; platform=darwin" },
+      });
+      await remote("/api/auth/me", {
+        headers: { ...bearer(chrome.token), "user-agent": LINUX_CHROME },
+      });
+
+      const { devices } = (await (await local("/api/auth/devices")).json()) as AnyJson;
+
+      // Both paired within one millisecond, so the list's order between them is not fixed.
+      const byName = [...devices].sort((a: AnyJson, b: AnyJson) => a.name.localeCompare(b.name));
+      expect(
+        byName.map((device: AnyJson) => [device.name, device.client, device.outOfDate]),
+      ).toEqual([
+        ["Chrome on Linux", { app: "browser", version: null, platform: "linux" }, false],
+        ["Work Mac", { app: "desktop", version: "0.10.8", platform: "darwin" }, false],
+      ]);
+    });
+
+    test("any paired device may read the list, even when it may not manage the host", async () => {
+      const { token } = await pair();
+      await local("/api/settings/host_management", { ...post({ value: "owner" }), method: "PUT" });
+
+      const res = await remote("/api/auth/devices", { headers: bearer(token) });
+
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as AnyJson).devices).toHaveLength(1);
     });
 
     test("DELETE /devices/:id revokes it: the next request with its token fails", async () => {
@@ -295,16 +339,15 @@ describe("auth routes", () => {
       expect(await res.json()).toMatchObject({ code: "NOT_FOUND" });
     });
 
-    test("a paired device cannot list devices or revoke one, itself included", async () => {
+    test("narrowed to the host machine, a paired device cannot revoke a device, itself included", async () => {
       const { device, token } = await pair();
+      await local("/api/settings/host_management", { ...post({ value: "owner" }), method: "PUT" });
 
-      const list = await remote("/api/auth/devices", { headers: bearer(token) });
       const revoke = await remote(`/api/auth/devices/${device.id}`, {
         method: "DELETE",
         headers: bearer(token),
       });
 
-      expect(list.status).toBe(403);
       expect(revoke.status).toBe(403);
       expect((await remote("/api/auth/me", { headers: bearer(token) })).status).toBe(200);
     });
@@ -343,14 +386,25 @@ describe("auth routes", () => {
       expect(unguarded).toEqual([]);
     });
 
-    test("keeps the host-only routes the policy names mounted", () => {
+    test("keeps the routes the policy guards mounted", () => {
       const mounted = new Set(app.routes.map((route) => `${route.method} ${route.path}`));
-      const hostOnly = [
+      const manager = [
         "POST /api/auth/pairing-codes",
-        "GET /api/auth/devices",
         "DELETE /api/auth/devices/:id",
+        "POST /api/host/setup/:id/fix",
         "POST /api/updates/apply",
+        "DELETE /api/updates/apply",
+        "POST /api/updates/check",
+        "GET /api/updates/log",
         "POST /api/agent-clis/:provider/update",
+        "POST /api/agent-clis/check",
+      ];
+      for (const route of manager) {
+        const [method = "", path = ""] = route.split(" ");
+        expect({ route, mounted: mounted.has(route) }).toEqual({ route, mounted: true });
+        expect(routeAccess(method, concrete(path))).toBe("manager");
+      }
+      const hostOnly = [
         "PUT /api/projects/:projectId/computer-use",
         "POST /api/mcp-secret/rotate",
         "POST /api/projects/:projectId/routines",
@@ -378,6 +432,24 @@ describe("auth routes", () => {
       expect(routeAccess("POST", "/api/projects/x/routines/preview")).toBe("device");
       expect(routeAccess("PUT", "/api/settings/routine_min_interval_minutes")).toBe("owner");
       expect(routeAccess("PUT", "/api/settings/routine_max_active_per_project")).toBe("owner");
+    });
+
+    test("gives who may update to the owner, and the update settings to whoever may update", () => {
+      expect(routeAccess("PUT", "/api/settings/host_management")).toBe("owner");
+      for (const key of [
+        "update_check",
+        "update_install",
+        "update_install_window",
+        "update_background_download",
+        "agent_cli_auto_update",
+        "agent_cli_check_interval_minutes",
+      ]) {
+        expect(routeAccess("PUT", `/api/settings/${key}`)).toBe("manager");
+      }
+      expect(routeAccess("GET", "/api/updates")).toBe("device");
+      expect(routeAccess("GET", "/api/auth/devices")).toBe("device");
+      expect(routeAccess("GET", "/api/host/setup")).toBe("device");
+      expect(routeAccess("PUT", "/api/settings/display_name")).toBe("device");
     });
   });
 });

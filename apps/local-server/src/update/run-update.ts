@@ -4,6 +4,8 @@ import { apiFetch, feedConfigFromEnv, fetchLatestRelease, messageOf } from "./re
 import { createSystemUpdateDeps } from "./system.ts";
 import { type OutcomeRecord, writeOutcomeRecord } from "./update-files.ts";
 import { type UpdateResult, updateHost } from "./update-host.ts";
+import { acquireUpdateLock } from "./update-lock.ts";
+import { restartNeededMessage } from "./update-progress.ts";
 
 export interface RunUpdateInput {
   /** The version this binary was built as (`BUILD_VERSION`), or undefined when it is not a build. */
@@ -21,11 +23,16 @@ export interface RunUpdateInput {
  */
 export const runUpdate = async (input: RunUpdateInput): Promise<number> => {
   const { buildVersion, print, env = process.env } = input;
+  if (!input.checkOnly && env.AOP_CHAT_SESSION_ID?.trim()) {
+    print(AGENT_REFUSAL);
+    return 1;
+  }
   if (!buildVersion?.trim()) {
     print(selfUpdateRefusal("source", input.execPath));
     return 1;
   }
   const current = normalizeReleaseVersion(buildVersion);
+  const startedAt = new Date().toISOString();
   try {
     if (input.checkOnly) {
       await printCheck(current, env, print);
@@ -37,16 +44,42 @@ export const runUpdate = async (input: RunUpdateInput): Promise<number> => {
       print(selfUpdateRefusal(block, input.execPath));
       return 1;
     }
-    const result = await updateHost(createSystemUpdateDeps(layout, current, print, env));
-    await writeOutcomeRecord(outcomeOf(result, current));
-    printResult(result, print);
-    return 0;
+    return await runLocked(() => updateHost(createSystemUpdateDeps(layout, current, print, env)), {
+      current,
+      startedAt,
+      print,
+    });
   } catch (error) {
-    if (!input.checkOnly) await recordFailure(current, error);
+    if (!input.checkOnly) await recordFailure(current, startedAt, error);
     print(`Update failed: ${messageOf(error)}`);
     return 1;
   }
 };
+
+// One run at a time per install (update-lock.ts); the lock is let go however the run ends.
+const runLocked = async (
+  update: () => Promise<UpdateResult>,
+  run: { current: string; startedAt: string; print: (line: string) => void },
+): Promise<number> => {
+  const release = acquireUpdateLock();
+  if (!release) {
+    run.print("Another update of this host is running. Let it finish, then try again.");
+    return 1;
+  }
+  try {
+    const result = await update();
+    await writeOutcomeRecord(outcomeOf(result, run.current, run.startedAt));
+    printResult(result, run.print);
+    return 0;
+  } finally {
+    release();
+  }
+};
+
+// The host sets AOP_CHAT_SESSION_ID in every agent turn. Updating restarts the host that runs the
+// turn, so an agent leaves it to the person; the host's own update run starts without it
+// (spawn-updater.ts).
+const AGENT_REFUSAL = `An agent can't update the host it runs on: the restart would cut its own turn. Ask the person to use Update host in AOP, or to run \`${buildChannel().binaryName} update\` in a terminal on the host.`;
 
 const printCheck = async (
   current: string,
@@ -65,23 +98,36 @@ const printCheck = async (
   print(`Release notes: ${release.url}`);
 };
 
-// The host that started this run reads the record to tell the person how it went. A run that
-// leaves the old release running is not a success from the dashboard's point of view.
-const outcomeOf = (result: UpdateResult, current: string): OutcomeRecord => {
+// The host that started this run reads the record to tell the person how it went. A host
+// started by hand keeps running the old release: the new one is installed, and it says so
+// ("Installed, restart needed") rather than failing.
+const outcomeOf = (result: UpdateResult, current: string, startedAt: string): OutcomeRecord => {
   const at = new Date().toISOString();
-  if (result.status === "updated" && result.restarted) {
-    return { at, ok: true, from: current, to: result.to, error: null };
+  if (result.status === "up-to-date") {
+    return {
+      at,
+      startedAt,
+      ok: false,
+      from: current,
+      to: null,
+      error: "AOP is already up to date",
+    };
   }
-  const error =
-    result.status === "updated"
-      ? `Installed ${result.to}. Restart the host to use it.`
-      : "AOP is already up to date";
-  return { at, ok: false, from: current, to: null, error };
+  return {
+    at,
+    startedAt,
+    ok: true,
+    from: current,
+    to: result.to,
+    error: null,
+    ...(result.restarted ? {} : { restartNeeded: true }),
+  };
 };
 
-const recordFailure = (current: string, error: unknown): Promise<void> =>
+const recordFailure = (current: string, startedAt: string, error: unknown): Promise<void> =>
   writeOutcomeRecord({
     at: new Date().toISOString(),
+    startedAt,
     ok: false,
     from: current,
     to: null,
@@ -96,7 +142,7 @@ const printResult = (result: UpdateResult, print: (line: string) => void): void 
     if (!result.restarted) {
       const bin = buildChannel().binaryName;
       print(`This host was not started as a service or with \`${bin} run --background\`, so it is`);
-      print(`still running the old release. Stop it and run \`${bin} run\` to use the new one.`);
+      print(`still running the old release. ${restartNeededMessage(result.to)}.`);
     }
   }
 };

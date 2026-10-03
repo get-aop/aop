@@ -2,7 +2,7 @@ import { extname } from "node:path";
 import { type CuaLeaseState, EMPTY_CUA_LEASE, parseLiveViewMode } from "@aop/common";
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
-import { type Context, Hono } from "hono";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { createHostAgentCliService } from "./agent-cli/host-agent-cli-service.ts";
 import { createAgentCliRoutes } from "./agent-cli/routes.ts";
 import type { AgentCliService } from "./agent-cli/service.ts";
@@ -11,6 +11,7 @@ import { createAttachmentRoutes } from "./attachment/routes.ts";
 import { createAttachmentService } from "./attachment/service.ts";
 import { type AuthEnv, createApiAuth } from "./auth/api-auth.ts";
 import { createApiCors } from "./auth/cross-origin.ts";
+import { readHostManagement } from "./auth/host-management.ts";
 import { createOriginGuard } from "./auth/origin-guard.ts";
 import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
@@ -26,6 +27,9 @@ import { createEventStreamRoutes } from "./event-log/routes.ts";
 import { createFsRoutes } from "./fs/routes.ts";
 import { createGithubRoutes, createGithubService, type GithubService } from "./github/index.ts";
 import { createHealthRoutes } from "./health/routes.ts";
+import { createHostSetup } from "./host-setup/host-probes.ts";
+import { createHostSetupRoutes } from "./host-setup/routes.ts";
+import type { HostSetupService } from "./host-setup/service.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { openInboxDatabase } from "./inbox/database.ts";
 import { createHostInboxService } from "./inbox/host-inbox-service.ts";
@@ -58,6 +62,7 @@ import { createSettingsRoutes } from "./settings/routes";
 import { SettingKey } from "./settings/types.ts";
 import { createSuggestionRoutes } from "./suggestion/routes.ts";
 import { createThreadRoutes } from "./thread/routes.ts";
+import { hostPort } from "./update/host-port.ts";
 import { createHostUpdateService } from "./update/host-update-service.ts";
 import { createUpdateRoutes } from "./update/routes.ts";
 import type { UpdateService } from "./update/update-service.ts";
@@ -99,7 +104,30 @@ export interface AppDependencies {
   inbox?: InboxService;
   /** The PR View's reads and writes; tests pass one over a fake `gh`. */
   pullRequestView?: PullRequestViewService;
+  /** The setup checklist (AOP settings › Host); tests pass one over fake probes. */
+  hostSetup?: HostSetupService;
 }
+
+// Request logging middleware — skip the endpoints clients poll: health, and the live view's
+// status and frames, which a watching viewer asks for several times a second
+const logRequests: MiddlewareHandler = async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+  if (path.startsWith("/api/health") || path.startsWith("/api/computer-use/live")) {
+    return next();
+  }
+
+  const method = c.req.method;
+  const start = Date.now();
+  logger.info("{method} {path}", { method, path });
+
+  await next();
+
+  const status = c.res.status;
+  const durationMs = Date.now() - start;
+  const line = "{method} {path} → {status} ({durationMs}ms)";
+  if (status >= 400) logger.warn(line, { method, path, status, durationMs });
+  else logger.info(line, { method, path, status, durationMs });
+};
 
 export const createApp = (deps: AppDependencies) => {
   const { ctx, dashboardStaticPath, dashboardDevOrigin } = deps;
@@ -118,45 +146,17 @@ export const createApp = (deps: AppDependencies) => {
   app.use("/api/*", createOriginGuard({ allowedOrigins }));
   app.use("/api/*", createApiCors(allowedOrigins));
 
-  app.use("/api/*", createApiAuth(ctx.authService));
+  app.use(
+    "/api/*",
+    createApiAuth(ctx.authService, () => readHostManagement(ctx.settingsRepository)),
+  );
 
   app.use("/api/*", async (c, next) => {
     await next();
     c.res = await maybeCompressJsonResponse(c.req.raw, c.res);
   });
 
-  // Request logging middleware — skip the endpoints clients poll: health, and the live view's
-  // status and frames, which a watching viewer asks for several times a second
-  app.use("/api/*", async (c, next) => {
-    const path = new URL(c.req.url).pathname;
-    if (path.startsWith("/api/health") || path.startsWith("/api/computer-use/live")) {
-      return next();
-    }
-
-    const method = c.req.method;
-    const start = Date.now();
-    logger.info("{method} {path}", { method, path });
-
-    await next();
-
-    const status = c.res.status;
-    const durationMs = Date.now() - start;
-    if (status >= 400) {
-      logger.warn("{method} {path} → {status} ({durationMs}ms)", {
-        method,
-        path,
-        status,
-        durationMs,
-      });
-    } else {
-      logger.info("{method} {path} → {status} ({durationMs}ms)", {
-        method,
-        path,
-        status,
-        durationMs,
-      });
-    }
-  });
+  app.use("/api/*", logRequests);
 
   app.route(
     "/api/health",
@@ -179,7 +179,8 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createRoutineRoutes(projects.routines));
-  app.route("/api/projects", createGithubBackedRoutes(deps, projects));
+  const github = deps.github ?? createGithubService(ctx);
+  app.route("/api/projects", createGithubBackedRoutes(deps, projects, github));
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
   app.route("/api", createThreadRoutes(projects));
@@ -190,19 +191,7 @@ export const createApp = (deps: AppDependencies) => {
     "/api/settings",
     createSettingsRoutes(ctx, { runCapChanged: () => projects.chat.dispatchQueuedRuns() }),
   );
-  app.route("/api/updates", createUpdateRoutes(deps.updates ?? createHostUpdateService(ctx)));
-  app.route(
-    "/api/agent-clis",
-    createAgentCliRoutes(deps.agentClis ?? createHostAgentCliService(ctx)),
-  );
-  app.route(
-    "/api/computer-use",
-    createComputerUseRoutes(
-      deps.computerUse ?? computerUse,
-      deps.liveView ?? createHostLiveView(ctx),
-      leaseState(deps),
-    ),
-  );
+  mountHostUpkeepRoutes(app, deps);
   app.route(
     "/api/runtime-configuration",
     createRuntimeConfigurationRoutes(
@@ -210,6 +199,7 @@ export const createApp = (deps: AppDependencies) => {
       createRuntimeConfigurationService(ctx, createRuntimeUsers(ctx, projects.projects)),
     ),
   );
+  app.route("/api/host/setup", createHostSetupRoutes(hostSetupOf(deps, github)));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
   app.route(
@@ -253,10 +243,31 @@ export const createApp = (deps: AppDependencies) => {
   return app;
 };
 
+/** Keeping the host current and able: its own updates, its agent CLIs, computer use. */
+const mountHostUpkeepRoutes = (app: Hono<AuthEnv>, deps: AppDependencies): void => {
+  const { ctx } = deps;
+  app.route("/api/updates", createUpdateRoutes(deps.updates ?? createHostUpdateService(ctx)));
+  app.route(
+    "/api/agent-clis",
+    createAgentCliRoutes(deps.agentClis ?? createHostAgentCliService(ctx)),
+  );
+  app.route(
+    "/api/computer-use",
+    createComputerUseRoutes(
+      deps.computerUse ?? computerUse,
+      deps.liveView ?? createHostLiveView(ctx),
+      leaseState(deps),
+    ),
+  );
+};
+
 // What the model of a refused run reads, since Claude Code passes it on as the call's error.
 /** The routes that read and act on GitHub through the host's `gh`: status, issues, PRs, the PR View. */
-const createGithubBackedRoutes = (deps: AppDependencies, projects: ProjectServices) => {
-  const github = deps.github ?? createGithubService(deps.ctx);
+const createGithubBackedRoutes = (
+  deps: AppDependencies,
+  projects: ProjectServices,
+  github: GithubService,
+) => {
   const routes = new Hono<AuthEnv>();
   routes.route("/", createGithubRoutes(github));
   routes.route(
@@ -275,6 +286,18 @@ const createGithubBackedRoutes = (deps: AppDependencies, projects: ProjectServic
   );
   return routes;
 };
+
+/** The setup checklist of the host this process is, over the same GitHub and CUA services. */
+const hostSetupOf = (deps: AppDependencies, github: GithubService): HostSetupService =>
+  deps.hostSetup ??
+  createHostSetup({
+    ctx: deps.ctx,
+    github,
+    computerUse: deps.computerUse ?? computerUse,
+    lease: leaseState(deps),
+    port: deps.port ?? hostPort(),
+    startTimeMs: deps.startTimeMs,
+  });
 
 /** The live view over the host's own capture and the activity every run's log tail reports to. */
 const createHostLiveView = (ctx: LocalServerContext): LiveViewService =>

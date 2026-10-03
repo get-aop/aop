@@ -100,7 +100,7 @@ The repository is private, so an install cannot read its GitHub Releases. Every 
 
 | Address | Cache | Read by |
 | --- | --- | --- |
-| `https://getaop.com/releases/latest.json` | 5 minutes | the host (`aop update`, the dashboard's notice) and the macOS app |
+| `https://getaop.com/releases/latest.json` | 5 minutes | the host (`aop update`, the Updates button) and a macOS app that is not Developer ID signed |
 | `https://getaop.com/releases/vX.Y.Z.json` | 5 minutes | the same document for one release, kept after newer ones ship |
 | `https://getaop.com/releases/vX.Y.Z.md` | 5 minutes | the release notes as text: the "Release notes" links open it |
 | `https://getaop.com/latest/latest.yml` | 5 minutes | the Windows app (electron-updater, generic provider); it names the installer and blockmap under `vX.Y.Z/` |
@@ -136,7 +136,7 @@ The notes come from `dist/release-notes.md` (the workflow and `release:local` wr
 
 ## Host updates
 
-An installed host reads `releases/latest.json` and offers the release when its `version` is newer than the host's build (`0.10.0+<commit>`; the `+commit` part is ignored). It downloads `aop-<os>-<arch>` for its platform and `runtime-assets.tar.gz` from the URLs in the feed and checks each against the feed's sha256. A release that lacks one is refused with a message naming it, and nothing on the host changes. With a GitHub token in its environment the host falls back to the GitHub Release when the feed cannot be read. How the host behaves, the restart, and how to turn the check off are in [Updating the host](./HOST.md#updating-the-host). The first release with the updater is `v0.10.0`; hosts older than it have no `aop update`, so they update once by running `install.sh` again.
+An installed host reads `releases/latest.json` and offers the release when its `version` is newer than the host's build (`0.10.0+<commit>`; the `+commit` part is ignored). It downloads `aop-<os>-<arch>` for its platform and `runtime-assets.tar.gz` from the URLs in the feed and checks each against the feed's sha256. A release that lacks one is refused with a message naming it, and nothing on the host changes. With a GitHub token in its environment the host falls back to the GitHub Release when the feed cannot be read. How the host behaves, the restart, the install policies and how to turn the check off are in [Updating AOP](./HOST.md#updating-aop). The first release with the updater is `v0.10.0`; hosts older than it have no `aop update`, so they update once by running `install.sh` again.
 
 Test the whole path against a fake feed instead of a real release. `fake-feed.ts` builds the feed with the same code as the release and serves the files beside it:
 
@@ -153,13 +153,15 @@ The apps read the feed on getaop.com, like the host.
 
 | App | What happens |
 | --- | --- |
-| Windows | Real auto update with electron-updater. The app looks at startup and every six hours, downloads the new installer in the background (only the changed blocks, through the blockmap), and installs it when the app restarts. The window menu gains "Restart to update (x.y.z)" once the download is ready. |
-| macOS, Developer ID signed | The same auto update as Windows. electron-updater reads `latest-mac.yml`, downloads the zip for this Mac's architecture (arm64 on Apple silicon), checks its sha512, and Squirrel.Mac swaps the app when it restarts. "Restart to update (x.y.z)" appears in the menu once the download is ready. |
-| macOS, ad-hoc signed | A notice only: Squirrel.Mac installs an update only over a signed app. The app looks at the latest release at startup and every six hours and, when it is newer, adds "Update available (x.y.z)" to the window title and a menu with a link to the DMG for this Mac's architecture. The person downloads and replaces the app by hand. |
+| Windows | Real auto update with electron-updater. The app looks at startup and every six hours, downloads the new installer in the background (only the changed blocks, through the blockmap), and installs it when the app restarts or quits. Once the download is ready, the This app row in the Updates popover reads Ready with **Restart to update**, and the Help menu's update item reads "Restart to Update (x.y.z)". |
+| macOS, Developer ID signed | The same auto update as Windows. electron-updater reads `latest-mac.yml`, downloads the zip for this Mac's architecture (arm64 on Apple silicon), checks its sha512, and Squirrel.Mac swaps the app when it restarts. The app menu's update item reads "Restart to Update (x.y.z)" once the download is ready. Every stable release from 0.10.6, and every nightly, is signed. |
+| macOS, ad-hoc signed | A notice only: Squirrel.Mac installs an update only over a signed app. The app looks at the latest release at startup and every six hours and, when it is newer, the This app row reads Update available with **Download**, a link to the DMG for this Mac's architecture. The person downloads and replaces the app by hand. |
+
+The app menu (Help on Windows) has one update item. It reads **Check for Updates…**, which looks now and opens the dashboard's Updates popover, and **Restart to Update (x.y.z)** once a build is downloaded. With **Download updates automatically** off (AOP settings › Updates), a found release waits for **Download and restart**. Errors show in the This app row as Update failed, as well as in `desktop.log`. [Updating AOP](./HOST.md#this-app) has what the person sees.
 
 The macOS app decides at startup, from its own signature: it runs `codesign -dv` on its bundle and updates itself only when a `Developer ID Application` authority signed it (`apps/desktop/electron/updates/mac-signature.ts`). A release built with signing on is such an app, so nothing in the code is switched: the first signed release is installed from its DMG once, and every release after it arrives on its own. Squirrel.Mac also refuses an update signed by another team, or not signed at all, so once releases are signed they must stay signed with the same team: an unsigned release would leave signed apps failing their update quietly (the failure is only in `desktop.log`).
 
-Both apps also say when the host runs another release than the app: a line on the status screen, the Host menu and a few words in the window title ("host 0.10.0 is newer" means update the app, "host 0.9.0 is older" means run `aop update` on the host). It is only a notice; the API version handshake decides whether they can talk.
+Both apps also say when the host runs another release than the app, in the Updates popover: the This app row reads "soulf runs 0.10.0; this app is older" (update the app), and the Host row reads "Older than this app" (update the host). It is only a notice; the API version handshake decides whether they can talk.
 
 How the pieces fit:
 
@@ -168,21 +170,21 @@ How the pieces fit:
 - `scripts/release/windows-installer.ts` copies the installer, `latest.yml` and `aop-windows-x64-setup.exe.blockmap` into `dist/release`. The workflow uploads them from `package-windows`, requires them in `assemble`, and attaches them to the GitHub Release; `deploy-r2.sh` puts the installer and blockmap under `vX.Y.Z/` and a copy of `latest.yml` that names them there under `latest/`. `scripts/release/updater-wiring.test.ts` keeps those lists the same.
 - The installer is per-user, so an update needs no elevation. An unsigned installer updates too: electron-updater checks the sha512 in `latest.yml`; it checks a publisher name only if one is configured, and none is.
 
-### Turn on macOS auto update
+### macOS auto update
 
-Set the repository variable `AOP_SIGN_RELEASES` to `true` (with the secrets in [Signing is off](#signing-is-off)) and cut a release. Its app is signed and notarized, and it updates itself from then on. An app installed from an earlier, ad-hoc signed DMG keeps showing the notice until that signed DMG is installed by hand once.
+The repository variable `AOP_SIGN_RELEASES` is `true`, with the Apple secrets in [Signing](#signing), so every published macOS app since 0.10.6 is signed and notarized and updates itself. An app installed from an earlier, ad-hoc signed DMG keeps showing the notice until a signed DMG is installed by hand once.
 
 ### Settings and testing
 
-- `AOP_DESKTOP_DISABLE_UPDATES=1` in the app's environment turns the check off. A development run (not packaged) never auto updates, and on macOS shows the notice.
+- `AOP_DESKTOP_DISABLE_UPDATES=1` in the app's environment turns the check off. A development run (not packaged) never auto updates, and on macOS shows the notice. The app does not update itself on Linux, where only development runs exist; `AOP_DESKTOP_UPDATE_MODE=notice` (or `auto`) there shows the This app row against a fake feed.
 - `AOP_RELEASE_FEED_URL` points the apps (and the host) at another feed, such as `http://127.0.0.1:<port>`. Run `bun scripts/release/fake-feed.ts --dir <folder of assets> --version 99.0.0 --port <port>` to serve one. The app opens a download link from such a feed only when it is https, or plain http on this computer while `AOP_RELEASE_FEED_URL` is set.
 - Windows cannot be run from a Mac. Its updater configuration is checked in the `assemble` job's "Check the Windows updater config" step, whose log prints `latest.yml`. "Check the macOS updater config" does the same for `latest-mac.yml`.
 
-## Signing is off
+## Signing
 
-Every build is unsigned, on purpose, until signing is decided. The Apple and Windows secrets may already exist in the `release` environment, but the workflow does not read them unless two things are true: the run is a tag push or a manual run (never a pull request), and the repository variable `AOP_SIGN_RELEASES` is `true`. Nothing in the workflow needs to change to sign: set the variable and make sure the secrets below exist.
+Published macOS apps are signed with the Developer ID and notarized, since 0.10.6. The Windows installer is not signed yet: the `release` environment has no Authenticode certificate. The workflow reads the signing secrets only when two things are true: the run is a tag push or a manual run with `publish` on (never a pull request), and the repository variable `AOP_SIGN_RELEASES` is `true`, which it is. Pull requests and build-only runs stay unsigned.
 
-An unsigned macOS build is still ad-hoc signed (`mac.identity: "-"` in `scripts/desktop/electron-builder-config.ts`). Without any signature Apple silicon kills the app at launch, because changing the Electron fuses invalidates the signature the framework shipped with.
+An unsigned macOS build (a pull request run, a build-only run, a local build) is still ad-hoc signed (`mac.identity: "-"` in `scripts/desktop/electron-builder-config.ts`). Without any signature Apple silicon kills the app at launch, because changing the Electron fuses invalidates the signature the framework shipped with.
 
 ### macOS (Developer ID and notarization)
 
@@ -199,14 +201,14 @@ The places to look are the `TODO(signing)` and `TODO(notarization)` comments in 
 
 ### Windows (Authenticode)
 
-Set `AOP_WINDOWS_PFX_BASE64` (base64 of the code-signing `.pfx`) and `AOP_WINDOWS_PFX_PASSWORD`. `scripts/release/windows-installer.ts` passes them to Electron Builder, which signs the app and the installer. The place to look is the `TODO(signing)` comment in the `package-windows` job.
+Not set up yet. To sign, add `AOP_WINDOWS_PFX_BASE64` (base64 of the code-signing `.pfx`) and `AOP_WINDOWS_PFX_PASSWORD` to the `release` environment. `scripts/release/windows-installer.ts` passes them to Electron Builder, which signs the app and the installer. The place to look is the `TODO(signing)` comment in the `package-windows` job.
 
-### Until then: the warnings people see
+### The warnings people see
 
-Tell anyone you send a build to about these.
+Tell anyone you send an unsigned build to about these.
 
-- **macOS Gatekeeper.** Opening `AOP.app` for the first time says it "cannot be opened because it is from an unidentified developer" or "cannot be verified". Open it with right-click, then **Open**, or allow it in System Settings, **Privacy & Security**, **Open Anyway**. If macOS says the app "is damaged", run `xattr -dr com.apple.quarantine /Applications/AOP.app` in a terminal, which clears the download flag, and open it again.
 - **Windows SmartScreen.** Running `aop-windows-x64-setup.exe` shows "Windows protected your PC". Choose **More info**, then **Run anyway**. The warning fades as the installer gains reputation, and goes away with a signed build.
+- **macOS Gatekeeper, unsigned builds only.** A published macOS app opens without a warning. A build that is only ad-hoc signed (from a pull request or a build-only run) is different: opening `AOP.app` for the first time says it "cannot be opened because it is from an unidentified developer" or "cannot be verified". Open it with right-click, then **Open**, or allow it in System Settings, **Privacy & Security**, **Open Anyway**. If macOS says the app "is damaged", run `xattr -dr com.apple.quarantine /Applications/AOP.app` in a terminal, which clears the download flag, and open it again.
 - **The host needs neither.** `install.sh` downloads with `curl`, which does not set the quarantine flag, and it signs the `aop` binary ad hoc on macOS so launchd can restart it.
 
 ## Troubleshooting
