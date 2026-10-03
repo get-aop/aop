@@ -241,8 +241,8 @@ describe("createApiAuth", () => {
       const { token } = await pair();
       const asDevice = () =>
         app.request(
-          `${BASE}/api/auth/devices`,
-          { headers: { authorization: `Bearer ${token}` } },
+          `${BASE}/api/auth/pairing-codes`,
+          { method: "POST", headers: { authorization: `Bearer ${token}` } },
           REMOTE_PEER,
         );
 
@@ -252,11 +252,15 @@ describe("createApiAuth", () => {
       expect(refused.status).toBe(403);
       expect(((await refused.json()) as { code: string }).code).toBe("HOST_ONLY");
       const asOwner = await app.request(
-        "http://127.0.0.1:25150/api/auth/devices",
-        {},
+        "http://127.0.0.1:25150/api/auth/pairing-codes",
+        { method: "POST" },
         LOOPBACK_PEER,
       );
       expect(asOwner.status).toBe(200);
+      // The device list stays readable: a device sees it, read-only.
+      expect((await get("/api/auth/devices", { authorization: `Bearer ${token}` })).status).toBe(
+        200,
+      );
     });
 
     test("an agent's request is refused manager and owner routes, and nothing else", async () => {
@@ -280,8 +284,8 @@ describe("createApiAuth", () => {
       management = "owner";
 
       const res = await app.request(
-        `${BASE}/api/auth/devices/`,
-        { headers: { authorization: `Bearer ${token}` } },
+        `${BASE}/api/auth/pairing-codes/`,
+        { method: "POST", headers: { authorization: `Bearer ${token}` } },
         REMOTE_PEER,
       );
 

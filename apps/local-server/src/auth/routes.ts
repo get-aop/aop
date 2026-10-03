@@ -1,7 +1,7 @@
 import { PairDeviceRequestSchema } from "@aop/common";
 import { Hono } from "hono";
 import type { LocalServerContext } from "../context.ts";
-import type { AuthEnv } from "./api-auth.ts";
+import { type AuthEnv, clientOfRequest } from "./api-auth.ts";
 import { bearerTokenOf, clearSessionCookie, setSessionCookie } from "./credentials.ts";
 
 /** Who may call each route is decided in `route-policy.ts`, not here. */
@@ -28,7 +28,7 @@ export const createAuthRoutes = (ctx: LocalServerContext) => {
       return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid pairing request" }, 400);
     }
 
-    const result = await auth.pairDevice(parsed.data);
+    const result = await auth.pairDevice({ ...parsed.data, client: clientOfRequest(c) });
     if (result.status === "rate-limited") {
       return c.json(
         { error: "Too many wrong pairing codes. Try again shortly.", code: "RATE_LIMITED" },

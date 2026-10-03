@@ -28,11 +28,13 @@ const PUBLIC_ROUTES: readonly RoutePattern[] = [
 // Looking after the host: keeping it and its agent CLIs current, and who is paired with it. The
 // person's everyday setup is an app on another computer, so paired devices may do this unless
 // the owner says otherwise; with "owner", a stolen laptop cannot mint itself a fresh token or
-// lock the owner out of the device list.
+// lock the owner out of the device list. Reading the list (`GET /api/auth/devices`) is any
+// device's: AOP settings › Host shows it read-only to those who may not manage the host.
 const MANAGER_ROUTES: readonly RoutePattern[] = [
   ["POST", /^\/api\/auth\/pairing-codes\/?$/],
-  ["GET", /^\/api\/auth\/devices\/?$/],
   ["DELETE", /^\/api\/auth\/devices\/[^/]+\/?$/],
+  // Runs a setup check's fix on the host (host-setup/), such as `aop computer-use setup`.
+  ["POST", /^\/api\/host\/setup\/[^/]+\/fix\/?$/],
   // Replaces the host's own binary and restarts its service, now or once turns finish; DELETE
   // cancels an update queued for later.
   ["POST", /^\/api\/updates\/(apply|check)\/?$/],

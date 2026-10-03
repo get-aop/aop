@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { Device } from "@aop/common";
+import type { ClientInfo, Device } from "@aop/common";
 import { getLogger } from "@aop/infra";
+import { type HostBuild, hostBuild } from "../update/host-build.ts";
+import { sameClient, withClientStatus } from "./client-info.ts";
 import type { DeviceRepository } from "./device-repository.ts";
 import { generateDeviceToken, hashDeviceToken } from "./device-token.ts";
 import { createFailureLimiter, type FailureLimiter } from "./failure-limiter.ts";
@@ -24,9 +26,17 @@ export type PairDeviceResult =
 export interface AuthService {
   issuePairingCode: () => PairingCodeGrant;
   /** Trades a live one-time code for a new device and its bearer token, shown only here. */
-  pairDevice: (input: { code: string; name: string }) => Promise<PairDeviceResult>;
-  /** The device a bearer token belongs to, or null when it matches none (or was revoked). */
-  authenticate: (token: string) => Promise<Device | null>;
+  pairDevice: (input: {
+    code: string;
+    name: string;
+    client?: ClientInfo;
+  }) => Promise<PairDeviceResult>;
+  /**
+   * The device a bearer token belongs to, or null when it matches none (or was revoked).
+   * `client` is what the request came from; it is stored when it differs from the last one.
+   */
+  authenticate: (token: string, client?: ClientInfo) => Promise<Device | null>;
+  /** Every paired device, with its client and whether that app is older than the host. */
   listDevices: () => Promise<Device[]>;
   /** Deletes the device so its token stops matching, and tells anything holding it open. */
   revokeDevice: (id: string) => Promise<boolean>;
@@ -39,6 +49,8 @@ export interface AuthServiceOptions {
   pairingCodes?: PairingCodes;
   pairingLimiter?: FailureLimiter;
   now?: () => Date;
+  /** The host's release, which a desktop app is compared with; this process's unless a test says. */
+  host?: HostBuild;
 }
 
 export const createAuthService = (options: AuthServiceOptions): AuthService => {
@@ -53,11 +65,13 @@ export const createAuthService = (options: AuthServiceOptions): AuthService => {
       now,
     });
   const revocationListeners = new Map<string, Set<() => void>>();
+  const host = options.host ?? hostBuild();
+  const present = (device: Device) => withClientStatus(device, host);
 
   return {
     issuePairingCode: () => pairingCodes.issue(),
 
-    pairDevice: async ({ code, name }) => {
+    pairDevice: async ({ code, name, client }) => {
       const retryAfterMs = pairingLimiter.retryAfterMs();
       if (retryAfterMs > 0) {
         logger.warn("Pairing refused: too many wrong codes");
@@ -74,19 +88,25 @@ export const createAuthService = (options: AuthServiceOptions): AuthService => {
         id: randomUUID(),
         name,
         tokenHash: hashDeviceToken(token),
+        client,
       });
       logger.info("Paired device {deviceId} ({name})", { deviceId: device.id, name: device.name });
-      return { status: "paired", device, token };
+      return { status: "paired", device: present(device), token };
     },
 
-    authenticate: async (token) => {
+    authenticate: async (token, client) => {
       const device = await devices.findByTokenHash(hashDeviceToken(token));
       if (!device) return null;
       if (isStale(device, now())) await devices.touchLastSeen(device.id);
-      return device;
+      // Compared first, so a client that keeps the same app and version writes nothing.
+      if (client && !sameClient(device.client, client)) {
+        await devices.recordClient(device.id, client);
+        return present({ ...device, client });
+      }
+      return present(device);
     },
 
-    listDevices: () => devices.list(),
+    listDevices: async () => (await devices.list()).map(present),
 
     revokeDevice: async (id) => {
       const removed = await devices.remove(id);
