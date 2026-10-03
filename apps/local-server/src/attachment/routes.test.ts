@@ -250,7 +250,9 @@ describe("a message to a thread with images", () => {
 
     expect(sent.status).toBe(201);
     const messages = await threadMessages(s, thread.id);
-    expect(messages.find((message) => message.role === "user")).toMatchObject({
+    expect(
+      messages.find((message) => message.role === "user" && message.sender === "person"),
+    ).toMatchObject({
       text: "Match this mockup",
       images: [{ id: png.id, mimeType: "image/png" }],
     });
