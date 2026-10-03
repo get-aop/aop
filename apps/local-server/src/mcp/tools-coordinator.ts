@@ -11,6 +11,7 @@ import {
   type Thread,
 } from "@aop/common";
 import { z } from "zod";
+import { describeSteerDelivery } from "../chat-session/steer-delivery.ts";
 import { describeServiceError } from "../project/errors.ts";
 import { createRunBlocks } from "../project/run-blocks.ts";
 import { defineTool, type McpToolCall, McpToolError, textResult } from "./registry.ts";
@@ -96,7 +97,7 @@ export const threadSpawnTool = defineTool({
 export const threadSteerTool = defineTool({
   name: "thread_steer",
   description:
-    'Send a message to an existing thread: new instructions, an answer to what it reported, or a change of direction. If the thread is working, the message reaches its running turn after the tool call it is on, so a correction changes the work in progress; when: "after-turn" holds it until the turn ends instead. If the thread is idle it starts another turn. Reopens a resolved thread.',
+    'Send a message to an existing thread: new instructions, an answer to what it reported, or a change of direction. If the thread is working, the message reaches its running turn once the tool call it is on ends, so a correction changes the work in progress; a long call (a test suite, a wait) holds it until then, and the result says which call and for how long. when: "interrupt" stops that call so the thread reads the message at once (what the call started, even in the background, may stop with it); when: "after-turn" holds the message until the turn ends instead. If the thread is idle it starts another turn. Reopens a resolved thread.',
   input: z.object({
     threadId: z.string(),
     message: z.string().min(1),
@@ -105,15 +106,15 @@ export const threadSteerTool = defineTool({
       .optional()
       .describe("The person's own words, when this forwards what they said."),
     when: z
-      .enum(["now", "after-turn"])
+      .enum(["now", "interrupt", "after-turn"])
       .optional()
       .describe(
-        "For a working thread: now (the default) reaches its running turn at the next step; after-turn waits until that turn ends.",
+        "For a working thread: now (the default) reaches its running turn once its current step ends; interrupt stops that step so it reads the message at once; after-turn waits until the turn ends.",
       ),
   }),
   handler: async (args, call) => {
     await ownThread(call, args.threadId);
-    const { thread } = unwrap(
+    const sent = unwrap(
       await call.services.threads.send(
         args.threadId,
         args.message,
@@ -121,10 +122,29 @@ export const threadSteerTool = defineTool({
         { midRunMode: args.when === "after-turn" ? "queue" : "steer" },
       ),
     );
-    await createRunBlocks(call.ctx.db).routedTo(call.session.id, thread.id);
-    return textResult(summarize(thread));
+    await createRunBlocks(call.ctx.db).routedTo(call.session.id, sent.thread.id);
+    const delivery = sent.messageId
+      ? await deliveryNote(call, sent.thread.projectId, sent.messageId, args.when === "interrupt")
+      : null;
+    return textResult({ ...summarize(sent.thread), ...(delivery && { delivery }) });
   },
 });
+
+// Where the message stands, read before an interrupt so it names the step that was stopped.
+const deliveryNote = async (
+  call: McpToolCall,
+  projectId: string,
+  messageId: string,
+  interrupt: boolean,
+): Promise<string | null> => {
+  const delivery = await call.services.chat.steerDelivery(messageId);
+  if (!delivery) return null;
+  const interrupted =
+    interrupt &&
+    delivery.state === "waiting" &&
+    (await call.services.projects.interruptForMessage(projectId, messageId)).success;
+  return describeSteerDelivery(delivery, { interrupted });
+};
 
 export const threadStopTool = defineTool({
   name: "thread_stop",

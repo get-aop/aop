@@ -35,7 +35,10 @@ export interface CuaGateDeps {
   progressEveryMs?: number;
 }
 
-export const MAX_WAIT_MS = 10 * 60_000;
+// A call waiting in line is a step the thread is on, and a message sent to the thread reaches it
+// only once that step ends: so a wait answers within a minute and the thread calls again, keeping
+// its place (lease.ts RESERVATION_MS), instead of one call that holds every message for minutes.
+export const MAX_WAIT_MS = 60_000;
 const PROGRESS_EVERY_MS = 10_000;
 const END_TOOL = "end_session";
 

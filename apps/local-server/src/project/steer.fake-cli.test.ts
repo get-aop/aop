@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { AssistantMessage, Message, Project, Thread } from "@aop/common";
+import {
+  type AssistantMessage,
+  currentStepOf,
+  type Message,
+  type Project,
+  type Thread,
+} from "@aop/common";
 import { createProjectStack, eventually, type ProjectStack, useTempAopHome } from "./test-utils.ts";
 
 // Messages that reach a running turn: the person's to the coordinator and the coordinator's to a
@@ -132,4 +138,103 @@ describe("thread_steer to a working thread", () => {
     const thread = (await s.api<{ thread: Thread }>("GET", `/api/threads/${threadId}`)).body.thread;
     expect(thread.repliesCount).toBe(1);
   }, 30_000);
+});
+
+/** The thread's long step is running: its live turn shows the call. */
+const longStepRunning = async (s: ProjectStack, projectId: string, threadId: string) => {
+  const [run] = await runsOf(s, threadId);
+  if (!run) throw new Error("no run");
+  return eventually(
+    async () =>
+      currentStepOf(s.ctx.eventPublisher.liveParts(projectId, run.assistant_message_id)) ??
+      undefined,
+    "the long step to run",
+  );
+};
+
+const spawnHolding = async (s: ProjectStack) => {
+  const project = await createProject(s);
+  const coordinator = await s.ctx.chatSessionRepository.getCoordinator(project.id);
+  if (!coordinator) throw new Error("no coordinator");
+  const spawned = await s.services.threads.spawn(project.id, {
+    title: "Suite",
+    prompt: "Run the suite [fake: hold=60000]",
+  });
+  if (!spawned.success) throw new Error("thread not spawned");
+  await cliStarted(s, spawned.thread.id);
+  await longStepRunning(s, project.id, spawned.thread.id);
+  return { project, coordinator, threadId: spawned.thread.id };
+};
+
+describe("a message that waits behind a long step", () => {
+  test("says which step it waits on, and Interrupt now gets it read at once", async () => {
+    stack = await createProjectStack(home.path());
+    const s = stack;
+    const { project, threadId } = await spawnHolding(s);
+    const startedAt = Date.now();
+
+    const sent = await s.services.threads.send(threadId, 'Stop, use arm64 [fake: say="Switched"]');
+    if (!sent.success || !sent.messageId) throw new Error("not sent");
+    const waiting = await s.services.chat.steerDelivery(sent.messageId);
+    expect(waiting).toMatchObject({
+      state: "waiting",
+      step: { tool: { name: "Bash", detail: "sleep 60", status: "running" }, others: 0 },
+    });
+
+    const interrupted = await s.api<{ outcome: string }>(
+      "POST",
+      `/api/projects/${project.id}/messages/${sent.messageId}/interrupt`,
+    );
+    expect(interrupted).toMatchObject({ status: 200, body: { outcome: "interrupted" } });
+    await s.settle();
+
+    expect(Date.now() - startedAt).toBeLessThan(30_000);
+    expect(await s.services.chat.steerDelivery(sent.messageId)).toEqual({ state: "delivered" });
+    const messages = await messagesOf(s, `/api/threads/${threadId}/messages`);
+    const replies = messages.filter(
+      (message): message is AssistantMessage => message.role === "assistant",
+    );
+    expect(replies).toHaveLength(1);
+    expect(steerPartsOf(replies[0])).toEqual([sent.messageId]);
+    expect(JSON.stringify(replies[0]?.blocks)).toContain("Switched");
+    expect((await runsOf(s, threadId)).map((run) => run.status)).toEqual(["completed"]);
+
+    // Once read, there is nothing left to stop.
+    const again = await s.api<{ outcome: string }>(
+      "POST",
+      `/api/projects/${project.id}/messages/${sent.messageId}/interrupt`,
+    );
+    expect(again).toMatchObject({ status: 200, body: { outcome: "delivered" } });
+  }, 45_000);
+
+  test('thread_steer says where its message waits, and when: "interrupt" stops the step', async () => {
+    stack = await createProjectStack(home.path());
+    const s = stack;
+    const { coordinator, threadId } = await spawnHolding(s);
+
+    const waits = await s.callTool(coordinator.id, "thread_steer", {
+      threadId,
+      message: "Note: arm64 later",
+    });
+    expect(JSON.parse(waits.content[0]?.text ?? "{}").delivery).toMatch(
+      /^Written into its running turn: it reads the message once its current step ends \(Bash `sleep 60`, running \d+s\)/,
+    );
+
+    const stops = await s.callTool(coordinator.id, "thread_steer", {
+      threadId,
+      message: 'Stop now [fake: say="Stopped"]',
+      when: "interrupt",
+    });
+    expect(JSON.parse(stops.content[0]?.text ?? "{}").delivery).toMatch(
+      /^Interrupted the step it was on \(Bash `sleep 60`, running \d+s\): it reads the message now\.$/,
+    );
+    await s.settle();
+
+    const messages = await messagesOf(s, `/api/threads/${threadId}/messages`);
+    const reply = messages.find(
+      (message): message is AssistantMessage => message.role === "assistant",
+    );
+    expect(steerPartsOf(reply)).toHaveLength(2);
+    expect(JSON.stringify(reply?.blocks)).toContain("Stopped");
+  }, 45_000);
 });

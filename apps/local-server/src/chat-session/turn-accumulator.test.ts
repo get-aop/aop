@@ -44,6 +44,24 @@ describe("createTurnAccumulator", () => {
     ]);
   });
 
+  test("with a clock, stamps each tool call with when it was first seen, and keeps it", () => {
+    let clock = 0;
+    const accumulator = createTurnAccumulator({
+      now: () => new Date(Date.UTC(2026, 9, 3, 10, 0, ++clock)).toISOString(),
+    });
+
+    accumulator.applyAll([{ kind: "tool", phase: "start", name: "Bash", itemId: "a" }]);
+    accumulator.applyAll([{ kind: "tool", phase: "start", name: "Read", itemId: "b" }]);
+    const parts = accumulator.applyAll([
+      { kind: "tool", phase: "done", name: "Tool", itemId: "a" },
+    ]);
+
+    expect(parts).toEqual([
+      tool({ id: "a", status: "done", startedAt: "2026-10-03T10:00:01.000Z" }),
+      tool({ id: "b", name: "Read", startedAt: "2026-10-03T10:00:02.000Z" }),
+    ]);
+  });
+
   test("concatenates token-sized reasoning and text into one part each", () => {
     expect(
       turnOfChunks(

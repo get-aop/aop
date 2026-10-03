@@ -50,6 +50,12 @@ export {
 } from "./computer-use.ts";
 export type { CuaSetupCommand, CuaSetupStep } from "./cua-setup.ts";
 export { CUA_COMMANDS, cuaSetupSteps } from "./cua-setup.ts";
+export {
+  type CurrentStep,
+  currentStepOf,
+  describeStep,
+  formatElapsed,
+} from "./current-step.ts";
 export type { Device } from "./device.ts";
 export { DeviceSchema } from "./device.ts";
 export type {
@@ -164,7 +170,7 @@ export {
   JiraTestInputSchema,
   JiraTestResultSchema,
 } from "./jira.ts";
-export { applyLiveOps, compactLiveOps, diffTurnParts } from "./live-turn.ts";
+export { applyLiveOps, compactLiveOps, diffTurnParts, settledParts } from "./live-turn.ts";
 export type { MemoryFile, MemoryFileInput } from "./memory.ts";
 export {
   MEMORY_BODY_MAX_LENGTH,

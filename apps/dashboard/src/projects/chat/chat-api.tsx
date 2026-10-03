@@ -1,6 +1,7 @@
 import type { MessagePage, Thread, UserMessage } from "@aop/common";
 import { createContext, useContext } from "react";
 import {
+  interruptForMessage,
   listCoordinatorMessages,
   type SendOptions,
   sendCoordinatorMessage,
@@ -28,6 +29,11 @@ export interface ChatApi {
   startSuggestion: (projectId: string, messageId: string, suggestionId: string) => Promise<Thread>;
   skipSuggestion: (projectId: string, messageId: string, suggestionId: string) => Promise<void>;
   unskipSuggestion: (projectId: string, messageId: string, suggestionId: string) => Promise<void>;
+  /** "Interrupt now" on a message that waits for the agent's current step or turn to end. */
+  interruptForMessage: (
+    projectId: string,
+    messageId: string,
+  ) => Promise<"interrupted" | "delivered">;
 }
 
 export const browserChatApi: ChatApi = {
@@ -36,6 +42,7 @@ export const browserChatApi: ChatApi = {
   startSuggestion,
   skipSuggestion,
   unskipSuggestion,
+  interruptForMessage,
 };
 
 const ChatApiContext = createContext<ChatApi>(browserChatApi);

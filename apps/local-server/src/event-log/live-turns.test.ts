@@ -91,6 +91,15 @@ describe("live turns", () => {
     expect(turns.list("p3")).toEqual([]);
   });
 
+  test("hands out one running turn's parts, and none for a turn that is not running", () => {
+    const turns = createLiveTurns();
+    turns.apply(started("one", { messageId: "m1" }));
+
+    expect(turns.parts("p1", "m1")).toEqual([{ type: "text", text: "one" }]);
+    expect(turns.parts("p1", "m2")).toEqual([]);
+    expect(turns.parts("p2", "m1")).toEqual([]);
+  });
+
   describe("settle", () => {
     const withThreeTurns = () => {
       const turns = createLiveTurns();

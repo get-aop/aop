@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { claudeDialect } from "./claude";
 import { type Directives, parseDirectives } from "./directives";
 import { writeFiles } from "./files";
+import { createInbox, type Inbox } from "./inbox";
 import type { InputLines } from "./input-lines";
 import { carryOut } from "./mcp-beats";
 import { beginTurn } from "./session-store";
@@ -11,6 +12,7 @@ import {
   AOP_MCP_SERVER,
   type Dialect,
   type Ending,
+  type Interruption,
   type Invocation,
   type JsonLine,
   type McpConnection,
@@ -48,13 +50,17 @@ export interface Io {
 /** One stretch of the turn's events; MCP calls run when their stretch is reached, not up front. */
 type Segment = () => Promise<JsonLine[]>;
 
+/** How often a long step looks for an interrupt. */
+const HOLD_POLL_MS = 50;
+
 /** How a launch goes on: the turns its stdin asks for, one after another. */
 interface Launch {
   runtime: Runtime;
   io: Io;
   dialect: Dialect;
   invocation: Invocation;
-  input: InputLines | undefined;
+  /** Stdin, when the prompt and later messages come there. */
+  input: Inbox | undefined;
   /** What the launch's turns so far consumed. */
   usage: TokenUsage;
 }
@@ -63,13 +69,15 @@ interface Launch {
  * Plays the turns of one CLI launch and returns the exit code. See directives.ts for the
  * scripting syntax. A prompt on stdin (`--input-format stream-json`) is read a line at a time,
  * as Claude Code reads it: a line that arrives while a turn works reaches it after the step it
- * is on, and one that arrives as the turn answers starts another turn once it has. The launch
- * ends with its input, or with a turn that does not end well.
+ * is on, and one that arrives as the turn answers starts another turn once it has. An interrupt
+ * (a `control_request` line) stops the turn at the step it is on, and the messages not taken yet
+ * start the next turn. The launch ends with its input, or with a turn that does not end well.
  */
 export const runFakeCli = async (runtime: Runtime, io: Io): Promise<number> => {
   const dialect = DIALECTS.find((candidate) => candidate.matches(runtime.args));
   if (!dialect) return abort(io, "fake-cli: unrecognised arguments", USAGE_EXIT_CODE);
-  const input = dialect.readsStdin(runtime.args) ? runtime.stdin : undefined;
+  const input =
+    dialect.readsStdin(runtime.args) && runtime.stdin ? createInbox(runtime.stdin) : undefined;
   const firstLine = input ? ((await input.next()) ?? "") : undefined;
   const invocation = dialect.parse(runtime.args, firstLine);
   if (!invocation.prompt) return abort(io, "fake-cli: no prompt given", FAILURE_EXIT_CODE);
@@ -103,7 +111,7 @@ const playTurn = async (
   resumeId: string | undefined,
   resultIndex: number,
 ): Promise<Played> => {
-  const { runtime, io, dialect, invocation, input } = launch;
+  const { runtime, io, dialect, invocation } = launch;
   const directives = parseDirectives(message.prompt, runtime.env.FAKE_CLI_SCRIPT);
   await io.sleep(directives.startupMs);
 
@@ -140,24 +148,83 @@ const playTurn = async (
   };
   const plan = planTurn(directives, ctx);
   const server = invocation.mcpServers[AOP_MCP_SERVER];
+  const turn: TurnState = { launch, ctx, cut: null };
   const aop = server ? io.mcp(server.url) : undefined;
-  // Steers are taken where the CLI takes them: after the step the turn is on.
-  const steered =
-    (segment: Segment): Segment =>
-    async () => [...(await segment()), ...takeSteers(dialect, input, ctx)];
   let ending = plan.ending;
   const segments: Segment[] = [
-    steered(async () => [...dialect.start(ctx), ...dialect.replay(message, ctx)]),
-    ...plan.beats.map((beat, index) => steered(beatSegment(dialect, beat, index, ctx, aop))),
+    steered(turn, async () => [...dialect.start(ctx), ...dialect.replay(message, ctx)]),
+    ...plan.beats.flatMap((beat, index) =>
+      beat.kind === "hold"
+        ? holdSegments(turn, beat, index)
+        : [steered(turn, beatSegment(dialect, beat, index, ctx, aop))],
+    ),
     async () => {
+      if (turn.cut) return dialect.interrupted(turn.cut, ctx);
       ending = steeredEnding(directives, ctx);
       return dialect.end(ending, ctx);
     },
   ];
 
   if (await emit(segments, directives, io)) return CRASHED_EXIT_CODE;
-  if (ending.kind !== "success") return exitCodeFor(ending, directives, io);
-  return { sessionId: session.id, waiting: input?.take() ?? [] };
+  if (!turn.cut && ending.kind !== "success") return exitCodeFor(ending, directives, io);
+  return { sessionId: session.id, waiting: launch.input?.take() ?? [] };
+};
+
+/** One turn as it plays: `cut` once an interrupt stopped it, after which it writes nothing more. */
+interface TurnState {
+  launch: Launch;
+  ctx: TurnContext;
+  cut: Interruption | null;
+}
+
+// Steers are taken where the CLI takes them: after the step the turn is on. An interrupt that
+// arrived meanwhile stops the turn there instead, and they wait for the next one.
+const steered =
+  (turn: TurnState, segment: Segment): Segment =>
+  async () => {
+    if (turn.cut) return [];
+    const lines = await segment();
+    return turn.cut || cutBy(turn) ? lines : [...lines, ...takeSteers(turn.launch, turn.ctx)];
+  };
+
+// A long step: its call is written, then it runs until it ends or an interrupt stops it.
+const holdSegments = (
+  turn: TurnState,
+  beat: Extract<PlannedBeat, { kind: "hold" }>,
+  index: number,
+): Segment[] => {
+  const { dialect, io } = turn.launch;
+  const rendered = (phase: "start" | "end") => dialect.beat({ ...beat, phase }, index, turn.ctx);
+  return [
+    async () => (turn.cut ? [] : rendered("start")),
+    steered(turn, async () => {
+      for (let waited = 0; waited < beat.ms; waited += HOLD_POLL_MS) {
+        if (cutBy(turn, toolUseIdOf(rendered("start")))) return [];
+        await io.sleep(Math.min(HOLD_POLL_MS, beat.ms - waited));
+      }
+      return rendered("end");
+    }),
+  ];
+};
+
+// Whether an interrupt arrived: the turn is then cut at the step it is on.
+const cutBy = (turn: TurnState, toolUseId?: string): boolean => {
+  const input = turn.launch.input;
+  const requestId = input?.takeInterrupt() ?? null;
+  if (requestId === null || !input) return false;
+  turn.cut = { requestId, ...(toolUseId && { toolUseId }), stillQueued: input.waitingUuids() };
+  return true;
+};
+
+const toolUseIdOf = (lines: JsonLine[]): string | undefined => {
+  for (const line of lines) {
+    const content = (
+      line.message as { content?: Array<{ type?: string; id?: string }> } | undefined
+    )?.content;
+    const call = content?.find((block) => block.type === "tool_use");
+    if (call?.id) return call.id;
+  }
+  return undefined;
 };
 
 // Adds a turn's tokens to its launch's, which a result reports as the process's.
@@ -170,11 +237,7 @@ const addUsage = (total: TokenUsage, turn: TokenUsage): TokenUsage => {
 };
 
 /** The lines that reached the turn: echoed where it took them, and remembered for its reply. */
-const takeSteers = (
-  dialect: Dialect,
-  input: InputLines | undefined,
-  ctx: TurnContext,
-): JsonLine[] =>
+const takeSteers = ({ dialect, input }: Launch, ctx: TurnContext): JsonLine[] =>
   (input?.take() ?? []).flatMap((line) => {
     const steer = dialect.readLine(line);
     ctx.steers?.push(steer);
@@ -193,7 +256,7 @@ const steeredEnding = (directives: Directives, ctx: TurnContext): Ending => {
 const beatSegment =
   (
     dialect: Dialect,
-    beat: PlannedBeat,
+    beat: Exclude<PlannedBeat, { kind: "hold" }>,
     index: number,
     ctx: TurnContext,
     aop: McpConnection | undefined,

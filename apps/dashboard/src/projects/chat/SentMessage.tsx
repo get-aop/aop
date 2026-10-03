@@ -5,6 +5,7 @@ import { ChatOriginContext } from "./artifact-links";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { Folded } from "./Folded";
 import { MessageMeta } from "./MessageMeta";
+import { QueuedNote } from "./SteerStatus";
 
 /** A message to an agent that the person did not type, and who sent it. */
 export type SentMessage = UserMessage & { sender: "coordinator" | "system" };
@@ -17,7 +18,14 @@ export const isSent = (message: UserMessage): message is SentMessage =>
  * request): on the left, in a card that names its sender, so it is never read as the person's.
  * The person's words the coordinator forwards sit above its own.
  */
-export const SentRow = memo(function SentRow({ message }: { message: SentMessage }) {
+export const SentRow = memo(function SentRow({
+  message,
+  queued = false,
+}: {
+  message: SentMessage;
+  /** Held for after the turn that runs now. */
+  queued?: boolean;
+}) {
   return (
     <div
       className="group flex flex-col items-start gap-1 pb-5"
@@ -27,6 +35,7 @@ export const SentRow = memo(function SentRow({ message }: { message: SentMessage
       data-sender={message.sender}
     >
       <SentCard message={message} />
+      {queued ? <QueuedNote message={message} align="start" /> : null}
       <div className="w-full max-w-[88%]">
         <MessageMeta timestamp={message.createdAt} copyText={message.text} />
       </div>

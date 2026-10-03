@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { buildClaudeUserMessage, prepareStdinPrompt, takesStdinPrompt } from "./claude-code-input";
+import {
+  buildClaudeInterruptRequest,
+  buildClaudeUserMessage,
+  prepareStdinPrompt,
+  takesStdinPrompt,
+} from "./claude-code-input";
 
 const bytesOf: Record<string, Buffer> = {
   "/a.png": Buffer.from("png bytes"),
@@ -11,6 +16,27 @@ const readImage = (path: string): Buffer => {
   if (!bytes) throw new Error(`no such file: ${path}`);
   return bytes;
 };
+
+describe("buildClaudeInterruptRequest", () => {
+  test("is one control_request line asking for an interrupt, under the id it was given", () => {
+    const line = buildClaudeInterruptRequest("req-1");
+
+    expect(line.endsWith("\n")).toBe(true);
+    expect(JSON.parse(line)).toEqual({
+      type: "control_request",
+      request_id: "req-1",
+      request: { subtype: "interrupt" },
+    });
+  });
+
+  test("gets an id of its own when given none", () => {
+    const ids = [buildClaudeInterruptRequest(), buildClaudeInterruptRequest()].map(
+      (line) => JSON.parse(line).request_id,
+    );
+    expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+});
 
 describe("buildClaudeUserMessage", () => {
   test("is one stream-json user line: the images in order as base64 blocks, then the text", () => {

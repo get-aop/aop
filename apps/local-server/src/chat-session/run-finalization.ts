@@ -1,4 +1,4 @@
-import type { ChatActionPayload, TurnPart } from "@aop/common";
+import { type ChatActionPayload, settledParts, type TurnPart } from "@aop/common";
 import type { Kysely } from "kysely";
 import { findAgentCli } from "../agent-cli/definitions.ts";
 import type {
@@ -121,7 +121,7 @@ const steeredInto = async (trx: Kysely<Database>, runId: string): Promise<Set<st
 
 // A steer part stands for a message written into this run; any other echo the log held is not one.
 const withKnownSteers = (parts: readonly TurnPart[], steered: ReadonlySet<string>): TurnPart[] =>
-  parts.filter((part) => part.type !== "steer" || steered.has(part.messageId));
+  settledParts(parts).filter((part) => part.type !== "steer" || steered.has(part.messageId));
 
 const readCliVersion = async (run: ChatRun): Promise<string | null> => {
   const field = findAgentCli(run.runtime)?.initVersionField;

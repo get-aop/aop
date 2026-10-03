@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { TurnPart } from "./blocks.ts";
-import { applyLiveOps, compactLiveOps, diffTurnParts } from "./live-turn.ts";
+import { applyLiveOps, compactLiveOps, diffTurnParts, settledParts } from "./live-turn.ts";
 import type { LiveOp } from "./stream.ts";
 
 const text = (value: string): TurnPart => ({ type: "text", text: value });
@@ -132,5 +132,25 @@ describe("compactLiveOps", () => {
       { op: "tool", index: 1, status: "done", detail: "x" },
     ];
     expect(applyLiveOps([], compactLiveOps(ops))).toEqual(applyLiveOps([], ops));
+  });
+});
+
+describe("settledParts", () => {
+  test("drops when each step started and keeps everything else", () => {
+    const parts: TurnPart[] = [
+      { type: "text", text: "Running it" },
+      {
+        type: "tool",
+        id: "t1",
+        name: "Bash",
+        detail: "bun test",
+        status: "done",
+        startedAt: "2026-10-03T10:00:00.000Z",
+      },
+    ];
+    expect(settledParts(parts)).toEqual([
+      { type: "text", text: "Running it" },
+      { type: "tool", id: "t1", name: "Bash", detail: "bun test", status: "done" },
+    ]);
   });
 });

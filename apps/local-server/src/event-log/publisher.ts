@@ -1,4 +1,4 @@
-import type { EventLogEntry, MessageDelta } from "@aop/common";
+import type { EventLogEntry, MessageDelta, TurnPart } from "@aop/common";
 import { getLogger } from "@aop/infra";
 import type { Kysely } from "kysely";
 import type { Database } from "../db/schema.ts";
@@ -58,6 +58,8 @@ export interface EventPublisher {
   publishLive: (delta: MessageDelta) => void;
   /** Ends a turn that will not produce its message (stopped, failed), so clients drop its live parts. */
   clearLive: (projectId: string, threadId: string | null, messageId: string) => void;
+  /** The parts so far of a turn being written, by the id its message will have; empty when none is. */
+  liveParts: (projectId: string, messageId: string) => readonly TurnPart[];
   /** For open streams. */
   subscribe: (projectId: string, listener: ProjectListener) => ProjectSubscription;
 }
@@ -136,6 +138,8 @@ export const createEventPublisher = (
 
     clearLive: (projectId, threadId, messageId) =>
       publishLive({ projectId, threadId, messageId, ops: [{ op: "end" }] }),
+
+    liveParts: (projectId, messageId) => liveTurns.parts(projectId, messageId),
 
     subscribe: (projectId, listener) => {
       const forProject = listeners.get(projectId) ?? new Set<ProjectListener>();

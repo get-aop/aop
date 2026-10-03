@@ -17,6 +17,17 @@ export const applyLiveOps = (
 };
 
 /**
+ * The parts as a finished reply keeps them: when each step started only matters while the turn
+ * is written (a message sent meanwhile says how long the step it waits on has run).
+ */
+export const settledParts = (parts: readonly TurnPart[]): TurnPart[] =>
+  parts.map((part) => {
+    if (part.type !== "tool" || part.startedAt === undefined) return part;
+    const { startedAt: _startedAt, ...settled } = part;
+    return settled;
+  });
+
+/**
  * The ops that take a client from `before` to `after`: new parts started, text appended, tool
  * calls updated. Parts never reorder or shrink while a turn is written, so anything else (a part
  * replaced, text that is not an extension) is sent as a reset. Empty when nothing changed.
