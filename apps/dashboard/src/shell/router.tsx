@@ -10,6 +10,7 @@ export const PROJECT_SETTINGS_SECTIONS = [
   "computer-use",
   "notifications",
   "environment",
+  "issues",
   "memory",
   "usage",
   "advanced",
@@ -37,6 +38,8 @@ interface CoordinatorView {
   pullRequest?: PullRequestViewRef;
   artifact?: ArtifactViewRef;
   browser?: true;
+  /** An issue of the Issues tab, by its list key (`jira:ABC-12`, `github:owner/name#3`). */
+  issue?: string;
 }
 
 /**
@@ -44,8 +47,8 @@ interface CoordinatorView {
  * panel on its overview. `thread` is the same screen with one thread open in the panel, and
  * `project-tab` the same screen with another of the panel's tabs showing;
  * `project-settings` is one section of the project's settings, in a dialog over the project screen.
- * Any project screen may name a `pullRequest`, an `artifact` or the AOP Browser (`browser`, the
- * desktop app's), one at a time, shown where the chat is while the panel stays.
+ * Any project screen may name a `pullRequest`, an `artifact`, an `issue` or the AOP Browser
+ * (`browser`, the desktop app's), one at a time, shown where the chat is while the panel stays.
  */
 export type Route =
   | { name: "projects" }
@@ -76,6 +79,7 @@ export const projectScreenPath = (screen: ProjectScreen): string => {
   const pr = screen.pullRequest;
   if (pr) return `${base}/pulls/${encodeURIComponent(pr.repoId)}/${pr.number}`;
   if (screen.artifact) return `${base}${artifactViewPath(screen.artifact)}`;
+  if (screen.issue) return `${base}/${ISSUE_SEGMENT}/${encodeURIComponent(screen.issue)}`;
   return screen.browser ? `${base}/${BROWSER_SEGMENT}` : base;
 };
 
@@ -123,22 +127,29 @@ export const parseRoute = (pathname: string): Route | null => {
 const PULL_REQUEST_SEGMENTS = 3;
 // The browser is the address's last segment.
 const BROWSER_SEGMENT = "browser";
+// An issue is the address's last two segments: `issue/<key>`.
+const ISSUE_SEGMENT = "issue";
 
 const parseProjectRoute = (projectId: string, rest: string[]): Route | null => {
   const browser = rest.at(-1) === BROWSER_SEGMENT ? parseBrowserRoute(projectId, rest) : null;
   if (browser) return browser;
   const artifact = parseArtifactSegments(projectId, rest);
   if (artifact !== undefined) return artifact;
+  if (rest.at(-2) === ISSUE_SEGMENT) return parseIssueRoute(projectId, rest);
   const pullRequestAt = rest.length - PULL_REQUEST_SEGMENTS;
   if (pullRequestAt >= 0 && rest[pullRequestAt] === "pulls") {
-    const pullRequest = parsePullRequest(rest.slice(pullRequestAt + 1));
-    const before = rest.slice(0, pullRequestAt);
-    // The old chat address is only ever bare; it is not a screen a pull request opens over.
-    const screen = before[0] === "chat" ? null : parseScreenRoute(projectId, before);
-    if (!pullRequest || !screen || !isProjectScreen(screen)) return null;
-    return { ...screen, pullRequest };
+    return parsePullRequestRoute(projectId, rest, pullRequestAt);
   }
   return parseScreenRoute(projectId, rest);
+};
+
+const parsePullRequestRoute = (projectId: string, rest: string[], at: number): Route | null => {
+  const pullRequest = parsePullRequest(rest.slice(at + 1));
+  const before = rest.slice(0, at);
+  // The old chat address is only ever bare; it is not a screen a pull request opens over.
+  const screen = before[0] === "chat" ? null : parseScreenRoute(projectId, before);
+  if (!pullRequest || !screen || !isProjectScreen(screen)) return null;
+  return { ...screen, pullRequest };
 };
 
 /** Whether the route is a project screen (the chat and the panel), which a pull request can open over. */
@@ -180,6 +191,13 @@ const ARTIFACT_VIEW_PARSERS: Record<
 const parseArtifactVersion = (id: string, version: string | undefined): ArtifactViewRef | null => {
   if (version === undefined) return { kind: "artifact", id };
   return /^[1-9]\d*$/.test(version) ? { kind: "artifact", id, version: Number(version) } : null;
+};
+
+const parseIssueRoute = (projectId: string, rest: string[]): Route | null => {
+  const issue = rest.at(-1);
+  const before = rest.slice(0, -2);
+  const screen = before[0] === "chat" ? null : parseScreenRoute(projectId, before);
+  return issue && screen && isProjectScreen(screen) ? { ...screen, issue } : null;
 };
 
 // Not a browser address after all (a thread whose id is "browser") falls through to the others.

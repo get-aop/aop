@@ -3,11 +3,11 @@ import { IdSchema, TimestampSchema } from "./primitives.ts";
 
 /**
  * The issues of a project's repositories, as the Issues tab shows them: GitHub issues of every
- * attached repository (read with the host's `gh`) and, when the host owner connected one, the
- * issues of a Linear team or project. Paired devices read them through the host; the Linear key
- * never leaves it.
+ * attached repository (read with the host's `gh`) and, when the host owner connected them, the
+ * issues of a Linear team or project and of Jira projects or a JQL filter. Paired devices read
+ * them through the host; the Linear key and the Jira token never leave it.
  */
-export const IssueSourceSchema = z.enum(["github", "linear"]);
+export const IssueSourceSchema = z.enum(["github", "linear", "jira"]);
 export type IssueSource = z.infer<typeof IssueSourceSchema>;
 
 /** Which issues a list asks for. Open is what the tab starts on. */
@@ -76,15 +76,31 @@ export const IssueStageSchema = z.enum([
 ]);
 export type IssueStage = z.infer<typeof IssueStageSchema>;
 
+/**
+ * How urgent an issue is, where the source has priorities (Linear, Jira): the name the source
+ * gives it and the level the row's marker draws. A Jira scheme's own names map to no level.
+ */
+export const IssuePriorityLevelSchema = z.enum(["urgent", "high", "medium", "low", "lowest"]);
+export type IssuePriorityLevel = z.infer<typeof IssuePriorityLevelSchema>;
+
+export const IssuePrioritySchema = z.object({
+  name: z.string().min(1),
+  level: IssuePriorityLevelSchema.nullable(),
+});
+export type IssuePriority = z.infer<typeof IssuePrioritySchema>;
+
 export const ProjectIssueSchema = z.object({
-  /** Unique across sources: `github:owner/name#12` or `linear:ENG-12`. What start-thread takes. */
+  /**
+   * Unique across sources: `github:owner/name#12`, `linear:ENG-12` or `jira:ABC-12`. What
+   * start-thread and the issue view take.
+   */
   key: z.string().min(1),
   source: IssueSourceSchema,
-  /** The project's repository a GitHub issue belongs to; null for Linear. */
+  /** The project's repository a GitHub issue belongs to; null for Linear and Jira. */
   repoId: IdSchema.nullable(),
-  /** `owner/name` for GitHub, the team or project name for Linear. */
+  /** `owner/name` for GitHub, the team or project name for Linear, the project for Jira. */
   container: z.string().min(1),
-  /** `#12` or `ENG-12`. */
+  /** `#12`, `ENG-12` or `ABC-12`. */
   identifier: z.string().min(1),
   title: z.string(),
   url: WebUrlSchema,
@@ -99,8 +115,10 @@ export const ProjectIssueSchema = z.object({
   labels: z.array(IssueLabelSchema),
   assignees: z.array(IssuePersonSchema),
   author: IssuePersonSchema.nullable(),
-  /** A GitHub milestone, or a Linear cycle or project milestone. */
+  /** A GitHub milestone, a Linear cycle or project milestone, or a Jira fix version. */
   milestone: z.string().nullable(),
+  /** Null for GitHub, which has none, and for an issue without one. */
+  priority: IssuePrioritySchema.nullable().default(null),
   /** Null when the source does not say. */
   commentCount: z.number().int().nonnegative().nullable(),
   createdAt: TimestampSchema,
@@ -111,15 +129,16 @@ export type ProjectIssue = z.infer<typeof ProjectIssueSchema>;
 
 /**
  * How one source answered. `not-authenticated`: the host's `gh` is not logged in. `gh-missing`: the host has no `gh`.
- * `no-github-remote`: the repository has no GitHub `origin`. `not-configured`: no Linear
- * connection. `unauthorized`: Linear refused the stored key. `error`: anything else, in `message`.
- * A source that fails keeps the issues it served last, with `stale` set.
+ * `no-github-remote`: the repository has no GitHub `origin`. `not-configured`: no Linear or Jira
+ * connection. `unauthorized`: Linear refused the stored key, or Jira the stored token (revoked or
+ * expired). `error`: anything else, in `message`. A source that fails keeps the issues it served
+ * last, with `stale` set.
  */
 export const IssueSourceStatusSchema = z.object({
   source: IssueSourceSchema,
-  /** The repository's id (GitHub), or `linear`. */
+  /** The repository's id (GitHub), `linear` or `jira`. */
   id: z.string().min(1),
-  /** `owner/name`, a Linear team or project name, or the repository's folder name. */
+  /** `owner/name`, a Linear team or project name, the Jira site, or the repository's folder name. */
   name: z.string().min(1),
   status: z.enum([
     "ok",

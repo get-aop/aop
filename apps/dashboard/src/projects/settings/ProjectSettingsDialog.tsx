@@ -9,6 +9,7 @@ import { AdvancedSection } from "./AdvancedSection";
 import { ComputerUseSetting } from "./ComputerUseSetting";
 import { EnvironmentSection } from "./EnvironmentSection";
 import { GeneralSection } from "./GeneralSection";
+import { IssueSourcesSection } from "./IssueSourcesSection";
 import { MemorySection } from "./MemorySection";
 import { ModelsSection } from "./ModelsSection";
 import { NotificationsSection } from "./NotificationsSection";
@@ -120,6 +121,8 @@ const SectionBody = ({
       return <NotificationsSection project={project} />;
     case "environment":
       return <EnvironmentSection entry={entry} />;
+    case "issues":
+      return <IssueSourcesSection project={project} />;
     case "memory":
       return <MemorySection project={project} />;
     case "usage":

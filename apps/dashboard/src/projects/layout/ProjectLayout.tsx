@@ -7,6 +7,7 @@ import { useBrowserScreen } from "../browser/use-browser-screen";
 import { CoordinatorChatPane } from "../chat/CoordinatorChatPane";
 import { focusCoordinatorComposer } from "../chat/focus-composer";
 import type { ChatModel, ProjectChat } from "../chat/project-chat";
+import { IssuePane } from "../issues/view/IssuePane";
 import { ProjectTopBar } from "../ProjectTopBar";
 import type { ProjectEntry } from "../projects-state";
 import { PullRequestPane } from "../pull-request-view/PullRequestPane";
@@ -46,8 +47,8 @@ export const ProjectLayout = ({
 }) => {
   const { project, threads, threadsLoaded, threadsError } = entry;
   const { threadId, tab } = panelPlaceOf(route);
-  const { pullRequest, artifact, browser } = route;
-  // Closing the thread leaves a pull request, an artifact or the browser open beside it where it is.
+  const { pullRequest, artifact, browser, issue } = route;
+  // Closing the thread leaves a pull request, an artifact, an issue or the browser open beside it where it is.
   const leaveThread = useCallback(
     () =>
       navigate(
@@ -57,9 +58,10 @@ export const ProjectLayout = ({
           pullRequest,
           artifact,
           browser,
+          issue,
         }),
       ),
-    [project.id, pullRequest, artifact, browser],
+    [project.id, pullRequest, artifact, browser, issue],
   );
   const layout = usePanelLayout({
     projectId: project.id,
@@ -71,7 +73,7 @@ export const ProjectLayout = ({
   const { revealChat } = layout;
   useRevealForView(viewKey(route), revealChat);
   const browserButton = useBrowserScreen(project.id, browser === true, revealChat);
-  const covered = Boolean(pullRequest || artifact || browser);
+  const covered = Boolean(pullRequest || artifact || browser || issue);
 
   // A thread starts from what the person tells the coordinator, so this goes to its composer.
   const startThread = useCallback(() => {
@@ -148,10 +150,10 @@ export const ProjectLayout = ({
   );
 };
 
-/** What a screen shows in the chat's place: a pull request, or an artifact. */
+/** What a screen shows in the chat's place: a pull request, an artifact, or an issue. */
 const CoveringView = ({
   entry,
-  route: { pullRequest, artifact },
+  route: { pullRequest, artifact, issue },
   chat,
   hidden,
 }: {
@@ -170,6 +172,17 @@ const CoveringView = ({
         className={cn("col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col", hidden && "hidden")}
       >
         <PullRequestPane entry={entry} pullRequest={pullRequest} chat={chat} />
+      </section>
+    );
+  }
+  if (issue) {
+    return (
+      <section
+        data-testid="issue-column"
+        aria-label="Issue"
+        className={cn("col-start-1 row-start-2 flex min-h-0 min-w-0 flex-col", hidden && "hidden")}
+      >
+        <IssuePane key={issue} projectId={entry.project.id} issueKey={issue} />
       </section>
     );
   }
@@ -202,8 +215,9 @@ const useRevealForView = (key: string | null, revealChat: () => void): void => {
 };
 
 // An artifact's versions are one view: switching between them does not ask again.
-const viewKey = ({ pullRequest, artifact }: ProjectScreen): string | null => {
+const viewKey = ({ pullRequest, artifact, issue }: ProjectScreen): string | null => {
   if (pullRequest) return `pr:${pullRequest.repoId}#${pullRequest.number}`;
+  if (issue) return `issue:${issue}`;
   if (!artifact) return null;
   return artifact.kind === "artifact" ? `artifact:${artifact.id}` : JSON.stringify(artifact);
 };

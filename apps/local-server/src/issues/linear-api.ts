@@ -1,6 +1,8 @@
 import type {
+  IssueComment,
   IssueLabel,
   IssuePerson,
+  IssuePriority,
   IssueStage,
   IssueStateFilter,
   LinearCatalog,
@@ -25,10 +27,17 @@ export interface LinearApi {
     apiKey: string,
     request: { scope: LinearScope; state: IssueStateFilter; first: number; after: string | null },
   ) => Promise<LinearRead<LinearIssuePage>>;
-  issueBody: (
+  /** One issue whole, for the issue view and a thread's brief; null when the key cannot see it. */
+  issueDetail: (
     apiKey: string,
-    identifier: string,
-  ) => Promise<LinearRead<{ title: string; url: string; body: string } | null>>;
+    request: { identifier: string; scope: LinearScope },
+  ) => Promise<LinearRead<LinearIssueDetail | null>>;
+}
+
+export interface LinearIssueDetail {
+  issue: ProjectIssue;
+  body: string;
+  comments: IssueComment[];
 }
 
 export interface LinearIssuePage {
@@ -88,16 +97,13 @@ export const createLinearApi = (options: { fetch?: LinearFetch; url?: string } =
         },
       };
     },
-    issueBody: async (apiKey, identifier) => {
-      const read = await query<{ issue?: BodyNode | null }>(apiKey, ISSUE_BODY_QUERY, {
+    issueDetail: async (apiKey, { identifier, scope }) => {
+      const read = await query<{ issue?: DetailNode | null }>(apiKey, ISSUE_DETAIL_QUERY, {
         id: identifier,
       });
-      if (!read.ok) return read;
+      if (!read.ok) return notFoundAsNull(read);
       const issue = read.value.issue;
-      return {
-        ok: true,
-        value: issue ? { title: issue.title, url: issue.url, body: issue.description ?? "" } : null,
-      };
+      return { ok: true, value: issue ? detailOf(issue, scope) : null };
     },
   };
 };
@@ -124,6 +130,7 @@ export const mapLinearIssue = (node: LinearIssueNode, scope: LinearScope): Proje
     assignees: node.assignee ? [person(node.assignee)] : [],
     author: node.creator ? person(node.creator) : null,
     milestone: node.projectMilestone?.name ?? cycleName(node.cycle),
+    priority: priorityOf(node),
     commentCount: comments,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
@@ -160,6 +167,31 @@ const readGraphqlResponse = async <T>(response: Response): Promise<LinearRead<T>
   }
   return { ok: true, value: payload.data };
 };
+
+// Linear's priorities: 0 is none, 1 urgent through 4 low.
+const PRIORITY_LEVELS = [null, "urgent", "high", "medium", "low"] as const;
+
+const priorityOf = (node: LinearIssueNode): IssuePriority | null => {
+  const level = PRIORITY_LEVELS[node.priority ?? 0] ?? null;
+  return level ? { name: node.priorityLabel || level, level } : null;
+};
+
+const detailOf = (node: DetailNode, scope: LinearScope): LinearIssueDetail => ({
+  issue: mapLinearIssue(node, scope),
+  body: node.description ?? "",
+  comments: (node.recentComments?.nodes ?? []).map(
+    (comment): IssueComment => ({
+      id: comment.id,
+      author: comment.user ? person(comment.user) : null,
+      body: comment.body ?? "",
+      createdAt: comment.createdAt,
+    }),
+  ),
+});
+
+// Linear answers an identifier it does not know with an "Entity not found" error.
+const notFoundAsNull = <T>(read: Extract<LinearRead<T>, { ok: false }>): LinearRead<null> =>
+  /not found/i.test(read.message) ? { ok: true, value: null } : read;
 
 const STAGES: readonly IssueStage[] = [
   "triage",
@@ -208,23 +240,33 @@ const CATALOG_QUERY = `query {
   projects(first: 100) { nodes { id name teams { nodes { key } } } }
 }`;
 
+// What a row shows of an issue: the list and the issue view read the same fields.
+const ISSUE_FIELDS = `
+  identifier title url createdAt updatedAt priority priorityLabel
+  state { name type color }
+  labels(first: 10) { nodes { name color } }
+  assignee { name displayName avatarUrl }
+  creator { name displayName avatarUrl }
+  cycle { name number }
+  projectMilestone { name }
+  comments(first: 50) { nodes { id } }`;
+
 const ISSUES_QUERY = `query($filter: IssueFilter, $first: Int!, $after: String) {
   issues(first: $first, after: $after, filter: $filter, orderBy: updatedAt) {
     pageInfo { hasNextPage endCursor }
-    nodes {
-      identifier title url createdAt updatedAt
-      state { name type color }
-      labels(first: 10) { nodes { name color } }
-      assignee { name displayName avatarUrl }
-      creator { name displayName avatarUrl }
-      cycle { name number }
-      projectMilestone { name }
-      comments(first: 50) { nodes { id } }
-    }
+    nodes { ${ISSUE_FIELDS} }
   }
 }`;
 
-const ISSUE_BODY_QUERY = `query($id: String!) { issue(id: $id) { title url description } }`;
+const ISSUE_DETAIL_QUERY = `query($id: String!) {
+  issue(id: $id) {
+    ${ISSUE_FIELDS}
+    description
+    recentComments: comments(last: 50) {
+      nodes { id body createdAt user { name displayName avatarUrl } }
+    }
+  }
+}`;
 
 interface GraphqlPayload<T> {
   data?: T;
@@ -250,6 +292,8 @@ export interface LinearIssueNode {
   cycle?: { name?: string | null; number: number } | null;
   projectMilestone?: { name: string } | null;
   comments?: { nodes?: { id: string }[] };
+  priority?: number | null;
+  priorityLabel?: string | null;
 }
 
 interface IssuesData {
@@ -259,10 +303,11 @@ interface IssuesData {
   };
 }
 
-interface BodyNode {
-  title: string;
-  url: string;
+interface DetailNode extends LinearIssueNode {
   description?: string | null;
+  recentComments?: {
+    nodes?: { id: string; body?: string | null; createdAt: string; user?: LinearUser | null }[];
+  };
 }
 
 interface CatalogData {

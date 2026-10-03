@@ -294,6 +294,15 @@ const node = (issue: FixtureIssue, nameWithOwner: string) => ({
     }),
   },
   body: issue.body ?? `${issue.title}.\n\nReported by @${issue.author.login}.`,
+  // The issue view's latest comments: a few of the count, so the view shows "n more on GitHub".
+  recentComments: {
+    nodes: Array.from({ length: Math.min(issue.comments ?? 0, 3) }, (_, index) => ({
+      id: `IC_${issue.number}_${index}`,
+      body: index === 0 ? "I can reproduce this on `main`." : `Follow-up ${index}: still happening.`,
+      createdAt: ago(issue.hours + 3 - index),
+      author: [people.ana, people.ben, people.mia][index % 3],
+    })),
+  },
 });
 
 /** `extra` old issues, so a list runs past one page of 100. */
@@ -430,7 +439,17 @@ export const linearIssueNodes = () =>
     comments: {
       nodes: Array.from({ length: issue.comments }, (_, index) => ({ id: `c${index}` })),
     },
-    description: `${issue.title}: details for the thread.`,
+    priority: (issue.n % 4) + 1,
+    priorityLabel: ["Urgent", "High", "Medium", "Low"][issue.n % 4],
+    description: `${issue.title}: details for the thread.\n\n- [ ] Write it\n- [ ] Test it`,
+    recentComments: {
+      nodes: Array.from({ length: Math.min(issue.comments, 2) }, (_, index) => ({
+        id: `lc${issue.n}_${index}`,
+        body: index === 0 ? "Picking this up." : "Pushed a first pass.",
+        createdAt: ago(issue.hours + 2 - index),
+        user: [linearPeople.sam, linearPeople.ana][index],
+      })),
+    },
   })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
 export const LINEAR_CATALOG = {

@@ -15,7 +15,7 @@ import type { MessageOrigin } from "../chat-session/message-origin.ts";
 import type { ChatMidRunMode } from "../chat-session/mid-run-mode.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
-import { createLinearConnectionStore } from "../issues/linear-connection-store.ts";
+import { removeProjectConnections } from "../issues/connection-store.ts";
 import { readDefaultRuntimeId } from "../runtime-configuration/default-runtime.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import type { ThreadGit } from "../thread/git.ts";
@@ -335,8 +335,8 @@ export const createProjectService = (
         await recordProjectRemoved(tx, projectId);
       });
       await rm(aopPaths.projectDir(projectId), { recursive: true, force: true });
-      // The project's Linear key is kept outside its directory; it goes with the project.
-      await createLinearConnectionStore().remove(projectId);
+      // The project's Linear key and Jira token are kept outside its directory; they go with it.
+      await removeProjectConnections(projectId);
       return { success: true };
     },
 

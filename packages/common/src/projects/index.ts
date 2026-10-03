@@ -78,10 +78,23 @@ export {
   GithubUserSchema,
 } from "./github.ts";
 export type {
+  IssueComment,
+  IssueDetail,
+  IssueSection,
+} from "./issue-detail.ts";
+export {
+  IssueCommentSchema,
+  IssueDetailQuerySchema,
+  IssueDetailSchema,
+  IssueSectionSchema,
+} from "./issue-detail.ts";
+export type {
   IssueLabel,
   IssueList,
   IssueListQuery,
   IssuePerson,
+  IssuePriority,
+  IssuePriorityLevel,
   IssueSource,
   IssueSourceStatus,
   IssueStage,
@@ -97,7 +110,6 @@ export type {
   ProjectIssue,
   StartThreadFromIssueInput,
 } from "./issues.ts";
-
 export {
   ISSUE_LIMIT_MAX,
   ISSUE_PAGE_SIZE,
@@ -105,6 +117,8 @@ export {
   IssueListQuerySchema,
   IssueListSchema,
   IssuePersonSchema,
+  IssuePriorityLevelSchema,
+  IssuePrioritySchema,
   IssueSourceSchema,
   IssueSourceStatusSchema,
   IssueStageSchema,
@@ -120,6 +134,33 @@ export {
   ProjectIssueSchema,
   StartThreadFromIssueInputSchema,
 } from "./issues.ts";
+export type {
+  JiraAccount,
+  JiraConnectInput,
+  JiraConnection,
+  JiraCredentials,
+  JiraDeployment,
+  JiraFilter,
+  JiraProjectSummary,
+  JiraTestInput,
+  JiraTestResult,
+} from "./jira.ts";
+export {
+  JIRA_JQL_MAX,
+  JIRA_NOT_CONNECTED,
+  JIRA_PROJECTS_MAX,
+  JiraAccountSchema,
+  JiraConnectInputSchema,
+  JiraConnectionSchema,
+  JiraCredentialsSchema,
+  JiraDeploymentSchema,
+  JiraFilterSchema,
+  JiraProjectKeySchema,
+  JiraProjectSummarySchema,
+  JiraSiteUrlSchema,
+  JiraTestInputSchema,
+  JiraTestResultSchema,
+} from "./jira.ts";
 export { applyLiveOps, compactLiveOps, diffTurnParts } from "./live-turn.ts";
 export type { MemoryFile, MemoryFileInput } from "./memory.ts";
 export {

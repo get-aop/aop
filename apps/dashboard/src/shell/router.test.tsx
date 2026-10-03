@@ -194,6 +194,28 @@ describe("parseRoute", () => {
     }
   });
 
+  test("an issue opens over any project screen by its list key, round-tripping its address", () => {
+    expect(parseRoute("/projects/p1/issues/issue/jira%3AAPP-3")).toEqual({
+      name: "project-tab",
+      projectId: "p1",
+      tab: "issues",
+      issue: "jira:APP-3",
+    });
+    for (const screen of [
+      { name: "project", projectId: "p1", issue: "github:acme/app#12" },
+      { name: "thread", projectId: "p1", threadId: "t1", issue: "linear:ENG-7" },
+      { name: "project-tab", projectId: "p1", tab: "issues", issue: "jira:APP-3" },
+    ] as const) {
+      expect(parseRoute(projectScreenPath(screen))).toEqual(screen);
+    }
+    expect(projectScreenPath({ name: "project", projectId: "p1", issue: "github:a/b#1" })).toBe(
+      "/projects/p1/issue/github%3Aa%2Fb%231",
+    );
+    for (const path of ["/projects/p1/chat/issue/x", "/projects/p1/settings/issue/x"]) {
+      expect(parseRoute(path)).toBeNull();
+    }
+  });
+
   test("routeProjectId is the project a route belongs to, or null", () => {
     expect(routeProjectId({ name: "projects" })).toBeNull();
     expect(routeProjectId({ name: "project", projectId: "p1" })).toBe("p1");

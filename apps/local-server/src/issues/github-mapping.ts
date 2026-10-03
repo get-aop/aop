@@ -6,6 +6,25 @@ import type {
   ProjectIssue,
 } from "@aop/common";
 
+/** The issue view shows the latest comments; the rest are a click away on GitHub. */
+export const ISSUE_DETAIL_COMMENTS = 50;
+
+// What a row shows of an issue: the list and the issue view read the same fields.
+const ISSUE_FIELDS = `
+  number title url state stateReason createdAt updatedAt
+  author { login avatarUrl ... on User { name } }
+  assignees(first: 5) { nodes { login name avatarUrl } }
+  labels(first: 10) { nodes { name color } }
+  milestone { title }
+  comments { totalCount }
+  closedByPullRequestsReferences(first: 5, includeClosedPrs: true) {
+    nodes {
+      number title url state isDraft
+      repository { nameWithOwner }
+      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+    }
+  }`;
+
 /**
  * One page of a repository's issues, newest update first, with the pull requests linked to each
  * (GitHub's Development links, which "Fixes #12" also makes) and their head commit's checks.
@@ -17,30 +36,25 @@ query($owner: String!, $name: String!, $first: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     issues(first: $first, after: $after, states: ${GRAPHQL_STATES[state]}, orderBy: {field: UPDATED_AT, direction: DESC}) {
       pageInfo { hasNextPage endCursor }
-      nodes {
-        number title url state stateReason createdAt updatedAt
-        author { login avatarUrl ... on User { name } }
-        assignees(first: 5) { nodes { login name avatarUrl } }
-        labels(first: 10) { nodes { name color } }
-        milestone { title }
-        comments { totalCount }
-        closedByPullRequestsReferences(first: 5, includeClosedPrs: true) {
-          nodes {
-            number title url state isDraft
-            repository { nameWithOwner }
-            commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-          }
-        }
-      }
+      nodes { ${ISSUE_FIELDS} }
     }
   }
 }`;
 
-/** One issue with its body, for the brief of a thread started from it. */
-export const GITHUB_ISSUE_BODY_QUERY = `
+/**
+ * One issue whole, for the issue view and the brief of a thread started from it: what its row
+ * shows, its body and its latest comments.
+ */
+export const GITHUB_ISSUE_DETAIL_QUERY = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
-    issue(number: $number) { number title url body }
+    issue(number: $number) {
+      ${ISSUE_FIELDS}
+      body
+      recentComments: comments(last: ${ISSUE_DETAIL_COMMENTS}) {
+        nodes { id body createdAt author { login avatarUrl } }
+      }
+    }
   }
 }`;
 
@@ -88,9 +102,10 @@ export const mapGithubIssue = (
     ...standing,
     stateColor: null,
     labels: nodesOf(node.labels).map((label) => ({ name: label.name, color: hexOf(label.color) })),
-    assignees: nodesOf(node.assignees).map(person),
-    author: node.author ? person(node.author) : null,
+    assignees: nodesOf(node.assignees).map(githubPerson),
+    author: node.author ? githubPerson(node.author) : null,
     milestone: node.milestone?.title ?? null,
+    priority: null,
     commentCount: node.comments?.totalCount ?? null,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
@@ -109,7 +124,7 @@ const githubStanding = (
     : { state: "closed", stage: "completed", stateName: "Closed" };
 };
 
-const person = (actor: GithubActor): IssuePerson => ({
+export const githubPerson = (actor: GithubActor): IssuePerson => ({
   login: actor.login,
   name: actor.name || null,
   avatarUrl: actor.avatarUrl || null,
@@ -154,7 +169,7 @@ const hexOf = (color: string | null): string | null =>
 const nodesOf = <T>(connection: { nodes?: (T | null)[] | null } | null | undefined): T[] =>
   (connection?.nodes ?? []).filter((node): node is T => node !== null);
 
-interface GithubActor {
+export interface GithubActor {
   login: string;
   name?: string | null;
   avatarUrl?: string | null;

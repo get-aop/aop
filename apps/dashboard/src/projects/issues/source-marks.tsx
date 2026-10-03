@@ -2,8 +2,8 @@ import type { IssueSource } from "@aop/common";
 import { cn } from "@/lib/cn";
 
 /*
- * The two sources' marks, drawn inline: the icon set has no brand marks. GitHub's is the
- * Octicons mark; Linear's is its logo. Both take the text colour, so they sit quietly in a row.
+ * The sources' marks, drawn inline: the icon set has no brand marks. GitHub's is the Octicons
+ * mark; Linear's and Jira's are their logos. All take the text colour, so they sit quietly in a row.
  */
 
 const GITHUB_PATH =
@@ -11,6 +11,9 @@ const GITHUB_PATH =
 
 const LINEAR_PATH =
   "M1.225 61.523c-.222-.949.908-1.546 1.597-.857l36.512 36.512c.69.69.092 1.82-.857 1.597-18.425-4.323-32.93-18.827-37.252-37.252ZM.002 46.889a.99.99 0 0 0 .29.76L52.35 99.709c.201.2.478.307.761.29 2.369-.148 4.694-.46 6.962-.927.765-.157 1.03-1.096.478-1.648L2.576 39.448c-.552-.551-1.491-.286-1.648.479a50.067 50.067 0 0 0-.926 6.962ZM4.21 29.705a.988.988 0 0 0 .208 1.1l64.776 64.776c.289.29.726.375 1.1.208a49.908 49.908 0 0 0 5.185-2.684.981.981 0 0 0 .183-1.54L8.436 24.336a.981.981 0 0 0-1.541.183 49.896 49.896 0 0 0-2.684 5.185Zm8.448-11.631a.986.986 0 0 1-.045-1.354C21.78 6.46 35.111 0 49.952 0 77.592 0 100 22.407 100 50.048c0 14.84-6.46 28.172-16.72 37.338a.986.986 0 0 1-1.354-.045L12.659 18.074Z";
+
+const JIRA_PATH =
+  "M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.483V1.005A1.001 1.001 0 0 0 23.013 0Z";
 
 export const GithubMark = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 16 16" aria-hidden="true" className={cn("size-4 fill-current", className)}>
@@ -24,11 +27,27 @@ export const LinearMark = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export const SOURCE_NAME: Record<IssueSource, string> = { github: "GitHub", linear: "Linear" };
+export const JiraMark = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className={cn("size-4 fill-current", className)}>
+    <path d={JIRA_PATH} />
+  </svg>
+);
+
+export const SOURCE_NAME: Record<IssueSource, string> = {
+  github: "GitHub",
+  linear: "Linear",
+  jira: "Jira",
+};
+
+const SOURCE_MARK: Record<IssueSource, typeof GithubMark> = {
+  github: GithubMark,
+  linear: LinearMark,
+  jira: JiraMark,
+};
 
 /** The mark of an issue's source, named for a screen reader. */
 export const SourceMark = ({ source, className }: { source: IssueSource; className?: string }) => {
-  const Mark = source === "github" ? GithubMark : LinearMark;
+  const Mark = SOURCE_MARK[source];
   return (
     <span
       role="img"

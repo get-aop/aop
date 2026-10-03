@@ -1,22 +1,22 @@
 import {
   describeFirstIssue,
+  IssueDetailQuerySchema,
   IssueListQuerySchema,
   LinearCatalogInputSchema,
   LinearConnectInputSchema,
   StartThreadFromIssueInputSchema,
 } from "@aop/common";
-import { type Context, Hono } from "hono";
-import {
-  errorResponse as projectErrorResponse,
-  readBody,
-  readOptionalBody,
-} from "../project/http.ts";
-import type { IssueError, IssueService } from "./service.ts";
+import { Hono } from "hono";
+import { readBody, readOptionalBody } from "../project/http.ts";
+import { issueErrorResponse } from "./issue-errors.ts";
+import { addJiraRoutes } from "./jira/jira-routes.ts";
+import type { IssueService } from "./service.ts";
 
 /**
- * A project's issues and its Linear connection, under `/api/projects/:projectId`. Any client may
- * list issues, start a thread from one and see whether Linear is connected; setting, mapping and
- * removing the Linear key is the host owner's (auth/route-policy.ts), and no answer carries it.
+ * A project's issues and its Linear and Jira connections, under `/api/projects/:projectId`. Any
+ * client may list issues, read one, start a thread from one and see whether Linear or Jira is
+ * connected; setting, testing and removing a key or token is the host owner's
+ * (auth/route-policy.ts), and no answer carries it.
  */
 export const createIssueRoutes = (issues: IssueService) => {
   const routes = new Hono();
@@ -28,6 +28,15 @@ export const createIssueRoutes = (issues: IssueService) => {
     }
     const result = await issues.list(c.req.param("projectId"), parsed.data);
     return result.success ? c.json(result.list) : issueErrorResponse(c, result.error);
+  });
+
+  routes.get("/:projectId/issues/detail", async (c) => {
+    const parsed = IssueDetailQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: describeFirstIssue(parsed.error.issues, "Invalid request") }, 400);
+    }
+    const result = await issues.detail(c.req.param("projectId"), parsed.data.key);
+    return result.success ? c.json({ detail: result.detail }) : issueErrorResponse(c, result.error);
   });
 
   routes.post("/:projectId/issues/start-thread", async (c) => {
@@ -69,22 +78,6 @@ export const createIssueRoutes = (issues: IssueService) => {
       : issueErrorResponse(c, result.error);
   });
 
+  addJiraRoutes(routes, issues.jiraConnection);
   return routes;
-};
-
-const issueErrorResponse = (c: Context, error: IssueError): Response => {
-  switch (error.code) {
-    case "PROJECT_ERROR":
-      return projectErrorResponse(c, error.error);
-    case "PROJECT_NOT_FOUND":
-      return c.json({ error: "Project not found", code: error.code }, 404);
-    case "ISSUE_NOT_FOUND":
-      return c.json({ error: "That issue is not one of this project's", code: error.code }, 404);
-    case "LINEAR_NOT_CONFIGURED":
-      return c.json({ error: "Linear is not connected to this project", code: error.code }, 409);
-    case "LINEAR_UNAUTHORIZED":
-      return c.json({ error: "Linear refused the API key", code: error.code }, 422);
-    case "SOURCE_FAILED":
-      return c.json({ error: error.message, code: error.code }, 502);
-  }
 };

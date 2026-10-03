@@ -1,8 +1,9 @@
 import { ChevronRightIcon, MessageSquareIcon, XIcon } from "lucide-react";
-import { type RefObject, useEffect, useRef } from "react";
+import { useRef } from "react";
 import { IconButton } from "../../components/IconButton";
 import type { PullRequestViewRef } from "../../shell/router";
 import type { ProjectChat } from "../chat/project-chat";
+import { useEscapeCloses, useTakeFocusFromHiddenChat } from "../layout/covering-pane";
 import type { ProjectEntry } from "../projects-state";
 import { closePullRequestView } from "./open-pull-request-view";
 import { askThroughChat, PullRequestView } from "./PullRequestView";
@@ -22,7 +23,7 @@ export const PullRequestPane = ({
   chat: Pick<ProjectChat, "send">;
 }) => {
   const paneRef = useRef<HTMLDivElement>(null);
-  useEscapeCloses();
+  useEscapeCloses(closePullRequestView);
   useTakeFocusFromHiddenChat(paneRef, `${pullRequest.repoId}#${pullRequest.number}`);
   return (
     <div
@@ -67,40 +68,3 @@ export const PullRequestPane = ({
     </div>
   );
 };
-
-/**
- * The chat is hidden, not unmounted, so focus left in its composer would stay in a field no one
- * sees, and keys (Escape among them) would still go there. The pane takes it instead; focus in
- * the threads panel (a chip just clicked) stays where it is.
- */
-const useTakeFocusFromHiddenChat = (pane: RefObject<HTMLDivElement | null>, shown: string) => {
-  useEffect(() => {
-    void shown;
-    const active = document.activeElement;
-    const stranded =
-      active === null ||
-      active === document.body ||
-      active.closest('[data-testid="chat-column"]') !== null;
-    if (stranded) pane.current?.focus({ preventScroll: true });
-  }, [pane, shown]);
-};
-
-// Escape belongs to whatever is on top first: a field being typed in, a menu, a dialog.
-const useEscapeCloses = (): void => {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented || isEditable(event.target)) return;
-      if (document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
-      closePullRequestView();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-};
-
-const isEditable = (target: EventTarget | null): boolean =>
-  target instanceof HTMLElement &&
-  (target.tagName === "INPUT" ||
-    target.tagName === "TEXTAREA" ||
-    target.tagName === "SELECT" ||
-    target.isContentEditable);

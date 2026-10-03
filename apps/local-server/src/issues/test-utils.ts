@@ -1,10 +1,17 @@
-import type { GithubAuth, GithubProjectRepo } from "@aop/common";
-import type { RestResponse } from "../github/index.ts";
+import type { GithubAuth, GithubProjectRepo, Message, ProjectIssue } from "@aop/common";
+import { makeUserMessage } from "@aop/common/test-utils";
+import type { GithubService, RestResponse } from "../github/index.ts";
 import type { GhRead } from "../github-cli/read.ts";
-import type { IssuesGithub } from "./github-issues.ts";
-import type { GithubIssueNode } from "./github-mapping.ts";
-import type { LinearApi, LinearIssueNode } from "./linear-api.ts";
+import { createGithubIssueLoader, type IssuesGithub } from "./github-issues.ts";
+import { type GithubIssueNode, mapGithubIssue } from "./github-mapping.ts";
+import type { JiraIssueNode } from "./jira/jira-api.ts";
+import type { StoredJiraConnection } from "./jira/jira-connection-store.ts";
+import { createJiraIssueLoader } from "./jira/jira-issues.ts";
+import { jiraNode, memoryJiraStore, scriptedJira } from "./jira/test-utils.ts";
+import { type LinearApi, type LinearIssueNode, mapLinearIssue } from "./linear-api.ts";
 import type { LinearConnectionStore, StoredLinearConnection } from "./linear-connection-store.ts";
+import { createLinearIssueLoader } from "./linear-issues.ts";
+import { createIssueService } from "./service.ts";
 
 /** A GitHub issue as the GraphQL API returns it, with whatever the test changes. */
 export const githubNode = (overrides: Partial<GithubIssueNode> = {}): GithubIssueNode => ({
@@ -89,7 +96,20 @@ const issueBody = <T>(issues: GithubIssueNode[], number: number, calls: string[]
       rateLimited: false,
     };
   }
-  const issue = { number, title: node.title, url: node.url, body: "Steps to reproduce." };
+  const issue = {
+    ...node,
+    body: "Steps to reproduce.",
+    recentComments: {
+      nodes: [
+        {
+          id: "IC_1",
+          body: "Seen on CI too.",
+          createdAt: "2026-09-02T09:00:00Z",
+          author: { login: "bo", avatarUrl: "https://avatars.example/bo" },
+        },
+      ],
+    },
+  };
   return { ok: true, value: { repository: { issue } } as T };
 };
 
@@ -97,6 +117,12 @@ export const repoRef = (overrides: Partial<GithubProjectRepo> = {}): GithubProje
   repoId: "repo_1",
   name: "app",
   nameWithOwner: "acme/app",
+  ...overrides,
+});
+
+/** An issue as the list carries it: the GitHub node's mapping, with whatever the test changes. */
+export const projectIssue = (overrides: Partial<ProjectIssue> = {}): ProjectIssue => ({
+  ...mapGithubIssue(githubNode(), { repoId: "repo_1", nameWithOwner: "acme/app" }, new Map()),
   ...overrides,
 });
 
@@ -166,7 +192,6 @@ export const scriptedLinear = (issues: LinearIssueNode[] = [linearNode()]) => {
         : refused,
     issuePage: async (key, { scope }) => {
       if (!ok(key)) return refused;
-      const { mapLinearIssue } = await import("./linear-api.ts");
       return {
         ok: true,
         value: {
@@ -176,14 +201,72 @@ export const scriptedLinear = (issues: LinearIssueNode[] = [linearNode()]) => {
         },
       };
     },
-    issueBody: async (key, identifier) => {
+    issueDetail: async (key, { identifier, scope }) => {
       if (!ok(key)) return refused;
       const node = issues.find((issue) => issue.identifier === identifier);
+      if (!node) return { ok: true, value: null };
       return {
         ok: true,
-        value: node ? { title: node.title, url: node.url, body: "From Linear." } : null,
+        value: { issue: mapLinearIssue(node, scope), body: "From Linear.", comments: [] },
       };
     },
   };
   return { api, keys };
+};
+
+/**
+ * An issue service over scripted GitHub, Linear and Jira, and a coordinator that keeps what it
+ * is sent. Only `proj_1` exists.
+ */
+export const scriptedIssueService = (
+  options: {
+    repos?: GithubProjectRepo[] | null;
+    auth?: GithubAuth;
+    githubIssues?: GithubIssueNode[];
+    githubFail?: string | null;
+    linear?: Record<string, StoredLinearConnection>;
+    jira?: Record<string, StoredJiraConnection>;
+    jiraIssues?: JiraIssueNode[];
+  } = {},
+) => {
+  const scripted = scriptedGithub({
+    issues: options.githubIssues ?? [githubNode()],
+    fail: options.githubFail ?? null,
+  });
+  const repos = options.repos === undefined ? [repoRef()] : options.repos;
+  const github = {
+    ...scripted.github,
+    authStatus: async () => options.auth ?? SIGNED_IN,
+    resolveProjectRepos: async (projectId: string) =>
+      projectId === "proj_1" && repos ? repos.map((repo) => ({ ...repo, path: "/x" })) : null,
+  } as Pick<GithubService, "authStatus" | "resolveProjectRepos" | "graphql" | "restGet">;
+  const linear = scriptedLinear([linearNode()]);
+  const store = memoryLinearStore(options.linear ?? {});
+  const jira = scriptedJira(options.jiraIssues ?? [jiraNode()]);
+  const jiraStore = memoryJiraStore(options.jira ?? {});
+  const sent: string[] = [];
+  const service = createIssueService({
+    github,
+    githubIssues: createGithubIssueLoader(github),
+    linear: linear.api,
+    linearIssues: createLinearIssueLoader(linear.api),
+    linearStore: store.store,
+    jira: jira.api,
+    jiraIssues: createJiraIssueLoader(jira.api),
+    jiraStore: jiraStore.store,
+    sendToCoordinator: async (_projectId, text) => {
+      sent.push(text);
+      return { success: true, message: makeUserMessage({ text }) as Message };
+    },
+  });
+  return {
+    service,
+    sent,
+    store,
+    jiraStore,
+    calls: scripted.calls,
+    linearKeys: linear.keys,
+    jiraCalls: jira.calls,
+    jiraState: jira.state,
+  };
 };

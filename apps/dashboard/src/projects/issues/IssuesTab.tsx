@@ -16,15 +16,16 @@ import {
   type IssueGroup,
   sortIssues,
 } from "./issue-view";
+import { JiraConnectDialog } from "./jira/JiraConnectDialog";
 import { LinearConnectDialog } from "./LinearConnectDialog";
-import { LinearMark } from "./source-marks";
+import { JiraMark, LinearMark } from "./source-marks";
 import { type IssueView, useIssueView } from "./use-issue-view";
 import { type IssuesState, useIssues } from "./use-issues";
 import { type StartThread, useStartThread } from "./use-start-thread";
 
 /**
- * The panel's Issues tab: every issue of the project's GitHub repositories and of its Linear
- * team or project, read through the host, in collapsible groups (by status, label, milestone,
+ * The panel's Issues tab: every issue of the project's GitHub repositories, of its Linear team or
+ * project and of its Jira projects or JQL query, read through the host, in collapsible groups (by status, label, milestone,
  * assignee or repository), with search, filters and sort. It lays itself out by its own width
  * (`@container/issues`), so it reads the same in the narrow panel and expanded.
  */
@@ -33,7 +34,9 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
   const issues = useIssues(projectId, view.state);
   const startThread = useStartThread(projectId);
   const owner = useIsHostOwner(true);
-  const [linearOpen, setLinearOpen] = useState(false);
+  const [connecting, setConnecting] = useState<Tracker | null>(null);
+  const connectLinear = () => setConnecting("linear");
+  const connectJira = () => setConnecting("jira");
   const search = useSearchShortcut();
 
   const all = issues.list?.issues ?? [];
@@ -60,7 +63,7 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
         error={issues.error}
         onRefresh={issues.refresh}
         onClear={view.clearFilters}
-        onLinear={() => setLinearOpen(true)}
+        onConnect={setConnecting}
       />
       <div data-testid="issues-scroll" className="min-h-0 flex-1 overflow-y-auto">
         {issues.list ? (
@@ -68,7 +71,8 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
             projectId={projectId}
             sources={issues.list.sources}
             owner={owner}
-            onConnectLinear={() => setLinearOpen(true)}
+            onConnectLinear={connectLinear}
+            onConnectJira={connectJira}
           />
         ) : null}
         <div className="px-2 pb-6">
@@ -81,7 +85,8 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
             filtering={filtering}
             owner={owner}
             startThread={startThread}
-            onConnectLinear={() => setLinearOpen(true)}
+            onConnectLinear={connectLinear}
+            onConnectJira={connectJira}
           />
           {issues.list?.sources.some((source) => source.hasMore) ? (
             <LoadMore busy={issues.refreshing} onLoadMore={issues.loadMore} />
@@ -90,9 +95,16 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
       </div>
       <LinearConnectDialog
         projectId={projectId}
-        open={linearOpen}
+        open={connecting === "linear"}
         owner={owner}
-        onOpenChange={setLinearOpen}
+        onOpenChange={(open) => setConnecting(open ? "linear" : null)}
+        onChanged={issues.refresh}
+      />
+      <JiraConnectDialog
+        projectId={projectId}
+        open={connecting === "jira"}
+        owner={owner}
+        onOpenChange={(open) => setConnecting(open ? "jira" : null)}
         onChanged={issues.refresh}
       />
     </div>
@@ -110,6 +122,7 @@ const IssuesBody = ({
   owner,
   startThread,
   onConnectLinear,
+  onConnectJira,
 }: {
   projectId: string;
   issues: IssuesState;
@@ -120,6 +133,7 @@ const IssuesBody = ({
   owner: boolean;
   startThread: StartThread;
   onConnectLinear: () => void;
+  onConnectJira: () => void;
 }) => {
   if (issues.loading) return <IssuesLoading />;
   if (!issues.list) {
@@ -137,6 +151,7 @@ const IssuesBody = ({
         state={view.state}
         owner={owner}
         onConnectLinear={onConnectLinear}
+        onConnectJira={onConnectJira}
       />
     );
   }
@@ -168,7 +183,14 @@ const LoadMore = ({ busy, onLoadMore }: { busy: boolean; onLoadMore: () => void 
   </div>
 );
 
-/** How many issues show, when they were read, and Refresh and Linear. */
+type Tracker = "linear" | "jira";
+
+const TRACKER_BUTTONS: { tracker: Tracker; label: string; Mark: typeof LinearMark }[] = [
+  { tracker: "linear", label: "Linear connection", Mark: LinearMark },
+  { tracker: "jira", label: "Jira connection", Mark: JiraMark },
+];
+
+/** How many issues show, when they were read, and Refresh, Linear and Jira. */
 const SummaryBar = ({
   list,
   shown,
@@ -177,7 +199,7 @@ const SummaryBar = ({
   error,
   onRefresh,
   onClear,
-  onLinear,
+  onConnect,
 }: {
   list: IssueList | null;
   shown: number;
@@ -187,7 +209,7 @@ const SummaryBar = ({
   error: string | null;
   onRefresh: () => void;
   onClear: () => void;
-  onLinear: () => void;
+  onConnect: (tracker: Tracker) => void;
 }) => {
   const total = list?.issues.length ?? 0;
   return (
@@ -211,16 +233,19 @@ const SummaryBar = ({
       ) : null}
       <span className="flex-1" />
       <ReadState list={list} error={error} />
-      <button
-        type="button"
-        data-testid="issues-linear"
-        aria-label="Linear connection"
-        title="Linear connection"
-        onClick={onLinear}
-        className="grid size-7 place-items-center rounded-row hover:bg-hover hover:text-text"
-      >
-        <LinearMark className="size-3.5" />
-      </button>
+      {TRACKER_BUTTONS.map(({ tracker, label, Mark }) => (
+        <button
+          key={tracker}
+          type="button"
+          data-testid={`issues-${tracker}`}
+          aria-label={label}
+          title={label}
+          onClick={() => onConnect(tracker)}
+          className="grid size-7 place-items-center rounded-row hover:bg-hover hover:text-text"
+        >
+          <Mark className="size-3.5" />
+        </button>
+      ))}
       <button
         type="button"
         data-testid="issues-refresh"
