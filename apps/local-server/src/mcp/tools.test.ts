@@ -286,16 +286,29 @@ describe("the coordinator's tools", () => {
     expect(idle.threads).toHaveLength(0);
   });
 
-  test("thread_report returns the thread and the end of its transcript", async () => {
+  test("thread_report returns the thread and the end of its transcript, each line with its sender", async () => {
     const { s, coordinator, thread } = await setup();
+    await s.services.threads.send(thread.id, "Keep the old API too");
+    await s.settle();
+    await s.services.threads.send(thread.id, "Check the backoff", {
+      type: "coordinator-relay",
+      quote: "make retries safer",
+    });
+    await s.settle();
 
     const report = json(
-      await s.callTool(coordinator.id, "thread_report", { threadId: thread.id, messages: 5 }),
-    ) as { thread: { id: string }; recent: { from: string; text: string }[] };
+      await s.callTool(coordinator.id, "thread_report", { threadId: thread.id, messages: 10 }),
+    ) as { thread: { id: string }; recent: Record<string, unknown>[] };
 
     expect(report.thread.id).toBe(thread.id);
-    expect(report.recent.at(-1)?.text).toContain("Fake reply");
-    expect(report.recent[0]?.text).toBe("Audit the retry code");
+    expect(report.recent.map(({ at: _at, ...line }) => line)).toEqual([
+      { from: "coordinator", brief: true, text: "Audit the retry code" },
+      { from: "thread", text: expect.stringContaining("Fake reply") },
+      { from: "person", text: "Keep the old API too" },
+      { from: "thread", text: expect.stringContaining("Fake reply") },
+      { from: "coordinator", quote: "make retries safer", text: "Check the backoff" },
+      { from: "thread", text: expect.stringContaining("Fake reply") },
+    ]);
   });
 
   test("thread_steer sends to a thread and thread_stop ends its work", async () => {
@@ -311,10 +324,13 @@ describe("the coordinator's tools", () => {
     expect(steered).toMatchObject({ id: thread.id, status: "working" });
     const transcript = await s.services.threads.listMessages(thread.id);
     const relayed = transcript.success && transcript.messages.at(-1);
-    expect(relayed && relayed.role === "assistant" && relayed.blocks[0]).toEqual({
-      type: "quote-forwarded",
-      text: "make retries safer",
+    expect(relayed).toMatchObject({
+      role: "user",
+      sender: "coordinator",
+      quote: "make retries safer",
+      text: "Also check the backoff [fake: delay=30000]",
     });
+    expect(relayed && "brief" in relayed).toBe(false);
 
     const stopped = json(await s.callTool(coordinator.id, "thread_stop", { threadId: thread.id }));
     expect(stopped).toMatchObject({ id: thread.id, status: "idle" });

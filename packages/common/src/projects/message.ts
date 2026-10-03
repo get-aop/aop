@@ -27,24 +27,35 @@ export const MessageImageSchema = z.object({
 const SteersSchema = IdSchema.optional();
 
 /**
- * Typed by the person; plain text, and the images they attached. A message of images alone has
- * no text. `routine` marks one a routine sent on the person's behalf: its brief, as they wrote it.
+ * Who sent a message the agent takes in: the person (typed in a composer), the coordinator (a
+ * thread's brief, or a steer), one of the person's routines, or AOP itself (a pull request fix,
+ * a new project's survey).
+ */
+export const MessageSenderSchema = z.enum(["person", "coordinator", "routine", "system"]);
+
+/**
+ * What an agent was told: plain text, and the images the person attached. A message of images
+ * alone has no text. `sender` says who wrote it; a host from before senders were recorded sends
+ * none, and the chat shows such a message as the person's. `routine` marks one a routine sent on
+ * the person's behalf: its brief, as they wrote it. `quote` is the person's own words that the
+ * coordinator forwards with its message, and `brief` marks a thread's first message, the brief
+ * it works from.
  */
 export const UserMessageSchema = MessageBaseSchema.extend({
   role: z.literal("user"),
   text: z.string(),
   images: z.array(MessageImageSchema).min(1).optional(),
   steers: SteersSchema,
+  sender: MessageSenderSchema.optional(),
   routine: z.object({ id: IdSchema, name: z.string() }).optional(),
+  quote: z.string().min(1).optional(),
+  brief: z.literal(true).optional(),
 }).refine((message) => message.text.length > 0 || message.images !== undefined, {
   message: "A message needs text or an image",
   path: ["text"],
 });
 
-/**
- * Written by an agent: the coordinator, a thread's agent, or the coordinator relaying the
- * user's message into a thread (blocks: quote-forwarded, then the brief as text).
- */
+/** Written by an agent: the coordinator, or a thread's agent. */
 export const AssistantMessageSchema = MessageBaseSchema.extend({
   role: z.literal("assistant"),
   blocks: z.array(MessageBlockSchema).min(1),
@@ -53,11 +64,9 @@ export const AssistantMessageSchema = MessageBaseSchema.extend({
   /**
    * The message this reply answers, which is where it sits in the conversation. A reply to
    * several thread reports that arrived together answers the newest of them. Absent on a message
-   * no run wrote (the coordinator's brief relayed into a thread).
+   * no run wrote (the host's welcome on a new project).
    */
   inReplyTo: IdSchema.optional(),
-  /** On the coordinator's words relayed into a thread that was working when they arrived. */
-  steers: SteersSchema,
 });
 
 /** What a thread told the coordinator. */
@@ -83,6 +92,7 @@ export const MessageSchema = z.discriminatedUnion("role", [
   ThreadReportMessageSchema,
 ]);
 export type UserMessage = z.infer<typeof UserMessageSchema>;
+export type MessageSender = z.infer<typeof MessageSenderSchema>;
 export type MessageImage = z.infer<typeof MessageImageSchema>;
 export type AssistantMessage = z.infer<typeof AssistantMessageSchema>;
 export type ThreadReportMessage = z.infer<typeof ThreadReportMessageSchema>;

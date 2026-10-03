@@ -36,7 +36,7 @@ Open a project (`/projects/:id`; the chat is the middle pane), type in the box a
 | `user-message` (`data-message-id`), `user-message-text`, `user-message-fold`, `assistant-message`, `message-meta`, `message-time` (relative, "2m ago"; the exact time in its tooltip), `message-copy` | A message, its text, the fold of a long one, and the hover meta |
 | `thread-report` (`data-outcome`), `thread-report-toggle`, `thread-report-text` | A thread's report to the coordinator |
 | `coordinator-activity`, `coordinator-live-text`, `coordinator-working` | The coordinator at work, what it has written so far, and how long |
-| `message-blocks`, `routing-receipt` (`data-thread-count`), `quote-forwarded`, `quote-forwarded-text` | The blocks of a reply |
+| `message-blocks`, `routing-receipt` (`data-thread-count`) | The blocks of a reply |
 | `thread-chip` (`data-thread-id`, `data-status`), `thread-chip-missing`, `thread-chip-popover`, `thread-chip-status`, `thread-chip-title`, `thread-chip-activity`, `pr-chip` (`data-state`) | Chips in prose, and the hover card of a thread chip |
 | `chat-thread-card` (`data-thread-id`, `data-variant` = `live`, `needs-call` or `done`, `data-status`), `chat-thread-card-link`, `-status`, `-question`, `-options`, `-view`, `-pr`, `-icon`, `chat-thread-card-unavailable` | A thread card and its parts |
 | `suggested-threads`, `suggestion` (`data-suggestion-id`, `data-state` = `pending`, `starting`, `started` or `skipped`), `suggestion-title`, `suggestion-reason`, `suggestion-start` (the ↵ icon button), `suggestion-skip` (shows on hover), `suggestion-undo`, `suggestion-started`, `suggestion-error`, `suggestions-start-all` | Proposals |

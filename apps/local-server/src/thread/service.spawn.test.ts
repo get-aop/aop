@@ -48,7 +48,7 @@ describe("spawning a thread", () => {
     );
   });
 
-  test("its first message is the coordinator's brief, marked as a relay with the person's quote", async () => {
+  test("its first message is the coordinator's brief, with the person's quote", async () => {
     const { s, project } = await setup();
 
     const thread = await spawnAndSettle(s, project.id, {
@@ -61,16 +61,37 @@ describe("spawning a thread", () => {
     expect(parseMessageOrigin(first?.origin_json ?? null)).toEqual({
       type: "coordinator-relay",
       quote: "make retries safer",
+      brief: true,
     });
     const messages = await s.services.threads.listMessages(thread.id);
     expect(messages.success && messages.messages[0]).toMatchObject({
-      role: "assistant",
+      role: "user",
       threadId: thread.id,
-      blocks: [
-        { type: "quote-forwarded", text: "make retries safer" },
-        { type: "text", text: "Audit the retry code" },
-      ],
+      sender: "coordinator",
+      brief: true,
+      quote: "make retries safer",
+      text: "Audit the retry code",
     });
+  });
+
+  test("a routine's brief is the routine's, shown as the person wrote it", async () => {
+    const { s, project } = await setup();
+
+    const thread = await spawnAndSettle(s, project.id, {
+      prompt: 'This thread was started by the routine "Deps".\n\nCheck the deps',
+      routine: { id: "rtn_1", name: "Deps", prompt: "Check the deps" },
+    });
+
+    const messages = await s.services.threads.listMessages(thread.id);
+    expect(messages.success && messages.messages[0]).toMatchObject({
+      role: "user",
+      sender: "routine",
+      brief: true,
+      routine: { id: "rtn_1", name: "Deps" },
+      text: "Check the deps",
+    });
+    const [first] = await s.ctx.chatSessionRepository.listMessages(thread.id);
+    expect(first?.content).toStartWith("This thread was started by the routine");
   });
 
   test("the run's system prompt carries the project's instructions, goal and memory, its message only the brief, and it may read the other repos", async () => {

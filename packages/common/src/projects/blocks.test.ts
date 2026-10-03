@@ -22,7 +22,6 @@ describe("MessageBlockSchema", () => {
     ["pr-chip", prChip()],
     ["thread-card", { type: "thread-card", threadId: "thr_1", variant: "live" }],
     ["routing-receipt", { type: "routing-receipt", threadIds: ["thr_1", "thr_2", "thr_3"] }],
-    ["quote-forwarded", { type: "quote-forwarded", text: "release moved to Monday" }],
     [
       "tool",
       { type: "tool", id: "toolu_1", name: "Bash", detail: "git status", status: "running" },
@@ -130,11 +129,8 @@ describe("MessageBlockSchema", () => {
     ).toEqual(["threadIds"]);
   });
 
-  test("rejects empty text and an empty forwarded quote", () => {
+  test("rejects empty text", () => {
     expect(rejectedPaths(MessageBlockSchema, { type: "text", text: "" })).toEqual(["text"]);
-    expect(rejectedPaths(MessageBlockSchema, { type: "quote-forwarded", text: "" })).toEqual([
-      "text",
-    ]);
   });
 
   test("rejects a pr chip whose pull request number is not positive", () => {

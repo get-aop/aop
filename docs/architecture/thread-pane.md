@@ -32,9 +32,13 @@ A thread's conversation is kept by the same code as the coordinator chat (`chat/
 
 What a thread's messages are:
 
-- The first one is the brief. The coordinator sends it as a relay, so it arrives as an assistant message: an optional `quote-forwarded` block ("Message forwarded from project chat", folded by default), then the brief as text.
+- Everything the agent is told is a user message, and its `sender` says who sent it (`MessageSenderSchema` in `@aop/common`; the host reads it from `chat_messages.origin_json`, see `chat-session/message-origin.ts`):
+  - `coordinator`: the brief it started the thread with (`thread_spawn`, or a proposal the person started), and each `thread_steer`. Drawn as a card on the left headed "Coordinator" (`chat/SentMessage.tsx`), never as the person's bubble. The person's own words it forwards (the tools' `quote`) sit above its message as a "You said:" quote. A new project's survey brief is the coordinator's too, since the welcome that announces it is.
+  - `routine`: the brief of a thread a routine's run started, labelled "Brief from routine · <name>" on the person's side, since the person set the routine up. It shows the routine's words, not the line the host puts before them.
+  - `system`: AOP's own, such as the pull request watcher's fix prompt. A card headed "AOP".
+  - `person`: typed in the thread's composer, or the answer to a question (`POST /api/threads/:id/reply`). The person's bubble on the right.
+- The first message is the brief (`brief: true`): headed "Brief from the coordinator", and folded to its first lines when long ("Show full brief"). Migration v26 marked the briefs of threads made before senders were recorded, and gave a routine's back to the routine. A message from a host older than that has no `sender` and is drawn as the person's bubble, as it was.
 - The agent's replies are assistant messages: the parts each turn produced, in order (prose, tool calls, reasoning).
-- What the person types is a user message. While the thread waits on a question, the answer is a user message too, sent through `POST /api/threads/:id/reply`.
 
 The agent's tool calls and reasoning are parts of its replies, where it made them: a call as a compact row (its status, its name, what it was asked to do; never what the tool returned), calls made one after another folded into "N tool calls", reasoning as a folded "Thinking" line. While a turn runs they arrive with its text on the stream, token by token, and the reply is drawn by the row its finished message takes over in place, exactly as in [the coordinator chat](./coordinator-chat.md#a-reply-being-written). Below it a line names the agent by its runtime ("Claude Code is working") and counts up from the message that started the turn, or from the brief for a thread's first turn.
 

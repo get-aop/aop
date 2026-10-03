@@ -212,7 +212,7 @@ export const threadListTool = defineTool({
 export const threadReportTool = defineTool({
   name: "thread_report",
   description:
-    "Read one thread in detail: its state and the end of its transcript. Use it to answer the person about a thread or decide how to steer it; a thread's own reports already reach you as messages.",
+    "Read one thread in detail: its state and the end of its transcript, each message marked with who sent it (`from`: thread, person, coordinator for your own briefs and steers, routine, or system for AOP). Use it to answer the person about a thread or decide how to steer it; a thread's own reports already reach you as messages.",
   input: z.object({
     threadId: z.string(),
     messages: z
@@ -231,17 +231,24 @@ export const threadReportTool = defineTool({
   },
 });
 
+// Who said each line: the thread, or whoever sent it a message (the person, this coordinator, a
+// routine or AOP), with the person's words the coordinator forwarded and whether it was the brief.
 const readable = (message: Message) => {
   const text =
     message.role === "assistant"
       ? message.blocks.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n")
       : message.text;
   return {
-    from: message.role === "user" ? "person" : "thread",
+    from: message.role === "user" ? (message.sender ?? "person") : "thread",
+    ...(message.role === "user" && message.brief && { brief: true }),
+    ...(message.role === "user" && message.quote && { quote: clipped(message.quote) }),
     at: message.createdAt,
-    text: text.length <= REPORT_TEXT_MAX ? text : `${text.slice(0, REPORT_TEXT_MAX)}…`,
+    text: clipped(text),
   };
 };
+
+const clipped = (text: string): string =>
+  text.length <= REPORT_TEXT_MAX ? text : `${text.slice(0, REPORT_TEXT_MAX)}…`;
 
 export const proposeThreadsTool = defineTool({
   name: "propose_threads",

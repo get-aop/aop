@@ -95,13 +95,11 @@ describe("a run the CLI refuses on a usage limit", () => {
     const texts = messages.map((message) =>
       message.role === "assistant" ? JSON.stringify(message.blocks) : message.role,
     );
-    // The brief, the reply that explains the wait, and the reply after it: the nudge that made
-    // the third is stored, but it is no message of the person's or of the agent's.
-    expect(messages.map((message) => message.role)).toEqual([
-      "assistant",
-      "assistant",
-      "assistant",
-    ]);
+    // The coordinator's brief, the reply that explains the wait, and the reply after it: the
+    // nudge that made the third is stored, but it is no message of anyone's.
+    expect(
+      messages.map((message) => (message.role === "user" ? message.sender : message.role)),
+    ).toEqual(["coordinator", "assistant", "assistant"]);
     expect(texts[1]).toContain("Paused: You've hit your session limit");
     expect(texts[2]).toContain("Fake reply for turn 2");
     const stored = await s.services.chat.get(thread.id);

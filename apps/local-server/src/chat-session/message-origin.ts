@@ -4,11 +4,18 @@ import { z } from "zod";
 /**
  * Who wrote a message that a person did not type. It is stored in `chat_messages.origin_json`
  * and read back by the wire mapping (project/wire-messages.ts), so a new kind is one more
- * variant here and no migration.
+ * variant here and no migration. A user-role row with no origin is the person's.
  */
 export const MessageOriginSchema = z.discriminatedUnion("type", [
-  /** The coordinator's brief to a thread; `quote` is the person's own words it forwards, if any. */
-  z.object({ type: z.literal("coordinator-relay"), quote: z.string().min(1).nullable() }),
+  /**
+   * The coordinator writing to a thread: the brief it started the thread with (`brief`), or a
+   * steer. `quote` is the person's own words it forwards, if any.
+   */
+  z.object({
+    type: z.literal("coordinator-relay"),
+    quote: z.string().min(1).nullable(),
+    brief: z.literal(true).optional(),
+  }),
   /**
    * A thread telling the coordinator how a turn ended; it wakes the coordinator. `kickoff` marks
    * the first report of a new project's survey thread, which asks for a summary that links the
@@ -37,8 +44,9 @@ export const MessageOriginSchema = z.discriminatedUnion("type", [
    */
   z.object({ type: z.literal("memory-request"), request: z.string().min(1) }),
   /**
-   * A routine sending its brief to the coordinator. The stored content frames `prompt` (which
-   * routine, which occurrence); the chat shows the brief, marked with the routine's name.
+   * A routine sending its brief to the coordinator, or to the thread it started. The stored
+   * content frames `prompt` (which routine, which occurrence); the chat shows the brief, marked
+   * with the routine's name.
    */
   z.object({
     type: z.literal("routine"),

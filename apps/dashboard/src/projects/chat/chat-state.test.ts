@@ -326,8 +326,8 @@ describe("unansweredMessages", () => {
     ];
 
     expect(unansweredMessages(messages)).toEqual([]);
-    // A relayed message sent into a thread's turn is no reply either.
-    const relayed = reply("c1", 4, undefined, { steers: "a2" });
+    // The coordinator's message sent into a thread's turn is no message to answer either.
+    const relayed = userMessage("c1", 4, { sender: "coordinator", steers: "a2" });
     expect(ids(unansweredMessages([userMessage("u3", 3), relayed]))).toEqual(["u3"]);
   });
 });

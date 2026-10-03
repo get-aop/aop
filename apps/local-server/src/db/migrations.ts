@@ -9,6 +9,7 @@ import { DEFAULT_RUNTIME_V9_STATEMENTS } from "./default-runtime-v9.ts";
 import { DROP_RUNTIME_PROFILES_V11_STATEMENTS } from "./drop-runtime-profiles-v11.ts";
 import { EXEC_HOSTS_V8_STATEMENTS } from "./exec-hosts-v8.ts";
 import { LIBRARY_V22_STATEMENTS } from "./library-v22.ts";
+import { MESSAGE_SENDERS_V26_STATEMENTS } from "./message-senders-v26.ts";
 import { PROJECT_APPEARANCE_V15_STATEMENTS } from "./project-appearance-v15.ts";
 import { PROJECT_KICKOFF_V12_STATEMENTS } from "./project-kickoff-v12.ts";
 import { PROJECT_RUNTIME_V25_STATEMENTS } from "./project-runtime-v25.ts";
@@ -64,6 +65,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 23, name: "library", statements: LIBRARY_V22_STATEMENTS },
   { version: 24, name: "artifacts", statements: ARTIFACTS_V24_STATEMENTS },
   { version: 25, name: "project-runtime", statements: PROJECT_RUNTIME_V25_STATEMENTS },
+  { version: 26, name: "message-senders", statements: MESSAGE_SENDERS_V26_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>
