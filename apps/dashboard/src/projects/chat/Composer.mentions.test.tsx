@@ -118,6 +118,18 @@ describe("the @ picker", () => {
     expect(picker()).toBeNull();
   });
 
+  test("closes when the box loses focus, and opens again when it comes back", () => {
+    renderComposer();
+    input().focus();
+    type("Ask @led");
+
+    fireEvent.blur(input());
+    expect(picker()).toBeNull();
+    input().setSelectionRange(8, 8);
+    fireEvent.focus(input());
+    expect(picker()).not.toBeNull();
+  });
+
   test("is a listbox the box points at: aria-controls and aria-activedescendant follow the arrows", () => {
     renderComposer();
     type("@");

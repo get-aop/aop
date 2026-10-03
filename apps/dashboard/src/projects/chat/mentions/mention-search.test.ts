@@ -67,6 +67,27 @@ describe("finding a thread to mention", () => {
     expect(ids("ledger nothing")).toEqual([]);
   });
 
+  test("the snippet shows the brief where the words are, from the start of a word", () => {
+    const brief = `${"Lorem ipsum dolor sit amet consectetur ".repeat(3)}adipiscing elit with the needle inside`;
+    const threads = [
+      makeThread({
+        id: "thr_a",
+        title: "A",
+        liveStatusLine: "needle in the status",
+        description: brief,
+      }),
+    ];
+    const [result] = searchMentions(buildMentionIndex(threads), "needle");
+    const text = result?.snippet?.text ?? "";
+
+    expect(text.startsWith("…")).toBe(true);
+    // The brief, not the status line, and a whole word after the ellipsis.
+    expect(text).toContain("the needle inside");
+    expect(text[1]).toMatch(/[A-Za-z]/);
+    expect(brief.includes(text.slice(1))).toBe(true);
+    expect(/\s/.test(brief[brief.indexOf(text.slice(1)) - 1] ?? "")).toBe(true);
+  });
+
   test("the status line and the pull request number find a thread too", () => {
     expect(ids("csv writer")).toEqual(["thr_ledger"]);
     expect(ids("#412")).toEqual(["thr_ledger"]);

@@ -112,7 +112,8 @@ const ranked = (entry: IndexEntry, words: readonly string[]): MentionResult | nu
   };
 };
 
-const SNIPPET_FIELDS = ["statusLine", "description"] as const;
+// The brief first: it says what the thread is about, which is what the snippet is for.
+const SNIPPET_FIELDS = ["description", "statusLine"] as const;
 
 /** Where one word counts most for a thread, and the letters of the title it lights up. */
 const bestMatch = (
@@ -196,7 +197,7 @@ const fuzzyMatch = (
   return { score: 1 + (3 * together) / word.length, titleRanges: ranges };
 };
 
-/** The line where the words were found: the status line first, it is the shorter. */
+/** The line where the words were found. */
 const matchSnippet = (entry: IndexEntry, words: readonly string[]): MentionResult["snippet"] => {
   for (const name of SNIPPET_FIELDS) {
     const source = entry[name];
@@ -221,7 +222,7 @@ const leadSnippet = (entry: IndexEntry): MentionResult["snippet"] => {
 
 // A stretch of `text` that starts a little before `at`, with the ranges moved to fit it.
 const around = (text: string, ranges: readonly Range[], at: number) => {
-  const start = at <= SNIPPET_BEFORE ? 0 : at - SNIPPET_BEFORE;
+  const start = at <= SNIPPET_BEFORE ? 0 : wordStartAfter(text, at - SNIPPET_BEFORE, at);
   const lead = start > 0 ? "…" : "";
   const offset = lead.length - start;
   const end = start + SNIPPET_LENGTH;
@@ -231,6 +232,14 @@ const around = (text: string, ranges: readonly Range[], at: number) => {
       .filter(([from, to]) => from >= start && to <= end)
       .map(([from, to]): Range => [from + offset, to + offset]),
   };
+};
+
+// Where the first word that starts in [from, to] begins, so a snippet never opens mid-word.
+const wordStartAfter = (text: string, from: number, to: number): number => {
+  for (let at = from; at < to; at += 1) {
+    if (isWordChar(text[at]) && !isWordChar(text[at - 1])) return at;
+  }
+  return to;
 };
 
 const merge = (ranges: readonly Range[]): Range[] => {

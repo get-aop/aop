@@ -128,6 +128,8 @@ export const useMentions = ({
     picker,
     onChange,
     onSelect,
+    // Back in the box, the cursor is where it was: no selection event says so.
+    onFocus: onSelect,
     onBlur: () => setCaret(null),
     onKeyDown,
     ariaProps: ariaPropsOf(picker),

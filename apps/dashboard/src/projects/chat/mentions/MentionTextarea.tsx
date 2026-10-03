@@ -47,6 +47,7 @@ export const MentionTextarea = ({
         {...mentions.ariaProps}
         onChange={mentions.onChange}
         onSelect={mentions.onSelect}
+        onFocus={mentions.onFocus}
         onBlur={mentions.onBlur}
         onKeyDown={(event) => {
           if (!mentions.onKeyDown(event)) onKeyDown(event);
