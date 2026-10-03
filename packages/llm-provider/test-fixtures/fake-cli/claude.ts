@@ -5,6 +5,7 @@ import {
   type Beat,
   type Dialect,
   type Ending,
+  type Interruption,
   type Invocation,
   type JsonLine,
   type TokenUsage,
@@ -46,7 +47,44 @@ export const claudeDialect: Dialect = {
   ],
   beat: renderBeat,
   end: renderEnding,
+  interrupted: renderInterrupted,
 };
+
+// What Claude Code 2.1.288 writes when a control_request interrupt stops a turn: the answer
+// (with the messages it has not taken yet), the call in flight refused, the interrupt as a user
+// message, and an error result. The messages still queued then start the next turn.
+function renderInterrupted(interruption: Interruption, ctx: TurnContext): JsonLine[] {
+  const { requestId, toolUseId, stillQueued } = interruption;
+  return [
+    {
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: requestId,
+        response: { still_queued: stillQueued },
+      },
+    },
+    ...(toolUseId ? [toolResult(ctx, toolUseId, INTERRUPTED_TOOL_RESULT, true)] : []),
+    {
+      type: "user",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: "[Request interrupted by user for tool use]" }],
+      },
+      session_id: ctx.sessionId,
+      parent_tool_use_id: null,
+    },
+    result(ctx, {
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"],
+      terminal_reason: "aborted_tools",
+    }),
+  ];
+}
+
+const INTERRUPTED_TOOL_RESULT =
+  "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.";
 
 // What a real Max login writes on an ordinary run, recorded from Claude Code 2.1.285 by the
 // real-runtime harness: a warning event, not a limit. `status` is `allowed_warning` once a window
@@ -183,6 +221,15 @@ function renderBeat(beat: Beat, index: number, ctx: TurnContext): JsonLine[] {
       return block(ctx, { type: "thinking", thinking: beat.text, signature: "fake" });
     case "shell":
       return toolRound(ctx, toolUseId, "Bash", { command: beat.command }, beat.output, false);
+    case "hold":
+      return beat.phase === "start"
+        ? block(ctx, {
+            type: "tool_use",
+            id: toolUseId,
+            name: "Bash",
+            input: { command: beat.command },
+          })
+        : [toolResult(ctx, toolUseId, "", false)];
     case "tool":
       return toolRound(ctx, toolUseId, beat.name, {}, "ok", false);
     case "ask":
@@ -239,17 +286,26 @@ function toolRound(
 ): JsonLine[] {
   return [
     ...block(ctx, { type: "tool_use", id: toolUseId, name, input }),
-    {
-      type: "user",
-      message: {
-        role: "user",
-        content: [
-          { type: "tool_result", tool_use_id: toolUseId, content: output, is_error: isError },
-        ],
-      },
-      session_id: ctx.sessionId,
-    },
+    toolResult(ctx, toolUseId, output, isError),
   ];
+}
+
+function toolResult(
+  ctx: TurnContext,
+  toolUseId: string,
+  output: string | JsonLine[],
+  isError: boolean,
+): JsonLine {
+  return {
+    type: "user",
+    message: {
+      role: "user",
+      content: [
+        { type: "tool_result", tool_use_id: toolUseId, content: output, is_error: isError },
+      ],
+    },
+    session_id: ctx.sessionId,
+  };
 }
 
 function renderEnding(ending: Ending, ctx: TurnContext): JsonLine[] {

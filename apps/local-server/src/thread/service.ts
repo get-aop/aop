@@ -86,14 +86,14 @@ export interface ThreadService {
    * idle; a reopen once resolved.
    * With `onlyIn`, the message is sent only if the thread is in one of those statuses when it is
    * stored, which nothing that releases its worktree can change meanwhile; otherwise it is
-   * refused as busy and nothing is stored or made.
+   * refused as busy and nothing is stored or made. `messageId` is the message stored.
    */
   send: (
     threadId: string,
     text: string,
     origin?: MessageOrigin,
     options?: SendOptions,
-  ) => Promise<ThreadResult<{ thread: Thread }>>;
+  ) => Promise<ThreadResult<{ thread: Thread; messageId?: string }>>;
   /** Answers the question a thread is waiting on; the answer resumes its runtime session. */
   reply: (threadId: string, text: string) => Promise<ThreadResult<{ thread: Thread }>>;
   /** Ends a rate-limited thread's wait now instead of at its reset; the thread takes up its work again. */
@@ -161,7 +161,7 @@ export const createThreadService = (
     text: string,
     origin: MessageOrigin | null,
     { onlyIn, images = [], midRunMode }: SendOptions = {},
-  ): Promise<ThreadResult<{ thread: Thread }>> => {
+  ): Promise<ThreadResult<{ thread: Thread; messageId?: string }>> => {
     const active = await activeProject(thread.projectId);
     if ("error" in active) return { success: false, error: active.error };
     const input = await readMessageInput(thread.projectId, text, images);
@@ -186,7 +186,12 @@ export const createThreadService = (
       return { success: false, error: { code: "SEND_FAILED", reason: started.value.error.code } };
     }
     await discardStagedImages(thread.projectId, images);
-    return reload(thread.id);
+    return reloadSent(thread.id, started.value.message.id);
+  };
+
+  const reloadSent = async (threadId: string, messageId: string) => {
+    const reloaded = await reload(threadId);
+    return reloaded.success ? { ...reloaded, messageId } : reloaded;
   };
 
   const deleteSession = async (

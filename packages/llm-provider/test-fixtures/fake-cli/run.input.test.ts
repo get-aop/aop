@@ -90,3 +90,67 @@ describe("a prompt read from stdin a line at a time", () => {
     expect(replays(run.events)).toEqual(["p1"]);
   });
 });
+
+const interrupt = (requestId: string): string =>
+  JSON.stringify({
+    type: "control_request",
+    request_id: requestId,
+    request: { subtype: "interrupt" },
+  });
+
+describe("a long step and an interrupt", () => {
+  test("a message waits behind a long step and is taken once it ends", async () => {
+    const run = await playStreamed({
+      lines: [userLine("run the suite [fake: hold=1000]", "p1")],
+      // Arrives as the long call starts (init, replay, then the call).
+      later: [{ afterEvents: 3, line: userLine("use arm64", "s1") }],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.sleeps.reduce((sum, ms) => sum + ms, 0)).toBe(1000);
+    const toolResultAt = run.events.findIndex((event) =>
+      JSON.stringify(event).includes('"tool_result"'),
+    );
+    expect(toolResultAt).toBeLessThan(indexOfUuid(run.events, "s1"));
+    expect(results(run.events)).toHaveLength(1);
+  });
+
+  test("an interrupt stops the long step, and the message waiting starts the next turn at once", async () => {
+    const run = await playStreamed({
+      lines: [userLine("run the suite [fake: hold=60000]", "p1")],
+      later: [
+        { afterEvents: 3, line: userLine('stop [fake: say="stopped"]', "s1") },
+        { afterEvents: 3, line: interrupt("req-1") },
+      ],
+    });
+
+    expect(run.exitCode).toBe(0);
+    // It never waited the step out.
+    expect(run.sleeps.reduce((sum, ms) => sum + ms, 0)).toBeLessThan(60_000);
+    expect(run.events.find((event) => event.type === "control_response")).toEqual({
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: "req-1",
+        response: { still_queued: ["s1"] },
+      },
+    });
+    const [cut, next] = results(run.events);
+    expect(cut).toMatchObject({ subtype: "error_during_execution", is_error: true });
+    expect(next).toMatchObject({ subtype: "success", result: "stopped" });
+    expect(replays(run.events)).toEqual(["p1", "s1"]);
+    expect(JSON.stringify(run.events)).toContain("[Request interrupted by user for tool use]");
+    const refused = run.events.find((event) => JSON.stringify(event).includes('"tool_result"'));
+    expect(JSON.stringify(refused)).toContain('"is_error":true');
+  });
+
+  test("an interrupt with no message waiting ends the turn, and the launch with its input", async () => {
+    const run = await playStreamed({
+      lines: [userLine("run the suite [fake: hold=60000]", "p1")],
+      later: [{ afterEvents: 3, line: interrupt("req-2") }],
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(results(run.events).map((result) => result.subtype)).toEqual(["error_during_execution"]);
+  });
+});

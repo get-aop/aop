@@ -11,6 +11,7 @@ export const silentChatHost: ChatApi = {
   startSuggestion: () => new Promise(() => {}),
   skipSuggestion: () => new Promise(() => {}),
   unskipSuggestion: () => new Promise(() => {}),
+  interruptForMessage: () => new Promise(() => {}),
 };
 
 /** A host that answers what a thread's pane asks when it opens, with nothing to show. */

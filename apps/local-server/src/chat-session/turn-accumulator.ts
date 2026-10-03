@@ -41,11 +41,18 @@ const SHELL_TOOL_NAME = "Shell";
  * Runtimes that re-send a whole message (Pi's lifecycle events, cumulative text) are merged, not
  * repeated. Claude's partial messages grow a part token by token; the finished block that
  * follows settles that part instead of adding another. A user message Claude echoes where the
- * model took it, other than the turn's own prompt (`promptUuid`), is a steer part there. What it
- * returns is the turn so far, without blank prose, safe to hand out: the accumulator keeps its
- * own copies.
+ * model took it, other than the turn's own prompt (`promptUuid`), is a steer part there. With a
+ * clock (`now`), a tool call is stamped with when it was first seen, so a turn being written
+ * says how long its step has run. What it returns is the turn so far, without blank prose, safe
+ * to hand out: the accumulator keeps its own copies.
  */
-export const createTurnAccumulator = ({ promptUuid }: { promptUuid?: string } = {}) => {
+export const createTurnAccumulator = ({
+  promptUuid,
+  now,
+}: {
+  promptUuid?: string;
+  now?: () => string;
+} = {}) => {
   const parts: TurnPart[] = [];
   let toolSeq = 0;
   /** The full text the runtime last sent for the text part being written (cumulative providers). */
@@ -224,14 +231,18 @@ export const createTurnAccumulator = ({ promptUuid }: { promptUuid?: string } = 
       return;
     }
     // The result of a call this turn never showed (a subagent's, say) has nothing to settle.
-    if (update.name === undefined) return;
-    parts.push({
+    if (update.name !== undefined) parts.push(newTool(update, update.name));
+  }
+
+  function newTool(update: ToolUpdate, name: string): ToolPart {
+    return {
       type: "tool",
       id: update.itemId ?? `tool_${++toolSeq}`,
-      name: clip(update.name, TOOL_NAME_MAX_LENGTH),
+      name: clip(name, TOOL_NAME_MAX_LENGTH),
       detail: update.detail ? clip(update.detail, TOOL_DETAIL_MAX_LENGTH) : null,
       status: update.status,
-    });
+      ...(now && { startedAt: now() }),
+    };
   }
 
   function findTool(

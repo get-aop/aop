@@ -13,6 +13,7 @@ import { aopPaths, generateTypeId } from "@aop/infra";
 import { discardStagedImages } from "../attachment/service.ts";
 import type { MessageOrigin } from "../chat-session/message-origin.ts";
 import type { ChatMidRunMode } from "../chat-session/mid-run-mode.ts";
+import type { SteerInterruptResult } from "../chat-session/steer-interrupt.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
 import { removeProjectConnections } from "../issues/connection-store.ts";
@@ -50,6 +51,7 @@ export type ProjectError =
   | { code: "INVALID_TRANSITION"; action: ProjectAction; status: ProjectStatus }
   | { code: "SESSION_BUSY"; sessionId: string }
   | { code: "COMPUTER_USE_UNAVAILABLE"; option: ComputerUseOption }
+  | Extract<SteerInterruptResult, { success: false }>["error"]
   | RuntimeChoiceError
   | Extract<
       ThreadError,
@@ -99,6 +101,14 @@ export interface ProjectService {
     text: string,
     options?: { origin?: MessageOrigin; images?: readonly string[]; midRunMode?: ChatMidRunMode },
   ) => Promise<ProjectResult<{ message: Message }>>;
+  /**
+   * "Interrupt now" for a message sent to the coordinator or a thread while it works: the step it
+   * is on stops and it reads the message at once (see chat-session/steer-interrupt.ts).
+   */
+  interruptForMessage: (
+    projectId: string,
+    messageId: string,
+  ) => Promise<ProjectResult<{ outcome: "interrupted" | "delivered" }>>;
   /** The latest page of the coordinator chat, or the one before message `page.before`. */
   listMessages: (
     projectId: string,
@@ -359,6 +369,11 @@ export const createProjectService = (
       const message = await getWireMessage(ctx.db, coordinator, sent.message.id);
       if (!message) throw new Error(`Message ${sent.message.id} was stored with nothing to show`);
       return { success: true, message };
+    },
+
+    interruptForMessage: async (projectId, messageId) => {
+      const result = await chat.interruptForMessage(projectId, messageId);
+      return result.success ? { success: true, outcome: result.outcome } : result;
     },
 
     listMessages: async (projectId, page) => {

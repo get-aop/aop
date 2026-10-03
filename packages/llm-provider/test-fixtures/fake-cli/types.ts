@@ -38,6 +38,11 @@ export type Beat =
   | { kind: "text"; text: string }
   | { kind: "thinking"; text: string }
   | { kind: "shell"; command: string; output: string }
+  /**
+   * A shell command that runs for a while (`hold=`): its call is written when it starts and its
+   * result when it ends, so a message or an interrupt can arrive in between.
+   */
+  | { kind: "hold"; command: string; ms: number; phase: "start" | "end" }
   /** A scripted call to a tool no server answers (`tools=`): it gets an "ok" result. */
   | { kind: "tool"; name: string }
   | { kind: "ask"; ask: AskUser }
@@ -45,7 +50,18 @@ export type Beat =
   | { kind: "mcp"; call: McpCall; result: McpResult };
 
 /** A step before it is carried out: an MCP call still has to reach the server. */
-export type PlannedBeat = Exclude<Beat, { kind: "mcp" }> | { kind: "call"; call: McpCall };
+export type PlannedBeat =
+  | Exclude<Beat, { kind: "mcp" | "hold" }>
+  | { kind: "call"; call: McpCall }
+  | { kind: "hold"; command: string; ms: number };
+
+/** An interrupt that stopped a turn: the request it answers and the call it cut short, if any. */
+export interface Interruption {
+  requestId: string;
+  toolUseId?: string;
+  /** The messages not taken yet, which the next turn starts with. */
+  stillQueued: string[];
+}
 
 export type Ending =
   | { kind: "success"; text: string }
@@ -142,4 +158,6 @@ export interface Dialect {
   start(ctx: TurnContext): JsonLine[];
   beat(beat: Beat, index: number, ctx: TurnContext): JsonLine[];
   end(ending: Ending, ctx: TurnContext): JsonLine[];
+  /** How a turn an interrupt stopped ends: the answer to the request, then the turn's end. */
+  interrupted(interruption: Interruption, ctx: TurnContext): JsonLine[];
 }

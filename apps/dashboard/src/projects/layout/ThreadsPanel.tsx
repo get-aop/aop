@@ -5,7 +5,7 @@ import {
   SlidersHorizontalIcon,
   XIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import { cn } from "@/lib/cn";
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { IconButton } from "../../components/IconButton";
+import { useLiveViewClearance } from "../../live-view/live-view-clearance";
 import { IssuesTab } from "../issues/IssuesTab";
 import { LibraryPanel } from "../library/LibraryPanel";
 import type { ProjectEntry } from "../projects-state";
@@ -145,11 +146,7 @@ const PanelTabBody = ({
 }) => {
   switch (tab) {
     case "threads":
-      return (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <ThreadOverview entry={entry} filters={filters} />
-        </div>
-      );
+      return <ThreadsTabBody entry={entry} filters={filters} />;
     case "routines":
       return <RoutinesTab project={entry.project} />;
     case "issues":
@@ -160,6 +157,22 @@ const PanelTabBody = ({
     case "pull-requests":
       return <PullRequestsTab entry={entry} />;
   }
+};
+
+/**
+ * The threads' overview, scrolling. While the live view's popup rests at the bottom over it, the
+ * end gets room, so the last rows and the Resolved toggle scroll up out from under the popup.
+ */
+const ThreadsTabBody = ({ entry, filters }: { entry: ProjectEntry; filters: OverviewFilters }) => {
+  const content = useRef<HTMLDivElement>(null);
+  const clearance = useLiveViewClearance(content);
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={content} style={clearance ? { paddingBottom: clearance } : undefined}>
+        <ThreadOverview entry={entry} filters={filters} />
+      </div>
+    </div>
+  );
 };
 
 /** The Threads tab's own buttons on the strip: search and the status filter. */

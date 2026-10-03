@@ -55,14 +55,4 @@ export const dayMarkerLabel = (
 };
 
 /** "12s", "3m 05s": how long the coordinator has been working on a message. */
-export const formatElapsed = (sinceIso: string, now: number): string => {
-  const since = Date.parse(sinceIso);
-  if (!Number.isFinite(since)) return "";
-  const seconds = Math.max(0, Math.floor((now - since) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = String(seconds % 60).padStart(2, "0");
-  return minutes < 60
-    ? `${minutes}m ${rest}s`
-    : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
-};
+export { formatElapsed } from "@aop/common";

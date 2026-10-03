@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ArtifactPartSchema } from "../artifacts.ts";
 import { PullRequestRefSchema } from "./artifact.ts";
-import { IdSchema } from "./primitives.ts";
+import { IdSchema, TimestampSchema } from "./primitives.ts";
 import type { ThreadStatus } from "./thread.ts";
 
 /**
@@ -50,6 +50,11 @@ const ToolBlockSchema = z.object({
   /** What it was asked to do, e.g. the command line or the file path. */
   detail: z.string().max(TOOL_DETAIL_MAX_LENGTH).nullable(),
   status: z.enum(["running", "done", "failed"]),
+  /**
+   * When the host saw the call start, on a turn being written: how long the step a message sent
+   * meanwhile waits on has run. A finished reply has none.
+   */
+  startedAt: TimestampSchema.optional(),
 });
 
 /** What the model reasoned before it went on, shown folded. */

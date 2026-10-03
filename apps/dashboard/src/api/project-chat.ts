@@ -24,6 +24,22 @@ export const sendCoordinatorMessage = async (
     })
   ).message;
 
+/**
+ * "Interrupt now" on a message sent while the coordinator or a thread works: the step it is on
+ * stops and it reads the message at once. A message held for after the turn goes in first.
+ * `delivered` when it had already read it.
+ */
+export const interruptForMessage = async (
+  projectId: string,
+  messageId: string,
+): Promise<"interrupted" | "delivered"> =>
+  (
+    await request<{ outcome: "interrupted" | "delivered" }>(
+      `/projects/${encodeURIComponent(projectId)}/messages/${encodeURIComponent(messageId)}/interrupt`,
+      { method: "POST" },
+    )
+  ).outcome;
+
 /** How a message to an agent at work is delivered. */
 export interface SendOptions {
   /** Held until the agent's current turn ends, instead of reaching it after its current step. */

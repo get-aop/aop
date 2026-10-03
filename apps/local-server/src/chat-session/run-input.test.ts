@@ -7,8 +7,15 @@ import type { Kysely } from "kysely";
 import { createCommandContext, type LocalServerContext } from "../context.ts";
 import type { ChatMessage, ChatRun, Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
+import { insertProjectRow } from "../project/test-utils.ts";
 import { finalizeChatRunAndPublish } from "./finalize-publish.ts";
-import { deliverToRunningTurn, settleRunInput } from "./run-input.ts";
+import {
+  deliverToRunningTurn,
+  hasTakenMessage,
+  interruptRun,
+  settleRunInput,
+} from "./run-input.ts";
+import { interruptForMessage } from "./steer-interrupt.ts";
 import { loadOldestQueuedMessage } from "./steer-queue.ts";
 
 const databases: Kysely<Database>[] = [];
@@ -20,14 +27,18 @@ afterEach(async () => {
 });
 
 const SESSION = "isess_run_input";
+const PROJECT = "proj_run_input";
 
 const line = (event: Record<string, unknown>): string => `${JSON.stringify(event)}\n`;
 const replay = (messageId: string) =>
   line({ type: "user", isReplay: true, uuid: typeIdToUuid(messageId), message: { content: [] } });
 const RESULT = line({ type: "result", subtype: "success", result: "Done." });
 
-/** A session with one running Claude Code run that takes messages, and its log as `log` says. */
-const setup = async (log: string, run: Partial<ChatRun> = {}) => {
+/**
+ * A session with one running Claude Code run that takes messages, and its log as `log` says.
+ * `inProject` makes the session the coordinator of project PROJECT.
+ */
+const setup = async (log: string, run: Partial<ChatRun> = {}, { inProject = false } = {}) => {
   const db = await createTestDb();
   databases.push(db);
   const ctx = createCommandContext(db);
@@ -35,6 +46,7 @@ const setup = async (log: string, run: Partial<ChatRun> = {}) => {
   const logFilePath = join(dir, "run.jsonl");
   writeFileSync(logFilePath, log);
   const now = new Date().toISOString();
+  if (inProject) await insertProjectRow(db, PROJECT);
   await db
     .insertInto("chat_sessions")
     .values({
@@ -43,6 +55,11 @@ const setup = async (log: string, run: Partial<ChatRun> = {}) => {
       runtime: "claude-code",
       created_at: now,
       updated_at: now,
+      ...(inProject && {
+        project_id: PROJECT,
+        kind: "coordinator" as const,
+        last_activity_at: now,
+      }),
     })
     .execute();
   const prompt = await insertMessage(db, "Build it", null);
@@ -92,6 +109,7 @@ const insertMessage = async (
       turn_index: 1,
       disposition: steeredRunId ? "steered" : "queued",
       steered_run_id: steeredRunId,
+      created_at: new Date().toISOString(),
     })
     .returningAll()
     .executeTakeFirstOrThrow();
@@ -105,6 +123,33 @@ const messageRow = (db: Kysely<Database>, id: string) =>
 
 const finalize = (ctx: LocalServerContext, run: ChatRun, status: "completed" | "cancelled") =>
   finalizeChatRunAndPublish(ctx, run, "Done.", null, null, { status, errorMessage: null }, []);
+
+/** The run's FIFO with a reader that does not block, as the relay holds one; `read` takes its lines. */
+const openFifo = (run: ChatRun) => {
+  const fifo = run.input_path ?? "";
+  Bun.spawnSync(["mkfifo", fifo]);
+  const reader = openSync(fifo, constants.O_RDONLY | constants.O_NONBLOCK);
+  return {
+    read: (): Record<string, unknown>[] => {
+      const buffer = Buffer.alloc(64 * 1024);
+      let size = 0;
+      try {
+        size = readSync(reader, buffer);
+      } catch {
+        // EAGAIN: nothing written.
+      }
+      return buffer
+        .subarray(0, size)
+        .toString()
+        .split("\n")
+        .filter(Boolean)
+        .map((text) => JSON.parse(text));
+    },
+    close: () => closeSync(reader),
+  };
+};
+
+const INTERRUPT = { type: "control_request", request: { subtype: "interrupt" } };
 
 /** Stands in for the relay: exits 9 when it is told the input ended. */
 const fakeRelay = (): Bun.Subprocess => {
@@ -236,6 +281,113 @@ describe("writing a message into a running turn", () => {
     expect(await messageRow(db, message.id)).toEqual({
       steered_run_id: null,
       disposition: "queued",
+    });
+  });
+});
+
+describe("interrupting a running turn", () => {
+  test("writes the CLI's interrupt request into the run's input", async () => {
+    const { ctx, run } = await setup("");
+    const fifo = openFifo(run);
+    try {
+      expect(await interruptRun(ctx, run.id)).toBe(true);
+      expect(fifo.read()).toEqual([expect.objectContaining(INTERRUPT)]);
+    } finally {
+      fifo.close();
+    }
+  });
+
+  test("refuses a run whose input has ended, or that is not running", async () => {
+    const relay = fakeRelay();
+    const { ctx, run } = await setup(RESULT, { pid: relay.pid });
+    expect(await settleRunInput(ctx, run.id)).toBe(true);
+    expect(await interruptRun(ctx, run.id)).toBe(false);
+
+    const finished = await setup("", { status: "completed" });
+    expect(await interruptRun(finished.ctx, finished.run.id)).toBe(false);
+  });
+
+  test("tells whether the run took a message in", async () => {
+    const taken = generateTypeId("smsg");
+    const { run } = await setup(`${replay(taken)}${RESULT}`);
+    expect(await hasTakenMessage(run, taken)).toBe(true);
+    expect(await hasTakenMessage(run, generateTypeId("smsg"))).toBe(false);
+  });
+});
+
+describe("Interrupt now on a message", () => {
+  test("a message the turn has not taken yet interrupts the step it is on", async () => {
+    const { db, ctx, run } = await setup("", {}, { inProject: true });
+    const steer = await insertMessage(db, "stop and use arm64", run.id);
+    const fifo = openFifo(run);
+    try {
+      expect(await interruptForMessage(ctx, PROJECT, steer.id)).toEqual({
+        success: true,
+        outcome: "interrupted",
+      });
+      expect(fifo.read()).toEqual([expect.objectContaining(INTERRUPT)]);
+    } finally {
+      fifo.close();
+    }
+  });
+
+  test("a message the turn already took needs no interrupt", async () => {
+    const steerId = generateTypeId("smsg");
+    const { db, ctx, run } = await setup(replay(steerId), {}, { inProject: true });
+    await db
+      .insertInto("chat_messages")
+      .values({ id: steerId, session_id: SESSION, role: "user", content: "use arm64" })
+      .execute();
+    await db
+      .updateTable("chat_messages")
+      .set({ steered_run_id: run.id })
+      .where("id", "=", steerId)
+      .execute();
+    const fifo = openFifo(run);
+    try {
+      expect(await interruptForMessage(ctx, PROJECT, steerId)).toEqual({
+        success: true,
+        outcome: "delivered",
+      });
+      expect(fifo.read()).toEqual([]);
+    } finally {
+      fifo.close();
+    }
+  });
+
+  test("a message held for after the turn is written into it first, then the step stops", async () => {
+    const { db, ctx, run } = await setup("", {}, { inProject: true });
+    const held = await insertMessage(db, "after this, use arm64", null);
+    const fifo = openFifo(run);
+    try {
+      expect(await interruptForMessage(ctx, PROJECT, held.id)).toEqual({
+        success: true,
+        outcome: "interrupted",
+      });
+      expect(fifo.read()).toEqual([
+        expect.objectContaining({ type: "user", uuid: typeIdToUuid(held.id) }),
+        expect.objectContaining(INTERRUPT),
+      ]);
+      expect(await messageRow(db, held.id)).toEqual({
+        steered_run_id: run.id,
+        disposition: "steered",
+      });
+    } finally {
+      fifo.close();
+    }
+  });
+
+  test("refuses a message of another project, and one no running turn waits on", async () => {
+    const { db, ctx } = await setup("", { status: "completed" }, { inProject: true });
+    const message = await insertMessage(db, "use arm64", null);
+
+    expect(await interruptForMessage(ctx, "proj_other", message.id)).toEqual({
+      success: false,
+      error: { code: "MESSAGE_NOT_FOUND" },
+    });
+    expect(await interruptForMessage(ctx, PROJECT, message.id)).toEqual({
+      success: false,
+      error: { code: "MESSAGE_NOT_WAITING" },
     });
   });
 });

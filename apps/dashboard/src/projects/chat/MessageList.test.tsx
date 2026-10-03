@@ -318,6 +318,9 @@ describe("a message sent into a turn while it ran", () => {
 
     const row = steered("u2");
     expect(row.getAttribute("data-state")).toBe("taken");
+    expect(within(row).getByTestId("steered-message-caption").textContent).toBe(
+      "Sent while it worked · delivered",
+    );
     expect(within(row).getByText("use arm64")).toBeTruthy();
     expect(assistantOf("a1").contains(row)).toBe(true);
     // The person's message is not drawn a second time on its own.
@@ -337,7 +340,7 @@ describe("a message sent into a turn while it ran", () => {
     const row = steered("u2");
     expect(row.getAttribute("data-state")).toBe("pending");
     expect(within(row).getByTestId("steered-message-caption").textContent).toContain(
-      "after its current step",
+      "Waiting for it to finish what it is writing",
     );
     expect(assistantOf("a1").contains(row)).toBe(true);
   });
