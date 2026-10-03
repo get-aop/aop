@@ -2,7 +2,7 @@ import { extname } from "node:path";
 import { type CuaLeaseState, EMPTY_CUA_LEASE, parseLiveViewMode } from "@aop/common";
 import { getLogger, getTracerProvider } from "@aop/infra";
 import { httpInstrumentationMiddleware } from "@hono/otel";
-import { type Context, Hono } from "hono";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { createHostAgentCliService } from "./agent-cli/host-agent-cli-service.ts";
 import { createAgentCliRoutes } from "./agent-cli/routes.ts";
 import type { AgentCliService } from "./agent-cli/service.ts";
@@ -108,6 +108,27 @@ export interface AppDependencies {
   hostSetup?: HostSetupService;
 }
 
+// Request logging middleware — skip the endpoints clients poll: health, and the live view's
+// status and frames, which a watching viewer asks for several times a second
+const logRequests: MiddlewareHandler = async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+  if (path.startsWith("/api/health") || path.startsWith("/api/computer-use/live")) {
+    return next();
+  }
+
+  const method = c.req.method;
+  const start = Date.now();
+  logger.info("{method} {path}", { method, path });
+
+  await next();
+
+  const status = c.res.status;
+  const durationMs = Date.now() - start;
+  const line = "{method} {path} → {status} ({durationMs}ms)";
+  if (status >= 400) logger.warn(line, { method, path, status, durationMs });
+  else logger.info(line, { method, path, status, durationMs });
+};
+
 export const createApp = (deps: AppDependencies) => {
   const { ctx, dashboardStaticPath, dashboardDevOrigin } = deps;
   const app = new Hono<AuthEnv>();
@@ -135,38 +156,7 @@ export const createApp = (deps: AppDependencies) => {
     c.res = await maybeCompressJsonResponse(c.req.raw, c.res);
   });
 
-  // Request logging middleware — skip the endpoints clients poll: health, and the live view's
-  // status and frames, which a watching viewer asks for several times a second
-  app.use("/api/*", async (c, next) => {
-    const path = new URL(c.req.url).pathname;
-    if (path.startsWith("/api/health") || path.startsWith("/api/computer-use/live")) {
-      return next();
-    }
-
-    const method = c.req.method;
-    const start = Date.now();
-    logger.info("{method} {path}", { method, path });
-
-    await next();
-
-    const status = c.res.status;
-    const durationMs = Date.now() - start;
-    if (status >= 400) {
-      logger.warn("{method} {path} → {status} ({durationMs}ms)", {
-        method,
-        path,
-        status,
-        durationMs,
-      });
-    } else {
-      logger.info("{method} {path} → {status} ({durationMs}ms)", {
-        method,
-        path,
-        status,
-        durationMs,
-      });
-    }
-  });
+  app.use("/api/*", logRequests);
 
   app.route(
     "/api/health",
@@ -201,19 +191,7 @@ export const createApp = (deps: AppDependencies) => {
     "/api/settings",
     createSettingsRoutes(ctx, { runCapChanged: () => projects.chat.dispatchQueuedRuns() }),
   );
-  app.route("/api/updates", createUpdateRoutes(deps.updates ?? createHostUpdateService(ctx)));
-  app.route(
-    "/api/agent-clis",
-    createAgentCliRoutes(deps.agentClis ?? createHostAgentCliService(ctx)),
-  );
-  app.route(
-    "/api/computer-use",
-    createComputerUseRoutes(
-      deps.computerUse ?? computerUse,
-      deps.liveView ?? createHostLiveView(ctx),
-      leaseState(deps),
-    ),
-  );
+  mountHostUpkeepRoutes(app, deps);
   app.route(
     "/api/runtime-configuration",
     createRuntimeConfigurationRoutes(
@@ -263,6 +241,24 @@ export const createApp = (deps: AppDependencies) => {
   }
 
   return app;
+};
+
+/** Keeping the host current and able: its own updates, its agent CLIs, computer use. */
+const mountHostUpkeepRoutes = (app: Hono<AuthEnv>, deps: AppDependencies): void => {
+  const { ctx } = deps;
+  app.route("/api/updates", createUpdateRoutes(deps.updates ?? createHostUpdateService(ctx)));
+  app.route(
+    "/api/agent-clis",
+    createAgentCliRoutes(deps.agentClis ?? createHostAgentCliService(ctx)),
+  );
+  app.route(
+    "/api/computer-use",
+    createComputerUseRoutes(
+      deps.computerUse ?? computerUse,
+      deps.liveView ?? createHostLiveView(ctx),
+      leaseState(deps),
+    ),
+  );
 };
 
 // What the model of a refused run reads, since Claude Code passes it on as the call's error.
