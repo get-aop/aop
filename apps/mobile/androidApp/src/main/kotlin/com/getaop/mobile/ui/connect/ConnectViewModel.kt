@@ -49,13 +49,18 @@ class ConnectViewModel(application: Application, private val saved: SavedStateHa
 
     fun setAddress(value: String) = edit { it.copy(address = value.trim(), error = null) }
 
-    fun setCode(value: String) = edit { it.copy(code = PairingCode.format(value), error = null) }
+    /**
+     * Keeps the text exactly as typed (a dash and spaces included, up to a sane length): changing
+     * the text while the keyboard is still composing makes it drop the characters that follow.
+     * Case and separators are ignored when the code is sent, as the host ignores them.
+     */
+    fun setCode(value: String) = edit { it.copy(code = value.take(CODE_INPUT_MAX), error = null) }
 
     fun setDeviceName(value: String) = edit { it.copy(deviceName = value.take(100), error = null) }
 
     /** A scanned or opened `aop://pair` link: fills what it carries. */
     fun usePayload(payload: PairingPayload) = edit {
-        it.copy(code = payload.code, address = payload.host ?: it.address, error = null)
+        it.copy(code = PairingCode.normalize(payload.code), address = payload.host ?: it.address, error = null)
     }
 
     fun submit() {
@@ -68,7 +73,7 @@ class ConnectViewModel(application: Application, private val saved: SavedStateHa
         edit { it.copy(busy = true, error = null, address = address) }
         viewModelScope.launch {
             try {
-                app.sessions.pair(address, current.code, current.deviceName.trim())
+                app.sessions.pair(address, PairingCode.format(current.code), current.deviceName.trim())
                 app.sessions.session?.goLive()
                 ConnectionService.sync(app)
                 edit { it.copy(busy = false, code = "") }
@@ -97,6 +102,8 @@ class ConnectViewModel(application: Application, private val saved: SavedStateHa
     }
 
     private companion object {
+        const val CODE_INPUT_MAX = 16
+
         /** The name the person gave the phone ("Galaxy Z Fold8"), else its model. */
         fun defaultDeviceName(application: Application): String =
             Settings.Global.getString(application.contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() }

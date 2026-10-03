@@ -35,6 +35,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.getaop.mobile.ui.theme.AopColors
@@ -93,6 +97,7 @@ fun ConnectScreen(viewModel: ConnectViewModel) {
                 onValueChange = viewModel::setCode,
                 label = { Text("Pairing code") },
                 placeholder = { Text("ABCD-EFGH") },
+                visualTransformation = PairingCodeTransformation,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Characters,
@@ -139,5 +144,24 @@ fun ConnectScreen(viewModel: ConnectViewModel) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Shows a typed code in capitals, and as the host prints it (`ABCD-EFGH`) when it was typed
+ * without the dash. Only the display changes; what was typed is kept.
+ */
+object PairingCodeTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val raw = text.text.uppercase()
+        if (raw.length <= 4 || !raw.all(Char::isLetterOrDigit)) {
+            return TransformedText(AnnotatedString(raw), OffsetMapping.Identity)
+        }
+        val mapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int = if (offset <= 4) offset else offset + 1
+
+            override fun transformedToOriginal(offset: Int): Int = (if (offset <= 4) offset else offset - 1).coerceAtMost(raw.length)
+        }
+        return TransformedText(AnnotatedString("${raw.take(4)}-${raw.drop(4)}"), mapping)
     }
 }

@@ -20,28 +20,24 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 
 /** How often the session looks again; tests shorten them. */
 data class SessionTiming(
     val projectsPollMs: Long = 15_000,
     val unreachableRetryMs: Long = 5_000,
     val streamBackoffMs: List<Long> = listOf(1_000, 2_000, 5_000, 10_000, 30_000),
-    val catchUpTimeoutMs: Long = 20_000,
 )
 
 /**
- * The phone's view of one host. While the app is on screen it is [goLive]: one stream per
- * project, so replies appear as they are written. In the background the service calls
- * [catchUp] now and then instead: each project's stream is read up to the present and closed,
- * which replays exactly the entries missed since the last look and keeps the radio quiet
- * between looks. Both paths apply entries the same way and publish [changes].
+ * The phone's view of one host. While it is [goLive] (the app on screen, or the background
+ * connection service running) it holds one stream per active project, so replies appear as
+ * they are written, and it publishes each change worth a notification on [changes]. A stream
+ * that drops reconnects from the newest entry it saw, so the host replays exactly what was missed.
  */
 class HostSession(
     val client: HostClient,
@@ -71,24 +67,6 @@ class HostSession(
     }
 
     val isLive: Boolean get() = liveJob?.isActive == true
-
-    /** One look at the host: the project list, then each project's missed entries. */
-    suspend fun catchUp() {
-        if (!refreshProjects()) return
-        for (project in streamedProjects()) {
-            val finished = withTimeoutOrNull(timing.catchUpTimeoutMs) {
-                runCatching {
-                    openProjectStream(client, http, project, cursor(project))
-                        .transformWhile { event ->
-                            emit(event)
-                            event !is StreamEvent.Live
-                        }
-                        .collect { handle(project, it) }
-                }.onFailure(::noteFailure)
-            }
-            if (finished == null || state.value.connection == Connection.Unauthorized) return
-        }
-    }
 
     suspend fun loadChat(key: ChatKey) {
         val page = guarded {

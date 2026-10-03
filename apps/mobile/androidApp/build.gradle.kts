@@ -7,17 +7,16 @@ plugins {
 }
 
 /**
- * The release key never lives in the repository. `keystore.properties` (gitignored) or the
- * AOP_MOBILE_KEYSTORE* environment variables point at it; without either, a release build is
- * left unsigned and cannot be installed.
+ * The release key never lives in the repository. Its properties file (storeFile, storePassword,
+ * keyAlias, keyPassword) is read from AOP_MOBILE_SIGNING_PROPERTIES, else
+ * ~/.aop-mobile/keystore.properties; without one, a release build is left unsigned and cannot be
+ * installed.
  */
 val signing: Properties = Properties().apply {
-    val file = rootProject.file("keystore.properties")
+    val path = System.getenv("AOP_MOBILE_SIGNING_PROPERTIES")
+        ?: "${System.getProperty("user.home")}/.aop-mobile/keystore.properties"
+    val file = File(path)
     if (file.exists()) file.inputStream().use(::load)
-    System.getenv("AOP_MOBILE_KEYSTORE")?.let { setProperty("storeFile", it) }
-    System.getenv("AOP_MOBILE_KEYSTORE_PASSWORD")?.let { setProperty("storePassword", it) }
-    System.getenv("AOP_MOBILE_KEY_ALIAS")?.let { setProperty("keyAlias", it) }
-    System.getenv("AOP_MOBILE_KEY_PASSWORD")?.let { setProperty("keyPassword", it) }
 }
 
 android {
@@ -91,5 +90,5 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
-    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit"))
 }

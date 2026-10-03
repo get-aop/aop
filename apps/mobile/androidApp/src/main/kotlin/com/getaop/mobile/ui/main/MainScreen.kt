@@ -16,6 +16,7 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.material3.adaptive.layout.MutableThreePaneScaffoldState
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirectiveWithTwoPanesOnMediumWidth
 import androidx.compose.material3.adaptive.navigation.BackNavigationBehavior
 import androidx.compose.material3.adaptive.navigation.NavigableListDetailPaneScaffold
@@ -61,6 +62,12 @@ fun MainScreen(viewModel: MainViewModel) {
     val twoPanes = directive.maxHorizontalPartitions > 1
     val current = navigator.currentDestination?.contentKey
 
+    // The navigator recomputes which panes fit when the window changes size, but applies it only on
+    // its next navigation; folding or unfolding is not one, so the new layout is applied here.
+    val fitted = navigator.scaffoldValue
+    LaunchedEffect(fitted) {
+        (navigator.scaffoldState as? MutableThreePaneScaffoldState)?.snapTo(fitted)
+    }
     LaunchedEffect(viewModel) {
         viewModel.opens.collect { request -> navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, request.detail) }
     }

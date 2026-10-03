@@ -38,14 +38,16 @@ class ConnectionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val app = aop
-        val paired = app.sessions.state.value as? PairState.Paired ?: return stop()
-        val host = HostAddress.shortName(paired.pairing.baseUrl)
+        val paired = app.sessions.state.value as? PairState.Paired
+        val host = paired?.pairing?.baseUrl?.let(HostAddress::shortName) ?: "the host"
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING
         } else {
             0
         }
+        // Android requires this call soon after every start, even one that is about to stop.
         ServiceCompat.startForeground(this, Notifier.CONNECTION_ID, app.notifier.connectionNotification("Connected to $host"), type)
+        if (paired == null) return stop()
         paired.session.goLive()
         follower?.cancel()
         follower = scope.launch { followConnection(host) }
@@ -78,6 +80,7 @@ class ConnectionService : Service() {
     }
 
     private fun stop(): Int {
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
         return START_NOT_STICKY
     }

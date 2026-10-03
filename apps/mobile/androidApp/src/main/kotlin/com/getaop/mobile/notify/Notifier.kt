@@ -16,17 +16,13 @@ import com.getaop.mobile.R
 import com.getaop.mobile.core.notify.NotificationIntent
 import com.getaop.mobile.core.notify.NotificationKind
 import com.getaop.mobile.ui.MainActivity
-import java.util.concurrent.ConcurrentHashMap
 
 /** Posts and takes back the app's notifications. One per conversation: a newer one replaces it. */
 class Notifier(private val context: Context) {
     private val manager = NotificationManagerCompat.from(context)
-
-    /** Conversations with a notification showing, so one dealt with elsewhere can be taken back. */
-    private val showing = ConcurrentHashMap.newKeySet<String>()
+    private val system = context.getSystemService(NotificationManager::class.java)
 
     fun createChannels() {
-        val system = context.getSystemService(NotificationManager::class.java)
         CHANNELS.forEach { (id, spec) ->
             system.createNotificationChannel(NotificationChannel(id, spec.first, spec.second))
         }
@@ -51,19 +47,19 @@ class Notifier(private val context: Context) {
             .build()
         try {
             manager.notify(key, ID, notification)
-            showing += key
         } catch (_: SecurityException) {
             // The permission was withdrawn between the check and the post.
         }
     }
 
-    /** Takes back a conversation's notification: the person dealt with it here or on another device. */
+    /**
+     * Takes back a conversation's notification: the person dealt with it here or on another
+     * device. Asks Android what is showing, so one posted before the app restarted goes too.
+     */
     fun cancel(projectId: String, threadId: String?) {
         val key = key(projectId, threadId)
-        if (showing.remove(key)) manager.cancel(key, ID)
+        if (system.activeNotifications.any { it.tag == key && it.id == ID }) manager.cancel(key, ID)
     }
-
-    fun isShowing(projectId: String, threadId: String?): Boolean = key(projectId, threadId) in showing
 
     fun connectionNotification(text: String): Notification =
         NotificationCompat.Builder(context, CONNECTION_CHANNEL)
@@ -73,7 +69,7 @@ class Notifier(private val context: Context) {
             .setContentIntent(openIntent(null, null))
             .setOngoing(true)
             .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
 
@@ -111,7 +107,7 @@ class Notifier(private val context: Context) {
             "pull-requests" to ("Pull requests" to NotificationManager.IMPORTANCE_DEFAULT),
             "coordinator" to ("Coordinator replies" to NotificationManager.IMPORTANCE_DEFAULT),
             "turns" to ("Finished turns" to NotificationManager.IMPORTANCE_LOW),
-            CONNECTION_CHANNEL to ("Connection to the host" to NotificationManager.IMPORTANCE_MIN),
+            CONNECTION_CHANNEL to ("Connection to the host" to NotificationManager.IMPORTANCE_LOW),
         )
     }
 }
