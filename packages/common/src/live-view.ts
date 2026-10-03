@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CuaLeaseStateSchema } from "./computer-use-lease.ts";
 import { TimestampSchema } from "./projects/primitives.ts";
 
 /**
@@ -59,5 +60,7 @@ export const LiveViewStatusSchema = z.object({
   /** Most recently active first. */
   sessions: z.array(LiveViewSessionSchema),
   capture: LiveViewCaptureSchema,
+  /** Who holds the computer-use lease and who waits for it (thread cards and the view's header). */
+  lease: CuaLeaseStateSchema,
 });
 export type LiveViewStatus = z.infer<typeof LiveViewStatusSchema>;

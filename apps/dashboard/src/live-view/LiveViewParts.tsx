@@ -1,4 +1,4 @@
-import type { LiveViewSession } from "@aop/common";
+import type { CuaLeaseState, LiveViewSession } from "@aop/common";
 import { ChevronsUpDownIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
 import { Link, threadPath } from "../shell/router";
+import { leaseSummary } from "./cua-lease";
 import { pickLiveViewThread } from "./live-view-store";
 
 /** The red "live" dot; it holds still while the session is ending. */
@@ -44,6 +45,38 @@ export const ThreadTitle = ({
     {session.title}
   </Link>
 );
+
+/**
+ * Who holds the computer-use lease and how many threads wait for it. `compact` (the popup's narrow
+ * header) leaves out the holder when it is the thread on screen, whose title is already there,
+ * and then says nothing at all while no one waits; the whole line stays in the tooltip.
+ */
+export const LeaseSummary = ({
+  lease,
+  current,
+  compact = false,
+}: {
+  lease: CuaLeaseState;
+  current: LiveViewSession;
+  compact?: boolean;
+}) => {
+  const full = leaseSummary(lease);
+  const { holder, queue } = lease;
+  const holdsIt = holder?.kind === "thread" && holder.threadId === current.threadId;
+  const text = compact && holdsIt ? (queue.length > 0 ? `${queue.length} waiting` : null) : full;
+  if (!full || !text) return null;
+  return (
+    <span
+      data-testid="live-view-lease"
+      data-holder={holder ? (holder.kind === "thread" ? holder.threadId : "external") : "none"}
+      data-waiting={queue.length}
+      title={full}
+      className="min-w-0 shrink truncate text-[11px] text-text-muted"
+    >
+      {text}
+    </span>
+  );
+};
 
 /** Picks which thread's session to watch when more than one uses computer use. */
 export const SessionSwitcher = ({

@@ -1,7 +1,7 @@
-import type { LiveViewSession } from "@aop/common";
+import type { CuaLeaseState, LiveViewSession } from "@aop/common";
 import { PictureInPicture2Icon } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { FramePicture, LiveDot, SessionSwitcher, ThreadTitle } from "./LiveViewParts";
+import { FramePicture, LeaseSummary, LiveDot, SessionSwitcher, ThreadTitle } from "./LiveViewParts";
 import { setLiveViewFullscreen } from "./live-view-store";
 import type { LiveFrames } from "./use-live-frames";
 
@@ -13,10 +13,12 @@ import type { LiveFrames } from "./use-live-frames";
 export const LiveViewFullscreen = ({
   session,
   sessions,
+  lease,
   frames,
 }: {
   session: LiveViewSession;
   sessions: LiveViewSession[];
+  lease: CuaLeaseState;
   frames: LiveFrames;
 }) => {
   const backButton = useRef<HTMLButtonElement>(null);
@@ -49,6 +51,7 @@ export const LiveViewFullscreen = ({
         />
         <span className="hidden shrink-0 text-meta text-text-subtle sm:inline">View only</span>
         <span className="flex-1" />
+        <LeaseSummary lease={lease} current={session} />
         <SessionSwitcher sessions={sessions} current={session} />
         <button
           ref={backButton}

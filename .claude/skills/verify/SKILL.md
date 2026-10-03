@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Launch an isolated AOP stack (Hono local-server + React dashboard + `aop` CLI) on free ports with a scratch AOP_HOME, drive it with the CLI or, when the task needs a browser check, with the session's computer-use tools (set by the AOP project's Computer Use setting), and capture screenshots, command output, and DB/git state as proof. Use to confirm a change to apps/dashboard, apps/local-server, or apps/cli works in the running app, beyond unit tests.
+description: Launch an isolated AOP stack (Hono local-server + React dashboard + `aop` CLI) on free ports with a scratch AOP_HOME, drive it with the CLI or, for what shows on a screen (the dashboard in a browser, the desktop app, other apps), with the session's computer-use tools (browser and computer use, set by the AOP project's Computer Use setting), and capture screenshots, command output, and DB/git state as proof. Use to confirm a change to apps/dashboard, apps/local-server, or apps/cli works in the running app, beyond unit tests.
 ---
 
 # Verify AOP in the running app
@@ -47,9 +47,9 @@ bun $S/verify-stack.ts aop --name <run> -- repo:init <path>
 bun $S/verify-stack.ts env --name <run>          # exports, to run other commands against the stack
 ```
 
-**Dashboard: only when the task needs a browser check, or the person asks for one.** A task needs one when its change is in what the dashboard shows or does and the API, the CLI and the tests cannot prove it. Server, CLI, docs and test-only changes do not; prove those with the CLI, `curl` and the tests.
+**Screen checks: whenever the change is in what a person sees or does on screen, or the person asks for one.** Every piece of UI work is driven in a real browser (or the real app) with the computer-use tools; the API, the CLI and the tests prove the rest. Server, CLI, docs and test-only changes need no screen; prove those with the CLI, `curl` and the tests. If something blocks a screen check, stop and ask the person instead of skipping it.
 
-Drive the dashboard only with the computer-use tools this session was given. In an AOP thread, the project's Computer Use setting decides them: **CUA** gives the `mcp__cua-driver__*` tools; **Model default** gives none. Never start a browser driver of your own (Playwright, headless Chrome over CDP, AppleScript; the desktop recipe's `desktop-cdp.ts` drives the Electron app, not a browser, and stays allowed), never hand the test to another agent CLI such as `codex`, and never drive the person's own Chrome profile. Without the tools, skip the dashboard drive, prove what you can through the CLI and the API, and say in the report that the dashboard was not driven and why.
+Drive the screen only with the computer-use tools this session was given. In an AOP thread, the project's Computer Use setting decides them: **CUA** gives the `mcp__cua-driver__*` tools, for browser use and computer use alike (browsers, desktop apps, windows, the keyboard and mouse, screenshots of the whole screen); **Model default** gives none. One thread at a time uses the host's screen, and AOP enforces it: your first CUA call waits in line while another thread has the screen, so do the non-screen work first and take no lock of your own. Never start a browser driver of your own (Playwright, headless Chrome over CDP, AppleScript; the desktop recipe's `desktop-cdp.ts` drives the Electron app, not a browser, and stays allowed), never hand the test to another agent CLI such as `codex`, and never drive the person's own Chrome profile. Without the tools, skip the dashboard drive, prove what you can through the CLI and the API, and say in the report that the dashboard was not driven and why.
 
 With CUA, read `skill://cua-driver/SKILL.md` first (with ReadMcpResourceTool), and repeat one `session` label (`verify-<run>`) on every call:
 
@@ -57,7 +57,7 @@ With CUA, read `skill://cua-driver/SKILL.md` first (with ReadMcpResourceTool), a
 2. Bind it: `list_windows` for that browser's pid, then `get_browser_state` with the `pid` and `window_id`. It returns the `target_id` and the tab ids.
 3. `browser_navigate` to the run's dashboard URL (`env.AOP_DASHBOARD_URL` in `.work/verify/<run>/state.json`).
 4. Read the page with `get_browser_state` (`snapshot_format: "semantic_v2"`, a `query` with the `data-testid` name or the visible label from the feature file), act with `browser_click` and `browser_type` on the refs it returns (`replace: true` sets a field), and read the state again after each action: a newer snapshot or a navigation invalidates the old refs. Ask for `include_screenshot: true` at each checkpoint.
-5. When done, `end_session`; if the browser you launched is still running, `kill_app` with its pid only.
+5. When done, `end_session` at once: it closes the browser you launched, deletes its profile and gives the screen to the next thread in line. Never hold the screen through test suites, builds or CI waits (AOP takes it back after 3 minutes without a CUA call, and when your turn ends).
 
 The feature files were written for Claude in Chrome. Read their steps as intent: `find` and `read_page` are `get_browser_state` with a `query`; a "native value setter" fill is `browser_type` with `replace: true`; `javascript_tool` reads are `page` with `get_text` or `query_dom` (the mutating `page` actions are off by default; do not turn them on). The CUA tools read no browser console, so say in the report that it was not read.
 

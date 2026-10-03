@@ -20,7 +20,7 @@ When the setting allows it, the view shows while a thread is using CUA and goes 
 
 ## How the host knows a thread uses CUA
 
-From the thread's own tool calls. Every line a thread's Claude Code writes to its run log already passes through the host (the log tail that streams the turn), and `computer-use/cua-activity.ts` hears each assistant message that calls a `mcp__cua-driver__*` tool. Nothing else counts: not the project's computer use setting, and not the CUA lock directory threads take by convention.
+From the thread's own tool calls. Every line a thread's Claude Code writes to its run log already passes through the host (the log tail that streams the turn), and `computer-use/cua-activity.ts` hears each assistant message that calls a `mcp__cua-driver__*` tool. Nothing else counts: not the project's computer use setting, and not the old CUA lock directory. A thread whose call waits in line for the computer-use lease ([Computer use](./computer-use.md#one-thread-at-a-time)) is left out of the sessions until its turn comes; the status's `lease` names the holder and the line.
 
 - A thread's CUA session starts with its first CUA call.
 - It ends when the thread calls `end_session`, when its turn ends (CUA Driver's MCP server ends with the run), or after three minutes without a CUA call (the thread moved on to a test suite and never said so).

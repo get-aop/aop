@@ -81,7 +81,7 @@ export const createMcpRoutes = (ctx: LocalServerContext, services: ProjectServic
  * else. The token outlives host restarts (see auth.ts), so what a session may still do is decided
  * here, on every request: a deleted session and a resolved thread have no turn to serve.
  */
-const authorizedSession = async (
+export const authorizedSession = async (
   c: Context,
   ctx: LocalServerContext,
   services: ProjectServices,

@@ -18,6 +18,12 @@ const status = (overrides: Partial<CuaStatus>): CuaStatus => ({
   version: "0.32.0",
   latestVersion: "0.32.0",
   checks: [],
+  fix: {
+    command: "aop computer-use setup",
+    sudoCommand: null,
+    missing: [],
+    pinnedVersion: "0.32.0",
+  },
   host: { name: "Studio Mac", platform: "darwin" },
   checkedAt: "2026-10-01T12:00:00.000Z",
   ...overrides,
@@ -36,7 +42,7 @@ describe("cuaSetupSteps", () => {
     const steps = status({ status: "not-installed", reason: "not-installed", path: null });
 
     expect(ids(steps)).toEqual(["install", "start", "permissions", "config"]);
-    expect(commands(steps)).toContain(CUA_COMMANDS.install);
+    expect(commands(steps)).toContain("aop computer-use setup");
     expect(cuaSetupSteps(steps).find((s) => s.id === "permissions")?.places).toEqual([
       "System Settings › Privacy & Security › Accessibility: turn on Cua Driver",
       "System Settings › Privacy & Security › Screen & System Audio Recording: turn on Cua Driver",
@@ -74,20 +80,21 @@ describe("cuaSetupSteps", () => {
     ]);
   });
 
-  test("a driver that does not answer is repaired by updating it", () => {
+  test("a driver that does not answer is repaired by AOP's setup", () => {
     const steps = status({ status: "not-ready", reason: "no-answer" });
 
-    expect(ids(steps)).toEqual(["update", "permissions", "config"]);
+    expect(ids(steps)).toEqual(["install", "permissions", "config"]);
+    expect(cuaSetupSteps(steps)[0]?.title).toBe("Repair CUA Driver");
     expect(commands(steps)).toEqual(
-      expect.arrayContaining([CUA_COMMANDS.update, CUA_COMMANDS.doctor]),
+      expect.arrayContaining(["aop computer-use setup", CUA_COMMANDS.doctor]),
     );
   });
 
-  test("a ready host with a newer release gets the update step only", () => {
-    const behind = status({ latestVersion: "0.33.0", checks: [check("up-to-date", false)] });
+  test("a ready host behind the version AOP pins is updated by AOP's setup", () => {
+    const behind = status({ version: "0.31.0", checks: [check("up-to-date", false)] });
 
-    expect(ids(behind)).toEqual(["update"]);
-    expect(cuaSetupSteps(behind)[0]?.body).toContain("0.33.0 is out");
+    expect(ids(behind)).toEqual(["install"]);
+    expect(cuaSetupSteps(behind)[0]?.title).toBe("Update CUA Driver to 0.32.0");
   });
 
   test("off macOS there are no grants or app to start", () => {
@@ -98,5 +105,42 @@ describe("cuaSetupSteps", () => {
     });
 
     expect(ids(linux)).toEqual(["install", "config"]);
+  });
+
+  test("the host's own command is used: AOP Nightly's is aop-nightly", () => {
+    const linux = status({
+      status: "not-installed",
+      reason: "not-installed",
+      host: { name: "box", platform: "linux" },
+      fix: {
+        command: "aop-nightly computer-use setup",
+        sudoCommand: null,
+        missing: [],
+        pinnedVersion: "0.32.0",
+      },
+    });
+
+    expect(commands(linux)).toEqual(["aop-nightly computer-use setup"]);
+  });
+
+  test("Linux packages that need root come first, as one sudo command naming what is missing", () => {
+    const linux = status({
+      status: "not-ready",
+      reason: "no-display",
+      host: { name: "box", platform: "linux" },
+      fix: {
+        command: "aop computer-use setup",
+        sudoCommand: "sudo apt-get install -y xvfb openbox",
+        missing: ["Xvfb", "openbox"],
+        pinnedVersion: "0.32.0",
+      },
+    });
+
+    expect(ids(linux)).toEqual(["packages", "display", "config"]);
+    const [packages] = cuaSetupSteps(linux);
+    expect(packages?.body).toContain("needs Xvfb and openbox");
+    expect(packages?.commands).toEqual([
+      { label: "Install with sudo", command: "sudo apt-get install -y xvfb openbox" },
+    ]);
   });
 });

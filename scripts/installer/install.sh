@@ -67,6 +67,7 @@ main() {
   install_binary
   install_runtime_assets
   link_nightly_command
+  setup_computer_use
   start_local_server
   wait_for_local_server
   check_post_install_warnings
@@ -82,6 +83,12 @@ VERSION=""
 NO_SERVICE=""
 case "${AOP_INSTALL_NO_SERVICE:-}" in
   1|true|yes) NO_SERVICE="1" ;;
+esac
+# --no-computer-use (or AOP_INSTALL_NO_COMPUTER_USE=1) leaves CUA Driver and the screen alone.
+# Set them up later with `aop computer-use setup`.
+NO_COMPUTER_USE=""
+case "${AOP_INSTALL_NO_COMPUTER_USE:-}" in
+  1|true|yes) NO_COMPUTER_USE="1" ;;
 esac
 
 parse_args() {
@@ -99,9 +106,13 @@ parse_args() {
         NO_SERVICE="1"
         shift
         ;;
+      --no-computer-use)
+        NO_COMPUTER_USE="1"
+        shift
+        ;;
       *)
         echo "Unknown argument: $1" >&2
-        echo "Usage: install.sh [--prefix <dir>] [--version <version>] [--no-service]" >&2
+        echo "Usage: install.sh [--prefix <dir>] [--version <version>] [--no-service] [--no-computer-use]" >&2
         exit 1
         ;;
     esac
@@ -458,6 +469,34 @@ link_nightly_command() {
   printf '#!/bin/sh\nexec "%s" "$@"\n' "${INSTALL_DIR}/${BIN_NAME}" > "${COMMAND_DIR}/${BIN_NAME}"
   chmod +x "${COMMAND_DIR}/${BIN_NAME}"
   echo "Linked ${COMMAND_DIR}/${BIN_NAME}"
+}
+
+# --- Computer Use ---
+
+# Threads use the host's screen through CUA Driver, which AOP installs at the version it pins,
+# with (on Linux) a virtual display that starts at boot. `aop computer-use setup` does it and can
+# be run again any time. Packages that need root are never installed silently: from a terminal
+# setup shows the one sudo command and asks before running it; otherwise it only prints it. A
+# setup that cannot finish never fails the AOP install.
+setup_computer_use() {
+  if [ -n "$NO_COMPUTER_USE" ]; then
+    echo "Skipping computer use setup (--no-computer-use). Run later: ${BIN_NAME} computer-use setup"
+    return
+  fi
+  local bin="${INSTALL_DIR}/${BIN_NAME}"
+  local rc=0
+  echo "Setting up computer use (CUA Driver)..."
+  # From `curl | sh`, stdin is the script itself, so questions and sudo read the terminal.
+  if [ -t 1 ] && (exec </dev/tty) 2>/dev/null; then
+    "$bin" computer-use setup </dev/tty || rc=$?
+  else
+    "$bin" computer-use setup --no-sudo </dev/null || rc=$?
+  fi
+  case "$rc" in
+    0) ;;
+    2) echo "Computer use is not ready yet (see above). Threads run without it until it is; check with: ${BIN_NAME} computer-use status" >&2 ;;
+    *) echo "Warning: computer use setup did not finish. Run it again later: ${BIN_NAME} computer-use setup" >&2 ;;
+  esac
 }
 
 # --- Service Management ---

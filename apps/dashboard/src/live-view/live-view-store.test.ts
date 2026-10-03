@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { LiveViewStatus } from "@aop/common";
+import { EMPTY_CUA_LEASE, type LiveViewStatus } from "@aop/common";
 import { followedThread } from "./live-view-store";
 import { makeSession } from "./test-utils";
 
@@ -9,6 +9,7 @@ const status = (...sessions: ReturnType<typeof makeSession>[]): LiveViewStatus =
   shown: true,
   sessions,
   capture: { state: "live", detail: null },
+  lease: EMPTY_CUA_LEASE,
 });
 
 const login = makeSession({ threadId: "thr_1", startedAt: "2026-10-02T12:00:00.000Z" });

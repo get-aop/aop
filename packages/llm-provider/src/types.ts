@@ -22,6 +22,14 @@ export interface McpStdioServer {
   env?: Record<string, string>;
 }
 
+/** An MCP server a run reaches over HTTP (streamable HTTP), such as the host's own endpoints. */
+export interface McpHttpServer {
+  type: "http";
+  url: string;
+}
+
+export type McpServerConfig = McpStdioServer | McpHttpServer;
+
 /** An image a prompt carries: a file on the host and its media type. */
 export interface RunImage {
   path: string;
@@ -120,7 +128,7 @@ export interface RunOptions {
    * here takes it). A project's threads get CUA Driver's tools this way. Providers without an
    * MCP config of their own ignore it.
    */
-  extraMcpServers?: Record<string, McpStdioServer>;
+  extraMcpServers?: Record<string, McpServerConfig>;
 }
 
 export interface RunResult {

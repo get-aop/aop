@@ -4,6 +4,7 @@ import { MEMORY_TOPICS_MAX } from "./memory-block.ts";
 import {
   buildCoordinatorSystemPrompt,
   buildThreadSystemPrompt,
+  COMPUTER_USE_LINES,
   REPOS_MAX,
   SYSTEM_PROMPT_MAX_CHARS,
 } from "./system-prompt.ts";
@@ -177,6 +178,25 @@ describe("a thread's system prompt", () => {
 
     expect(prompt).not.toContain("thread_spawn");
     expect(prompt).not.toContain("coordinator of the AOP project");
+  });
+});
+
+describe("what a thread is told about computer use", () => {
+  const base = { project, repos, memory: noMemory, thread, workspace: "/w" };
+
+  test("a thread with CUA's tools is told they are for browser and computer use, that AOP enforces one thread at a time, and to release with end_session", () => {
+    const prompt = buildThreadSystemPrompt({ ...base, computerUse: true });
+
+    expect(prompt).toContain(COMPUTER_USE_LINES.join("\n"));
+    expect(prompt).toContain("browser use AND computer use");
+    expect(prompt).toContain("AOP enforces it");
+    expect(prompt).toContain("call end_session");
+    expect(prompt).toContain("isolated, throwaway profile");
+    expect(prompt).not.toMatch(/only (for|to) (run )?browser checks/i);
+  });
+
+  test("a thread without them is told nothing about computer use", () => {
+    expect(buildThreadSystemPrompt(base)).not.toContain("## Computer use");
   });
 });
 

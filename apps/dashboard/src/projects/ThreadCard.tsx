@@ -7,6 +7,7 @@ import { plainStatusLine } from "./plain-status-line";
 import { ResumeThreadButton } from "./ResumeThreadButton";
 import { StepsRing } from "./StepsRing";
 import { formatAge, hasFailingChecks, pullRequestOf, THREAD_STATUS_LABEL } from "./selectors";
+import { ThreadCuaChip } from "./ThreadCuaChip";
 import { ThreadStatusDot } from "./ThreadStatusDot";
 
 /**
@@ -50,6 +51,7 @@ export const ThreadCard = ({ thread, now }: { thread: Thread; now: number }) => 
           {failing ? "Checks failing" : THREAD_STATUS_LABEL[shown]}
         </span>
         <StatusLine thread={thread} />
+        <ThreadCuaChip threadId={thread.id} />
         <CardFooter thread={thread} />
       </div>
       <CardAside thread={thread} now={now} />

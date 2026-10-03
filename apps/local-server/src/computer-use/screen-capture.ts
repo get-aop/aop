@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { buildSpawnEnv, getLogger } from "@aop/infra";
 import { resolveRuntimeExecutable } from "@aop/llm-provider";
+import { computerUseDisplay } from "./config.ts";
 import { createMpjpegParser } from "./mpjpeg.ts";
 
 const logger = getLogger("live-view");
@@ -161,7 +162,7 @@ const locateFfmpeg = (): string | null => {
 
 const defaultDeps: ScreenCaptureDeps = {
   platform: process.platform,
-  display: () => buildSpawnEnv().DISPLAY,
+  display: computerUseDisplay,
   displayRunning: localDisplayRunning,
   locateFfmpeg,
   spawn: (argv) => {

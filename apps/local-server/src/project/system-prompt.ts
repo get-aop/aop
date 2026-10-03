@@ -66,6 +66,20 @@ const THREAD_RULES = [
   "- For a document the person will read in full (a plan, a report, a table, a diagram, a JSON result, a small HTML page), make an artifact with aop_artifact_create instead of pasting it into your reply: the chat shows it as a card that opens beside the chat. Update it with aop_artifact_update, which keeps the earlier versions. Keep your reply to what the artifact is and why.",
 ];
 
+/**
+ * For a thread that has CUA Driver's tools (its project's computer use is CUA and the host is
+ * ready). The host enforces one thread at a time on the screen (computer-use/lease.ts); this says
+ * how to live with it.
+ */
+export const COMPUTER_USE_LINES = [
+  "## Computer use",
+  "- You have CUA Driver's tools (mcp__cua-driver__*) for browser use AND computer use: desktop apps, windows, the keyboard and mouse, screenshots of the whole screen, and the browser tools. Use them whenever the work needs a real screen, not only to check web pages.",
+  "- One thread at a time uses this computer, and AOP enforces it: your first CUA call takes the screen for you; if another thread has it, the call waits in line and goes through when your turn comes. Do work that does not need the screen first, and do not take any lock of your own.",
+  "- Give the screen back as soon as you are done with it: call end_session (it closes the browser you opened and deletes its profile). AOP also takes it back when your turn ends, or after 3 minutes without a CUA call, so never hold it through test suites, builds or waits.",
+  "- For testing, open browsers with an isolated, throwaway profile (browser_prepare with profile mode isolated_new). Use the person's own browser profile or apps only when they allow it.",
+  "",
+];
+
 // A thread with a repository works on a branch of its own, and opens its pull request through AOP.
 const BRANCH_RULE =
   "- When the work is ready for review, call aop_open_pr. It commits your changes, pushes your branch and opens the pull request, and called again it pushes what you did since and returns the same one. Give it a title and a short description of what changed and why. Do not merge it: the person or the coordinator does. A merged or closed pull request is done; further work belongs in a new thread.";
@@ -95,7 +109,12 @@ export const buildCoordinatorSystemPrompt = (input: PromptInput): string =>
   );
 
 export const buildThreadSystemPrompt = (
-  input: PromptInput & { thread: Pick<Thread, "title" | "repoId" | "branch">; workspace: string },
+  input: PromptInput & {
+    thread: Pick<Thread, "title" | "repoId" | "branch">;
+    workspace: string;
+    /** Whether the thread has CUA Driver's tools this turn. */
+    computerUse?: boolean;
+  },
 ): string =>
   assemble(
     [
@@ -109,6 +128,7 @@ export const buildThreadSystemPrompt = (
       ...THREAD_RULES,
       ...(input.thread.branch ? [BRANCH_RULE] : []),
       "",
+      ...(input.computerUse ? COMPUTER_USE_LINES : []),
       ...repoLines(
         "## Other repositories of this project (read, do not change)",
         input.repos.filter((repo) => repo.id !== input.thread.repoId),

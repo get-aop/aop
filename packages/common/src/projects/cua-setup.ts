@@ -1,14 +1,15 @@
 import type { CuaCheck, CuaStatus } from "./computer-use.ts";
 
 /**
- * How to set CUA Driver up on the AOP host, in one place: the dashboard's guide shows these steps
- * today, and a host-side setup flow can run the same commands later. Commands come from CUA's
- * docs (https://cua.ai/docs/cua-driver) and the installer's own output for 0.32.0.
+ * How to set CUA Driver up on the AOP host, in one place: the dashboard's guide shows these steps,
+ * and the host's own setup (`aop computer-use setup`, which the install script runs) does the same
+ * work. AOP installs CUA Driver itself at the version it pins; the commands below are what the
+ * person runs at the host when something is still missing. The driver's own commands come from
+ * CUA's docs (https://cua.ai/docs/cua-driver) for 0.32.0.
  */
 export const CUA_COMMANDS = {
-  install: '/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"',
-  update: "cua-driver update --apply",
-  checkUpdate: "cua-driver check-update",
+  /** The host's setup, as the stable `aop` names it; a status carries its own host's command. */
+  setup: "aop computer-use setup",
   start: "open -n -g -a CuaDriver --args serve",
   grant: "cua-driver permissions grant",
   permissionsStatus: "cua-driver permissions status",
@@ -21,7 +22,7 @@ export interface CuaSetupCommand {
 }
 
 export interface CuaSetupStep {
-  id: "install" | "update" | "start" | "permissions" | "config";
+  id: "packages" | "install" | "display" | "start" | "permissions" | "config";
   title: string;
   body: string;
   commands: CuaSetupCommand[];
@@ -30,14 +31,16 @@ export interface CuaSetupStep {
 }
 
 /**
- * The steps that take the host from `status` to ready, in order. Empty when it is ready and up to
- * date. Every command runs on the host, never on the device showing the guide.
+ * The steps that take the host from `status` to ready, in order. Empty when it is ready and has
+ * what it needs. Every command runs on the host, never on the device showing the guide.
  */
 export const cuaSetupSteps = (status: CuaStatus): CuaSetupStep[] => {
   const macOS = status.host.platform === "darwin";
+  const setup = status.fix.command ?? CUA_COMMANDS.setup;
   const steps: CuaSetupStep[] = [];
-  if (status.status === "not-installed") steps.push(installStep);
-  if (status.reason === "no-answer" || updateAvailable(status)) steps.push(updateStep(status));
+  if (status.fix.sudoCommand) steps.push(packagesStep(status, status.fix.sudoCommand));
+  if (needsDriver(status)) steps.push(installStep(status, setup));
+  if (status.reason === "no-display") steps.push(displayStep(setup));
   if (macOS && (status.status === "not-installed" || status.reason === "not-running")) {
     steps.push(startStep);
   }
@@ -46,7 +49,9 @@ export const cuaSetupSteps = (status: CuaStatus): CuaSetupStep[] => {
   return steps;
 };
 
-const updateAvailable = (status: CuaStatus): boolean =>
+const needsDriver = (status: CuaStatus): boolean =>
+  status.status === "not-installed" ||
+  status.reason === "no-answer" ||
   status.checks.some((check) => check.id === "up-to-date" && check.ok === false);
 
 const missingGrants = (status: CuaStatus): CuaCheck[] =>
@@ -55,35 +60,48 @@ const missingGrants = (status: CuaStatus): CuaCheck[] =>
       (check.id === "accessibility" || check.id === "screen-recording") && check.ok !== true,
   );
 
-const installStep: CuaSetupStep = {
-  id: "install",
-  title: "Install CUA Driver",
-  body: "Installs CuaDriver.app in /Applications and links `cua-driver` into ~/.local/bin. No sudo needed.",
-  commands: [{ label: "Install", command: CUA_COMMANDS.install }],
+const packagesStep = (status: CuaStatus, sudoCommand: string): CuaSetupStep => ({
+  id: "packages",
+  title: "Install the system packages",
+  body: `Computer use on this host needs ${listOf(status.fix.missing)}. Installing them needs root, so AOP cannot do it by itself: run this one command at the host (it asks for your password).`,
+  commands: [{ label: "Install with sudo", command: sudoCommand }],
   places: [],
+});
+
+const installStep = (status: CuaStatus, setup: string): CuaSetupStep => {
+  const pinned = status.fix.pinnedVersion;
+  const title =
+    status.status === "not-installed"
+      ? "Install CUA Driver"
+      : status.reason === "no-answer"
+        ? "Repair CUA Driver"
+        : `Update CUA Driver to ${pinned}`;
+  return {
+    id: "install",
+    title,
+    body: `AOP installs CUA Driver ${pinned} for you, in your home folder (no sudo).${status.reason === "no-answer" ? " The driver there did not answer; `cua-driver doctor` says what is wrong." : ""}`,
+    commands: [
+      { label: "Set up", command: setup },
+      ...(status.reason === "no-answer"
+        ? [{ label: "Diagnose", command: CUA_COMMANDS.doctor }]
+        : []),
+    ],
+    places: [],
+  };
 };
 
-const updateStep = (status: CuaStatus): CuaSetupStep => ({
-  id: "update",
-  title: status.reason === "no-answer" ? "Repair or update CUA Driver" : "Update CUA Driver",
-  body:
-    status.reason === "no-answer"
-      ? "`cua-driver` is there but did not answer. Updating reinstalls it; `cua-driver doctor` says what is wrong."
-      : `Version ${status.latestVersion ?? "a newer one"} is out (this host has ${status.version ?? "an older one"}). Updating stops its app; start it again afterwards.`,
-  commands: [
-    { label: "Check for an update", command: CUA_COMMANDS.checkUpdate },
-    { label: "Update", command: CUA_COMMANDS.update },
-    ...(status.reason === "no-answer"
-      ? [{ label: "Diagnose", command: CUA_COMMANDS.doctor }]
-      : [{ label: "Start it again", command: CUA_COMMANDS.start }]),
-  ],
+const displayStep = (setup: string): CuaSetupStep => ({
+  id: "display",
+  title: "Set up the screen",
+  body: "No X display is up for CUA Driver to drive. Setup makes a virtual one (Xvfb with a window manager, started at boot), or uses your desktop if you choose it.",
+  commands: [{ label: "Set up", command: setup }],
   places: [],
 });
 
 const startStep: CuaSetupStep = {
   id: "start",
   title: "Start CUA Driver",
-  body: "Its app runs in the background and holds the macOS permissions; threads reach it through `cua-driver mcp`.",
+  body: "Its app runs in the background and holds the macOS permissions; the AOP host reaches it through `cua-driver mcp`.",
   commands: [{ label: "Start", command: CUA_COMMANDS.start }],
   places: [],
 };
@@ -93,7 +111,7 @@ const permissionsStep = (missing: CuaCheck[]): CuaSetupStep => {
   return {
     id: "permissions",
     title: "Grant the macOS permissions",
-    body: `CUA Driver needs ${names.join(" and ")}, granted to the Cua Driver app (not to your terminal). The grant command opens the dialogs and verifies capture; on macOS Tahoe it also asks for direct capture consent. Someone has to click Allow at the host's screen.`,
+    body: `CUA Driver needs ${names.join(" and ")}, granted to the Cua Driver app (not to your terminal). The grant command opens the dialogs and verifies capture; on macOS Tahoe it also asks for direct capture consent. Someone has to click Allow at the host's screen; AOP never asks from a thread.`,
     commands: [
       { label: "Grant", command: CUA_COMMANDS.grant },
       { label: "Check", command: CUA_COMMANDS.permissionsStatus },
@@ -113,7 +131,12 @@ const PANES: Record<string, string> = {
 const configStep: CuaSetupStep = {
   id: "config",
   title: "Nothing else to configure",
-  body: "CUA Driver needs no API key, and AOP hands its MCP server (`cua-driver mcp`) to this project's threads itself: nothing goes in your Claude Code config. Threads use the tools only with Thread access set to Full access.",
+  body: "CUA Driver needs no API key, and the AOP host hands its tools to this project's threads itself, one thread at a time: nothing goes in your Claude Code config. Threads use the tools only with Thread access set to Full access.",
   commands: [],
   places: [],
+};
+
+const listOf = (items: string[]): string => {
+  if (items.length <= 1) return items[0] ?? "a few system packages";
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 };

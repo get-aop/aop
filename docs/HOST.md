@@ -212,3 +212,14 @@ Prefer `tailscale serve` to `AOP_BIND_HOST`. A direct bind sends tokens over pla
 - Paired devices are trusted equally. There are no per-device permissions.
 - The `aop` CLI sends no token, so it works only on the host. It cannot reach a host across the network yet.
 - The desktop app connects over HTTPS, or to a host on its own computer. A host bound to the network over plain HTTP is for browsers, which use the cookie.
+
+## Computer use
+
+Threads can operate the host's screen (browsers and desktop apps) through CUA Driver, which the install script sets up with `aop computer-use setup` (Nightly: `aop-nightly computer-use setup`). Run it again any time; `aop computer-use status` says what is missing.
+
+- **Linux:** a virtual display by default (Xvfb + openbox as the user services `aop-xvfb` and `aop-openbox`, display `:99`, started at boot with linger), so threads never take over a desktop someone uses. Packages that need root (Xvfb, openbox, X libraries, AT-SPI, Google Chrome, ffmpeg) come as ONE `sudo sh -c '…'` command: setup runs it after asking when you are at a terminal, and only prints it otherwise. The chosen display is kept in `<AOP home>/computer-use.json`; the host reads it on every use, so no restart is needed.
+- **macOS:** CuaDriver.app in /Applications. Grant Accessibility and Screen Recording to Cua Driver at the Mac; setup opens the dialogs only from a terminal and after asking.
+- **One thread at a time:** the host holds a lease on the screen; other threads' CUA calls wait in line and go on by themselves. `GET /api/computer-use/lease` shows the holder and the line.
+
+Details, the lease rules and the limits: [Computer use](./architecture/computer-use.md).
+

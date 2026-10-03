@@ -110,6 +110,46 @@ describe("install.sh host install", () => {
     expect(existsSync(join(box.prefix, "bin", "aop"))).toBe(false);
   });
 
+  test("sets up computer use with the installed binary, printing the sudo command instead of running it without a terminal", async () => {
+    const box = await createBox();
+
+    const result = await box.install(["--version", VERSION, "--no-service"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain("Setting up computer use (CUA Driver)...");
+    expect(await box.installedCalls()).toEqual(["computer-use setup --no-sudo"]);
+  });
+
+  test("a computer use setup that is not ready or fails never fails the install", async () => {
+    const notReady = await createBox();
+    const failed = await createBox();
+
+    const a = await notReady.install(["--version", VERSION, "--no-service"], {
+      AOP_STUB_EXIT: "2",
+    });
+    const b = await failed.install(["--version", VERSION, "--no-service"], { AOP_STUB_EXIT: "1" });
+
+    expect(a.exitCode).toBe(0);
+    expect(a.stderr).toContain("Computer use is not ready yet");
+    expect(b.exitCode).toBe(0);
+    expect(b.stderr).toContain("Warning: computer use setup did not finish");
+  });
+
+  test("--no-computer-use and AOP_INSTALL_NO_COMPUTER_USE=1 leave computer use alone", async () => {
+    const flag = await createBox();
+    const env = await createBox();
+
+    const a = await flag.install(["--version", VERSION, "--no-service", "--no-computer-use"]);
+    const b = await env.install(["--version", VERSION, "--no-service"], {
+      AOP_INSTALL_NO_COMPUTER_USE: "1",
+    });
+
+    expect(a.output).toContain("Skipping computer use setup (--no-computer-use)");
+    expect(b.output).toContain("Skipping computer use setup (--no-computer-use)");
+    expect(await flag.installedCalls()).toEqual([]);
+    expect(await env.installedCalls()).toEqual([]);
+  });
+
   test("points Windows users to the desktop app instead of installing a host", async () => {
     const box = await createBox({ uname: unameStub("MINGW64_NT-10.0", "x86_64") });
 
@@ -284,6 +324,11 @@ const createBox = async ({ corruptBinary = false, uname = unameStub() }: BoxOpti
     install,
     runInstalled: async (args: string[]) =>
       (await run([join(prefix, "bin", "aop"), ...args], { HOME: home })).stdout.trim(),
+    /** What the installer asked of the installed binary, one call per line. */
+    installedCalls: async () =>
+      (await readFile(join(home, "aop-calls.log"), "utf8").catch(() => ""))
+        .split("\n")
+        .filter(Boolean),
     allCalls: async () =>
       (await readFile(callLog, "utf8").catch(() => "")).split("\n").filter(Boolean),
     serviceCalls: async () =>
@@ -296,7 +341,8 @@ const createBox = async ({ corruptBinary = false, uname = unameStub() }: BoxOpti
 // The binary is a stub that answers --version, packaged with a real checksum manifest.
 const writeReleaseFiles = async (dir: string, corruptBinary: boolean): Promise<void> => {
   await mkdir(dir, { recursive: true });
-  const binary = `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "aop/${VERSION} stub"; fi\n`;
+  // It records every other call, so a test can see what the installer asked of it.
+  const binary = `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "aop/${VERSION} stub"; exit 0; fi\necho "$@" >> "$HOME/aop-calls.log"\nexit "\${AOP_STUB_EXIT:-0}"\n`;
   await writeFile(join(dir, BINARY), binary, { mode: 0o755 });
 
   const assets = join(dir, "assets");

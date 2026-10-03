@@ -8,7 +8,7 @@ import { ThreadsLoadError } from "../ThreadsLoadError";
 import { ThreadChanges } from "./changes/ThreadChanges";
 import { useThreadDiff } from "./changes/use-thread-diff";
 import { ThreadHeader } from "./ThreadHeader";
-import { ThreadNotice } from "./ThreadNotice";
+import { ThreadCuaNotice, ThreadNotice } from "./ThreadNotice";
 import { ThreadTranscript } from "./ThreadTranscript";
 import { usePullRequestDock } from "./use-pull-request-dock";
 
@@ -114,6 +114,7 @@ const ThreadView = ({
         onShowPullRequestBar={bringBack}
       />
       <ThreadNotice thread={thread} autoContinue={project.autoContinue} />
+      <ThreadCuaNotice threadId={thread.id} />
       {showChanges ? (
         <>
           <ThreadChanges

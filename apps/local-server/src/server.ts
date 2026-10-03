@@ -4,6 +4,8 @@ import { createHostAgentCliService } from "./agent-cli/host-agent-cli-service.ts
 import { createApp } from "./app.ts";
 import { runStartupCheckpointCleanup } from "./chat-session/checkpoint-cleanup-service.ts";
 import { shutdownChatSessions } from "./chat-session/service.ts";
+import { stopHostCua } from "./computer-use/host-gate.ts";
+import { upgradePinnedDriver } from "./computer-use/setup/auto-upgrade.ts";
 import {
   getAllowedOrigins,
   getBindHost,
@@ -103,6 +105,8 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   // Shortly after boot and then every `agent_cli_check_interval_minutes`, the agent CLIs are
   // checked for newer versions (and updated, when the person turned that on).
   agentClis.start();
+  // A host update can pin a newer CUA Driver: an installed older one is brought up to it.
+  void upgradePinnedDriver();
   // Routines fire when they come due; runs a stopped host left half-started are failed first.
   await projectServices.routineScheduler.start();
   // Once a day the Library removes what outlived its retention or its caps.
@@ -121,6 +125,8 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
       await stopWatcher();
       server.stop();
       await shutdownChatSessions(ctx);
+      // Every run has stopped, so no thread uses the screen: drivers and the lock dir go.
+      await stopHostCua();
       await db.destroy();
       logger.info("Shutdown complete");
     },

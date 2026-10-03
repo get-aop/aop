@@ -54,6 +54,7 @@ export {
 } from "./artifacts.ts";
 export type { ChannelConfig, ReleaseChannel } from "./channel.ts";
 export { buildChannel, CHANNELS, channelDefine, parseReleaseChannel } from "./channel.ts";
+export * from "./computer-use-lease.ts";
 export type {
   BrowserAsk,
   BrowserDownload,

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
-import { installFakeLiveHost, makeSession } from "./test-utils";
+import { installFakeLiveHost, makeLease, makeSession } from "./test-utils";
 
 setupDashboardDom();
 
@@ -235,5 +235,57 @@ describe("several threads using CUA", () => {
     renderView();
     await popup();
     expect(has("live-view-switcher")).toBe(false);
+  });
+});
+
+describe("the computer-use lease in the header", () => {
+  const login = { threadId: "thr_1", title: "Check the login page" };
+  const footer = { threadId: "thr_2", title: "Fix the footer" };
+  const docs = { threadId: "thr_3", title: "Screenshot the docs" };
+
+  test("the popup counts who waits behind the thread on screen, the whole line in its tooltip", async () => {
+    installFakeLiveHost({ lease: makeLease(login, [footer, docs]) });
+    renderView();
+    await popup();
+
+    const lease = screen.getByTestId("live-view-lease");
+    expect(lease.textContent).toBe("2 waiting");
+    expect(lease.getAttribute("title")).toBe("Computer use: Check the login page · 2 waiting");
+    expect(lease.dataset.holder).toBe("thr_1");
+  });
+
+  test("the popup says nothing while the thread on screen holds it and no one waits", async () => {
+    installFakeLiveHost({ lease: makeLease(login) });
+    renderView();
+    await popup();
+
+    expect(has("live-view-lease")).toBe(false);
+  });
+
+  test("names a holder other than the thread on screen, and someone outside AOP's lease", async () => {
+    const host = installFakeLiveHost({ lease: makeLease(footer, [login]) });
+    renderView();
+    await popup();
+    expect(screen.getByTestId("live-view-lease").textContent).toBe(
+      "Computer use: Fix the footer · 1 waiting",
+    );
+
+    host.lease = { ...makeLease(null), holder: { kind: "external", owner: "thr_x", since: null } };
+    await act(() => refreshLiveView());
+    expect(screen.getByTestId("live-view-lease").textContent).toBe(
+      "Computer use: thr_x (outside AOP's lease)",
+    );
+  });
+
+  test("full screen always names the holder", async () => {
+    installFakeLiveHost({ lease: makeLease(login, [footer]) });
+    renderView();
+    await popup();
+    fireEvent.click(screen.getByTestId("live-view-body"), { detail: 0 });
+    await waitFor(() => screen.getByTestId("live-view-fullscreen"));
+
+    expect(screen.getByTestId("live-view-lease").textContent).toBe(
+      "Computer use: Check the login page · 1 waiting",
+    );
   });
 });

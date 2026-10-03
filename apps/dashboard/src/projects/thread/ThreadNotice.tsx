@@ -1,15 +1,17 @@
-import type { Thread } from "@aop/common";
+import { cuaHolderName, cuaWaitingLabel, type Thread } from "@aop/common";
 import {
   ClockIcon,
   ExternalLinkIcon,
   HandIcon,
   HourglassIcon,
+  MonitorIcon,
   RotateCcwIcon,
   UnplugIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
+import { threadLeasePlace, useCuaLease } from "../../live-view/cua-lease";
 import { formatShortTimestamp } from "../chat/chat-time";
 import { pullRequestOf } from "../selectors";
 import { threadActions } from "../thread-actions";
@@ -60,6 +62,44 @@ export const ThreadNotice = ({
     default:
       return null;
   }
+};
+
+/**
+ * The thread's place with the host's computer-use lease: waiting in line for another thread (or a
+ * program outside AOP) to give the host's screen back, or holding it while others wait. One
+ * thread drives the screen at a time, so a waiting thread is not stuck: its CUA call goes on by
+ * itself when its turn comes.
+ */
+export const ThreadCuaNotice = ({ threadId }: { threadId: string }) => {
+  const lease = useCuaLease();
+  const place = threadLeasePlace(lease, threadId);
+  if (!lease || !place) return null;
+  if (place.state === "holding") {
+    const others = lease.queue.length;
+    return (
+      <Notice testId="thread-notice-cua-holding" icon={<MonitorIcon className="size-4" />}>
+        <p>
+          <strong className="font-medium text-text">Using computer use.</strong>{" "}
+          {others === 0
+            ? "No other thread waits for the host's screen."
+            : `${others === 1 ? "1 other thread waits" : `${others} other threads wait`} for the host's screen until it is done.`}
+        </p>
+      </Notice>
+    );
+  }
+  return (
+    <Notice
+      testId="thread-notice-cua-waiting"
+      tone="waiting"
+      icon={<HourglassIcon className="size-4" />}
+    >
+      <p>
+        <strong className="font-medium text-text">{cuaWaitingLabel(place.position)}.</strong>{" "}
+        {lease.holder ? `${cuaHolderName(lease.holder)} is using the host's screen. ` : ""}The
+        thread goes on by itself when its turn comes.
+      </p>
+    </Notice>
+  );
 };
 
 // Lost tools come first: until they are back, the thread cannot even say it is waiting.

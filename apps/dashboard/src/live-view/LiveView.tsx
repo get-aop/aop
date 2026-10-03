@@ -1,9 +1,9 @@
-import type { LiveViewSession } from "@aop/common";
+import type { CuaLeaseState, LiveViewSession } from "@aop/common";
 import { ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import { cn } from "@/lib/cn";
 import { LiveViewFullscreen } from "./LiveViewFullscreen";
-import { FramePicture, LiveDot, SessionSwitcher, ThreadTitle } from "./LiveViewParts";
+import { FramePicture, LeaseSummary, LiveDot, SessionSwitcher, ThreadTitle } from "./LiveViewParts";
 import {
   closeLiveView,
   setLiveViewFullscreen,
@@ -31,13 +31,14 @@ export const LiveView = () => {
   const visible = session !== null && !state.closed;
   const frames = useLiveFrames(visible && (state.fullscreen || !state.minimized));
   if (!session || !visible || !state.status) return null;
-  const { sessions } = state.status;
+  const { sessions, lease } = state.status;
   return state.fullscreen ? (
-    <LiveViewFullscreen session={session} sessions={sessions} frames={frames} />
+    <LiveViewFullscreen session={session} sessions={sessions} lease={lease} frames={frames} />
   ) : (
     <LiveViewPopup
       session={session}
       sessions={sessions}
+      lease={lease}
       frames={frames}
       minimized={state.minimized}
     />
@@ -47,11 +48,13 @@ export const LiveView = () => {
 const LiveViewPopup = ({
   session,
   sessions,
+  lease,
   frames,
   minimized,
 }: {
   session: LiveViewSession;
   sessions: LiveViewSession[];
+  lease: CuaLeaseState;
   frames: ReturnType<typeof useLiveFrames>;
   minimized: boolean;
 }) => {
@@ -91,6 +94,7 @@ const LiveViewPopup = ({
         <ThreadTitle session={session} />
         {/* The header's free space is where it is grabbed: the title takes only its own width. */}
         <span className="h-full min-w-4 flex-1" />
+        <LeaseSummary lease={lease} current={session} compact />
         <SessionSwitcher sessions={sessions} current={session} />
         <HeaderButton
           testId="live-view-minimize"

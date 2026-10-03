@@ -1,6 +1,6 @@
 import type { CuaStatus, Project } from "@aop/common";
 import { getLogger } from "@aop/infra";
-import type { McpStdioServer } from "@aop/llm-provider";
+import type { McpServerConfig } from "@aop/llm-provider";
 import { type CuaProbeDeps, probeCua } from "./cua-driver.ts";
 
 const logger = getLogger("computer-use");
@@ -18,11 +18,15 @@ export interface ComputerUseService {
    * The MCP servers a project's session adds for computer use, read on every launch so a change
    * applies from the next turn. Only threads get them: the coordinator stays on the aop tools.
    * A project on CUA whose host is not ready gets none, and the run starts without them.
+   *
+   * The server is the host's own gate in front of CUA Driver (`/api/mcp/cua`, reached with the
+   * session's AOP MCP URL), so the host can hold calls back while another thread has the screen.
    */
   serversFor: (
     project: Pick<Project, "id" | "computerUse">,
     role: "coordinator" | "thread",
-  ) => Promise<Record<string, McpStdioServer> | undefined>;
+    aopMcpUrl?: string,
+  ) => Promise<Record<string, McpServerConfig> | undefined>;
 }
 
 export const createComputerUseService = (
@@ -52,8 +56,8 @@ export const createComputerUseService = (
 
   return {
     cuaStatus,
-    serversFor: async (project, role) => {
-      if (role !== "thread" || project.computerUse !== "cua") return undefined;
+    serversFor: async (project, role, aopMcpUrl) => {
+      if (role !== "thread" || project.computerUse !== "cua" || !aopMcpUrl) return undefined;
       const status = await cuaStatus();
       if (status.status !== "ready" || !status.path) {
         logger.warn(
@@ -67,9 +71,16 @@ export const createComputerUseService = (
         );
         return undefined;
       }
-      return { [CUA_MCP_SERVER_NAME]: { type: "stdio", command: status.path, args: ["mcp"] } };
+      return { [CUA_MCP_SERVER_NAME]: { type: "http", url: cuaGateUrl(aopMcpUrl) } };
     },
   };
+};
+
+/** The gate's URL: the AOP MCP URL of the same session (and token), one path segment deeper. */
+export const cuaGateUrl = (aopMcpUrl: string): string => {
+  const url = new URL(aopMcpUrl);
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/cua`;
+  return url.toString();
 };
 
 /** The host's one service: every launch and the status route share its probe. */

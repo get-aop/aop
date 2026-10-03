@@ -8,6 +8,7 @@ import { getSettings } from "../api/client";
 import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
 import { noteSavedSettings } from "../settings/display-name";
 import { SettingsAbout } from "../settings/settings-about";
+import { SettingsComputerUse } from "../settings/settings-computer-use";
 import { SettingsDevices } from "../settings/settings-devices";
 import { mergeSavedSettings, SettingsGeneral } from "../settings/settings-general";
 import { SettingsRepositories } from "../settings/settings-repositories";
@@ -24,6 +25,7 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   general: "General",
   repositories: "Repositories",
   runtimes: "Runtimes",
+  "computer-use": "Computer use",
   devices: "Devices",
   about: "About",
 };
@@ -104,6 +106,7 @@ const SettingsSectionHost = ({ section }: { section: SettingsSection }) => {
 
   if (section === "repositories") return <SettingsRepositories />;
   if (section === "runtimes") return <SettingsRuntimes />;
+  if (section === "computer-use") return <SettingsComputerUse />;
   if (section === "devices") return <SettingsDevices />;
   if (section === "about") return <SettingsAbout />;
   return (
