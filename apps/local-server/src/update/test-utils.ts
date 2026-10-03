@@ -41,6 +41,8 @@ export interface FakeRelease {
 
 export interface FakeReleaseOptions {
   version: string;
+  /** The host binary's asset name; `BINARY_ASSET` unless the test updates this machine's host. */
+  binaryAsset?: string;
   /** The binary prints nothing useful and exits 1. */
   brokenBinary?: boolean;
   /** The binary differs from what the feed and `checksums.sha256` promised. */
@@ -61,7 +63,7 @@ export const FAKE_TOKEN = "ghp_test";
 export const startFakeRelease = async (options: FakeReleaseOptions): Promise<FakeRelease> => {
   const files = await buildReleaseFiles(options);
   const digests = new Map([...files].map(([name, data]) => [name, sha256(data)]));
-  if (options.corruptBinary) digests.set(BINARY_ASSET, sha256(PROMISED));
+  if (options.corruptBinary) digests.set(binaryAssetOf(options), sha256(PROMISED));
   const requests: string[] = [];
   const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
@@ -99,7 +101,7 @@ const routeFakeRelease = (req: FakeRequest): Response => {
   if (pathname === "/releases/latest.json") {
     return options.feedDown
       ? new Response("missing", { status: 404 })
-      : Response.json(feedOf(options.version, base, files, req.digests));
+      : Response.json(feedOf(options, base, files, req.digests));
   }
   if (pathname.endsWith("/releases/latest")) {
     return withToken(req, () => Response.json(githubReleaseOf(options.version, base, files)));
@@ -118,21 +120,23 @@ const routeFakeRelease = (req: FakeRequest): Response => {
 const withToken = (req: FakeRequest, respond: () => Response): Response =>
   req.authorization === `Bearer ${FAKE_TOKEN}` ? respond() : new Response("", { status: 404 });
 
+const binaryAssetOf = (options: FakeReleaseOptions): string => options.binaryAsset ?? BINARY_ASSET;
+
 const feedOf = (
-  version: string,
+  options: FakeReleaseOptions,
   base: string,
   files: Map<string, Uint8Array>,
   digests: Map<string, string>,
 ) => ({
   schemaVersion: 1,
-  version,
+  version: options.version,
   publishedAt: "2026-10-02T00:00:00Z",
-  notes: `Notes of ${version}`,
-  notesUrl: `${base}/releases/v${version}.md`,
+  notes: `Notes of ${options.version}`,
+  notesUrl: `${base}/releases/v${options.version}.md`,
   files: [...files].map(([name, data]) => ({
     name,
-    kind: name === BINARY_ASSET ? "host" : "other",
-    url: `${base}/v${version}/${name}`,
+    kind: name === binaryAssetOf(options) ? "host" : "other",
+    url: `${base}/v${options.version}/${name}`,
     sha256: digests.get(name),
     size: data.byteLength,
   })),
@@ -155,9 +159,9 @@ const buildReleaseFiles = async (options: FakeReleaseOptions): Promise<Map<strin
   const archive = await buildRuntimeAssets(`dashboard ${options.version}`);
   const listed = options.corruptBinary ? PROMISED : binary;
   const lines = [`${sha256(archive)}  runtime-assets.tar.gz`];
-  if (!options.omitBinaryChecksum) lines.push(`${sha256(listed)}  ${BINARY_ASSET}`);
+  if (!options.omitBinaryChecksum) lines.push(`${sha256(listed)}  ${binaryAssetOf(options)}`);
   return new Map<string, Uint8Array>([
-    [BINARY_ASSET, binary],
+    [binaryAssetOf(options), binary],
     ["runtime-assets.tar.gz", archive],
     ["checksums.sha256", new TextEncoder().encode(`${lines.join("\n")}\n`)],
   ]);

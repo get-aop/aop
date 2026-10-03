@@ -96,6 +96,23 @@ describe("resolveChatWorkspace", () => {
 
     await expect(resolveChatWorkspace(root, linked)).rejects.toThrow("same Git repository");
   });
+
+  test("rejects a folder recreated in place as another repository, even with its inode number", async () => {
+    const root = await mkdtemp(join(tmpdir(), "aop-workspace-inode-root-"));
+    const nested = join(root, "pkg");
+    paths.push(root);
+    await git(root, ["init"]);
+    await mkdir(nested);
+
+    expect(await resolveChatWorkspace(root, nested)).toBe(await realpath(nested));
+
+    // ext4 gives an empty folder's freed inode number straight to the next mkdir.
+    await rm(nested, { recursive: true });
+    await mkdir(nested);
+    await git(nested, ["init"]);
+
+    await expect(resolveChatWorkspace(root, nested)).rejects.toThrow("same Git repository");
+  });
 });
 
 const git = async (cwd: string, args: string[]): Promise<void> => {

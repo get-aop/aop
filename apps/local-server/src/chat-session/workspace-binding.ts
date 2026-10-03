@@ -107,8 +107,10 @@ const existingRealPath = async (
 };
 
 const gitCommonDirectory = async (cwd: string): Promise<string> => {
-  const pathStat = await stat(cwd);
-  const key = `${cwd}:${pathStat.dev}:${pathStat.ino}`;
+  const pathStat = await stat(cwd, { bigint: true });
+  // ext4 hands a deleted directory's inode number straight to the next one created,
+  // so a path recreated as another repository keeps its dev:ino; its birth time does change.
+  const key = `${cwd}:${pathStat.dev}:${pathStat.ino}:${pathStat.birthtimeNs}`;
   const now = Date.now();
   const cached = gitCommonDirectoryCache.get(key);
   if (cached && cached.expiresAt > now) return cached.value;

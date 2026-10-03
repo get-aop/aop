@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { detectPlatform, hostAssetName } from "./install-layout.ts";
 import { runUpdate } from "./run-update.ts";
-import { createInstall, scratchDir, startFakeRelease } from "./test-utils.ts";
+import { runsUnderRosetta } from "./system.ts";
+import { createInstall, PLATFORM, scratchDir, startFakeRelease } from "./test-utils.ts";
 import { readOutcomeRecord } from "./update-files.ts";
 
 const stopAfter: Array<() => void> = [];
@@ -74,7 +76,13 @@ describe("runUpdate", () => {
 
   test("a failed update leaves a record the host can show", async () => {
     const layout = await createInstall("0.9.51");
-    const release = await startFakeRelease({ version: "0.10.0", corruptBinary: true });
+    // runUpdate updates the machine running the tests, so the release must carry its binary.
+    const thisMachine = detectPlatform(process.platform, process.arch, runsUnderRosetta());
+    const release = await startFakeRelease({
+      version: "0.10.0",
+      corruptBinary: true,
+      binaryAsset: hostAssetName(thisMachine ?? PLATFORM),
+    });
     stopAfter.push(release.stop);
     // The host's own data folder is this run's scratch folder, never the person's.
     const home = await scratchDir("aop-home");

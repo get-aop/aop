@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
 import { installFakePlanHost, makePlanUsage } from "./test-utils";
 
@@ -10,9 +10,19 @@ const { resetPlanUsageForTests } = await import("./plan-usage-store");
 
 const originalFetch = globalThis.fetch;
 
-beforeEach(() => resetPlanUsageForTests({ pollMs: 60_000 }));
+// Local noon, in whatever time zone runs the tests: the 5-hour reset (2h 14m away) stays on
+// today's date, so its time shows without a weekday. The wall clock would cross midnight late in
+// the evening.
+const LOCAL_NOON = new Date(2026, 9, 1, 12, 0, 0);
+const WEEKDAY = /Mon|Tue|Wed|Thu|Fri|Sat|Sun/;
+
+beforeEach(() => {
+  setSystemTime(LOCAL_NOON);
+  resetPlanUsageForTests({ pollMs: 60_000 });
+});
 
 afterEach(() => {
+  setSystemTime();
   cleanup();
   resetPlanUsageForTests();
   globalThis.fetch = originalFetch;
@@ -70,12 +80,12 @@ describe("PlanUsageMeter", () => {
 
     const details = await waitFor(() => screen.getByTestId("plan-usage-details"));
     expect(details.textContent).toContain("5-hour window42% used");
-    expect(screen.getByTestId("plan-usage-detail-fiveHour").textContent).toMatch(
-      /Resets in 2h 14m · \d{1,2}:\d{2}/,
-    );
-    expect(screen.getByTestId("plan-usage-detail-sevenDay").textContent).toContain(
-      "Resets in 1d 3h · ",
-    );
+    const fiveHour = screen.getByTestId("plan-usage-detail-fiveHour").textContent;
+    expect(fiveHour).toMatch(/Resets in 2h 14m · \d{1,2}:14/);
+    expect(fiveHour).not.toMatch(WEEKDAY);
+    const sevenDay = screen.getByTestId("plan-usage-detail-sevenDay").textContent;
+    expect(sevenDay).toContain("Resets in 1d 3h · ");
+    expect(sevenDay).toMatch(WEEKDAY);
     expect(screen.getByTestId("plan-usage-updated").textContent).toBe(
       "Updated 3m ago, from the latest Claude Code run.",
     );
