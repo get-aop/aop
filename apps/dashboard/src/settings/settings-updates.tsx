@@ -143,6 +143,18 @@ const HostCard = ({
       {values ? (
         <>
           <ToggleRow
+            id="settings-updates-check"
+            label="Check for updates"
+            description={
+              buildChannel().id === "nightly"
+                ? "Every hour the host looks for a newer nightly build of main."
+                : "Once a day the host looks for a newer release on getaop.com."
+            }
+            checked={values.update_check !== "false"}
+            disabled={!canUpdate}
+            onChange={(checked) => void settings.save("update_check", String(checked))}
+          />
+          <ToggleRow
             id="settings-updates-background-download"
             label="Download updates in the background"
             description="So Update host only has to restart."

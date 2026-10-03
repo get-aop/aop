@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { checkForCliUpdates } from "../agent-clis/agent-cli-store";
+import { checkForCliUpdates, refreshAgentClis } from "../agent-clis/agent-cli-store";
 import { useAgentCliStatus } from "../agent-clis/use-agent-clis";
 import { useHostSetupOs } from "../host-setup/host-setup-store";
 import { checkForAppUpdate, startAppUpdates, useAppUpdates } from "./app-update-store";
 import { appRow, cliRows, hostRow, type UpdateRowView } from "./update-rows";
-import { checkForHostUpdate, getUpdates, type UpdatesState } from "./update-store";
+import { checkForHostUpdate, getUpdates, refreshUpdates, type UpdatesState } from "./update-store";
 import { useUpdateStatus } from "./use-update-status";
 
 export interface UpdateRows {
@@ -45,12 +45,21 @@ export const useUpdateRows = ({ poll = false }: { poll?: boolean } = {}): Update
   };
 };
 
-/** "Check for updates": asks every feed now, the app's, the host's and the agent CLIs'. */
+/**
+ * "Check for updates": asks every feed now, the app's, the host's and the agent CLIs'. A viewer
+ * who may not check the host's feeds still reads what the host last found, and whether that
+ * has changed (the owner may have let devices update since).
+ */
 export const checkEverything = async (): Promise<void> => {
+  await refreshUpdates();
   const canUpdate = getUpdates().status?.canUpdate ?? false;
   await Promise.all([
     checkForAppUpdate(),
     canUpdate ? checkForHostUpdate() : Promise.resolve(),
-    canUpdate ? checkForCliUpdates() : Promise.resolve(),
+    canUpdate ? checkForCliUpdates() : refreshAgentClis(),
   ]);
 };
+
+/** Re-reads what the host knows, without asking any feed: when the popover opens. */
+export const rereadEverything = (): Promise<unknown> =>
+  Promise.all([refreshUpdates(), refreshAgentClis()]);

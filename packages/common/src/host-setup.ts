@@ -65,3 +65,17 @@ export type HostSetup = z.infer<typeof HostSetupSchema>;
 /** A check is done when it is ok or optional. */
 export const setupIsComplete = (setup: Pick<HostSetup, "ready" | "total">): boolean =>
   setup.ready >= setup.total;
+
+/**
+ * The command that publishes a host on the tailnet over HTTPS. Stable takes 443; AOP Nightly
+ * (or a host whose 443 is already taken, by Stable on the same machine) uses its own port, so
+ * the two never fight over one address. install.sh follows the same rule.
+ */
+export const tailscaleServeCommand = (
+  port: number,
+  channel: "stable" | "nightly",
+  httpsDefaultTaken = false,
+): string => {
+  const httpsPort = httpsDefaultTaken || channel === "nightly" ? port : 443;
+  return `tailscale serve --bg --https=${httpsPort} http://127.0.0.1:${port}`;
+};

@@ -60,7 +60,7 @@ export const accessRefusal = async (
     error:
       level === "owner"
         ? "Only available on the host machine"
-        : "Only the host machine can update this host. Its owner can let paired devices do it in AOP settings › General › Who can update this host.",
+        : "Only the host machine can update this host. Its owner can let paired devices do it in AOP settings › Updates › Who can update this host.",
     code: "HOST_ONLY",
   };
 };

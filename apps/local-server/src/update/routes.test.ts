@@ -175,7 +175,7 @@ describe("update routes", () => {
       expect(res.status).toBe(403);
       expect(await res.json()).toEqual({
         error:
-          "Only the host machine can update this host. Its owner can let paired devices do it in AOP settings › General › Who can update this host.",
+          "Only the host machine can update this host. Its owner can let paired devices do it in AOP settings › Updates › Who can update this host.",
         code: "HOST_ONLY",
       });
     }

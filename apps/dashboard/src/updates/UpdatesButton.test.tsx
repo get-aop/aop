@@ -184,6 +184,18 @@ describe("the Updates button", () => {
     );
   });
 
+  test("Check for updates reads again whether this viewer may update, after the owner changed it", async () => {
+    installHost({ canUpdate: false, owner: false, hostManagement: "owner" });
+    renderButton();
+    const popover = await openPopover();
+    expect(popover.queryByTestId("update-action-update-host")).toBeNull();
+    host.status = { ...host.status, canUpdate: true, hostManagement: "devices" };
+
+    fireEvent.click(popover.getByTestId("updates-check"));
+
+    expect(await popover.findByTestId("update-action-update-host")).toBeTruthy();
+  });
+
   test("a failed update says why and shows the log", async () => {
     installHost({
       state: "failed",

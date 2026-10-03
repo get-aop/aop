@@ -102,6 +102,7 @@ export {
   SetupCheckIdSchema,
   SetupCheckSchema,
   setupIsComplete,
+  tailscaleServeCommand,
 } from "./host-setup.ts";
 export * from "./inbox.ts";
 export type { FieldLabels, ValidationIssue } from "./issues.ts";

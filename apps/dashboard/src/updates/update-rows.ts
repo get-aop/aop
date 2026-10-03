@@ -311,6 +311,15 @@ const CHANGELOGS: Record<string, string> = {
   "claude-code": "https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md",
 };
 
+// How it was installed decides how it updates (in place, or once its turns end).
+const INSTALL_METHODS: Partial<Record<NonNullable<AgentCliStatus["installMethod"]>, string>> = {
+  native: "native installer",
+  npm: "npm",
+  pnpm: "pnpm",
+  bun: "Bun",
+  brew: "Homebrew",
+};
+
 export const cliRows = (
   data: AgentClisResponse | null,
   host: Pick<UpdateStatus, "canUpdate" | "hostName"> | null,
@@ -326,6 +335,7 @@ const cliRow = (cli: AgentCliStatus, canUpdate: boolean, hostName: string): Upda
     title: cli.label,
     meta: [
       `Agent CLI on ${hostName || "the host"}`,
+      cli.installMethod ? INSTALL_METHODS[cli.installMethod] : null,
       cli.version ? versions(cli.version, cli.updateAvailable ? cli.latest : null) : null,
     ]
       .filter(Boolean)

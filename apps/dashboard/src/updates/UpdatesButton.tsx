@@ -10,7 +10,7 @@ import { openSettingsDialog } from "../shell/dialog-store";
 import { appUpdateBridge } from "./app-update-store";
 import { UpdateRow } from "./UpdateRow";
 import { newsSignature, type UpdateRowView } from "./update-rows";
-import { checkEverything, useUpdateRows } from "./use-update-rows";
+import { checkEverything, rereadEverything, useUpdateRows } from "./use-update-rows";
 
 const SEEN_KEY = "aop:updates-seen:v1";
 
@@ -32,7 +32,9 @@ export const UpdatesButton = () => {
 
   const onOpenChange = (next: boolean) => {
     setPopoverOpen(next);
-    if (next) setSeen(markSeen(news));
+    if (!next) return;
+    setSeen(markSeen(news));
+    void rereadEverything();
   };
 
   return (

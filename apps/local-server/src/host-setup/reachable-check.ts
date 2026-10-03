@@ -1,4 +1,4 @@
-import type { ChannelConfig, SetupCheck } from "@aop/common";
+import { type ChannelConfig, type SetupCheck, tailscaleServeCommand } from "@aop/common";
 import type { ServeLook } from "./probes.ts";
 
 const TITLE = "Reachable from your other devices";
@@ -25,7 +25,6 @@ export const reachableCheck = (
       actions: [],
     };
   }
-  const httpsPort = look.httpsDefaultTaken || channel.id === "nightly" ? port : 443;
   return {
     id: "reachable",
     state: "warning",
@@ -42,7 +41,7 @@ export const reachableCheck = (
               ]),
           `On ${host}, publish AOP on your tailnet over HTTPS. Then open the https address \`tailscale serve status\` prints, from any of your devices.`,
         ],
-        command: `tailscale serve --bg --https=${httpsPort} http://127.0.0.1:${port}`,
+        command: tailscaleServeCommand(port, channel.id, look.httpsDefaultTaken),
       },
     ],
   };
