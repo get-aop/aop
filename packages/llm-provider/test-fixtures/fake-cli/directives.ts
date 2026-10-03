@@ -15,6 +15,11 @@ export interface Directives {
   /** Final reply text; replaces the default echo. */
   say?: string;
   ask?: AskUser;
+  /**
+   * Tools the turn calls after the steps, by full name (`mcp__cua-driver__click`), each answered
+   * "ok" without reaching any server: how a run looks to the host while it uses another MCP server.
+   */
+  tools?: string[];
   /** MCP tool calls made after the steps and before the question, in order. */
   calls?: McpCall[];
   /** Files written into the working directory before the first event, like edits a model made. */
@@ -66,6 +71,7 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
     say: tokens.get("say") || undefined,
     ask: question === undefined ? undefined : readAsk(question, tokens),
     writes: readWrites(tokens.get("write")),
+    tools: readTools(tokens.get("tools")),
     ...readCalls(tokens.get("calls")),
     rateLimitSeconds: readRateLimit(tokens),
     failMessage: readFailMessage(tokens),
@@ -219,3 +225,12 @@ const optionalNumber = (value: string | undefined): number | undefined => {
 
 const toNumber = (value: string | undefined, fallback: number): number =>
   optionalNumber(value) ?? fallback;
+
+// `tools="a|b"`: names split on `|` or `,`, blanks dropped.
+const readTools = (value: string | undefined): string[] | undefined => {
+  const names = (value ?? "")
+    .split(/[|,]/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+  return names.length > 0 ? names : undefined;
+};

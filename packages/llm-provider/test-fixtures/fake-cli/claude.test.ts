@@ -175,6 +175,17 @@ describe("claudeDialect events", () => {
     expect(lines.map((line) => line.session_id)).toEqual(lines.map(() => "sess-1"));
   });
 
+  test("a scripted tool call is a tool_use under its full name, answered ok", () => {
+    const [call, result] = claudeDialect.beat(
+      { kind: "tool", name: "mcp__cua-driver__click" },
+      2,
+      ctx,
+    );
+
+    expect(contentOf(call)[0]).toMatchObject({ type: "tool_use", name: "mcp__cua-driver__click" });
+    expect(contentOf(result)[0]).toMatchObject({ type: "tool_result", content: "ok" });
+  });
+
   test("with partial messages, a block opens, grows in deltas, arrives finished, then closes", () => {
     const streaming = { ...ctx, partialMessages: true };
     const lines = claudeDialect.beat(

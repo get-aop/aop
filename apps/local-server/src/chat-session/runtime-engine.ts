@@ -16,6 +16,7 @@ import {
   type RunOptions,
 } from "@aop/llm-provider";
 import { waitForSpawnGate } from "../agent-cli/spawn-gate.ts";
+import { type CuaThread, cuaActivity } from "../computer-use/cua-activity.ts";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
 import { runAndReap } from "../process/reaper.ts";
 import { detectRateLimit, type RateLimitHit } from "../scheduling/rate-limit.ts";
@@ -485,6 +486,7 @@ const executeProviderRun = async (
       },
     });
     if (onProgress) {
+      const cuaThread = cuaThreadOf(session);
       const inspectSessionLine = createRuntimeSessionLineInspector({
         onSession: captureRuntimeSession,
       });
@@ -493,6 +495,7 @@ const executeProviderRun = async (
         promptUuid: runInput?.channel.promptUuid,
         onLine: async (line) => {
           void observePlanUsage(line);
+          if (cuaThread) cuaActivity.observeLine(cuaThread, line);
           await inspectSessionLine(line);
           if (runInput && isResultLine(line)) runInput.onResult();
         },
@@ -532,8 +535,16 @@ const executeProviderRun = async (
     stopLogSizeWatchdog?.();
     await stopSessionTail?.();
     await stopTail?.();
+    // CUA Driver's MCP server ends with the run, and so does the thread's CUA session.
+    cuaActivity.runEnded(session.id);
   }
 };
+
+/** A thread's run reports its CUA calls to the live view; other sessions never get CUA. */
+const cuaThreadOf = (session: ChatSession): CuaThread | null =>
+  session.kind === "thread" && session.project_id
+    ? { id: session.id, projectId: session.project_id, title: session.title }
+    : null;
 
 const prepareProviderLaunch = async (input: {
   session: ChatSession;

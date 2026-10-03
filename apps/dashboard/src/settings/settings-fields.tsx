@@ -32,6 +32,10 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
     keys: ["max_concurrent_runs"],
   },
   {
+    label: "Computer use",
+    keys: ["live_view"],
+  },
+  {
     label: "Updates",
     keys: ["update_check", "update_auto_apply"],
   },
@@ -57,6 +61,17 @@ export const SETTING_META: Record<string, SettingMeta> = {
     description:
       "How many thread turns this host runs at once. The rest wait their turn, in order. Raising it starts waiting turns at once; lowering it never stops a turn that is running.",
     type: "number",
+  },
+  live_view: {
+    label: "Live view of the host's screen",
+    description:
+      "While a thread uses computer use, a small window shows the host's screen live; click it for full screen. View only: nothing you do there reaches the host. “Remote viewers” shows it only on a device other than the host itself, such as the desktop app connected to this host.",
+    type: "select",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "remote", label: "Remote viewers only" },
+      { value: "always", label: "Always" },
+    ],
   },
   update_check: {
     label: "Check for updates",

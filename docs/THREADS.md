@@ -95,6 +95,8 @@ It also carries `detail` (one sentence), `version`, `latestVersion`, `path`, eac
 
 **Thread access still applies.** A thread on Edit files sees the CUA tools, but every call needs an approval no thread can give, so it is denied; the settings row says so. With Full access, or while the host owner's Skip permission checks is on, the calls run without asking. CUA Driver's own permission mode (`standard` unless its daemon was started otherwise) applies on top.
 
+**Watching it.** While a thread uses CUA, a viewer on another machine than the host sees the host's screen live in a small window over the dashboard, full screen on a click. View only. The host setting `live_view` (`off`, `remote` by default, or `always`) decides who; capture needs ffmpeg on a Linux host and is not supported on macOS yet. See [The live view of the host's screen](./architecture/live-view.md).
+
 **The coordinator never gets them.** It is hermetic: it runs with the AOP tools only and does no work itself, and a coordinator that could drive the desktop would act on what people and threads write without a thread's boundaries. A thread that needs the desktop does that work.
 
 ## States

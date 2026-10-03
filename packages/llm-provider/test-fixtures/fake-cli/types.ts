@@ -38,6 +38,8 @@ export type Beat =
   | { kind: "text"; text: string }
   | { kind: "thinking"; text: string }
   | { kind: "shell"; command: string; output: string }
+  /** A scripted call to a tool no server answers (`tools=`): it gets an "ok" result. */
+  | { kind: "tool"; name: string }
   | { kind: "ask"; ask: AskUser }
   /** An MCP tool call that has been carried out, with the result the model saw. */
   | { kind: "mcp"; call: McpCall; result: McpResult };

@@ -48,7 +48,8 @@ export const resolveAppRequest = (rawUrl: string, roots: AppRoots): ResolvedAppF
 /**
  * What each page may load. The dashboard may talk to its host, load its images and the avatars
  * of the people on GitHub and Linear, and frame a PDF it holds in memory, nothing else; the desktop screen talks to the app over IPC and needs no network at all. Scripts come
- * only from the app itself.
+ * only from the app itself. The live view of the host's screen needs nothing more: it fetches
+ * its frames from the host's API (connect-src) and shows them as blob: URLs (img-src).
  */
 export const contentSecurityPolicy = (surface: AppSurface, hostOrigin: string | null): string => {
   const host = surface === "dashboard" && hostOrigin ? ` ${hostOrigin}` : "";

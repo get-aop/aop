@@ -3,6 +3,7 @@ import { cn } from "@/lib/cn";
 import { CliUpdateDot } from "../agent-clis/AgentCliPanel";
 import { pendingCliUpdates, skipsPermissions, useAgentClis } from "../agent-clis/agent-cli-store";
 import { useAgentCliStatus } from "../agent-clis/use-agent-clis";
+import { LiveViewNotice } from "../live-view/LiveViewNotice";
 import { PlanUsageMeter } from "../plan-usage/PlanUsageMeter";
 import { useProjectsState } from "../projects/ProjectsProvider";
 import { hostConnection } from "../projects/selectors";
@@ -10,12 +11,14 @@ import { openSettingsDialog } from "./dialog-store";
 import { CONNECTION_DOT } from "./project-switcher/SwitcherConnection";
 
 /**
- * The far end of every top bar: host-wide state. A newer agent CLI and agents that skip
+ * The far end of every top bar: host-wide state. The live view's "Show" button while it is
+ * closed and a thread uses computer use, a newer agent CLI and agents that skip
  * permission checks (each opens the Runtimes settings), a host out of reach, then the Claude
  * plan's usage meter. The notices drop their words when the bar is narrow; their titles keep them.
  */
 export const ShellStatus = ({ testId }: { testId: string }) => (
   <div data-testid={testId} className="ml-auto flex shrink-0 items-center gap-0.5">
+    <LiveViewNotice className={noticeClass} />
     <CliUpdateNotice />
     <PermissionBypassNotice />
     <HostOfflineNotice />

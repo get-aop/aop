@@ -31,6 +31,15 @@ describe("planTurn", () => {
     });
   });
 
+  test("`tools` calls each named tool after the steps, answered without a server", () => {
+    const { beats } = plan('steps=1 tools="mcp__cua-driver__click|mcp__cua-driver__end_session"');
+
+    expect(beats.slice(2)).toEqual([
+      { kind: "tool", name: "mcp__cua-driver__click" },
+      { kind: "tool", name: "mcp__cua-driver__end_session" },
+    ]);
+  });
+
   test("a question comes after the steps and makes the turn wait for the answer", () => {
     const { beats, ending } = plan('steps=1 ask="Ready?"');
 

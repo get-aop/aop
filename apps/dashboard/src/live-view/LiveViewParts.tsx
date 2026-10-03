@@ -1,0 +1,142 @@
+import type { LiveViewSession } from "@aop/common";
+import { ChevronsUpDownIcon } from "lucide-react";
+import { cn } from "@/lib/cn";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/ui/dropdown-menu";
+import { Link, threadPath } from "../shell/router";
+import { pickLiveViewThread } from "./live-view-store";
+
+/** The red "live" dot; it holds still while the session is ending. */
+export const LiveDot = ({ ending }: { ending: boolean }) => (
+  <span
+    data-testid="live-view-dot"
+    aria-hidden="true"
+    className={cn(
+      "size-2 shrink-0 rounded-full",
+      ending ? "bg-text-subtle" : "bg-blocked animate-[aop-pulse_1.6s_ease-in-out_infinite]",
+    )}
+  />
+);
+
+/** The thread's title, linking to the thread. */
+export const ThreadTitle = ({
+  session,
+  onNavigate,
+  className,
+}: {
+  session: LiveViewSession;
+  onNavigate?: () => void;
+  className?: string;
+}) => (
+  <Link
+    to={threadPath(session.projectId, session.threadId)}
+    data-testid="live-view-thread-link"
+    title={`Open the thread “${session.title}”`}
+    onClick={onNavigate}
+    className={cn("min-w-0 truncate text-[12px] font-medium text-text hover:underline", className)}
+  >
+    {session.title}
+  </Link>
+);
+
+/** Picks which thread's session to watch when more than one uses computer use. */
+export const SessionSwitcher = ({
+  sessions,
+  current,
+}: {
+  sessions: LiveViewSession[];
+  current: LiveViewSession;
+}) => {
+  if (sessions.length < 2) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          data-testid="live-view-switcher"
+          aria-label={`${sessions.length} threads use computer use: switch`}
+          title="Switch thread"
+          className="flex h-6 shrink-0 items-center gap-0.5 rounded-row px-1 text-[11px] text-text-muted hover:bg-hover hover:text-text"
+        >
+          {sessions.length}
+          <ChevronsUpDownIcon className="size-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64" data-testid="live-view-switcher-menu">
+        <DropdownMenuLabel className="text-[11px] text-text-muted">
+          Threads using computer use
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={current.threadId} onValueChange={pickLiveViewThread}>
+          {inStartOrder(sessions).map((session) => (
+            <DropdownMenuRadioItem
+              key={session.threadId}
+              value={session.threadId}
+              data-testid={`live-view-switcher-${session.threadId}`}
+            >
+              <span className="truncate">{session.title}</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+/** The picture, or why there is none. */
+export const FramePicture = ({
+  url,
+  error,
+  onAspect,
+  className,
+}: {
+  url: string | null;
+  error: string | null;
+  onAspect?: (aspect: number) => void;
+  className?: string;
+}) => {
+  if (error) {
+    return (
+      <span
+        data-testid="live-view-error"
+        role="status"
+        className="block p-3 text-center text-meta text-text-muted"
+      >
+        {error}
+      </span>
+    );
+  }
+  if (!url) {
+    return (
+      <span
+        data-testid="live-view-connecting"
+        className="block p-3 text-center text-meta text-text-subtle"
+      >
+        Connecting to the host's screen…
+      </span>
+    );
+  }
+  return (
+    <img
+      data-testid="live-view-image"
+      src={url}
+      alt="The host's screen"
+      draggable={false}
+      onLoad={(event) => {
+        const { naturalWidth, naturalHeight } = event.currentTarget;
+        if (naturalWidth > 0 && naturalHeight > 0) onAspect?.(naturalHeight / naturalWidth);
+      }}
+      className={cn("block select-none object-contain", className)}
+    />
+  );
+};
+
+// The host lists sessions most recently active first, which changes while threads take turns;
+// the menu keeps them in the order they started, so an item does not move under the pointer.
+const inStartOrder = (sessions: LiveViewSession[]): LiveViewSession[] =>
+  [...sessions].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
