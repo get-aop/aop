@@ -4,8 +4,8 @@ import { cn } from "@/lib/cn";
 const FOLDED_MAX_CHARS = 600;
 const FOLDED_MAX_LINES = 8;
 
-/** Whether a message's text is long enough to open folded. */
-export const isLong = (text: string): boolean =>
+// Whether a message's text is long enough to open folded.
+const isLong = (text: string): boolean =>
   text.length > FOLDED_MAX_CHARS || text.split("\n").length > FOLDED_MAX_LINES;
 
 /**
