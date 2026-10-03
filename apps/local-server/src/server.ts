@@ -17,6 +17,9 @@ import {
 import { createCommandContext } from "./context.ts";
 import { createDatabase, getDefaultDbPath } from "./db/connection.ts";
 import { runMigrations } from "./db/migrations.ts";
+import { inboxDbPath, openInboxDatabase } from "./inbox/database.ts";
+import { createHostInboxService } from "./inbox/host-inbox-service.ts";
+import { startInboxRetention } from "./inbox/retention.ts";
 import { runLibraryRetention, startLibraryRetention } from "./library/retention.ts";
 import { createProjectServices } from "./project/services.ts";
 import { startPullRequestWatcher } from "./pull-request-watch/watcher.ts";
@@ -64,11 +67,14 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   );
   const updates = createHostUpdateService(ctx);
   const agentClis = createHostAgentCliService(ctx);
+  const inboxDb = openInboxDatabase(dbPath === ":memory:" ? ":memory:" : inboxDbPath());
+  const inbox = createHostInboxService(ctx, inboxDb);
   const app = createApp({
     ctx,
     projectServices,
     updates,
     agentClis,
+    inbox,
     startTimeMs,
     port,
     dashboardStaticPath: options?.dashboardStaticPath ?? getDashboardStaticPath(),
@@ -88,6 +94,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
     });
   } catch (err) {
     await db.destroy();
+    await inboxDb.destroy();
     const message =
       err instanceof Error && err.message.includes("EADDRINUSE")
         ? `Port ${port} is already in use`
@@ -111,6 +118,8 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
   await projectServices.routineScheduler.start();
   // Once a day the Library removes what outlived its retention or its caps.
   const stopLibraryRetention = startLibraryRetention(() => runLibraryRetention(ctx));
+  // Every hour the Inbox forgets the Slack messages that outlived its retention.
+  const stopInboxRetention = startInboxRetention(inbox);
   // A project created just before a restart may not have started its survey yet.
   void projectServices.kickoff.resumePending();
 
@@ -120,6 +129,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
       stopMaintenance();
       await projectServices.routineScheduler.stop();
       stopLibraryRetention();
+      stopInboxRetention();
       updates.stop();
       agentClis.stop();
       await stopWatcher();
@@ -128,6 +138,7 @@ export const startServer = async (options?: ServerOptions): Promise<ServerHandle
       // Every run has stopped, so no thread uses the screen: drivers and the lock dir go.
       await stopHostCua();
       await db.destroy();
+      await inboxDb.destroy();
       logger.info("Shutdown complete");
     },
   };

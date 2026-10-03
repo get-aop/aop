@@ -100,7 +100,11 @@ export const CoordinatorChatPane = ({
           chat={chat}
           onStart={startWith}
         />
-        <footer className="mx-auto w-full max-w-3xl shrink-0 px-6 pb-4 pt-2">
+        {/* The live view's popup rests above it, clear of the send button. */}
+        <footer
+          data-live-view-keep-clear
+          className="mx-auto w-full max-w-3xl shrink-0 px-6 pb-4 pt-2"
+        >
           {model.phase === "ready" && model.loadError ? (
             <ChatRefreshNotice message={model.loadError} />
           ) : null}

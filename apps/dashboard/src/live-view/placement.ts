@@ -1,19 +1,19 @@
 /**
  * Where the live view's popup sits. It always rests in one of the window's four corners: a drag
  * moves it freely, and letting go snaps it to the nearest corner, which is what is remembered.
- * Its place is worked out from that corner and the window's size on every render, so a resize
- * never leaves it outside the window.
+ * Its place is worked out from that corner, the window's size and what it must keep clear on
+ * every render, so a resize never leaves it outside the window.
  */
 export type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export const CORNERS: readonly Corner[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
 
 /**
- * Top right, under the top bar and a covering view's headers: clear of the composers' send
- * buttons (bottom right) and of every header's controls, over the threads panel's list or the
- * content of the PR View, an artifact or the AOP Browser.
+ * Bottom right: on the project screen that is the foot of the threads panel, which is usually
+ * empty because the Resolved group there starts folded. A bottom corner rests above any composer
+ * in its column (see `restingPlace`), so the send buttons stay clear.
  */
-export const DEFAULT_CORNER: Corner = "top-right";
+export const DEFAULT_CORNER: Corner = "bottom-right";
 
 export interface Size {
   width: number;
@@ -35,6 +35,67 @@ export const INSETS = { top: 152, right: 12, bottom: 12, left: 12 } as const;
 /** The popup's width: a small square-ish window, narrower on a narrow screen. */
 export const popupWidth = (viewportWidth: number): number =>
   Math.round(Math.min(288, Math.max(160, viewportWidth * 0.42)));
+
+/** A box on screen, in viewport pixels (a DOMRect's edges). */
+export interface Rect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/**
+ * Where a popup of `size` rests in `corner`, and the corner that is (`shown`). A bottom corner
+ * rests with its bottom edge at `floor` (the top of what it keeps clear, see `floorAbove`). When
+ * that leaves no room below the top inset (a short window, a tall composer), it rests in the top
+ * corner on the same side instead, as it did before bottom right was the default.
+ */
+export const restingPlace = (
+  corner: Corner,
+  size: Size,
+  viewport: Size,
+  floor: number,
+): { position: Point; shown: Corner } => {
+  if (corner.startsWith("top"))
+    return { position: cornerPosition(corner, size, viewport), shown: corner };
+  const y = Math.min(floor, viewport.height - INSETS.bottom) - size.height;
+  const side = corner.endsWith("left") ? "left" : "right";
+  if (y < INSETS.top) {
+    const top: Corner = `top-${side}`;
+    return { position: cornerPosition(top, size, viewport), shown: top };
+  }
+  const x = cornerPosition(corner, size, viewport).x;
+  return { position: clampToViewport({ x, y }, size, viewport), shown: corner };
+};
+
+/**
+ * The lowest a bottom corner's popup may reach in the column from `left` to `right`: a margin
+ * above the highest of the `keepClear` boxes (composers) it would overlap, or the window's
+ * bottom margin when there is none.
+ */
+export const floorAbove = (
+  keepClear: readonly Rect[],
+  column: { left: number; right: number },
+  viewport: Size,
+): number =>
+  keepClear
+    .filter((box) => box.left < column.right && box.right > column.left && box.bottom > box.top)
+    .reduce(
+      (floor, box) => Math.min(floor, box.top - INSETS.bottom),
+      viewport.height - INSETS.bottom,
+    );
+
+/** The columns a popup `width` wide spans in the left and right corners. */
+export const cornerColumn = (
+  corner: Corner,
+  width: number,
+  viewport: Size,
+): { left: number; right: number } => {
+  const left = corner.endsWith("left")
+    ? INSETS.left
+    : Math.max(0, viewport.width - INSETS.right - width);
+  return { left, right: left + width };
+};
 
 /** The top-left point of a popup of `size` resting in `corner`, kept inside the viewport. */
 export const cornerPosition = (corner: Corner, size: Size, viewport: Size): Point => {

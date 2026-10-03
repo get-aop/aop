@@ -19,6 +19,8 @@ import type {
 } from "./session-types.ts";
 import { updateChatSession } from "./session-update.ts";
 import { updateChatWorkspace } from "./session-workspace.ts";
+import { steerDeliveryOf } from "./steer-delivery.ts";
+import { interruptForMessage } from "./steer-interrupt.ts";
 
 export { waitForPendingChatReplies } from "./reply-state.ts";
 export {
@@ -105,5 +107,12 @@ export const createChatSessionService = (
 
     sendMessage: (sessionId: string, input: SendChatMessageInput) =>
       sendChatMessage(ctx, runtimeConfigurations, sessionId, input, deps),
+
+    /** Where a message sent to a conversation stands: waiting on a step, delivered, queued or started. */
+    steerDelivery: (messageId: string) => steerDeliveryOf(ctx, messageId),
+
+    /** Stops the step a running turn is on, so it reads a message sent to it now. */
+    interruptForMessage: (projectId: string, messageId: string) =>
+      interruptForMessage(ctx, projectId, messageId),
   };
 };

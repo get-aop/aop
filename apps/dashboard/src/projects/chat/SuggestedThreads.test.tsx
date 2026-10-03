@@ -66,6 +66,9 @@ const setup = (
     },
     skipSuggestion: (projectId, messageId, id) => respond("skip", projectId, messageId, id),
     unskipSuggestion: (projectId, messageId, id) => respond("unskip", projectId, messageId, id),
+    interruptForMessage: async () => {
+      throw new Error("not used");
+    },
   };
   const tree = (answered: Record<string, SuggestionAnswer>, threads: Thread[]) => (
     <ChatApiProvider value={api}>

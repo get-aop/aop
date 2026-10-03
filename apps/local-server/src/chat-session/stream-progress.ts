@@ -29,10 +29,15 @@ export const startLogProgressTail = (input: {
   onLine?: (line: string) => Promise<void> | void;
   minEmitIntervalMs?: number;
   pollIntervalMs?: number;
+  /** When a tool call is first seen; the tail reads the log as it grows, so that is when it started. */
+  now?: () => string;
 }): (() => Promise<void>) => {
   const minEmitIntervalMs = input.minEmitIntervalMs ?? 100;
   const pollIntervalMs = input.pollIntervalMs ?? 100;
-  const accumulator = createTurnAccumulator({ promptUuid: input.promptUuid });
+  const accumulator = createTurnAccumulator({
+    promptUuid: input.promptUuid,
+    now: input.now ?? (() => new Date().toISOString()),
+  });
   const state: TailState = {
     stopped: false,
     reader: createLogReader(input.logFilePath),

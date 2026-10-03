@@ -11,7 +11,7 @@ const NOT_CONNECTED = `MCP server ${AOP_MCP_SERVER} is not connected`;
  * scripted event otherwise.
  */
 export const carryOut = async (
-  beat: PlannedBeat,
+  beat: Exclude<PlannedBeat, { kind: "hold" }>,
   aop: McpConnection | undefined,
 ): Promise<Beat> => {
   if (beat.kind === "call") return mcpBeat(beat.call, aop);

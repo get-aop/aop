@@ -2,29 +2,38 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import { useLocalStorage } from "../hooks/use-local-storage";
+import { KEEP_CLEAR_ATTRIBUTE } from "./live-view-clearance";
 import {
   type Corner,
   clampToViewport,
-  cornerPosition,
+  cornerColumn,
   DEFAULT_CORNER,
+  floorAbove,
   isCorner,
   movedPastThreshold,
   nearestCorner,
   type Point,
+  type Rect,
+  restingPlace,
   type Size,
 } from "./placement";
 
+// Only a corner the person dragged it to is stored; until then the popup follows DEFAULT_CORNER.
 const CORNER_KEY = "aop:live-view:corner";
+
+/** How often what the popup keeps clear is measured again: a composer grows as it is typed in. */
+const KEEP_CLEAR_EVERY_MS = 500;
 
 /**
  * Drags the popup by the pointer and snaps it to the nearest corner when let go, remembering
  * the corner. A press that does not move past the drag threshold is a click: `onClick` gets it
- * (the popup's picture opens full screen on one). The popup is placed from its corner and the
- * window's size, so it follows a resize.
+ * (the popup's picture opens full screen on one). The popup is placed from its corner, the
+ * window's size and the composers under it, so it follows a resize and a growing composer.
  */
 export const usePopupPlacement = (
   size: Size,
@@ -42,7 +51,8 @@ export const usePopupPlacement = (
     target: EventTarget;
   } | null>(null);
 
-  const resting = cornerPosition(corner, size, viewport);
+  const floor = useFloor(corner, size.width, viewport);
+  const { position: resting, shown } = restingPlace(corner, size, viewport, floor);
   const position = dragAt ? clampToViewport(dragAt, size, viewport) : resting;
 
   const onPointerDown = useCallback(
@@ -97,11 +107,56 @@ export const usePopupPlacement = (
   }, []);
 
   return {
-    corner,
+    corner: shown,
     position,
     dragging: dragAt !== null,
     handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel },
   };
+};
+
+/**
+ * The lowest a popup in a bottom `corner` may reach: above the composers in its column that are
+ * on screen. Measured again on a timer, since a composer grows, and a pane opens or closes,
+ * without the window changing size.
+ */
+const useFloor = (corner: Corner, width: number, viewport: Size): number => {
+  const [floor, setFloor] = useState(viewport.height);
+  const bottom = corner.startsWith("bottom");
+  // Before the first paint, so the popup never shows over a composer and then jumps.
+  useLayoutEffect(() => {
+    if (!bottom) return;
+    const measure = () => {
+      const column = cornerColumn(corner, width, viewport);
+      setFloor(floorAbove(keepClearIn(column), column, viewport));
+    };
+    measure();
+    const timer = window.setInterval(measure, KEEP_CLEAR_EVERY_MS);
+    return () => window.clearInterval(timer);
+  }, [bottom, corner, width, viewport]);
+  return bottom ? floor : viewport.height;
+};
+
+/**
+ * The boxes marked keep-clear that show in `column`: one hidden (display: none) has no box, and
+ * one under another pane (the chat's composer under an overlaid threads panel) is not the
+ * topmost thing at its own middle.
+ */
+const keepClearIn = (column: { left: number; right: number }): Rect[] =>
+  Array.from(document.querySelectorAll(`[${KEEP_CLEAR_ATTRIBUTE}]`)).flatMap((element) => {
+    const box = element.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return [];
+    const x = Math.min(Math.max((column.left + column.right) / 2, box.left + 1), box.right - 1);
+    return isOnTop(element, x, box.top + box.height / 2) ? [box] : [];
+  });
+
+// Floating things that come and go (the popup itself, a toast, a menu) do not hide a composer.
+const FLOATING =
+  "[data-testid=live-view-popup], [data-sonner-toaster], [data-radix-popper-content-wrapper]";
+
+const isOnTop = (element: Element, x: number, y: number): boolean => {
+  if (typeof document.elementsFromPoint !== "function") return true;
+  const top = document.elementsFromPoint(x, y).find((hit) => !hit.closest(FLOATING));
+  return top === undefined || element.contains(top);
 };
 
 /** The window's size, following resizes. */

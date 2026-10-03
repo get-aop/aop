@@ -43,6 +43,17 @@ export const buildClaudeUserMessage = (
   })}\n`;
 
 /**
+ * The stream-json line that stops the step a running turn is on, the way the Agent SDK's
+ * `interrupt()` does. Verified on Claude Code 2.1.288: the CLI answers with a `control_response`
+ * (its `still_queued` lists the user lines not taken yet), cancels the tool call in flight and
+ * kills its process, ends the turn with an `error_during_execution` result, and then starts the
+ * lines still queued as the next turn of the same process at once. SIGINT cancels the same way
+ * but exits without reading what was queued, so it is not used.
+ */
+export const buildClaudeInterruptRequest = (requestId: string = randomUUID()): string =>
+  `${JSON.stringify({ type: "control_request", request_id: requestId, request: { subtype: "interrupt" } })}\n`;
+
+/**
  * Writes the message to a file of its own and returns its path, or null for a prompt that goes
  * as an argument. `remove` is safe once the process is spawned: on Unix the child keeps its open
  * handle, so a detached run reads its prompt even after the host restarts.

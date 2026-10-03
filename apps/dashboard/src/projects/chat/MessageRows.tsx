@@ -1,6 +1,7 @@
 import {
   type AssistantMessage,
   type Message,
+  type MessageBlock,
   shownThreadStatus,
   type ThreadReportMessage,
   type ThreadReportOutcome,
@@ -18,6 +19,7 @@ import { MessageBlocks } from "./MessageBlocks";
 import { MessageImages } from "./MessageImages";
 import { MessageMeta } from "./MessageMeta";
 import { isSent, SentCard, SentRow } from "./SentMessage";
+import { QueuedNote, SteerWaiting } from "./SteerStatus";
 import { ThreadChip } from "./ThreadChip";
 import { useThreadPresence } from "./thread-presence";
 import { useTurnReveal } from "./use-turn-reveal";
@@ -26,10 +28,17 @@ import { useTurnReveal } from "./use-turn-reveal";
  * A message an agent was told. The person's words: a bubble on the right, folded when long, with
  * the time and a copy button on hover. The images they sent sit above it; a message of images
  * alone has no bubble. A brief one of their routines sent is labelled with the routine's name.
- * The coordinator's words and AOP's are a card on the left that names who sent them.
+ * The coordinator's words and AOP's are a card on the left that names who sent them. One held
+ * for after the turn that runs now (`queued`) says so.
  */
-export const UserRow = memo(function UserRow({ message }: { message: UserMessage }) {
-  if (isSent(message)) return <SentRow message={message} />;
+export const UserRow = memo(function UserRow({
+  message,
+  queued = false,
+}: {
+  message: UserMessage;
+  queued?: boolean;
+}) {
+  if (isSent(message)) return <SentRow message={message} queued={queued} />;
   return (
     <div
       className="group flex flex-col items-end gap-1 pb-5"
@@ -48,6 +57,7 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
         </span>
       ) : null}
       <PersonWords message={message} />
+      {queued ? <QueuedNote message={message} align="end" /> : null}
       <div className="w-full max-w-[80%]">
         <MessageMeta timestamp={message.createdAt} copyText={message.text} align="end" />
       </div>
@@ -77,6 +87,7 @@ export const AssistantRow = memo(function AssistantRow({
   // Fixed at mount: a reply that finishes in front of the person keeps rendering as it did.
   const watched = useRef(writing).current;
   const { renderSteer, untaken } = useSteers(message, steers);
+  const liveBlocks = writing ? message.blocks : undefined;
   const origin = useMemo(() => ({ threadId: message.threadId }), [message.threadId]);
   const text = textOf(message);
   return (
@@ -113,7 +124,12 @@ export const AssistantRow = memo(function AssistantRow({
           />
         </ChatOriginContext.Provider>
         {untaken.map((steer) => (
-          <SteeredMessage key={steer.id} message={steer} state={writing ? "pending" : "missed"} />
+          <SteeredMessage
+            key={steer.id}
+            message={steer}
+            state={writing ? "pending" : "missed"}
+            liveBlocks={liveBlocks}
+          />
         ))}
         {/* The meta's room is kept while the reply is written, so it ends without a jump. */}
         <div className="mt-1.5 min-h-6">
@@ -154,25 +170,30 @@ const useSteers = (message: AssistantMessage, steers: readonly Message[] | undef
 };
 
 const STEER_CAPTION = {
-  taken: "Sent while it worked",
+  taken: "Sent while it worked · delivered",
   pending: "Sent while it worked · it reads this after its current step",
   missed: "Sent while it worked · the turn was stopped before reading it",
 } as const;
 
 /**
  * A message sent into a turn while it ran, drawn inside the reply: where the agent took it in,
- * or, until it does, at the reply's end. The person's words are a bubble, as anywhere else; the
- * coordinator's words keep their card, which names it and shows the person's words it forwards.
+ * or, until it does, at the reply's end, saying what it waits for. The person's words are a
+ * bubble, as anywhere else; the coordinator's words keep their card, which names it and shows the
+ * person's words it forwards.
  */
 const SteeredMessage = memo(function SteeredMessage({
   message,
   state,
+  liveBlocks,
 }: {
   message: Message;
   state: keyof typeof STEER_CAPTION;
+  /** The reply being written, while the message waits in it. */
+  liveBlocks?: readonly MessageBlock[];
 }) {
   // Only what an agent is told is sent into its turn.
   if (message.role !== "user") return null;
+  const align = isSent(message) ? "start" : "end";
   return (
     <div
       data-testid="steered-message"
@@ -182,9 +203,13 @@ const SteeredMessage = memo(function SteeredMessage({
       className={cn("my-3 flex flex-col gap-1", isSent(message) ? "items-start" : "items-end")}
     >
       {isSent(message) ? <SentCard message={message} /> : <PersonWords message={message} />}
-      <p data-testid="steered-message-caption" className="text-meta text-text-subtle">
-        {STEER_CAPTION[state]}
-      </p>
+      {state === "pending" && liveBlocks ? (
+        <SteerWaiting message={message} blocks={liveBlocks} align={align} />
+      ) : (
+        <p data-testid="steered-message-caption" className="text-meta text-text-subtle">
+          {STEER_CAPTION[state]}
+        </p>
+      )}
     </div>
   );
 });

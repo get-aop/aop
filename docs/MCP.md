@@ -15,7 +15,7 @@ The coordinator is hermetic: it runs with the AOP tools only, with no Claude set
 | Tool | Behavior |
 | --- | --- |
 | `thread_spawn` | Starts a thread in one of the project's repositories with a complete brief, and returns at once. A project with several repositories needs `repoId`. Attaches a live thread card to the coordinator's reply. |
-| `thread_steer` | Sends a message to an existing thread of this project. While the thread works, the message reaches its running turn after the tool call it is on, so a correction changes the work in progress; `when: "after-turn"` holds it until that turn ends instead. While the thread is idle it starts a new turn. Counts toward the reply's routing receipt. |
+| `thread_steer` | Sends a message to an existing thread of this project. While the thread works, the message reaches its running turn once the tool call it is on ends, so a correction changes the work in progress; `when: "interrupt"` stops that call so the thread reads the message at once, and `when: "after-turn"` holds it until that turn ends instead. While the thread is idle it starts a new turn. The result's `delivery` says where the message stands: waiting on a step (named, with how long it has run), interrupted, read, queued, or started. Counts toward the reply's routing receipt. |
 | `thread_stop` | Ends the thread's running turn and drops its queued messages. |
 | `thread_list` | Lists the project's threads with status, progress and the question of any thread waiting on the person. |
 | `thread_report` | Returns one thread's state and the end of its transcript, each message with its sender (`from`: `thread`, `person`, `coordinator`, `routine` or `system`), the person's words a coordinator message forwarded (`quote`) and whether it was the brief. |

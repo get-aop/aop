@@ -2,6 +2,7 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { aopPaths, getLogger } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
+import { startPeriodicJob } from "../process/periodic-job.ts";
 import { backfillSentAttachments } from "./chat-index.ts";
 import { effectiveRetention, hostLibraryDefaults, megabytes, retentionCutoff } from "./item-dto.ts";
 import { removeLibraryItem } from "./removal.ts";
@@ -88,38 +89,17 @@ export const enforceProjectCap = async (
   return evicted;
 };
 
-/**
- * Runs the cleanup shortly after start and then once a day. A run still going when the next is
- * due is not doubled. Returns what stops it.
- */
+/** Runs the cleanup shortly after start and then once a day. Returns what stops it. */
 export const startLibraryRetention = (
   run: () => Promise<unknown>,
   timing: { startupDelayMs?: number; intervalMs?: number } = {},
-): (() => void) => {
-  let running = false;
-  const tick = async () => {
-    if (running) return;
-    running = true;
-    try {
-      await run();
-    } catch (error) {
-      logger.error("Library cleanup failed: {error}", { error: String(error) });
-    } finally {
-      running = false;
-    }
-  };
-  let interval: ReturnType<typeof setInterval> | null = null;
-  const first = setTimeout(() => {
-    void tick();
-    interval = setInterval(() => void tick(), timing.intervalMs ?? RETENTION_INTERVAL_MS);
-    interval.unref?.();
-  }, timing.startupDelayMs ?? RETENTION_STARTUP_DELAY_MS);
-  first.unref?.();
-  return () => {
-    clearTimeout(first);
-    if (interval) clearInterval(interval);
-  };
-};
+): (() => void) =>
+  startPeriodicJob({
+    name: "Library cleanup",
+    run,
+    startupDelayMs: timing.startupDelayMs ?? RETENTION_STARTUP_DELAY_MS,
+    intervalMs: timing.intervalMs ?? RETENTION_INTERVAL_MS,
+  });
 
 const cleanProject = async (
   repository: LibraryRepository,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { MessageDelta } from "@aop/common";
-import { applyLiveOps, type TurnPart } from "@aop/common";
+import { applyLiveOps, settledParts, type TurnPart } from "@aop/common";
 import { Hono } from "hono";
 import { serializeMessageOrigin } from "../chat-session/message-origin.ts";
 import { createChatSessionRoutes } from "../chat-session/routes.ts";
@@ -166,9 +166,12 @@ describe("clients hear of project changes through the event publisher", () => {
       (parts, delta) => applyLiveOps(parts ?? [], delta.ops),
       [],
     );
-    // What a client watched being written is the finished message, part for part.
+    // What a client watched being written is the finished message, part for part, save when each
+    // step started, which only a turn being written carries.
     expect(live?.map((part) => part.type)).toEqual(["text", "tool", "text", "tool", "text"]);
-    expect(reply?.role === "assistant" && reply.blocks).toEqual(live ?? []);
+    const tools = (live ?? []).filter((part) => part.type === "tool");
+    expect(tools.every((part) => typeof part.startedAt === "string")).toBe(true);
+    expect(reply?.role === "assistant" && reply.blocks).toEqual(settledParts(live ?? []));
     // The user's message and the finished reply were each committed with their log entries.
     expect(heard.commits()).toBeGreaterThanOrEqual(2);
   });

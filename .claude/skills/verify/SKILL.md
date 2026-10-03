@@ -65,6 +65,17 @@ The feature files were written for Claude in Chrome. Read their steps as intent:
 
 The exception is a stack seeded with `--fake-runtime` (`bun $S/seed.ts --name <run> --fake-runtime`). That registers `packages/llm-provider/test-fixtures/fake-cli.ts` as a runtime and makes it the host's default runtime, so new projects and sessions spawn it instead of `claude` (projects created before the seed keep the built-in runtime: pick the fake in their settings › Models). It never calls a model, streams Claude-style JSONL, and supports `--resume`, so chat is free to drive. Confirm the session's `runtimeAlias` in `GET /api/chat-sessions` ends in `fake-cli.ts` before typing. Script a turn with a `[fake: ...]` marker in the message; see `features/sessions.md` and `packages/llm-provider/test-fixtures/README.md`.
 
+**Waits: a minute at most per call.** A message the person or the coordinator sends reaches your running turn only when the call you are on ends (see "Messages sent while a turn runs" in `docs/architecture/README.md`). So start anything long detached, with its output in a file under `.work/verify/<run>/`, and check on it in the foreground with calls that block 60 seconds at most, repeated until it is done; never one call that blocks for minutes:
+
+```bash
+# A full suite: start it detached, then poll.
+nohup bun test > .work/verify/<run>/suite.log 2>&1 & echo $! > .work/verify/<run>/suite.pid
+# Each poll returns within a minute: done, or still running.
+timeout 60 sh -c 'while kill -0 "$(cat .work/verify/<run>/suite.pid)" 2>/dev/null; do sleep 5; done'; tail -3 .work/verify/<run>/suite.log
+```
+
+Do not end your turn while you still wait: nothing wakes an idle thread when a background job ends.
+
 ## Evidence
 
 Everything goes to `.work/verify/<run>/evidence/` (command output, API and DB reads, and a note of what each screenshot showed: CUA returns screenshots inline, not as files). Server and dashboard logs are in `.work/verify/<run>/logs/`. Record the feature ID and entry point beside each artifact.

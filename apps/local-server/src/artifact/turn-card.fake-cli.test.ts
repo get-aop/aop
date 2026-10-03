@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { applyLiveOps, type MessageDelta, type TurnPart } from "@aop/common";
+import { applyLiveOps, type MessageDelta, settledParts, type TurnPart } from "@aop/common";
 import { createLibraryProject } from "../library/test-utils.ts";
 import { createProjectStack, type ProjectStack, useTempAopHome } from "../project/test-utils.ts";
 
@@ -58,7 +58,8 @@ describe("an artifact made during a turn", () => {
       (parts, delta) => applyLiveOps(parts ?? [], delta.ops),
       [],
     );
-    expect(live).toEqual(blocks as TurnPart[]);
+    // The same card, part for part, save when each step started, which only a live turn carries.
+    expect(settledParts(live ?? [])).toEqual(blocks as TurnPart[]);
     expect(
       deltas.some((delta) =>
         delta.ops.some((op) => op.op === "start" && op.part.type === "artifact"),
