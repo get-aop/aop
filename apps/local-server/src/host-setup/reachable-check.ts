@@ -1,4 +1,4 @@
-import type { SetupCheck } from "@aop/common";
+import type { ChannelConfig, SetupCheck } from "@aop/common";
 import type { ServeLook } from "./probes.ts";
 
 const TITLE = "Reachable from your other devices";
@@ -6,10 +6,16 @@ const TITLE = "Reachable from your other devices";
 /**
  * "Reachable from your other devices": the addresses `tailscale serve` publishes the host on.
  * The host listens on loopback only, so without one only this computer reaches it. The how-to is
- * docs/HOST.md's command with this host's port, and the host's port for https as well when 443
- * already serves something else on the tailnet name.
+ * docs/HOST.md's command with this host's port. It serves https on 443, except where that is
+ * taken: AOP Nightly runs beside stable and leaves 443 to it (install.sh says the same), and a
+ * tailnet name whose 443 already serves something else keeps it.
  */
-export const reachableCheck = (look: ServeLook, port: number, host: string): SetupCheck => {
+export const reachableCheck = (
+  look: ServeLook,
+  port: number,
+  host: string,
+  channel: ChannelConfig,
+): SetupCheck => {
   if (look.addresses.length > 0) {
     return {
       id: "reachable",
@@ -19,7 +25,7 @@ export const reachableCheck = (look: ServeLook, port: number, host: string): Set
       actions: [],
     };
   }
-  const httpsPort = look.httpsDefaultTaken ? port : 443;
+  const httpsPort = look.httpsDefaultTaken || channel.id === "nightly" ? port : 443;
   return {
     id: "reachable",
     state: "warning",

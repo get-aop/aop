@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { CHANNELS } from "@aop/common";
 import { parseServeStatus, reachableCheck } from "./reachable-check.ts";
-import { HOST } from "./test-utils.ts";
+import { HOST, NIGHTLY } from "./test-utils.ts";
 
 // What `tailscale serve status --json` printed on a host serving AOP Nightly and two other apps.
 const SOULF = {
@@ -66,6 +67,7 @@ describe("reachableCheck", () => {
       },
       25650,
       HOST,
+      NIGHTLY,
     );
 
     expect(check).toEqual({
@@ -82,6 +84,7 @@ describe("reachableCheck", () => {
       { tailscale: true, addresses: [], httpsDefaultTaken: false },
       25150,
       HOST,
+      CHANNELS.stable,
     );
 
     expect(check.state).toBe("warning");
@@ -97,19 +100,21 @@ describe("reachableCheck", () => {
     ]);
   });
 
-  test("uses the host's own port for https when 443 serves something else, and asks for Tailscale when it is missing", () => {
+  test("serves https on the host's own port where 443 is taken or is stable's, and asks for Tailscale when it is missing", () => {
+    const free = { tailscale: true, addresses: [], httpsDefaultTaken: false };
     const taken = reachableCheck(
-      { tailscale: true, addresses: [], httpsDefaultTaken: true },
-      25650,
+      { ...free, httpsDefaultTaken: true },
+      25150,
       HOST,
+      CHANNELS.stable,
     );
-    const missing = reachableCheck(
-      { tailscale: false, addresses: [], httpsDefaultTaken: false },
-      25650,
-      HOST,
-    );
+    const nightly = reachableCheck(free, 25650, HOST, NIGHTLY);
+    const missing = reachableCheck({ ...free, tailscale: false }, 25650, HOST, NIGHTLY);
 
     expect(taken.actions[0]).toMatchObject({
+      command: "tailscale serve --bg --https=25150 http://127.0.0.1:25150",
+    });
+    expect(nightly.actions[0]).toMatchObject({
       command: "tailscale serve --bg --https=25650 http://127.0.0.1:25650",
     });
     const steps = missing.actions[0]?.kind === "how-to" ? missing.actions[0].steps : [];

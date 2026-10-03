@@ -729,6 +729,20 @@ print_success() {
   else
     echo "Dashboard: ${LOCAL_SERVER_URL}"
   fi
+  print_next_steps
+}
+
+# Where to go from here: other devices, remote access and updates. The tailscale command is the
+# one AOP settings › Host shows; AOP Nightly serves https on its own port, so 443 stays stable's.
+print_next_steps() {
+  local https_port=443
+  if [ "$CHANNEL" = "nightly" ]; then
+    https_port="$LOCAL_SERVER_PORT"
+  fi
+  echo ""
+  echo "Pair another device: run \`${BIN_NAME} pair\` on this computer and enter the code in the AOP app or a browser."
+  echo "Reach it from your other devices over Tailscale: tailscale serve --bg --https=${https_port} http://127.0.0.1:${LOCAL_SERVER_PORT}"
+  echo "Updates: AOP settings › Updates. Setup status: AOP settings › Host."
 }
 
 main "$@"

@@ -85,7 +85,7 @@ const readSetup = async (deps: HostSetupServiceDeps, fresh: boolean): Promise<Ho
     bounded(
       "reachable",
       () => serve,
-      (look) => reachableCheck(look, facts.port, host),
+      (look) => reachableCheck(look, facts.port, host, facts.channel),
     ),
     bounded(
       "claude",
