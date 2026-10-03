@@ -4,6 +4,7 @@ import { createCommandContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
 import { isProcessAlive } from "../process/liveness.ts";
+import { spawnRunning } from "../process/test-utils.ts";
 import {
   isChatRunProcessGone,
   recordChatRunPid,
@@ -20,12 +21,8 @@ afterEach(async () => {
 });
 
 /** A detached process group, like the chat engine's CLI spawn. */
-const spawnSleeper = (seconds = 30) => {
-  const proc = Bun.spawn(["sleep", String(seconds)], {
-    stdout: "ignore",
-    stderr: "ignore",
-    detached: true,
-  });
+const spawnSleeper = async (seconds = 30) => {
+  const proc = await spawnRunning(["sleep", String(seconds)], { detached: true });
   spawned.push(proc);
   return proc;
 };
@@ -99,20 +96,20 @@ describe("isChatRunProcessGone", () => {
     expect(isChatRunProcessGone({ pid: 999_999 }, "sleep")).toBe(true);
   });
 
-  test("declares the run gone when the pid now belongs to a non-agent process", () => {
-    const proc = spawnSleeper();
+  test("declares the run gone when the pid now belongs to a non-agent process", async () => {
+    const proc = await spawnSleeper();
     expect(isChatRunProcessGone({ pid: proc.pid }, "/opt/fake-cli.ts")).toBe(true);
   });
 
-  test("keeps the run live while its CLI is running", () => {
-    const proc = spawnSleeper();
+  test("keeps the run live while its CLI is running", async () => {
+    const proc = await spawnSleeper();
     expect(isChatRunProcessGone({ pid: proc.pid }, "sleep")).toBe(false);
   });
 });
 
 describe("stopOrphanedChatRunProcess", () => {
   test("terminates the recorded CLI process", async () => {
-    const proc = spawnSleeper();
+    const proc = await spawnSleeper();
 
     const stopped = await stopOrphanedChatRunProcess({ id: "crun_1", pid: proc.pid }, "sleep");
 
@@ -121,7 +118,7 @@ describe("stopOrphanedChatRunProcess", () => {
   });
 
   test("leaves a live process alone when it is not the run's CLI", async () => {
-    const proc = spawnSleeper();
+    const proc = await spawnSleeper();
 
     const stopped = await stopOrphanedChatRunProcess(
       { id: "crun_1", pid: proc.pid },

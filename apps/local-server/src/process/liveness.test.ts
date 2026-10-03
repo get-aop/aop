@@ -8,6 +8,7 @@ import {
   isZombie,
   pollForProcessExit,
 } from "./liveness.ts";
+import { spawnRunning } from "./test-utils.ts";
 
 describe("isProcessAlive", () => {
   test("returns true for current process", () => {
@@ -64,10 +65,10 @@ describe("isAgentProcess", () => {
     expect(isAgentProcess(999999)).toBe(false);
   });
 
-  test("returns false for a live process that is not an agent CLI", () => {
+  test("returns false for a live process that is not an agent CLI", async () => {
     // process.pid's cmdline varies with the test invocation (paths may match);
     // a spawned neutral process is deterministic.
-    const proc = Bun.spawn(["sleep", "2"], { stdout: "ignore", stderr: "ignore" });
+    const proc = await spawnRunning(["sleep", "2"]);
     try {
       expect(isAgentProcess(proc.pid)).toBe(false);
     } finally {
@@ -75,8 +76,8 @@ describe("isAgentProcess", () => {
     }
   });
 
-  test("accepts a live process whose command line contains the run's executable", () => {
-    const proc = Bun.spawn(["sleep", "2"], { stdout: "ignore", stderr: "ignore" });
+  test("accepts a live process whose command line contains the run's executable", async () => {
+    const proc = await spawnRunning(["sleep", "2"]);
     try {
       expect(isAgentProcess(proc.pid, { executable: "sleep" })).toBe(true);
       expect(isAgentProcess(proc.pid, { executable: "/opt/fake-cli.ts" })).toBe(false);

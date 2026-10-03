@@ -5,7 +5,7 @@ Thank you for helping improve AOP. The project is **MIT-licensed** and stays ope
 ## Before you open a PR
 
 1. Read the [developer guide](./aop/README.md) for workspace layout and architecture.
-2. Run focused tests for the area you changed (`bun test` runs unit tests; `bun run test:integration` adds the opt-in CLI HTTP suite), then `bun check` from the repo root.
+2. Run focused tests for the area you changed (`bun test` runs unit tests; `bun run test:integration` adds the opt-in CLI HTTP suite), then `bun check` from the repo root. `bun check` builds the desktop app with vite, which runs under the `node` on your PATH: use Node 24 (`mise.toml` pins it; 22.18 or newer works). Older Node cannot load `vite.config.ts`, because it imports `@aop/common`'s TypeScript source.
 3. Add or update colocated `*.test.ts` files for behavior changes.
 4. Keep entrypoints thin (routes/commands → services → repositories). See [`CLAUDE.md`](./CLAUDE.md).
 

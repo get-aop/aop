@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Message, Project, Thread } from "@aop/common";
 import type { LLMProvider, RunOptions } from "@aop/llm-provider";
+import { backgroundReplyTasks } from "../chat-session/reply-state.ts";
 import { cancelCoordinatorWakes } from "../chat-session/report-batch.ts";
 import { createChatSessionService, shutdownChatSessions } from "../chat-session/service.ts";
 import { createCommandContext } from "../context.ts";
@@ -245,6 +246,12 @@ describe("batched coordinator wakes", () => {
     await eventually(
       async () => ((await reportsIn(s, project.id)).length === 2 ? true : undefined),
       "both reports",
+    );
+    // A thread's turn stores its report and only then schedules the wake. Let both turns end
+    // first: a late one would put this stack's 60 s wake back, and it would replace the boot's.
+    await eventually(
+      () => (backgroundReplyTasks.size === 0 ? true : undefined),
+      "the threads' turns to end",
     );
     // The process ends with its wake still waiting out the window: only the stored reports remain.
     cancelCoordinatorWakes();
