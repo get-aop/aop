@@ -298,7 +298,8 @@ const node = (issue: FixtureIssue, nameWithOwner: string) => ({
   recentComments: {
     nodes: Array.from({ length: Math.min(issue.comments ?? 0, 3) }, (_, index) => ({
       id: `IC_${issue.number}_${index}`,
-      body: index === 0 ? "I can reproduce this on `main`." : `Follow-up ${index}: still happening.`,
+      body:
+        index === 0 ? "I can reproduce this on `main`." : `Follow-up ${index}: still happening.`,
       createdAt: ago(issue.hours + 3 - index),
       author: [people.ana, people.ben, people.mia][index % 3],
     })),
