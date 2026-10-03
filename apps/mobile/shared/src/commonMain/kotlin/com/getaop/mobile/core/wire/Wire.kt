@@ -146,6 +146,10 @@ data class Block(
     val url: String? = null,
     val state: String? = null,
     val messageId: String? = null,
+    /** A `question` block: what the coordinator asks, the answers it offers, and whether "Other…" shows. */
+    val question: String? = null,
+    val options: List<BlockedOption> = emptyList(),
+    val other: Boolean = false,
 )
 
 /** `user`, `assistant` or `thread-report`; see `MessageSchema`. */

@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,7 +42,7 @@ import com.getaop.mobile.ui.theme.CardShape
 fun MessageView(message: Message, host: HostState, onOpenThread: (String) -> Unit) {
     when (message.role) {
         MessageRole.USER -> UserBubble(message)
-        MessageRole.ASSISTANT -> AssistantReply(message.blocks, host, failed = message.failed, onOpenThread = onOpenThread)
+        MessageRole.ASSISTANT -> AssistantReply(message.id, message.blocks, host, failed = message.failed, onOpenThread = onOpenThread)
         MessageRole.THREAD_REPORT -> ThreadReportLine(message, host, onOpenThread)
     }
 }
@@ -49,7 +50,7 @@ fun MessageView(message: Message, host: HostState, onOpenThread: (String) -> Uni
 @Composable
 fun LiveTurnView(turn: LiveTurn, host: HostState, onOpenThread: (String) -> Unit) {
     Column {
-        AssistantReply(turn.parts, host, failed = false, onOpenThread = onOpenThread)
+        AssistantReply(null, turn.parts, host, failed = false, onOpenThread = onOpenThread)
         Text("Writing…", style = MaterialTheme.typography.labelSmall, color = AopColors.Running, modifier = Modifier.padding(top = 2.dp))
     }
 }
@@ -77,9 +78,12 @@ private fun UserBubble(message: Message) {
     }
 }
 
-/** A reply's parts in order: prose, folded reasoning, tool calls folded into one line, cards. */
+/**
+ * A reply's parts in order: prose, folded reasoning, tool calls folded into one line, cards.
+ * `messageId` is null while the reply is being written.
+ */
 @Composable
-private fun AssistantReply(blocks: List<Block>, host: HostState, failed: Boolean, onOpenThread: (String) -> Unit) {
+private fun AssistantReply(messageId: String?, blocks: List<Block>, host: HostState, failed: Boolean, onOpenThread: (String) -> Unit) {
     val modifier = if (failed) {
         Modifier.border(1.dp, AopColors.Blocked.copy(alpha = 0.5f), CardShape).padding(12.dp)
     } else {
@@ -90,7 +94,7 @@ private fun AssistantReply(blocks: List<Block>, host: HostState, failed: Boolean
         for (group in groupTools(blocks)) {
             when {
                 group.size > 1 || group.first().type == "tool" -> ToolsLine(group)
-                else -> BlockView(group.first(), host, onOpenThread)
+                else -> BlockView(messageId, group.first(), host, onOpenThread)
             }
         }
     }
@@ -107,7 +111,7 @@ fun groupTools(blocks: List<Block>): List<List<Block>> {
 }
 
 @Composable
-private fun BlockView(block: Block, host: HostState, onOpenThread: (String) -> Unit) {
+private fun BlockView(messageId: String?, block: Block, host: HostState, onOpenThread: (String) -> Unit) {
     val uri = LocalUriHandler.current
     when (block.type) {
         "text" -> Markdown(block.text.orEmpty(), onThreadLink = onOpenThread)
@@ -126,9 +130,25 @@ private fun BlockView(block: Block, host: HostState, onOpenThread: (String) -> U
             Text(if (count == 1) "Sent to one thread" else "Sent to $count threads", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         "artifact" -> Text("Made an artifact. Open it in AOP on your computer.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        "question" -> AskedQuestion(messageId, block)
+        // Marks where a steer reached the turn; the steer itself shows as the person's message.
         "steer" -> Unit
-        else -> Unit
+        else -> OpenOnDesktop()
     }
+}
+
+/** A block this version of the app cannot draw (a newer host, or one only the desktop shows): say so rather than drop it. */
+@Composable
+private fun OpenOnDesktop() {
+    Text(
+        "Open on desktop to see this",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .testTag("unknown-block")
+            .border(1.dp, AopColors.BorderStrong, CardShape)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    )
 }
 
 @Composable

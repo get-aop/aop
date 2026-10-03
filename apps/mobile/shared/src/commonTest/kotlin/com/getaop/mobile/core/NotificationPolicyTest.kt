@@ -4,9 +4,13 @@ import com.getaop.mobile.core.notify.NotificationKind
 import com.getaop.mobile.core.notify.NotificationPolicy
 import com.getaop.mobile.core.notify.NotificationPrefs
 import com.getaop.mobile.core.session.HostChange
+import com.getaop.mobile.core.wire.Block
+import com.getaop.mobile.core.wire.BlockedOption
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class NotificationPolicyTest {
     private val policy = NotificationPolicy()
@@ -57,6 +61,25 @@ class NotificationPolicyTest {
         val intent = policy.decide(post, prefs.copy(coordinator = true), NOW)!!
         assertEquals(NotificationKind.COORDINATOR, intent.kind)
         assertNull(intent.threadId)
+    }
+
+    @Test
+    fun aCoordinatorQuestionNeedsYouAndShowsTheQuestion() {
+        val question = Block(type = "question", question = "Merge it by itself, or wait for you?", options = listOf(BlockedOption("Merge"), BlockedOption("Wait")))
+        val asks = message("m1", "assistant", text = "The thread is done.").let { it.copy(blocks = it.blocks + question) }
+        val intent = policy.decide(HostChange.MessageArrived(project(), asks, null), prefs, NOW)!!
+        assertEquals(NotificationKind.NEEDS_YOU, intent.kind)
+        assertEquals("Merge it by itself, or wait for you?", intent.body)
+        assertNull(intent.threadId)
+        assertNull(policy.decide(HostChange.MessageArrived(project(), asks, null), prefs.copy(needsYou = false), NOW))
+    }
+
+    @Test
+    fun thePersonsReplyToTheCoordinatorSettlesItsChat() {
+        assertTrue(policy.settlesChat(message("u1", "user", text = "Merge")))
+        assertFalse(policy.settlesChat(message("u1", "user", text = "Brief").copy(sender = "routine")))
+        assertFalse(policy.settlesChat(message("u1", "user", threadId = "thr_1", text = "Merge")))
+        assertFalse(policy.settlesChat(message("a1", "assistant", text = "Done")))
     }
 
     @Test

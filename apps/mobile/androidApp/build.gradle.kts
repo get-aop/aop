@@ -29,7 +29,7 @@ android {
         // 36, not 37: Android 17's local-network permission may count Tailscale's addresses
         // as local, which is untested. Play requires 37 only from August 2027.
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = "0.1.0"
     }
 
@@ -54,6 +54,9 @@ android {
     }
 
     buildFeatures { compose = true }
+
+    // Compose UI tests run on the JVM under Robolectric, so `test:android` needs no emulator.
+    testOptions { unitTests { isIncludeAndroidResources = true } }
 
     lint {
         warningsAsErrors = false
@@ -89,6 +92,10 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
     testImplementation(libs.junit)
     testImplementation(kotlin("test-junit"))
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
 }

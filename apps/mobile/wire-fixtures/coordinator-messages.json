@@ -54,6 +54,25 @@
       "role": "assistant",
       "failed": true,
       "blocks": [{ "type": "text", "text": "The run failed: usage limit." }]
+    },
+    {
+      "id": "msg_5",
+      "projectId": "prj_aop",
+      "threadId": null,
+      "createdAt": "2026-10-03T08:08:00.000Z",
+      "role": "assistant",
+      "blocks": [
+        { "type": "text", "text": "The thread is done and `ci` is green." },
+        {
+          "type": "question",
+          "question": "Merge it by itself, or wait for you?",
+          "options": [
+            { "label": "Merge by itself", "recommended": true },
+            { "label": "Wait for me" }
+          ],
+          "other": true
+        }
+      ]
     }
   ],
   "hasMore": true

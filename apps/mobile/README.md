@@ -18,7 +18,7 @@ JDK 17 and the Android SDK (platform 37, build-tools 36). `scripts/gradle.ts` fi
 
 ```bash
 bun run --filter @aop/mobile typecheck      # compile shared + app
-bun run --filter @aop/mobile test:android   # Kotlin unit tests
+bun run --filter @aop/mobile test:android   # Kotlin unit tests, and Compose UI tests under Robolectric (no emulator)
 bun run --filter @aop/mobile lint:android   # Android lint
 bun run --filter @aop/mobile apk            # signed release APK in androidApp/build/outputs/apk/release
 bun test apps/mobile                        # wire contract against @aop/common

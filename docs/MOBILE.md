@@ -26,12 +26,18 @@ The phone appears in the host's device list. **Disconnect this phone** in the ap
 
 If the app says **Can't reach the host. Is Tailscale on?**, turn on Tailscale on the phone and check that the host machine is awake and AOP is running there. The app keeps retrying.
 
+## Questions from the coordinator
+
+When the coordinator asks you something with a few possible answers, the chat shows the question under its reply with one button per answer; the one it recommends is filled. Tap one to send it as your reply, or tap **Other…** (when offered) and type your own. Typing any reply answers it too. Once answered, the buttons turn off and the one you chose keeps a check, the same on the phone, your computer and every other device.
+
+Something in a reply that this version of the app cannot show, such as suggested threads to start, appears as **Open on desktop to see this**.
+
 ## Notifications
 
 Notifications need no Google or Firebase account. While **Stay connected** is on (the default), the app keeps one connection to the host open in the background, which Android shows as a quiet "Connected to …" notification, and it notifies you itself. Turning it off saves battery; you then see news when you open the app.
 
-- What notifies you is set per kind in the app's settings: a thread needs you (on), a run failed (on), pull requests (on), coordinator replies (off). Each project's own notification level, set in AOP on your computer, still applies.
-- A notification goes away once its thread is dealt with anywhere: answered on the phone, or opened on your computer.
+- What notifies you is set per kind in the app's settings: a thread needs you (on), a run failed (on), pull requests (on), coordinator replies (off). A coordinator question counts as needing you: it notifies with the question's text even while coordinator replies are off. Each project's own notification level, set in AOP on your computer, still applies.
+- A notification goes away once its thread is dealt with anywhere: answered on the phone, or opened on your computer. A coordinator question's goes once you reply to the coordinator on any device.
 - Nothing is shown while the app is open on screen.
 - Samsung phones put apps they think are unused to sleep, which stops notifications. The app's settings offer **Let AOP run in the background** to prevent it.
 

@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
  * Turns what changes on the host into phone notifications, and takes one back once its thread
  * is dealt with anywhere: answered here, or read on the Mac (the host's `unread` clears), so the
  * phone never keeps nagging about something the desktop app already showed and the person saw.
+ * A coordinator question is taken back once the person replies to the coordinator anywhere.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NotificationRelay(private val app: AopApplication, private val policy: NotificationPolicy = NotificationPolicy()) {
@@ -28,6 +29,9 @@ class NotificationRelay(private val app: AopApplication, private val policy: Not
     private suspend fun onChange(change: HostChange) {
         if (change is HostChange.ThreadChanged && policy.isSettled(change.thread)) {
             app.notifier.cancel(change.project.id, change.thread.id)
+        }
+        if (change is HostChange.MessageArrived && policy.settlesChat(change.message)) {
+            app.notifier.cancel(change.project.id, null)
         }
         if (app.foreground.value) return
         val prefs = app.store.settings.first().notifications

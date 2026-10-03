@@ -45,9 +45,13 @@ class WireFixturesTest {
     @Test
     fun messagesOfEveryRole() {
         val page = WireJson.decodeFromString<MessagePage>(fixture("coordinator-messages.json"))
-        assertEquals(listOf("user", "assistant", "thread-report", "assistant"), page.messages.map { it.role })
+        assertEquals(listOf("user", "assistant", "thread-report", "assistant", "assistant"), page.messages.map { it.role })
         assertEquals(listOf("thinking", "tool", "text", "thread-card", "pr-chip", "routing-receipt"), page.messages[1].blocks.map { it.type })
         assertTrue(page.messages[3].failed)
+        val question = page.messages[4].blocks.single { it.type == "question" }
+        assertEquals("Merge it by itself, or wait for you?", question.question)
+        assertEquals("Merge by itself", question.options.single { it.recommended }.label)
+        assertTrue(question.other)
         assertTrue(page.hasMore)
     }
 
