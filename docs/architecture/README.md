@@ -68,6 +68,7 @@ The desktop app also has the AOP Browser: a Chromium browser shown in the coordi
 ## Related guides
 
 - [Choosing a runtime](./runtime-choice.md)
+- [The Inbox](./inbox.md)
 - [The Issues tab](./issues-tab.md)
 - [The live view of the host's screen](./live-view.md)
 - [Computer use: CUA Driver built into the host](./computer-use.md)

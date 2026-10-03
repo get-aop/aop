@@ -27,6 +27,10 @@ import { createFsRoutes } from "./fs/routes.ts";
 import { createGithubRoutes, createGithubService, type GithubService } from "./github/index.ts";
 import { createHealthRoutes } from "./health/routes.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
+import { openInboxDatabase } from "./inbox/database.ts";
+import { createHostInboxService } from "./inbox/host-inbox-service.ts";
+import { createInboxRoutes } from "./inbox/routes.ts";
+import type { InboxService } from "./inbox/service.ts";
 import { createHostIssueService } from "./issues/host-issue-service.ts";
 import { createIssueRoutes } from "./issues/routes.ts";
 import type { IssueService } from "./issues/service.ts";
@@ -91,6 +95,8 @@ export interface AppDependencies {
   github?: GithubService;
   /** The Issues tab's GitHub and Linear reads; tests pass one over a fake `gh` and Linear. */
   issues?: IssueService;
+  /** The Inbox; the server passes its own, over `$AOP_HOME/inbox/inbox.db`. Tests get one in memory. */
+  inbox?: InboxService;
   /** The PR View's reads and writes; tests pass one over a fake `gh`. */
   pullRequestView?: PullRequestViewService;
 }
@@ -206,6 +212,10 @@ export const createApp = (deps: AppDependencies) => {
   );
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
+  app.route(
+    "/api/inbox",
+    createInboxRoutes(deps.inbox ?? createHostInboxService(ctx, openInboxDatabase(":memory:"))),
+  );
 
   // An MCP client whose token is refused looks for OAuth metadata, and then registers itself, at
   // these paths. The host has neither, and a dashboard page in their place fails the client with
