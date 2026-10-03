@@ -35,8 +35,17 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
   const startThread = useStartThread(projectId);
   const owner = useIsHostOwner(true);
   const [connecting, setConnecting] = useState<Tracker | null>(null);
+  // The Reconnect notice opens Jira's dialog on its token step rather than its summary.
+  const [reconnecting, setReconnecting] = useState(false);
   const connectLinear = () => setConnecting("linear");
-  const connectJira = () => setConnecting("jira");
+  const connectJira = () => {
+    setReconnecting(false);
+    setConnecting("jira");
+  };
+  const reconnectJira = () => {
+    setReconnecting(true);
+    setConnecting("jira");
+  };
   const search = useSearchShortcut();
 
   const all = issues.list?.issues ?? [];
@@ -63,7 +72,7 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
         error={issues.error}
         onRefresh={issues.refresh}
         onClear={view.clearFilters}
-        onConnect={setConnecting}
+        onConnect={(tracker) => (tracker === "jira" ? connectJira() : connectLinear())}
       />
       <div data-testid="issues-scroll" className="min-h-0 flex-1 overflow-y-auto">
         {issues.list ? (
@@ -73,6 +82,7 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
             owner={owner}
             onConnectLinear={connectLinear}
             onConnectJira={connectJira}
+            onReconnectJira={reconnectJira}
           />
         ) : null}
         <div className="px-2 pb-6">
@@ -104,6 +114,7 @@ export const IssuesTab = ({ projectId }: { projectId: string }) => {
         projectId={projectId}
         open={connecting === "jira"}
         owner={owner}
+        reconnect={reconnecting}
         onOpenChange={(open) => setConnecting(open ? "jira" : null)}
         onChanged={issues.refresh}
       />

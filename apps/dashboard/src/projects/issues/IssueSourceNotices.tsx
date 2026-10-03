@@ -23,12 +23,15 @@ export const IssueSourceNotices = ({
   owner,
   onConnectLinear,
   onConnectJira,
+  onReconnectJira = onConnectJira,
 }: {
   projectId: string;
   sources: readonly IssueSourceStatus[];
   owner: boolean;
   onConnectLinear: () => void;
   onConnectJira: () => void;
+  /** A refused token: the dialog opens on its token step. */
+  onReconnectJira?: () => void;
 }) => {
   const github = sources.filter((source) => source.source === "github");
   const signedOut = github.find(
@@ -48,7 +51,7 @@ export const IssueSourceNotices = ({
       <Refused key="linear" tracker="linear" owner={owner} onConnect={onConnectLinear} />
     ) : null,
     jira?.status === "unauthorized" ? (
-      <Refused key="jira" tracker="jira" owner={owner} onConnect={onConnectJira} />
+      <Refused key="jira" tracker="jira" owner={owner} onConnect={onReconnectJira} />
     ) : null,
     noTracker ? (
       <TrackerInvite

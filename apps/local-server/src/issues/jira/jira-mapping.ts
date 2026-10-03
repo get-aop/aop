@@ -49,7 +49,11 @@ export const mapJiraIssue = (node: JiraIssueNode, credentials: JiraCredentials):
     url: browseUrl(credentials, node.key),
     state: stage === "completed" || stage === "canceled" ? "closed" : "open",
     stage,
-    stateName: text(status.name) || "Unknown",
+    // Not done after all ("Won't Do") reads by its resolution, as GitHub's "Not planned" does.
+    stateName:
+      (stage === "canceled" && text(record(fields.resolution).name)) ||
+      text(status.name) ||
+      "Unknown",
     stateColor: null,
     labels: labelsOf(fields),
     assignees: assignee ? [assignee] : [],

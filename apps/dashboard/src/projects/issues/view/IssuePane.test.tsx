@@ -85,7 +85,9 @@ describe("the issue view", () => {
     expect(body.textContent).toContain("<script>alert(1)</script>");
     expect(screen.getByTestId("issue-detail-section").textContent).toContain("Signs in with Okta");
     expect(screen.getAllByTestId("issue-detail-comment")).toHaveLength(1);
-    expect(screen.getByTestId("issue-detail-earlier").textContent).toBe("6 earlier comments in Jira");
+    expect(screen.getByTestId("issue-detail-earlier").textContent).toBe(
+      "6 earlier comments in Jira",
+    );
     expect(screen.getByTestId("issue-detail-open").getAttribute("href")).toBe(DETAIL.issue.url);
   });
 

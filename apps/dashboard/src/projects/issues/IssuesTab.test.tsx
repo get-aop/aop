@@ -374,12 +374,10 @@ describe("the Issues tab's notices and empty states", () => {
     expect(window.location.pathname).toBe("/projects/p1/issues");
     expect(fireEvent.click(title)).toBe(false);
     expect(window.location.pathname).toBe("/projects/p1/issues/issue/jira%3AAPP-3");
-    await waitFor(() =>
-      expect(screen.getByTestId("issue-row").dataset.selected).toBe("true"),
-    );
+    await waitFor(() => expect(screen.getByTestId("issue-row").dataset.selected).toBe("true"));
   });
 
-  test("a refused Jira token offers to reconnect, which opens the Jira dialog", async () => {
+  test("a refused Jira token offers to reconnect, which opens the Jira dialog on its token step", async () => {
     await renderTab(
       issueList(SAMPLE, [
         sourceStatus(),
@@ -406,8 +404,11 @@ describe("the Issues tab's notices and empty states", () => {
       "Jira refused the saved token",
     );
     fireEvent.click(screen.getByTestId("issues-jira-reconnect"));
-    expect(await screen.findByTestId("jira-connected")).toBeTruthy();
-    expect(screen.getByTestId("jira-connected-site").textContent).toContain("acme.atlassian.net");
+    const site = (await screen.findByTestId("jira-site")) as HTMLInputElement;
+    expect(site.value).toBe("https://acme.atlassian.net");
+    expect(screen.queryByTestId("jira-connected")).toBeNull();
+    fireEvent.click(screen.getByTestId("jira-back"));
+    expect(screen.getByTestId("jira-connected")).toBeTruthy();
   });
 });
 

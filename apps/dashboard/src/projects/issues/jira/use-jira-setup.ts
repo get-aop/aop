@@ -60,7 +60,12 @@ export interface JiraSetup {
  * types goes to the host to be tried and, once, to be saved; the host never sends it back, so a
  * stored token is never in this state.
  */
-export const useJiraSetup = (projectId: string, open: boolean): JiraSetup => {
+export const useJiraSetup = (
+  projectId: string,
+  open: boolean,
+  /** Opened to give a new token (the tab's Reconnect): start on the token step. */
+  reconnect = false,
+): JiraSetup => {
   const [connection, setConnection] = useState<JiraConnection | null>(null);
   const [step, setStep] = useState<JiraSetupStep>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
@@ -77,7 +82,7 @@ export const useJiraSetup = (projectId: string, open: boolean): JiraSetup => {
       (read) => {
         if (!current) return;
         setConnection(read);
-        setStep({ kind: read.configured ? "connected" : "credentials" });
+        setStep({ kind: read.configured && !reconnect ? "connected" : "credentials" });
       },
       (cause) => {
         if (!current) return;
@@ -88,7 +93,7 @@ export const useJiraSetup = (projectId: string, open: boolean): JiraSetup => {
     return () => {
       current = false;
     };
-  }, [projectId, open]);
+  }, [projectId, open, reconnect]);
 
   const run = useCallback(async <T>(work: () => Promise<T>): Promise<T | undefined> => {
     setBusy(true);

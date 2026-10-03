@@ -148,7 +148,9 @@ describe("connecting Jira", () => {
 
   test("Data Center signs in with a personal access token and no email", async () => {
     await renderDialog(JIRA_NOT_CONNECTED);
-    fireEvent.click(screen.getByTestId("jira-deployment-datacenter").querySelector("input") as HTMLInputElement);
+    fireEvent.click(
+      screen.getByTestId("jira-deployment-datacenter").querySelector("input") as HTMLInputElement,
+    );
     expect(screen.queryByTestId("jira-email")).toBeNull();
     type("jira-site", "https://jira.acme.test");
     type("jira-token", "pat_1");
@@ -164,7 +166,10 @@ describe("connecting Jira", () => {
       respond: (call) =>
         call.method === "PUT" && (call.body as { filter: { jql: string } }).filter.jql === "bogus"
           ? Response.json(
-              { error: "Jira did not accept the filter: Field 'bogus' does not exist.", code: "JIRA_BAD_FILTER" },
+              {
+                error: "Jira did not accept the filter: Field 'bogus' does not exist.",
+                code: "JIRA_BAD_FILTER",
+              },
               { status: 422 },
             )
           : undefined,
@@ -208,7 +213,9 @@ describe("connecting Jira", () => {
     expect(screen.getByTestId("jira-disconnect-confirm").textContent).toContain("Delete the token");
     fireEvent.click(screen.getByTestId("jira-disconnect-confirmed"));
     await screen.findByTestId("jira-site");
-    expect(api?.writes()).toEqual([{ method: "DELETE", path: "/projects/p1/jira", body: undefined }]);
+    expect(api?.writes()).toEqual([
+      { method: "DELETE", path: "/projects/p1/jira", body: undefined },
+    ]);
     expect(view.changes()).toBe(1);
   });
 

@@ -52,7 +52,7 @@ describe("mapping a Jira issue to a row", () => {
       }),
       cloudCredentials(),
     );
-    expect(closed).toMatchObject({ state: "closed", stage: "canceled", stateName: "Done" });
+    expect(closed).toMatchObject({ state: "closed", stage: "canceled", stateName: "Won't Do" });
   });
 
   test("priorities map by name; a scheme's own names keep their name without a level", () => {

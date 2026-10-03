@@ -26,17 +26,20 @@ export const JiraConnectDialog = ({
   projectId,
   open,
   owner,
+  reconnect = false,
   onOpenChange,
   onChanged,
 }: {
   projectId: string;
   open: boolean;
   owner: boolean;
+  /** Opened from the Reconnect notice: straight to the token step. */
+  reconnect?: boolean;
   onOpenChange: (open: boolean) => void;
   /** The connection changed: the issues list reads again. */
   onChanged: () => void;
 }) => {
-  const setup = useJiraSetup(projectId, open);
+  const setup = useJiraSetup(projectId, open, reconnect && owner);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -159,18 +162,37 @@ const FilterSummary = ({ connection }: { connection: JiraConnection | null }) =>
   );
 };
 
-/** The saved token tried again: who it signs in as, or that Jira now refuses it (reconnect). */
-const ConnectedTest = ({ setup }: { setup: JiraSetup }) => {
+/**
+ * Test connection tries the saved token again, and says beside the button who it signs in as,
+ * or that Jira now refuses it (with the way to reconnect).
+ */
+const ConnectedTest = ({ setup }: { setup: JiraSetup }) => (
+  <div className="flex flex-col gap-2">
+    <div className="flex flex-wrap items-center gap-3">
+      <Button
+        variant="secondary"
+        size="sm"
+        data-testid="jira-test-saved"
+        disabled={setup.busy}
+        onClick={() => void setup.testConnection()}
+      >
+        {setup.busy ? <Spinner className="size-3.5" /> : null}
+        Test connection
+      </Button>
+      {setup.test?.ok ? (
+        <p data-testid="jira-test-ok" className="flex items-center gap-2 text-meta text-ok">
+          <CircleCheckIcon className="size-3.5 shrink-0" />
+          Signed in as {setup.test.account.displayName}.
+        </p>
+      ) : null}
+    </div>
+    <TestRefused setup={setup} />
+  </div>
+);
+
+const TestRefused = ({ setup }: { setup: JiraSetup }) => {
   const outcome = setup.test;
-  if (!outcome) return null;
-  if (outcome.ok) {
-    return (
-      <p data-testid="jira-test-ok" className="flex items-center gap-2 text-meta text-ok">
-        <CircleCheckIcon className="size-3.5 shrink-0" />
-        Signed in as {outcome.account.displayName}.
-      </p>
-    );
-  }
+  if (!outcome || outcome.ok) return null;
   return (
     <div
       data-testid="jira-test-failed"
@@ -226,46 +248,38 @@ const ConnectedActions = ({ setup, onDone }: { setup: JiraSetup; onDone: () => v
       </DialogFooter>
     );
   }
+  // Not DialogFooter: it stacks its buttons in a column on a narrow screen.
   return (
-    <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+    <div className="flex flex-wrap items-center gap-2">
       <Button
-        variant="destructive"
+        variant="ghost"
         size="sm"
         data-testid="jira-disconnect"
         disabled={setup.busy}
         onClick={() => setConfirming(true)}
+        className="text-blocked hover:text-blocked"
       >
         Disconnect
       </Button>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid="jira-test-saved"
-          disabled={setup.busy}
-          onClick={() => void setup.testConnection()}
-        >
-          Test connection
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          data-testid="jira-replace-token"
-          disabled={setup.busy}
-          onClick={setup.replaceToken}
-        >
-          Replace token
-        </Button>
-        <Button
-          size="sm"
-          data-testid="jira-change-filter"
-          disabled={setup.busy}
-          onClick={() => void setup.changeFilter()}
-        >
-          {setup.busy ? <Spinner className="size-3.5" /> : null}
-          Change filter
-        </Button>
-      </div>
-    </DialogFooter>
+      <span className="flex-1" />
+      <Button
+        variant="secondary"
+        size="sm"
+        data-testid="jira-replace-token"
+        disabled={setup.busy}
+        onClick={setup.replaceToken}
+      >
+        Replace token
+      </Button>
+      <Button
+        size="sm"
+        data-testid="jira-change-filter"
+        disabled={setup.busy}
+        onClick={() => void setup.changeFilter()}
+      >
+        {setup.busy ? <Spinner className="size-3.5" /> : null}
+        Change filter
+      </Button>
+    </div>
   );
 };
