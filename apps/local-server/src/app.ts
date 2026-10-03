@@ -27,6 +27,9 @@ import { createEventStreamRoutes } from "./event-log/routes.ts";
 import { createFsRoutes } from "./fs/routes.ts";
 import { createGithubRoutes, createGithubService, type GithubService } from "./github/index.ts";
 import { createHealthRoutes } from "./health/routes.ts";
+import { createHostSetup } from "./host-setup/host-probes.ts";
+import { createHostSetupRoutes } from "./host-setup/routes.ts";
+import type { HostSetupService } from "./host-setup/service.ts";
 import { maybeCompressJsonResponse } from "./http-compression.ts";
 import { createHostIssueService } from "./issues/host-issue-service.ts";
 import { createIssueRoutes } from "./issues/routes.ts";
@@ -55,6 +58,7 @@ import { createSettingsRoutes } from "./settings/routes";
 import { SettingKey } from "./settings/types.ts";
 import { createSuggestionRoutes } from "./suggestion/routes.ts";
 import { createThreadRoutes } from "./thread/routes.ts";
+import { hostPort } from "./update/host-port.ts";
 import { createHostUpdateService } from "./update/host-update-service.ts";
 import { createUpdateRoutes } from "./update/routes.ts";
 import type { UpdateService } from "./update/update-service.ts";
@@ -94,6 +98,8 @@ export interface AppDependencies {
   issues?: IssueService;
   /** The PR View's reads and writes; tests pass one over a fake `gh`. */
   pullRequestView?: PullRequestViewService;
+  /** The setup checklist (AOP settings › Host); tests pass one over fake probes. */
+  hostSetup?: HostSetupService;
 }
 
 export const createApp = (deps: AppDependencies) => {
@@ -177,7 +183,8 @@ export const createApp = (deps: AppDependencies) => {
   app.route("/api/projects", createProjectRoutes(projects));
   app.route("/api/projects", createAttachmentRoutes(createAttachmentService(ctx)));
   app.route("/api/projects", createRoutineRoutes(projects.routines));
-  app.route("/api/projects", createGithubBackedRoutes(deps, projects));
+  const github = deps.github ?? createGithubService(ctx);
+  app.route("/api/projects", createGithubBackedRoutes(deps, projects, github));
   app.route("/api/projects", createLibraryRoutes(projects.library));
   app.route("/api/projects", createArtifactRoutes(projects.artifacts, projects.visualize));
   app.route("/api", createThreadRoutes(projects));
@@ -208,6 +215,7 @@ export const createApp = (deps: AppDependencies) => {
       createRuntimeConfigurationService(ctx, createRuntimeUsers(ctx, projects.projects)),
     ),
   );
+  app.route("/api/host/setup", createHostSetupRoutes(hostSetupOf(deps, github)));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
 
@@ -249,8 +257,11 @@ export const createApp = (deps: AppDependencies) => {
 
 // What the model of a refused run reads, since Claude Code passes it on as the call's error.
 /** The routes that read and act on GitHub through the host's `gh`: status, issues, PRs, the PR View. */
-const createGithubBackedRoutes = (deps: AppDependencies, projects: ProjectServices) => {
-  const github = deps.github ?? createGithubService(deps.ctx);
+const createGithubBackedRoutes = (
+  deps: AppDependencies,
+  projects: ProjectServices,
+  github: GithubService,
+) => {
   const routes = new Hono<AuthEnv>();
   routes.route("/", createGithubRoutes(github));
   routes.route(
@@ -269,6 +280,18 @@ const createGithubBackedRoutes = (deps: AppDependencies, projects: ProjectServic
   );
   return routes;
 };
+
+/** The setup checklist of the host this process is, over the same GitHub and CUA services. */
+const hostSetupOf = (deps: AppDependencies, github: GithubService): HostSetupService =>
+  deps.hostSetup ??
+  createHostSetup({
+    ctx: deps.ctx,
+    github,
+    computerUse: deps.computerUse ?? computerUse,
+    lease: leaseState(deps),
+    port: deps.port ?? hostPort(),
+    startTimeMs: deps.startTimeMs,
+  });
 
 /** The live view over the host's own capture and the activity every run's log tail reports to. */
 const createHostLiveView = (ctx: LocalServerContext): LiveViewService =>

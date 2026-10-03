@@ -1,6 +1,7 @@
-import type { AuthPrincipal, HostManagement } from "@aop/common";
+import { type AuthPrincipal, CLIENT_HEADER, type HostManagement } from "@aop/common";
 import { getLogger } from "@aop/infra";
 import type { Context, MiddlewareHandler } from "hono";
+import { requestClient } from "./client-info.ts";
 import { bearerTokenOf, readSessionCookie } from "./credentials.ts";
 import { accessRefusal, type HostCaller, isAgentRequest } from "./host-management.ts";
 import { isDirectLocalRequest } from "./local-request.ts";
@@ -62,9 +63,13 @@ const resolvePrincipal = async (c: Context, auth: AuthService): Promise<AuthPrin
 
   const token = bearerTokenOf(c) ?? readSessionCookie(c);
   if (!token) return null;
-  const device = await auth.authenticate(token);
+  const device = await auth.authenticate(token, clientOfRequest(c));
   return device ? { kind: "device", device } : null;
 };
+
+/** Which app and version the request comes from, which AOP settings › Host lists per device. */
+export const clientOfRequest = (c: Context) =>
+  requestClient({ client: c.req.header(CLIENT_HEADER), userAgent: c.req.header("user-agent") });
 
 // An event stream authenticates once, when it opens, and can then run for days. Without this,
 // revoking a device would leave whatever stream it already held open flowing.

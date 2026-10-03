@@ -169,7 +169,7 @@ describe("update routes", () => {
       ["/api/agent-clis/claude-code/update", "POST"],
       ["/api/agent-clis/check", "POST"],
       ["/api/auth/pairing-codes", "POST"],
-      ["/api/auth/devices", "GET"],
+      ["/api/auth/devices/some-device", "DELETE"],
     ] as const) {
       const res = await remote(path, { method, headers: { authorization } });
       expect(res.status).toBe(403);

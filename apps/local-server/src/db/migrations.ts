@@ -6,6 +6,7 @@ import { BASELINE_V1_STATEMENTS } from "./baseline-v1.ts";
 import { COMPUTER_USE_V20_STATEMENTS } from "./computer-use-v20.ts";
 import { COORDINATOR_V4_STATEMENTS } from "./coordinator-v4.ts";
 import { DEFAULT_RUNTIME_V9_STATEMENTS } from "./default-runtime-v9.ts";
+import { DEVICE_CLIENTS_V28_STATEMENTS } from "./device-clients-v28.ts";
 import { DROP_RUNTIME_PROFILES_V11_STATEMENTS } from "./drop-runtime-profiles-v11.ts";
 import { EXEC_HOSTS_V8_STATEMENTS } from "./exec-hosts-v8.ts";
 import { LIBRARY_V22_STATEMENTS } from "./library-v22.ts";
@@ -68,6 +69,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 25, name: "project-runtime", statements: PROJECT_RUNTIME_V25_STATEMENTS },
   { version: 26, name: "message-senders", statements: MESSAGE_SENDERS_V26_STATEMENTS },
   { version: 27, name: "update-install", statements: UPDATE_INSTALL_V27_STATEMENTS },
+  { version: 28, name: "device-clients", statements: DEVICE_CLIENTS_V28_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>
