@@ -182,3 +182,48 @@ describe("AuthGate", () => {
     expect(screen.queryByTestId("app")).toBeNull();
   });
 });
+
+describe("AuthGate inside the desktop app", () => {
+  const withDesktopBridge = () => {
+    const hostRejected = mock(async () => {});
+    const bridge = {
+      getHostConfig: async () => ({ baseUrl: "https://mac.example", token: "aop_old" }),
+      hostRejected,
+    };
+    Object.assign(window, { aopDesktop: bridge });
+    return hostRejected;
+  };
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, "aopDesktop");
+  });
+
+  test("a refused token hands over to the app, and never pairs a stray device here", async () => {
+    const hostRejected = withDesktopBridge();
+    route = UNAUTHENTICATED;
+    renderGate();
+
+    expect(await screen.findByTestId("desktop-pair-again")).toBeTruthy();
+    expect(screen.queryByTestId("pairing-screen")).toBeNull();
+    expect(screen.queryByTestId("app")).toBeNull();
+    expect(calls.some((call) => call.url.endsWith("/api/auth/pair"))).toBe(false);
+
+    fireEvent.click(screen.getByTestId("desktop-pair-again-button"));
+    await waitFor(() => expect(hostRejected).toHaveBeenCalledTimes(1));
+  });
+
+  test("a device revoked while the app is open hands over too", async () => {
+    withDesktopBridge();
+    renderGate();
+    await screen.findByTestId("app");
+
+    route = UNAUTHENTICATED;
+    const { request } = await import("../api/request");
+    await act(async () => {
+      await request("/projects").catch(() => {});
+    });
+
+    await waitFor(() => expect(screen.getByTestId("desktop-pair-again")).toBeTruthy());
+    expect(screen.queryByTestId("pairing-screen")).toBeNull();
+  });
+});

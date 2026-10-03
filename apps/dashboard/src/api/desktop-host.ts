@@ -31,5 +31,22 @@ export const bootstrapDesktopHost = async (
   onUnauthenticated(() => void hostRejected().catch(() => undefined));
 };
 
+/**
+ * Whether this dashboard runs inside the desktop app. There, pairing belongs to the app: a token
+ * this dashboard made would have nowhere to go (the app holds the token in the keychain), and
+ * would leave a stray device on the host. So a refused token is handed to the app instead of
+ * showing the dashboard's own pairing screen.
+ */
+export const isInsideDesktopApp = (
+  bridge: Partial<DesktopHostBridge> | undefined = desktopBridge(),
+): boolean => Boolean(bridge?.getHostConfig && bridge.hostRejected);
+
+/** Asks the app to settle a refused token: its status screen offers "Pair again". */
+export const handBackToDesktopApp = async (
+  bridge: Partial<DesktopHostBridge> | undefined = desktopBridge(),
+): Promise<void> => {
+  await bridge?.hostRejected?.();
+};
+
 const desktopBridge = (): Partial<DesktopHostBridge> | undefined =>
   (window as Window & { aopDesktop?: Partial<DesktopHostBridge> }).aopDesktop;
