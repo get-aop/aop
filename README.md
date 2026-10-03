@@ -6,7 +6,7 @@ The AOP host runs on your own machine and is reached over Tailscale. Every compu
 
 ## Status
 
-AOP is alpha software. Phase 1 is Claude Code only; the host runs on macOS or Linux, and Windows and macOS are clients. The Codex CLI and PI adapters stay in the tree but are not exposed until Phase 2, and there is no cloud host or mobile client yet. Releases are published at [getaop.com](https://getaop.com) (see [Releasing](./docs/RELEASE.md)), and [AOP Nightly](./docs/NIGHTLY.md), a build of `main` after every merge, installs beside them. Expect breaking changes.
+AOP is alpha software. Phase 1 is Claude Code only; the host runs on macOS or Linux, and Windows and macOS are clients. The Codex CLI and PI adapters stay in the tree but are not exposed until Phase 2, and there is no cloud host yet. An Android app is in early testing ([AOP on your phone](./docs/MOBILE.md)). Releases are published at [getaop.com](https://getaop.com) (see [Releasing](./docs/RELEASE.md)), and [AOP Nightly](./docs/NIGHTLY.md), a build of `main` after every merge, installs beside them. Expect breaking changes.
 
 ## What you need
 

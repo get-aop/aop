@@ -1,0 +1,60 @@
+{
+  "messages": [
+    {
+      "id": "msg_1",
+      "projectId": "prj_aop",
+      "threadId": null,
+      "createdAt": "2026-10-03T08:00:00.000Z",
+      "role": "user",
+      "text": "Build the phone app",
+      "sender": "person"
+    },
+    {
+      "id": "msg_2",
+      "projectId": "prj_aop",
+      "threadId": null,
+      "createdAt": "2026-10-03T08:00:30.000Z",
+      "role": "assistant",
+      "inReplyTo": "msg_1",
+      "blocks": [
+        { "type": "thinking", "text": "Plan it." },
+        {
+          "type": "tool",
+          "id": "t1",
+          "name": "mcp aop thread spawn",
+          "detail": "Build the APK",
+          "status": "done"
+        },
+        { "type": "text", "text": "Started **Build the APK**." },
+        { "type": "thread-card", "threadId": "thr_w", "variant": "live" },
+        {
+          "type": "pr-chip",
+          "number": 71,
+          "url": "https://github.com/get-aop/aop/pull/71",
+          "state": "open"
+        },
+        { "type": "routing-receipt", "threadIds": ["thr_w"] }
+      ]
+    },
+    {
+      "id": "msg_3",
+      "projectId": "prj_aop",
+      "threadId": null,
+      "createdAt": "2026-10-03T08:06:00.000Z",
+      "role": "thread-report",
+      "reportedThreadId": "thr_q",
+      "outcome": "needs-you",
+      "text": "Native or PWA?"
+    },
+    {
+      "id": "msg_4",
+      "projectId": "prj_aop",
+      "threadId": null,
+      "createdAt": "2026-10-03T08:07:00.000Z",
+      "role": "assistant",
+      "failed": true,
+      "blocks": [{ "type": "text", "text": "The run failed: usage limit." }]
+    }
+  ],
+  "hasMore": true
+}

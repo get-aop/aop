@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_aop",
+  "threadId": null,
+  "messageId": "msg_6",
+  "inReplyTo": "msg_1",
+  "ops": [
+    { "op": "start", "index": 0, "part": { "type": "text", "text": "Hello" } },
+    { "op": "append", "index": 0, "text": " there" },
+    {
+      "op": "start",
+      "index": 1,
+      "part": { "type": "tool", "id": "t2", "name": "Bash", "detail": "ls", "status": "running" }
+    },
+    { "op": "tool", "index": 1, "status": "done", "detail": "ls -la" }
+  ]
+}

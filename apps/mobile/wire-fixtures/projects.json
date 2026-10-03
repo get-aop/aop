@@ -1,0 +1,37 @@
+{
+  "projects": [
+    {
+      "id": "prj_aop",
+      "name": "aop",
+      "icon": "rocket",
+      "color": "blue",
+      "goal": "Your daily driver",
+      "instructions": "",
+      "coordinator": {
+        "provider": "claude-code",
+        "runtimeId": "rt_builtin",
+        "model": null,
+        "effort": "high"
+      },
+      "thread": {
+        "provider": "claude-code",
+        "runtimeId": "rt_builtin",
+        "model": null,
+        "effort": "high"
+      },
+      "notificationLevel": "coordinator",
+      "threadAccess": "full-access",
+      "autoFixPullRequests": true,
+      "autoContinue": true,
+      "repoIds": ["repo_1"],
+      "status": "active",
+      "computerUse": "model-default",
+      "reportedRuntime": {
+        "coordinator": { "model": null, "effort": null },
+        "thread": { "model": null, "effort": null }
+      },
+      "createdAt": "2026-10-01T10:00:00.000Z",
+      "updatedAt": "2026-10-03T08:00:00.000Z"
+    }
+  ]
+}

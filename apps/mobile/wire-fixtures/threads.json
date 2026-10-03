@@ -1,0 +1,137 @@
+{
+  "threads": [
+    {
+      "id": "thr_q",
+      "title": "Pick the push design",
+      "status": "waiting-on-you",
+      "projectId": "prj_aop",
+      "runtime": {
+        "provider": "claude-code",
+        "runtimeId": "rt_builtin",
+        "model": null,
+        "effort": "high"
+      },
+      "target": { "kind": "host" },
+      "repoId": "repo_1",
+      "liveStatusLine": null,
+      "repliesCount": 2,
+      "createdAt": "2026-10-03T07:00:00.000Z",
+      "branch": "aop/push-design",
+      "steps": [{ "label": "Research", "state": "done" }, { "label": "Decide", "state": "active" }],
+      "artifacts": [],
+      "unread": true,
+      "lastActivityAt": "2026-10-03T08:05:00.000Z",
+      "blockedQuestion": {
+        "question": "Native or PWA?",
+        "options": [
+          { "label": "Native", "recommended": true },
+          { "label": "PWA", "recommended": false }
+        ]
+      }
+    },
+    {
+      "id": "thr_w",
+      "title": "Build the APK",
+      "status": "working",
+      "projectId": "prj_aop",
+      "runtime": {
+        "provider": "claude-code",
+        "runtimeId": "rt_builtin",
+        "model": null,
+        "effort": "high"
+      },
+      "target": { "kind": "host" },
+      "repoId": "repo_1",
+      "liveStatusLine": null,
+      "repliesCount": 2,
+      "createdAt": "2026-10-03T07:00:00.000Z",
+      "branch": "aop/apk",
+      "steps": [],
+      "artifacts": [],
+      "unread": false,
+      "lastActivityAt": "2026-10-03T08:04:00.000Z",
+      "waitingOn": {
+        "reason": "Approve the release on GitHub",
+        "link": "https://github.com/get-aop/aop/releases",
+        "since": "2026-10-03T08:03:00.000Z"
+      }
+    },
+    {
+      "id": "thr_r",
+      "title": "Fold layouts",
+      "status": "ready-for-review",
+      "projectId": "prj_aop",
+      "runtime": {
+        "provider": "claude-code",
+        "runtimeId": "rt_builtin",
+        "model": null,
+        "effort": "high"
+      },
+      "target": { "kind": "host" },
+      "repoId": "repo_1",
+      "liveStatusLine": null,
+      "repliesCount": 2,
+      "createdAt": "2026-10-03T07:00:00.000Z",
+      "branch": "aop/fold",
+      "steps": [],
+      "artifacts": [
+        {
+          "type": "pr",
+          "number": 71,
+          "url": "https://github.com/get-aop/aop/pull/71",
+          "state": "open",
+          "checks": { "state": "success", "successful": 4, "failing": 0, "pending": 0 }
+        },
+        { "type": "doc", "name": "notes.md" }
+      ],
+      "unread": false,
+      "lastActivityAt": "2026-10-03T07:30:00.000Z"
+    },
+    {
+      "id": "thr_l",
+      "title": "Rate limited thread",
+      "status": "rate-limited",
+      "projectId": "prj_aop",
+      "runtime": {
+        "provider": "claude-code",
+        "runtimeId": "rt_builtin",
+        "model": null,
+        "effort": "high"
+      },
+      "target": { "kind": "host" },
+      "repoId": "repo_1",
+      "liveStatusLine": null,
+      "repliesCount": 2,
+      "createdAt": "2026-10-03T07:00:00.000Z",
+      "branch": null,
+      "steps": [],
+      "artifacts": [],
+      "unread": false,
+      "lastActivityAt": "2026-10-03T07:20:00.000Z",
+      "resumesAt": "2026-10-03T09:00:00.000Z"
+    },
+    {
+      "id": "thr_d",
+      "title": "Old work",
+      "status": "resolved",
+      "projectId": "prj_aop",
+      "runtime": {
+        "provider": "claude-code",
+        "runtimeId": "rt_builtin",
+        "model": null,
+        "effort": "high"
+      },
+      "target": { "kind": "host" },
+      "repoId": "repo_1",
+      "liveStatusLine": null,
+      "repliesCount": 2,
+      "createdAt": "2026-10-03T07:00:00.000Z",
+      "branch": null,
+      "steps": [],
+      "artifacts": [],
+      "unread": false,
+      "lastActivityAt": "2026-10-02T07:20:00.000Z",
+      "resolvedAt": "2026-10-02T07:20:00.000Z"
+    }
+  ]
+}
