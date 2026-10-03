@@ -133,6 +133,37 @@ describe("host setup service", () => {
       expect(result.setup.checks.find((check) => check.id === "computer-use")?.state).toBe("ok");
     });
 
+    test("two Fix presses at once share one run", async () => {
+      let runs = 0;
+      let finish = () => {};
+      const service = createHostSetupService({
+        probes: readyProbes({
+          computerUse: async () => ({
+            status: cuaNoScreen(),
+            lease: EMPTY_CUA_LEASE,
+            wanted: true,
+          }),
+          setupComputerUse: () => {
+            runs += 1;
+            return new Promise((resolve) => {
+              finish = () => resolve(0);
+            });
+          },
+        }),
+        facts: FACTS,
+      });
+
+      const first = service.fix("computer-use");
+      while (runs === 0) await Bun.sleep(1);
+      const second = service.fix("computer-use");
+      await Bun.sleep(5);
+      finish();
+
+      expect((await first).ok).toBe(true);
+      expect((await second).ok).toBe(true);
+      expect(runs).toBe(1);
+    });
+
     test("refuses a check that has no fix now, and one that does not exist", async () => {
       let runs = 0;
       const service = createHostSetupService({

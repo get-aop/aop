@@ -33,38 +33,50 @@ export interface HostSetupServiceDeps {
 
 export const createHostSetupService = (deps: HostSetupServiceDeps): HostSetupService => {
   const setup: HostSetupService["setup"] = ({ fresh = false } = {}) => readSetup(deps, fresh);
+  // Two devices pressing Fix together share one run: setup installs software on the host.
+  const running = new Map<SetupCheckId, Promise<FixResult>>();
+
+  const runFix = async (id: SetupCheckId, fix: Fix): Promise<FixResult> => {
+    try {
+      const exitCode = await fix(deps.probes);
+      logger.info("Setup fix {id} finished with exit code {exitCode}", { id, exitCode });
+      return { ok: true, setup: await setup({ fresh: true }) };
+    } catch (error) {
+      logger.error("Setup fix {id} failed: {error}", { id, error: messageOf(error) });
+      return {
+        ok: false,
+        code: "FIX_FAILED",
+        error: messageOf(error),
+        setup: await setup({ fresh: true }),
+      };
+    }
+  };
 
   return {
     setup,
     fix: async (id) => {
       const before = (await setup()).checks.find((check) => check.id === id);
       if (!before) return { ok: false, code: "NOT_FOUND", error: `No setup check "${id}"` };
-      if (!FIXES[before.id] || !before.actions.some((action) => action.kind === "fix")) {
+      const fix = FIXES[before.id];
+      if (!fix || !before.actions.some((action) => action.kind === "fix")) {
         return {
           ok: false,
           code: "NO_FIX",
           error: `${before.title} has nothing the host can fix itself`,
         };
       }
-      try {
-        const exitCode = await FIXES[before.id]?.(deps.probes);
-        logger.info("Setup fix {id} finished with exit code {exitCode}", { id, exitCode });
-        return { ok: true, setup: await setup({ fresh: true }) };
-      } catch (error) {
-        logger.error("Setup fix {id} failed: {error}", { id, error: messageOf(error) });
-        return {
-          ok: false,
-          code: "FIX_FAILED",
-          error: messageOf(error),
-          setup: await setup({ fresh: true }),
-        };
-      }
+      const pending =
+        running.get(before.id) ?? runFix(before.id, fix).finally(() => running.delete(before.id));
+      running.set(before.id, pending);
+      return pending;
     },
   };
 };
 
+type Fix = (probes: HostSetupProbes) => Promise<number>;
+
 /** The checks the host can fix by itself, and how. */
-const FIXES: Partial<Record<SetupCheckId, (probes: HostSetupProbes) => Promise<number>>> = {
+const FIXES: Partial<Record<SetupCheckId, Fix>> = {
   "computer-use": (probes) => probes.setupComputerUse(),
 };
 
