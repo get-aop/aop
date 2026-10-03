@@ -36,6 +36,7 @@ const screenUnder = (projectId: string): ProjectScreen => {
   if (!route || !isProjectScreen(route) || route.projectId !== projectId) {
     return { name: "project", projectId };
   }
-  const { pullRequest: _replaced, ...screen } = route;
+  // An issue open in the view gives way; the pull request it links to takes its place.
+  const { pullRequest: _replaced, issue: _issue, ...screen } = route;
   return screen;
 };

@@ -74,6 +74,11 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
   ["PUT", /^\/api\/projects\/[^/]+\/linear\/?$/],
   ["DELETE", /^\/api\/projects\/[^/]+\/linear\/?$/],
   ["POST", /^\/api\/projects\/[^/]+\/linear\/catalog\/?$/],
+  // A project's Jira token: the same, for the same reason (issues/jira/jira-connection-store.ts).
+  // Testing it is the owner's too: it would let a device try tokens against any site from here.
+  ["PUT", /^\/api\/projects\/[^/]+\/jira\/?$/],
+  ["DELETE", /^\/api\/projects\/[^/]+\/jira\/?$/],
+  ["POST", /^\/api\/projects\/[^/]+\/jira\/test\/?$/],
   // Acts on GitHub as the host's `gh` login: comment, review, merge, rename, close, draft.
   [
     "POST",

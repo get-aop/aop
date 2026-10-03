@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { aopPaths } from "@aop/infra";
+import { createJiraConnectionStore } from "../issues/jira/jira-connection-store.ts";
 import { createLinearConnectionStore } from "../issues/linear-connection-store.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import {
@@ -377,7 +378,7 @@ describe("deleting a project", () => {
     expect(types).toContain("thread.upserted");
   }, 30_000);
 
-  test("takes the project's Linear key off the host", async () => {
+  test("takes the project's Linear key and Jira token off the host", async () => {
     const s = await createProjectStack(home.path());
     stack = s;
     const created = await s.services.projects.create(projectSettings({ repoIds: [] }));
@@ -389,9 +390,22 @@ describe("deleting a project", () => {
       workspace: "Acme",
       viewer: "sam",
     });
+    const jira = createJiraConnectionStore();
+    await jira.write(created.project.id, {
+      credentials: {
+        deployment: "cloud",
+        siteUrl: "https://acme.atlassian.net",
+        email: "sam@acme.test",
+        apiToken: "jira_secret",
+      },
+      account: "Sam",
+      filter: { projects: ["APP"], jql: null },
+      linkPullRequests: true,
+    });
 
     expect(await s.services.projects.remove(created.project.id)).toEqual({ success: true });
     expect(await store.read(created.project.id)).toBeNull();
+    expect(await jira.read(created.project.id)).toBeNull();
   });
 
   test("an unknown project is not found", async () => {

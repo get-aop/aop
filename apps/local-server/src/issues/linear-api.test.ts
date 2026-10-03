@@ -146,17 +146,50 @@ describe("the Linear API", () => {
     });
   });
 
-  test("an issue's description is read for its brief; an unknown one is null", async () => {
+  test("an issue is read whole for its view and brief; an unknown one is null", async () => {
     const found = createLinearApi({
       fetch: fakeFetch({
-        data: { issue: { title: "T", url: "https://linear.app/x", description: null } },
+        data: {
+          issue: {
+            ...linearNode({ priority: 2, priorityLabel: "High" }),
+            description: null,
+            recentComments: {
+              nodes: [
+                {
+                  id: "c1",
+                  body: "Looks good",
+                  createdAt: "2026-09-04T10:00:00Z",
+                  user: { name: "Ana", displayName: "ana", avatarUrl: null },
+                },
+              ],
+            },
+          },
+        },
       }).fetch,
     });
     const missing = createLinearApi({ fetch: fakeFetch({ data: { issue: null } }).fetch });
-    expect(await found.issueBody("k", "ENG-1")).toEqual({
-      ok: true,
-      value: { title: "T", url: "https://linear.app/x", body: "" },
+    const unknown = createLinearApi({
+      fetch: fakeFetch({ errors: [{ message: "Entity not found: Issue" }] }).fetch,
     });
-    expect(await missing.issueBody("k", "ENG-1")).toEqual({ ok: true, value: null });
+    const scope = { kind: "team" as const, id: "t1", name: "Eng" };
+    const read = await found.issueDetail("k", { identifier: "ENG-7", scope });
+    expect(read.ok && read.value?.issue.priority).toEqual({ name: "High", level: "high" });
+    expect(read.ok && read.value?.body).toBe("");
+    expect(read.ok && read.value?.comments).toEqual([
+      {
+        id: "c1",
+        author: { login: "ana", name: "Ana", avatarUrl: null },
+        body: "Looks good",
+        createdAt: "2026-09-04T10:00:00Z",
+      },
+    ]);
+    expect(await missing.issueDetail("k", { identifier: "ENG-1", scope })).toEqual({
+      ok: true,
+      value: null,
+    });
+    expect(await unknown.issueDetail("k", { identifier: "ENG-1", scope })).toEqual({
+      ok: true,
+      value: null,
+    });
   });
 });

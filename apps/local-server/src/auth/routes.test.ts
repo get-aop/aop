@@ -414,6 +414,9 @@ describe("auth routes", () => {
         "PUT /api/projects/:projectId/linear",
         "DELETE /api/projects/:projectId/linear",
         "POST /api/projects/:projectId/linear/catalog",
+        "PUT /api/projects/:projectId/jira",
+        "DELETE /api/projects/:projectId/jira",
+        "POST /api/projects/:projectId/jira/test",
       ];
 
       for (const route of hostOnly) {

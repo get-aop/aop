@@ -1,5 +1,6 @@
 import type {
   GithubProjectRepo,
+  IssueDetail,
   IssueList,
   IssueListQuery,
   LinearCatalog,
@@ -12,18 +13,28 @@ import type {
 import type { GithubService } from "../github/index.ts";
 import type { ProjectError } from "../project/service.ts";
 import type { GithubIssueLoader } from "./github-issues.ts";
-import { readIssueBody } from "./issue-body.ts";
 import { issueBrief } from "./issue-brief.ts";
+import { readIssueDetail } from "./issue-detail.ts";
+import type { JiraApi } from "./jira/jira-api.ts";
+import {
+  createJiraConnectionService,
+  type JiraConnectionService,
+} from "./jira/jira-connection-service.ts";
+import type { JiraConnectionStore } from "./jira/jira-connection-store.ts";
+import type { JiraIssueLoader } from "./jira/jira-issues.ts";
 import type { LinearApi } from "./linear-api.ts";
 import type { LinearConnectionStore, StoredLinearConnection } from "./linear-connection-store.ts";
 import type { LinearIssueLoader } from "./linear-issues.ts";
-import { readGithubSources, readLinearSource } from "./sources.ts";
+import { readGithubSources, readJiraSource, readLinearSource } from "./sources.ts";
 
 export type IssueError =
   | { code: "PROJECT_NOT_FOUND" }
   | { code: "ISSUE_NOT_FOUND"; key: string }
   | { code: "LINEAR_NOT_CONFIGURED" }
   | { code: "LINEAR_UNAUTHORIZED" }
+  | { code: "JIRA_NOT_CONFIGURED" }
+  | { code: "JIRA_UNAUTHORIZED" }
+  | { code: "JIRA_BAD_FILTER"; message: string }
   | { code: "SOURCE_FAILED"; message: string }
   | { code: "PROJECT_ERROR"; error: ProjectError };
 
@@ -37,6 +48,8 @@ export interface IssueService {
    * repository and writes the thread's prompt as it always does.
    */
   startThread: (projectId: string, key: string) => Promise<IssueResult<{ message: Message }>>;
+  /** One issue whole, read fresh from its source, for the issue view. */
+  detail: (projectId: string, key: string) => Promise<IssueResult<{ detail: IssueDetail }>>;
   linearConnection: (projectId: string) => Promise<IssueResult<{ connection: LinearConnection }>>;
   /** Host owner only (auth/route-policy.ts). Checks the key with Linear before keeping it. */
   connectLinear: (
@@ -49,6 +62,8 @@ export interface IssueService {
     projectId: string,
     input: LinearCatalogInput,
   ) => Promise<IssueResult<{ catalog: LinearCatalog }>>;
+  /** The project's Jira connection: reading it, testing, setting and removing it. */
+  jiraConnection: JiraConnectionService;
 }
 
 export interface IssueServiceDeps {
@@ -61,6 +76,9 @@ export interface IssueServiceDeps {
   linear: LinearApi;
   linearIssues: LinearIssueLoader;
   linearStore: LinearConnectionStore;
+  jira: JiraApi;
+  jiraIssues: JiraIssueLoader;
+  jiraStore: JiraConnectionStore;
 }
 
 export const createIssueService = (deps: IssueServiceDeps): IssueService => {
@@ -68,17 +86,32 @@ export const createIssueService = (deps: IssueServiceDeps): IssueService => {
   const projectRepos = (projectId: string) => github.resolveProjectRepos(projectId);
 
   const findIssue = async (projectId: string, repos: GithubProjectRepo[], key: string) =>
-    readIssueBody(key, { repos, github, linear, connection: await linearStore.read(projectId) });
+    readIssueDetail(key, {
+      repos,
+      github,
+      linear,
+      linearConnection: await linearStore.read(projectId),
+      jira: deps.jira,
+      jiraConnection: await deps.jiraStore.read(projectId),
+    });
 
   return {
+    jiraConnection: createJiraConnectionService({
+      projectExists: async (projectId) => (await projectRepos(projectId)) !== null,
+      jira: deps.jira,
+      jiraIssues: deps.jiraIssues,
+      jiraStore: deps.jiraStore,
+    }),
+
     list: async (projectId, query) => {
       const repos = await projectRepos(projectId);
       if (!repos) return { success: false, error: { code: "PROJECT_NOT_FOUND" } };
-      const [githubParts, linearPart] = await Promise.all([
+      const [githubParts, linearPart, jiraPart] = await Promise.all([
         readGithubSources(repos, query, deps),
         readLinearSource(projectId, query, deps),
+        readJiraSource(projectId, query, deps),
       ]);
-      const parts = [...githubParts, linearPart];
+      const parts = [...githubParts, linearPart, jiraPart];
       const issues: ProjectIssue[] = parts
         .flatMap((part) => part.issues)
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -90,10 +123,19 @@ export const createIssueService = (deps: IssueServiceDeps): IssueService => {
       if (!repos) return { success: false, error: { code: "PROJECT_NOT_FOUND" } };
       const found = await findIssue(projectId, repos, key);
       if (!found.success) return found;
-      const sent = await deps.sendToCoordinator(projectId, issueBrief(found.issue));
+      const keyInPullRequest = (await deps.jiraStore.read(projectId))?.linkPullRequests === true;
+      const brief = issueBrief(found.detail, { keyInPullRequest });
+      const sent = await deps.sendToCoordinator(projectId, brief);
       return sent.success
         ? { success: true, message: sent.message }
         : { success: false, error: { code: "PROJECT_ERROR", error: sent.error } };
+    },
+
+    detail: async (projectId, key) => {
+      const repos = await projectRepos(projectId);
+      if (!repos) return { success: false, error: { code: "PROJECT_NOT_FOUND" } };
+      const found = await findIssue(projectId, repos, key);
+      return found.success ? { success: true, detail: found.detail } : found;
     },
 
     linearConnection: async (projectId) => {

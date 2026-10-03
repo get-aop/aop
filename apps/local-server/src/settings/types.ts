@@ -9,6 +9,7 @@ import {
   DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES,
   DEFAULT_UPDATE_INSTALL_WINDOW,
   HostManagementSchema,
+  INBOX_DEFAULTS,
   LIBRARY_CAP_MB_MAX,
   LIBRARY_DEFAULTS,
   LIBRARY_RETENTION_DAYS_MAX,
@@ -75,6 +76,11 @@ export const SettingKey = {
    */
   HOST_MANAGEMENT: "host_management",
   /**
+   * Days the Inbox keeps a matched message after its last activity, 0 keeping it (see
+   * inbox/retention.ts). Linked items past it keep their links and lose their text.
+   */
+  INBOX_RETENTION_DAYS: "inbox_retention_days",
+  /**
    * The Library's host-wide defaults (see library/retention.ts). Days an automatic item (a chat
    * attachment, an agent's artifact) stays, 0 keeping it; a project may set its own.
    */
@@ -138,6 +144,7 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.DEFAULT_RUNTIME]: BUILT_IN_RUNTIME_ID,
   [SettingKey.DISPLAY_NAME]: "",
   [SettingKey.HOST_MANAGEMENT]: DEFAULT_HOST_MANAGEMENT,
+  [SettingKey.INBOX_RETENTION_DAYS]: String(INBOX_DEFAULTS.retentionDays),
   [SettingKey.LIBRARY_RETENTION_DAYS]: String(LIBRARY_DEFAULTS.retentionDays),
   [SettingKey.LIBRARY_PROJECT_CAP_MB]: String(LIBRARY_DEFAULTS.projectCapMb),
   [SettingKey.LIBRARY_HOST_CAP_MB]: String(LIBRARY_DEFAULTS.hostCapMb),
@@ -238,7 +245,8 @@ const VALUE_RULES: readonly {
     message: (key) => `${key} must be a whole number from 1 to ${MAX_ROUTINE_MAX_ACTIVE}`,
   },
   {
-    keys: [SettingKey.LIBRARY_RETENTION_DAYS],
+    // The Inbox keeps the Library's range of days.
+    keys: [SettingKey.LIBRARY_RETENTION_DAYS, SettingKey.INBOX_RETENTION_DAYS],
     valid: (value) => parseLibraryRetentionDays(value) !== null,
     message: (key) =>
       `${key} must be a whole number of days from 0 to ${LIBRARY_RETENTION_DAYS_MAX}`,

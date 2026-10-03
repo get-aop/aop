@@ -1,11 +1,23 @@
-import type { IssueLabel, IssuePerson, IssueStage } from "@aop/common";
+import type {
+  IssueLabel,
+  IssuePerson,
+  IssuePriority,
+  IssuePriorityLevel,
+  IssueStage,
+} from "@aop/common";
 import {
+  ChevronDownIcon,
+  ChevronsDownIcon,
+  ChevronsUpIcon,
+  ChevronUpIcon,
   CircleCheckIcon,
   CircleDashedIcon,
   CircleDotIcon,
   CircleIcon,
   CircleSlashIcon,
+  EqualIcon,
   type LucideIcon,
+  MinusIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -44,6 +56,36 @@ export const StageIcon = ({
       style={color ? { color: `#${color}` } : undefined}
       className={cn("size-3.5 shrink-0", !color && tone, className)}
     />
+  );
+};
+
+const PRIORITY_ICON: Record<IssuePriorityLevel, { icon: LucideIcon; tone: string }> = {
+  urgent: { icon: ChevronsUpIcon, tone: "text-blocked" },
+  high: { icon: ChevronUpIcon, tone: "text-waiting" },
+  medium: { icon: EqualIcon, tone: "text-favorite" },
+  low: { icon: ChevronDownIcon, tone: "text-running" },
+  lowest: { icon: ChevronsDownIcon, tone: "text-text-subtle" },
+};
+
+/**
+ * How urgent an issue is, as Jira draws it: chevrons up for high, down for low. A priority a
+ * scheme named itself (no level) is a dash; its name is in the tooltip either way.
+ */
+export const PriorityIcon = ({ priority }: { priority: IssuePriority }) => {
+  const { icon: Icon, tone } = priority.level
+    ? PRIORITY_ICON[priority.level]
+    : { icon: MinusIcon, tone: "text-text-subtle" };
+  return (
+    <span
+      role="img"
+      data-testid="issue-priority"
+      data-level={priority.level ?? "other"}
+      aria-label={`Priority: ${priority.name}`}
+      title={`Priority: ${priority.name}`}
+      className="inline-flex shrink-0"
+    >
+      <Icon aria-hidden="true" className={cn("size-3.5", tone)} />
+    </span>
   );
 };
 

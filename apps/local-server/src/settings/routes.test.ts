@@ -44,6 +44,7 @@ describe("settings/routes", () => {
         { key: "default_runtime_id", value: "claude-code" },
         { key: "display_name", value: "" },
         { key: "host_management", value: "devices" },
+        { key: "inbox_retention_days", value: "30" },
         { key: "library_retention_days", value: "30" },
         { key: "library_project_cap_mb", value: "1024" },
         { key: "library_host_cap_mb", value: "5120" },

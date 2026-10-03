@@ -8,6 +8,8 @@ import type {
 import type { GithubService } from "../github/index.ts";
 import type { GithubIssueLoader } from "./github-issues.ts";
 import { mapGithubIssue } from "./github-mapping.ts";
+import type { JiraConnectionStore, StoredJiraConnection } from "./jira/jira-connection-store.ts";
+import type { JiraIssueLoader } from "./jira/jira-issues.ts";
 import type { LinearConnectionStore, StoredLinearConnection } from "./linear-connection-store.ts";
 import type { LinearIssueLoader } from "./linear-issues.ts";
 
@@ -69,6 +71,28 @@ export const readLinearSource = async (
   };
 };
 
+/** The project's Jira issues, or `not-configured` when no Jira is connected. */
+export const readJiraSource = async (
+  projectId: string,
+  query: IssueListQuery,
+  deps: { jiraStore: JiraConnectionStore; jiraIssues: JiraIssueLoader },
+): Promise<SourceRead> => {
+  const connection = await deps.jiraStore.read(projectId);
+  if (!connection) return { issues: [], status: jiraStatus(null, { status: "not-configured" }) };
+  const read = await deps.jiraIssues.load({ projectId, connection, ...query });
+  const { failure } = read;
+  return {
+    issues: read.issues,
+    status: jiraStatus(connection, {
+      status: failure ? (failure.kind === "unauthorized" ? "unauthorized" : "error") : "ok",
+      message: failure?.message ?? null,
+      hasMore: read.hasMore,
+      stale: failure !== null && read.fetchedAt !== null,
+      fetchedAt: isoOrNull(read.fetchedAt),
+    }),
+  };
+};
+
 // What the person does about it differs: install `gh`, or log it in.
 const signedOut = (repo: GithubProjectRepo, auth: GithubAuth | null): IssueSourceStatus => {
   const missing = auth?.authenticated === false && auth.reason === "gh-missing";
@@ -115,6 +139,20 @@ const linearStatus = (
   source: "linear",
   id: "linear",
   name: connection?.scope.name ?? "Linear",
+  message: null,
+  hasMore: false,
+  stale: false,
+  fetchedAt: null,
+  ...fields,
+});
+
+const jiraStatus = (
+  connection: StoredJiraConnection | null,
+  fields: Partial<IssueSourceStatus> & Pick<IssueSourceStatus, "status">,
+): IssueSourceStatus => ({
+  source: "jira",
+  id: "jira",
+  name: connection ? new URL(connection.credentials.siteUrl).host : "Jira",
   message: null,
   hasMore: false,
   stale: false,

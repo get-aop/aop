@@ -1,6 +1,7 @@
 import type { ProjectIssue } from "@aop/common";
 import { ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { isProjectScreen, useRoute } from "../../shell/router";
 import { useNow } from "../use-now";
 import { IssueRow } from "./IssueRow";
 import { StageIcon } from "./issue-bits";
@@ -31,6 +32,8 @@ export const IssueGroupedTable = ({
   startThread: StartThread;
 }) => {
   const now = useNow();
+  const route = useRoute();
+  const openKey = isProjectScreen(route) && route.projectId === projectId ? route.issue : undefined;
   // Finished work folds away only when there is open work to show instead.
   const foldFinished =
     !filtering && groupBy === "status" && groups.some((group) => !isFinished(group));
@@ -61,6 +64,7 @@ export const IssueGroupedTable = ({
                     projectId={projectId}
                     now={now}
                     starting={startThread.pending.has(issue.key)}
+                    selected={issue.key === openKey}
                     onStartThread={startThread.start}
                   />
                 ))}

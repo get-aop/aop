@@ -103,6 +103,7 @@ export {
   SetupCheckSchema,
   setupIsComplete,
 } from "./host-setup.ts";
+export * from "./inbox.ts";
 export type { FieldLabels, ValidationIssue } from "./issues.ts";
 export { describeFirstIssue, describeIssue, describeIssuesByField } from "./issues.ts";
 export * from "./library.ts";

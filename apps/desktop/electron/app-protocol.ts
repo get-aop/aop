@@ -47,7 +47,7 @@ export const resolveAppRequest = (rawUrl: string, roots: AppRoots): ResolvedAppF
 
 /**
  * What each page may load. The dashboard may talk to its host, load its images and the avatars
- * of the people on GitHub and Linear, and frame a PDF it holds in memory, nothing else; the desktop screen talks to the app over IPC and needs no network at all. Scripts come
+ * of the people on GitHub, Linear and Jira, and frame a PDF it holds in memory, nothing else; the desktop screen talks to the app over IPC and needs no network at all. Scripts come
  * only from the app itself. The live view of the host's screen needs nothing more: it fetches
  * its frames from the host's API (connect-src) and shows them as blob: URLs (img-src).
  */
@@ -70,8 +70,17 @@ export const contentSecurityPolicy = (surface: AppSurface, hostOrigin: string | 
 
 // The PR View, the PRs tab and the Issues tab show people's pictures straight from these hosts.
 // Only the avatar hosts: any other image (one linked in a pull request's markdown) stays blocked,
-// so whoever wrote it cannot tell when, or from where, it was read.
-const AVATAR_ORIGINS = "https://avatars.githubusercontent.com https://public.linear.app";
+// so whoever wrote it cannot tell when, or from where, it was read. Jira Cloud's avatars are on
+// Atlassian's avatar host or on Gravatar. Gravatar's default picture redirects through
+// i0-i2.wp.com, an open image proxy that would let any image through, so it is left out: a
+// person without a Gravatar picture shows their initial. A Jira Data Center site serves its own
+// avatars, behind its login, so those fall back to initials too.
+const AVATAR_ORIGINS = [
+  "https://avatars.githubusercontent.com",
+  "https://public.linear.app",
+  "https://avatar-management--avatars.us-west-2.prod.public.atl-paas.net",
+  "https://secure.gravatar.com",
+].join(" ");
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",

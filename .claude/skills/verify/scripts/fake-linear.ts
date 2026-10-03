@@ -2,7 +2,7 @@
 /**
  * A fake Linear GraphQL API for verifying the Issues tab's Linear source: point the host at it
  * with `AOP_LINEAR_API_URL=http://127.0.0.1:<port>/graphql`. It answers the three reads the host
- * makes (the catalog of teams and projects, a page of issues, one issue's description) from
+ * makes (the catalog of teams and projects, a page of issues, one issue whole with its comments) from
  * issue-fixtures.ts. Only the key `lin_api_fixture` is accepted; any other is refused the way
  * Linear refuses one. Requests are logged to stdout without the key.
  *
@@ -49,13 +49,7 @@ Bun.serve({
     const all = linearIssueNodes();
     if (kind === "issue") {
       const issue = all.find((item) => item.identifier === variables.id);
-      return Response.json({
-        data: {
-          issue: issue
-            ? { title: issue.title, url: issue.url, description: issue.description }
-            : null,
-        },
-      });
+      return Response.json({ data: { issue: issue ?? null } });
     }
     const filter = (variables.filter ?? {}) as {
       state?: { type?: { in?: string[]; nin?: string[] } };
