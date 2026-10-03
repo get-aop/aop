@@ -7,6 +7,7 @@ const { act, cleanup, fireEvent, render, renderHook, screen } = await import(
   "@testing-library/react"
 );
 const {
+  inboxPath,
   Link,
   navigate,
   PROJECT_SETTINGS_SECTIONS,
@@ -300,5 +301,15 @@ describe("switchProjectPath", () => {
       "/projects/b",
     );
     expect(switchProjectPath({ name: "projects" }, "b")).toBe("/projects/b");
+  });
+});
+
+describe("the Inbox's addresses", () => {
+  test("/inbox and /inbox/<item> are the Inbox, with no project", () => {
+    expect(parseRoute("/inbox")).toEqual({ name: "inbox", itemId: null });
+    expect(parseRoute("/inbox/inbx_1")).toEqual({ name: "inbox", itemId: "inbx_1" });
+    expect(parseRoute("/inbox/inbx_1/more")).toBeNull();
+    expect(inboxPath("inbx 1")).toBe("/inbox/inbx%201");
+    expect(routeProjectId({ name: "inbox", itemId: null })).toBeNull();
   });
 });

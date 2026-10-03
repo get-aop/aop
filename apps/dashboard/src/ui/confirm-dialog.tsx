@@ -39,7 +39,7 @@ export const ConfirmDialog = ({
     <AlertDialogContent className={large ? "w-[520px]" : "w-[512px]"}>
       <AlertDialogHeader>
         <AlertDialogTitle>{title}</AlertDialogTitle>
-        <AlertDialogDescription>{message}</AlertDialogDescription>
+        <AlertDialogDescription className="whitespace-pre-line">{message}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <AlertDialogCancel data-testid="confirm-dialog-cancel">{cancelLabel}</AlertDialogCancel>

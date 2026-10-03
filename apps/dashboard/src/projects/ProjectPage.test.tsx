@@ -13,7 +13,7 @@ const { ChatApiProvider } = await import("./chat/chat-api");
 const { PROJECT_SETTINGS_SECTIONS, projectSettingsPath } = await import("../shell/router");
 type Route = import("../shell/router").Route;
 
-type ProjectRoute = Exclude<Route, { name: "projects" }>;
+type ProjectRoute = Exclude<Route, { name: "projects" | "inbox" }>;
 
 let host: ReturnType<typeof mockEmptyThreadHost>;
 

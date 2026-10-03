@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { navigate, parseRoute, projectScreenPath } from "../../shell/router";
+import { isProjectScreen, navigate, parseRoute, projectScreenPath } from "../../shell/router";
 
 /**
  * "Open in Library": shows the Library tab in the panel, with the item selected and previewed,
@@ -13,10 +13,7 @@ export const openInLibrary = (projectId: string, itemId: string): void => {
   pending = { projectId, itemId };
   for (const listener of listeners) listener();
   const route = parseRoute(window.location.pathname);
-  const artifact =
-    route && route.name !== "projects" && route.name !== "project-settings"
-      ? route.artifact
-      : undefined;
+  const artifact = route && isProjectScreen(route) ? route.artifact : undefined;
   navigate(projectScreenPath({ name: "project-tab", projectId, tab: "library", artifact }));
 };
 

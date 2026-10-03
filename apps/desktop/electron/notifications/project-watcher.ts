@@ -11,6 +11,7 @@ import {
   ThreadSchema,
 } from "@aop/common";
 import type { FetchLike } from "../connection/host-client";
+import { InboxPoll } from "./inbox-poll";
 import { decideNotification, type NotificationIntent } from "./policy";
 
 export interface WatchTarget {
@@ -40,7 +41,7 @@ const REFRESH_INTERVAL_MS = 60_000;
 const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 
 /**
- * Turns a host's project streams into OS notifications. It runs in the app's main process, not
+ * Turns a host's project streams, and the Inbox's notification queue, into OS notifications. It runs in the app's main process, not
  * in the dashboard: the dashboard streams only the project on screen, while a notification is
  * about any project, and it must reach the person when the window is closed, hidden, or showing
  * the connect screen. The main process also owns the token, so it reads the streams with
@@ -66,20 +67,25 @@ export const createProjectWatcher = (deps: WatcherDeps): ProjectWatcher => {
 
 class Session {
   private readonly watches = new Map<string, ProjectWatch>();
+  private readonly inbox: InboxPoll;
   private cancelRefresh: (() => void) | null = null;
   private closed = false;
 
   constructor(
     private readonly target: WatchTarget,
     private readonly deps: WatcherDeps,
-  ) {}
+  ) {
+    this.inbox = new InboxPoll(target, deps, () => this.unauthorized());
+  }
 
   begin(): void {
     void this.refresh();
+    this.inbox.start();
   }
 
   close(): void {
     this.closed = true;
+    this.inbox.close();
     this.cancelRefresh?.();
     for (const watch of this.watches.values()) watch.close();
     this.watches.clear();

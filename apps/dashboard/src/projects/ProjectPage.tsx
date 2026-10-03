@@ -13,7 +13,7 @@ import { ProjectLayout } from "./layout/ProjectLayout";
 import { useProjectEntry, useProjectsState } from "./ProjectsProvider";
 import { ProjectSettingsDialog } from "./settings/ProjectSettingsDialog";
 
-type ProjectRoute = Exclude<Route, { name: "projects" }>;
+type ProjectRoute = Exclude<Route, { name: "projects" | "inbox" }>;
 
 /**
  * One project: the three-pane screen (chat and threads panel) for its home and its threads.

@@ -14,6 +14,7 @@ import { SettingsRepositories } from "../settings/settings-repositories";
 import { SettingsRuntimes } from "../settings/settings-runtimes";
 import { SettingsUpdates } from "../settings/settings-updates";
 import { useUpdateRows } from "../updates/use-update-rows";
+import { SettingsConnections } from "../settings/slack/SettingsConnections";
 import {
   closeSettingsDialog,
   openSettingsDialog,
@@ -28,6 +29,7 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   repositories: "Repositories",
   runtimes: "Runtimes",
   "computer-use": "Computer use",
+  connections: "Connections",
   about: "About",
 };
 
@@ -114,6 +116,7 @@ const SettingsSectionHost = ({ section }: { section: SettingsSection }) => {
   if (section === "computer-use") return <SettingsComputerUse />;
   if (section === "host") return <SettingsHost />;
   if (section === "updates") return <SettingsUpdates />;
+  if (section === "connections") return <SettingsConnections />;
   if (section === "about") return <SettingsAbout />;
   return (
     <SettingsGeneral

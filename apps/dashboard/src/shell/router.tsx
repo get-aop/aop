@@ -52,6 +52,8 @@ interface CoordinatorView {
  */
 export type Route =
   | { name: "projects" }
+  /** The Inbox: the person's Slack activity that needs them, with one item open or none. */
+  | { name: "inbox"; itemId: string | null }
   | ({ name: "project"; projectId: string } & CoordinatorView)
   | ({ name: "thread"; projectId: string; threadId: string } & CoordinatorView)
   | ({ name: "project-tab"; projectId: string; tab: AddableTabId } & CoordinatorView)
@@ -61,6 +63,8 @@ export type Route =
 export type ProjectScreen = Extract<Route, { name: "project" | "thread" | "project-tab" }>;
 
 export const projectsPath = (): string => "/";
+export const inboxPath = (itemId: string | null = null): string =>
+  itemId ? `/inbox/${encodeURIComponent(itemId)}` : "/inbox";
 export const projectPath = (projectId: string): string =>
   `/projects/${encodeURIComponent(projectId)}`;
 export const threadPath = (projectId: string, threadId: string): string =>
@@ -119,6 +123,8 @@ export const parseRoute = (pathname: string): Route | null => {
   const segments = pathname.split("/").filter(Boolean).map(decodeSegment);
   if (segments.length === 0) return { name: "projects" };
   const [root, projectId, ...rest] = segments;
+  if (root === "inbox")
+    return rest.length === 0 ? { name: "inbox", itemId: projectId ?? null } : null;
   if (root !== "projects" || !projectId) return null;
   return parseProjectRoute(projectId, rest);
 };
@@ -238,7 +244,7 @@ const parseSettingsRoute = (projectId: string, detail: string | undefined): Rout
 const LEGACY_CHAT_PATH = /^\/projects\/[^/]+\/chat\/?$/;
 
 export const routeProjectId = (route: Route): string | null =>
-  route.name === "projects" ? null : route.projectId;
+  route.name === "projects" || route.name === "inbox" ? null : route.projectId;
 
 const NAVIGATE_EVENT = "aop:navigate";
 

@@ -2,6 +2,7 @@ import { ErrorBoundary } from "@/ui/error-boundary";
 import { useAppZoom } from "./app-zoom";
 import { AuthGate } from "./auth/AuthGate";
 import { RuntimeConfigurationProvider } from "./hooks/runtime-configuration";
+import { InboxPage } from "./inbox/InboxPage";
 import { ProjectPage } from "./projects/ProjectPage";
 import { ProjectsIndex } from "./projects/ProjectsIndex";
 import { ProjectsProvider } from "./projects/ProjectsProvider";
@@ -46,5 +47,7 @@ export const App = () => {
 
 const RouteView = () => {
   const route = useRoute();
-  return route.name === "projects" ? <ProjectsIndex /> : <ProjectPage route={route} />;
+  if (route.name === "projects") return <ProjectsIndex />;
+  if (route.name === "inbox") return <InboxPage itemId={route.itemId} />;
+  return <ProjectPage route={route} />;
 };
