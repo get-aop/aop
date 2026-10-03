@@ -23,3 +23,22 @@ export const useIsHostOwner = (enabled: boolean): boolean => {
 
   return owner;
 };
+
+/** This viewer's own paired device, to mark it "This device"; null on the host machine itself. */
+export const useCurrentDeviceId = (): string | null => {
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    getPrincipal().then(
+      (principal) =>
+        current && setDeviceId(principal.kind === "device" ? principal.device.id : null),
+      () => current && setDeviceId(null),
+    );
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  return deviceId;
+};

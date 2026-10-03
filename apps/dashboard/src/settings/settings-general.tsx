@@ -6,12 +6,7 @@ import { Spinner } from "@/ui/spinner";
 import type { SettingEntry } from "../api/client";
 import { updateSettings } from "../api/client";
 import { settingError } from "./setting-validation";
-import {
-  isSettingVisible,
-  resolveSettingOptions,
-  SETTINGS_GROUPS,
-  SettingRow,
-} from "./settings-fields";
+import { resolveSettingOptions, SETTINGS_GROUPS, SettingRow } from "./settings-fields";
 
 const AUTO_SAVE_DELAY_MS = 600;
 
@@ -79,9 +74,7 @@ export const SettingsGeneral = ({
   return (
     <div className="flex flex-col gap-4 p-4">
       {SETTINGS_GROUPS.map((group) => {
-        const groupKeys = group.keys.filter(
-          (key) => key in savedValues && isSettingVisible(key, editedValues, runtimeConfigurations),
-        );
+        const groupKeys = group.keys.filter((key) => key in savedValues);
         if (groupKeys.length === 0) return null;
         return (
           // The kit Card ships py-6/gap-6 for padded content. These groups are

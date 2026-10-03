@@ -5,7 +5,8 @@ import { AttachRepoDialog } from "../dialogs/AttachRepoDialog";
 import { LiveView } from "../live-view/LiveView";
 import { NewProjectDialog } from "../projects/NewProjectDialog";
 import { useLiveProjects } from "../projects/ProjectsProvider";
-import { UpdateNotice } from "../updates/UpdateNotice";
+import { useHostUpdatedToast } from "../updates/host-updated";
+import { UpdateDialogs } from "../updates/UpdateDialogs";
 import { useDesktopSettingsMenu } from "./desktop-settings-menu";
 import {
   announceRepoAttached,
@@ -22,7 +23,8 @@ import { handleGlobalShortcut } from "./shortcuts";
  * The shell: no chrome of its own. Each screen brings its top bar, which holds the project
  * switcher (the app's menu), so the route's screen has the whole width. The shell tells the live
  * state which project is open (that project always gets a stream), and mounts the live view of
- * the host's screen, the dialogs, the toaster and the global keyboard layer.
+ * the host's screen, the dialogs, the toaster (with "Host soulf updated to x" after a host
+ * update) and the global keyboard layer.
  */
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const live = useLiveProjects();
@@ -50,16 +52,17 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
   useDesktopSettingsMenu();
+  useHostUpdatedToast();
 
   return (
     <div data-testid="app-shell" className="flex h-svh min-h-0 w-full flex-col bg-background">
-      <UpdateNotice />
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">{children}</main>
       <LiveView />
       <SettingsDialog />
       <NewProjectDialog />
       <AttachRepoDialog onAttached={announceRepoAttached} />
       <Toaster position="bottom-right" />
+      <UpdateDialogs />
       <ConfirmationHost />
     </div>
   );

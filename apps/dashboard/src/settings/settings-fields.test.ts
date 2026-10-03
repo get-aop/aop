@@ -5,9 +5,7 @@ import { setupDashboardDom } from "../test/setup-dom";
 // importing them without one would leave every later test file in the process without layout effects.
 setupDashboardDom();
 
-const { isSettingVisible, resolveSettingOptions, SETTINGS_GROUPS } = await import(
-  "./settings-fields.tsx"
-);
+const { resolveSettingOptions, SETTINGS_GROUPS } = await import("./settings-fields.tsx");
 
 describe("settings fields", () => {
   test("does not expose Quick-fix or control runtime settings", () => {
@@ -35,16 +33,19 @@ describe("settings fields", () => {
     expect(SETTINGS_GROUPS.some((group) => group.label === "Polling")).toBe(false);
   });
 
-  test("a stable dashboard hides the nightly-only automatic install", () => {
-    expect(SETTINGS_GROUPS.find((group) => group.label === "Updates")?.keys).toContain(
-      "update_auto_apply",
-    );
-    expect(isSettingVisible("update_auto_apply", { update_auto_apply: "false" }, [])).toBe(false);
-    expect(isSettingVisible("update_check", {}, [])).toBe(true);
+  test("leaves the update settings to AOP settings › Updates", () => {
+    const keys = SETTINGS_GROUPS.flatMap((group) => group.keys);
+    for (const key of [
+      "update_check",
+      "update_install",
+      "agent_cli_auto_update",
+      "host_management",
+    ]) {
+      expect(keys).not.toContain(key);
+    }
   });
 
   test("keeps remaining settings visible", () => {
-    expect(isSettingVisible("chat_global_instructions", {}, [])).toBe(true);
     expect(resolveSettingOptions("chat_global_instructions", {}, [])).toBeUndefined();
   });
 

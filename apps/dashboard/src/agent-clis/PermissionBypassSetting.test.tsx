@@ -9,7 +9,7 @@ setupDashboardDom();
 setDefaultTimeout(15_000);
 
 const { cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
-const { AgentCliPanel } = await import("./AgentCliPanel");
+const { PermissionChecks } = await import("./PermissionChecks");
 const { ConfirmationHost } = await import("../components/ConfirmationHost");
 const { ShellStatus } = await import("../shell/ShellStatus");
 const { ProjectsProvider } = await import("../projects/ProjectsProvider");
@@ -29,7 +29,7 @@ afterEach(() => {
 const renderPanel = () =>
   render(
     <>
-      <AgentCliPanel />
+      <PermissionChecks />
       <ConfirmationHost />
     </>,
   );
@@ -68,7 +68,7 @@ describe("Skip permission checks", () => {
     const host = installFakeCliHost();
     render(
       <>
-        <AgentCliPanel />
+        <PermissionChecks />
         <ConfirmationHost />
         <ProjectsProvider live={stubLiveProjects(makeState([])).live}>
           <ShellStatus testId="status" />

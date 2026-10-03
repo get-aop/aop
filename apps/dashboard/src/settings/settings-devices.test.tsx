@@ -10,7 +10,7 @@ const { cleanup, fireEvent, render, screen, waitFor, within } = await import(
   "@testing-library/react"
 );
 const { ConfirmationHost } = await import("../components/ConfirmationHost");
-const { SettingsDevices } = await import("./settings-devices");
+const { HostDevices } = await import("./settings-devices");
 
 let api: ReturnType<typeof mockApi>;
 let devices: Device[];
@@ -36,15 +36,66 @@ afterEach(() => {
   api.restore();
 });
 
-const renderDevices = (pollMs?: number) =>
+const renderDevices = (
+  pollMs?: number,
+  access: { canManage?: boolean; currentDeviceId?: string | null } = {},
+) =>
   render(
     <>
-      <SettingsDevices pollMs={pollMs} />
+      <HostDevices
+        pollMs={pollMs}
+        canManage={access.canManage ?? true}
+        currentDeviceId={access.currentDeviceId ?? null}
+        blockedReason="Updates for this host can only be started on soulf itself (AOP settings › Updates › Who can update this host)."
+      />
       <ConfirmationHost />
     </>,
   );
 
 describe("paired devices", () => {
+  test("says which app and version each runs, marks this device, and flags an app older than the host", async () => {
+    devices = [
+      makeDevice({
+        id: "mac",
+        name: "Marcelos-MacBook-Pro",
+        client: { app: "desktop", version: "0.10.8", platform: "darwin" },
+      }),
+      makeDevice({
+        id: "work",
+        name: "Work laptop",
+        client: { app: "desktop", version: "0.10.6", platform: "win32" },
+        outOfDate: true,
+      }),
+      makeDevice({
+        id: "chrome",
+        name: "Chrome on Linux",
+        client: { app: "browser", version: null, platform: "linux" },
+      }),
+    ];
+    renderDevices(undefined, { currentDeviceId: "mac" });
+
+    const rows = await screen.findAllByTestId("device-row");
+    const [mac, work, chrome] = rows.map((row) => within(row as HTMLElement));
+    expect(mac?.getByTestId("device-client").textContent).toBe("AOP app 0.10.8 · macOS");
+    expect(mac?.getByTestId("device-current").textContent).toBe("This device");
+    expect(mac?.queryByTestId("device-revoke")).toBeNull();
+    expect(work?.getByTestId("device-out-of-date").textContent).toBe("Out of date");
+    expect(chrome?.getByTestId("device-client").textContent).toBe(
+      "Browser · Linux · uses the host's dashboard, always current",
+    );
+  });
+
+  test("read-only for a viewer who may not manage the host: no revoke, no pairing, and why", async () => {
+    renderDevices(undefined, { canManage: false });
+
+    await screen.findAllByTestId("device-row");
+    expect(screen.queryByTestId("device-revoke")).toBeNull();
+    expect(screen.queryByTestId("devices-generate")).toBeNull();
+    expect(screen.getByTestId("devices-readonly").textContent).toContain(
+      "can only be started on soulf itself",
+    );
+  });
+
   test("lists each device with its name, when it was last seen and when it was paired", async () => {
     devices = [
       makeDevice({ id: "d1", name: "Work laptop" }),

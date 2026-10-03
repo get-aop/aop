@@ -1,4 +1,4 @@
-import type { Device, PairingCode } from "@aop/common";
+import { buildChannel, type Device, type PairingCode } from "@aop/common";
 import { LaptopIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -6,20 +6,49 @@ import { Button } from "@/ui/button";
 import { createPairingCode } from "../api/auth";
 import { requestConfirmation } from "../components/ConfirmationHost";
 import { useNow } from "../projects/use-now";
-import { describeLastSeen, formatCountdown, formatPaired, secondsLeft } from "./devices-format";
+import {
+  describeClient,
+  describeLastSeen,
+  formatCountdown,
+  formatPaired,
+  secondsLeft,
+} from "./devices-format";
 import { useDevices } from "./use-devices";
 
 /**
- * Settings §Devices, for the host owner: a pairing code to type into a new device, and the
- * devices already paired, each of which can be revoked.
+ * The paired devices on AOP settings › Host: each with the app and version it runs, and a pairing
+ * code to type into a new one. Whoever may manage the host (the `host_management` setting) pairs
+ * and revokes; everyone else sees the list read-only, with the reason.
  */
-export const SettingsDevices = ({ pollMs }: { pollMs?: number }) => {
+export const HostDevices = ({
+  pollMs,
+  canManage,
+  currentDeviceId,
+  blockedReason,
+}: {
+  pollMs?: number;
+  canManage: boolean;
+  /** This viewer's own device, marked "This device"; null on the host machine. */
+  currentDeviceId: string | null;
+  blockedReason: string | null;
+}) => {
   const { devices, error, revoke } = useDevices(pollMs);
 
   return (
-    <div data-testid="section-devices" className="flex flex-col gap-6 p-4">
-      <PairingPanel devices={devices} />
-      <DeviceList devices={devices} error={error} revoke={revoke} />
+    <div data-testid="section-devices" className="flex flex-col gap-4">
+      <DeviceList
+        devices={devices}
+        error={error}
+        revoke={canManage ? revoke : null}
+        currentDeviceId={currentDeviceId}
+      />
+      {canManage ? (
+        <PairingPanel devices={devices} />
+      ) : (
+        <p data-testid="devices-readonly" className="text-[12px] text-waiting">
+          {blockedReason}
+        </p>
+      )}
     </div>
   );
 };
@@ -56,8 +85,9 @@ const PairingPanel = ({ devices }: { devices: Device[] | null }) => {
       <div>
         <h2 className="text-[13px] font-semibold text-text">Pair a device</h2>
         <p className="mt-0.5 max-w-xl text-[12.5px] leading-relaxed text-text-subtle">
-          Open this host's address in the browser or app on the other computer and enter the code
-          with a name for that device. A code works once, and a new code replaces the one before it.
+          Open this host's address (above) in the AOP app or a browser on the other computer and
+          enter the code with a name for that device. A code works once, and a new code replaces the
+          one before it. On the host, <code>{buildChannel().binaryName} pair</code> prints one too.
         </p>
       </div>
       {grant && !pairedWithIt ? <CodeCard grant={grant} remaining={remaining} /> : null}
@@ -114,14 +144,18 @@ const DeviceList = ({
   devices,
   error,
   revoke,
+  currentDeviceId,
 }: {
   devices: Device[] | null;
   error: string | null;
-  revoke: (device: Device) => Promise<void>;
+  /** Null when this viewer may not revoke. */
+  revoke: ((device: Device) => Promise<void>) | null;
+  currentDeviceId: string | null;
 }) => {
   const now = useNow(30_000);
 
   const confirmRevoke = async (device: Device) => {
+    if (!revoke) return;
     const confirmed = await requestConfirmation({
       title: `Revoke “${device.name}”?`,
       message:
@@ -159,7 +193,8 @@ const DeviceList = ({
               key={device.id}
               device={device}
               now={now}
-              onRevoke={() => void confirmRevoke(device)}
+              current={device.id === currentDeviceId}
+              onRevoke={revoke ? () => void confirmRevoke(device) : null}
             />
           ))}
         </ul>
@@ -171,11 +206,13 @@ const DeviceList = ({
 const DeviceRow = ({
   device,
   now,
+  current,
   onRevoke,
 }: {
   device: Device;
   now: number;
-  onRevoke: () => void;
+  current: boolean;
+  onRevoke: (() => void) | null;
 }) => (
   <li
     data-testid="device-row"
@@ -186,7 +223,16 @@ const DeviceRow = ({
     <div className="min-w-0 flex-1">
       <p data-testid="device-name" className="truncate text-[13px] font-medium text-text">
         {device.name}
+        {current ? (
+          <span
+            data-testid="device-current"
+            className="ml-2 text-[11.5px] font-normal text-text-subtle"
+          >
+            This device
+          </span>
+        ) : null}
       </p>
+      <DeviceClient device={device} />
       <p className="text-[12px] text-text-subtle">
         <span data-testid="device-last-seen">{describeLastSeen(device.lastSeenAt, now)}</span>
         {" · "}
@@ -195,15 +241,34 @@ const DeviceRow = ({
         </span>
       </p>
     </div>
-    <Button
-      type="button"
-      variant="secondary"
-      size="xs"
-      data-testid="device-revoke"
-      aria-label={`Revoke ${device.name}`}
-      onClick={onRevoke}
-    >
-      Revoke
-    </Button>
+    {device.outOfDate ? (
+      <span
+        data-testid="device-out-of-date"
+        className="rounded-md border border-waiting/30 bg-waiting/10 px-1.5 py-px text-[11px] font-medium text-waiting"
+      >
+        Out of date
+      </span>
+    ) : null}
+    {onRevoke && !current ? (
+      <Button
+        type="button"
+        variant="secondary"
+        size="xs"
+        data-testid="device-revoke"
+        aria-label={`Revoke ${device.name}`}
+        onClick={onRevoke}
+      >
+        Revoke
+      </Button>
+    ) : null}
   </li>
 );
+
+const DeviceClient = ({ device }: { device: Device }) => {
+  const line = describeClient(device, buildChannel().id === "nightly" ? "AOP Nightly" : "AOP");
+  return line ? (
+    <p data-testid="device-client" className="text-[12px] text-text-subtle">
+      {line}
+    </p>
+  ) : null;
+};

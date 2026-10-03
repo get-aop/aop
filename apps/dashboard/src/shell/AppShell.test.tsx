@@ -7,6 +7,7 @@ import {
   stubLiveProjects,
 } from "../projects/test-utils";
 import { setupDashboardDom } from "../test/setup-dom";
+import { makeUpdateStatus } from "../updates/test-utils";
 
 setupDashboardDom();
 
@@ -188,60 +189,72 @@ describe("AppShell keyboard and dialogs", () => {
     act(() => openSettingsDialog("general"));
 
     const dialog = await screen.findByTestId("settings-dialog");
-    for (const section of ["general", "repositories", "runtimes", "computer-use", "about"]) {
+    for (const section of [
+      "general",
+      "host",
+      "updates",
+      "repositories",
+      "runtimes",
+      "computer-use",
+      "about",
+    ]) {
       expect(within(dialog).getByTestId(`settings-nav-${section}`)).toBeTruthy();
     }
     expect(within(dialog).queryByText("Workflows")).toBeNull();
     expect(within(dialog).queryByTestId("settings-nav-exec-hosts")).toBeNull();
   });
 
-  describe("the Devices section", () => {
-    const answerAs = (principal: object) => {
-      globalThis.fetch = mock(async (input: string | URL | Request) => {
-        const url = String(input);
-        if (url === "/api/auth/me") return Response.json(principal);
-        if (url === "/api/auth/devices") return Response.json({ devices: [] });
-        return Response.json({ settings: [] });
-      }) as unknown as typeof fetch;
+  describe("the Host section", () => {
+    const answerAs = (principal: object, canUpdate: boolean) => {
+      const answers: Record<string, unknown> = {
+        "/api/auth/me": principal,
+        "/api/auth/devices": {
+          devices: [
+            { id: "d1", name: "Laptop", createdAt: "2026-09-29T10:00:00.000Z", lastSeenAt: null },
+          ],
+        },
+        "/api/updates": makeUpdateStatus({
+          canUpdate,
+          owner: (principal as { kind: string }).kind === "owner",
+        }),
+      };
+      globalThis.fetch = mock(async (input: string | URL | Request) =>
+        Response.json(answers[String(input)] ?? { settings: [] }),
+      ) as unknown as typeof fetch;
     };
 
-    test("is listed for the host owner, and opens", async () => {
-      answerAs({ kind: "owner" });
+    test("is listed for everyone and holds the paired devices", async () => {
+      answerAs({ kind: "owner" }, true);
       renderShell();
       act(() => openSettingsDialog("general"));
       const dialog = await screen.findByTestId("settings-dialog");
 
-      fireEvent.click(await within(dialog).findByTestId("settings-nav-devices"));
+      fireEvent.click(await within(dialog).findByTestId("settings-nav-host"));
+      expect(await within(dialog).findByTestId("section-host")).toBeTruthy();
       expect(await within(dialog).findByTestId("section-devices")).toBeTruthy();
-      expect(getDialogs().settings.section).toBe("devices");
+      expect(getDialogs().settings.section).toBe("host");
+      expect(await within(dialog).findByTestId("device-revoke")).toBeTruthy();
     });
 
-    test("is not listed for a paired device, and asking for it shows General", async () => {
-      answerAs({
-        kind: "device",
-        device: {
-          id: "d1",
-          name: "Laptop",
-          createdAt: "2026-09-29T10:00:00.000Z",
-          lastSeenAt: null,
+    test("shows a paired device the list read-only, with the reason, once the owner narrowed it", async () => {
+      answerAs(
+        {
+          kind: "device",
+          device: {
+            id: "d2",
+            name: "Phone",
+            createdAt: "2026-09-29T10:00:00.000Z",
+            lastSeenAt: null,
+          },
         },
-      });
+        false,
+      );
       renderShell();
-      act(() => openSettingsDialog("devices"));
+      act(() => openSettingsDialog("host"));
       const dialog = await screen.findByTestId("settings-dialog");
 
-      // Let the host's answer arrive before judging what is missing.
-      await waitFor(() =>
-        expect(
-          (globalThis.fetch as unknown as ReturnType<typeof mock>).mock.calls.some(
-            ([url]) => url === "/api/auth/me",
-          ),
-        ).toBe(true),
-      );
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(within(dialog).queryByTestId("settings-nav-devices")).toBeNull();
-      expect(within(dialog).queryByTestId("section-devices")).toBeNull();
-      expect(within(dialog).getByRole("heading", { name: "General" })).toBeTruthy();
+      expect(await within(dialog).findByTestId("devices-readonly")).toBeTruthy();
+      expect(within(dialog).queryByTestId("device-revoke")).toBeNull();
     });
   });
 
