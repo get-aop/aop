@@ -123,5 +123,6 @@ export const readyProbes = (overrides: Partial<HostSetupProbes> = {}): HostSetup
   computerUse: async () => ({ status: cuaStatus(), lease: EMPTY_CUA_LEASE, wanted: true }),
   updates: async () => ({ checking: true, mode: "idle", window: null, block: null }),
   setupComputerUse: async () => 0,
+  slackInbox: async () => null,
   ...overrides,
 });

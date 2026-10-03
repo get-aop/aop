@@ -12,6 +12,7 @@ const { cleanup, fireEvent, render, screen, waitFor, within } = await import(
 const { resetUpdatesForTests } = await import("../updates/update-store");
 const { resetHostSetupForTests } = await import("../host-setup/host-setup-store");
 const { SettingsHost, hostSummary } = await import("./settings-host");
+const { getDialogs, resetDialogs } = await import("../shell/dialog-store");
 
 const SETUP: HostSetup = {
   hostName: "soulf",
@@ -51,6 +52,13 @@ const SETUP: HostSetup = {
       detail: "2.1.288, logged in · default runtime",
       actions: [{ kind: "link", label: "Runtimes", target: "runtimes" }],
     },
+    {
+      id: "slack-inbox",
+      state: "optional",
+      title: "Slack Inbox",
+      detail: "Not set up: your Slack mentions, DMs and thread replies, in AOP",
+      actions: [{ kind: "link", label: "Set up", target: "connections" }],
+    },
   ],
 };
 
@@ -83,9 +91,16 @@ afterEach(() => {
   api.restore();
   resetHostSetupForTests();
   resetUpdatesForTests();
+  resetDialogs();
 });
 
 describe("AOP settings › Host", () => {
+  test("the optional Slack Inbox row opens Settings › Connections", async () => {
+    render(<SettingsHost />);
+    fireEvent.click(await screen.findByTestId("setup-link-slack-inbox"));
+    expect(getDialogs().settings).toEqual({ open: true, section: "connections" });
+  });
+
   test("sums the host up", () => {
     expect(hostSummary(SETUP)).toBe(
       "Linux · AOP Nightly 0.10.8-nightly.20261002.17 · up 3 h · 4 of 6 ready",

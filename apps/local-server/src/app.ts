@@ -198,10 +198,11 @@ export const createApp = (deps: AppDependencies) => {
       createRuntimeConfigurationService(ctx, createRuntimeUsers(ctx, projects.projects)),
     ),
   );
-  app.route("/api/host/setup", createHostSetupRoutes(hostSetupOf(deps, github)));
+  const inbox = deps.inbox ?? memoryInbox(ctx, projects, issues);
+  app.route("/api/host/setup", createHostSetupRoutes(hostSetupOf(deps, github, inbox)));
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
-  app.route("/api/inbox", createInboxRoutes(deps.inbox ?? memoryInbox(ctx, projects, issues)));
+  app.route("/api/inbox", createInboxRoutes(inbox));
 
   // An MCP client whose token is refused looks for OAuth metadata, and then registers itself, at
   // these paths. The host has neither, and a dashboard page in their place fails the client with
@@ -281,11 +282,16 @@ const createGithubBackedRoutes = (
 };
 
 /** The setup checklist of the host this process is, over the same GitHub and CUA services. */
-const hostSetupOf = (deps: AppDependencies, github: GithubService): HostSetupService =>
+const hostSetupOf = (
+  deps: AppDependencies,
+  github: GithubService,
+  inbox: HostInbox,
+): HostSetupService =>
   deps.hostSetup ??
   createHostSetup({
     ctx: deps.ctx,
     github,
+    slackInbox: () => inbox.slack.connection(),
     computerUse: deps.computerUse ?? computerUse,
     lease: leaseState(deps),
     port: deps.port ?? hostPort(),

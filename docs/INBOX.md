@@ -52,6 +52,8 @@ The test names each problem and its fix:
 
 When Slack refuses the token, because the app was removed or the token revoked, the settings say so: sign in again.
 
+AOP settings › Host lists Slack Inbox as an optional row of the host's checklist: grey until you connect it, then green while the feed is live, amber when Slack sends no events or AOP is reconnecting, and red when Slack refused the token. Its button opens Settings › Connections.
+
 ## The Inbox page
 
 The views across the top are **Needs me**, **Mentions**, **DMs**, **Threads**, **Snoozed** and **Done**. They are filters, not folders. When a channel is mapped to a project, a **Project** filter shows only those channels.

@@ -12,6 +12,7 @@ export const SetupCheckIdSchema = z.enum([
   "github",
   "computer-use",
   "updates",
+  "slack-inbox",
 ]);
 export type SetupCheckId = z.infer<typeof SetupCheckIdSchema>;
 
@@ -30,7 +31,7 @@ export const SetupActionSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("link"),
     label: z.string(),
-    target: z.enum(["runtimes", "updates", "live-view"]),
+    target: z.enum(["runtimes", "updates", "live-view", "connections"]),
   }),
 ]);
 export type SetupAction = z.infer<typeof SetupActionSchema>;

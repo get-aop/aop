@@ -133,7 +133,7 @@ It reads DMs first, then private and public channels, and the replies of threads
 
 **No events.** When a catch-up finds messages from a time a socket was open and that socket delivered none, Slack is not sending events: Socket Mode is off in the app's settings. The feed's health becomes `no-events` with the fix, and the Inbox keeps filling from catch-up reads.
 
-`GET /sources` reports the workspace, who the person is there, the feed's health, the last event, the problem and its fix, and missing scopes. It never reports the tokens. A Host setup checklist row can read the same route.
+`GET /sources` reports the workspace, who the person is there, the feed's health, the last event, the problem and its fix, and missing scopes. It never reports the tokens. AOP settings › Host shows the same in its optional "Slack Inbox" row (`host-setup/slack-inbox-check.ts`): grey until Slack is connected, then green, amber (no events, or reconnecting) or red (token refused), each linking to Settings › Connections.
 
 ## Actions
 

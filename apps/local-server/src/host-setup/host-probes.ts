@@ -3,6 +3,7 @@ import {
   BUILT_IN_RUNTIME_ID,
   buildChannel,
   type CuaLeaseState,
+  type SlackConnection,
   type UpdateInstallMode,
   UpdateInstallModeSchema,
 } from "@aop/common";
@@ -47,6 +48,8 @@ export interface HostSetupSources {
   startTimeMs: number;
   readiness?: RuntimeReadiness;
   env?: NodeJS.ProcessEnv;
+  /** The Inbox's Slack connection, as clients see it (never its tokens). */
+  slackInbox?: () => Promise<SlackConnection | null>;
 }
 
 /** The checklist of the host this process is. */
@@ -78,6 +81,7 @@ export const createHostProbes = (sources: HostSetupSources): HostSetupProbes => 
       wanted: (await ctx.projectRepository.list()).some((project) => project.computerUse === "cua"),
     }),
     updates: () => readUpdates(ctx.settingsRepository, env),
+    slackInbox: sources.slackInbox ?? (async () => null),
     setupComputerUse: () =>
       runComputerUseSetup(
         { noSudo: true, command: buildChannel().binaryName },

@@ -4,6 +4,7 @@ import type {
   CuaStatus,
   GithubAuth,
   RuntimeStatus,
+  SlackConnection,
   UpdateInstallMode,
 } from "@aop/common";
 
@@ -23,6 +24,8 @@ export interface HostSetupProbes {
   github: (fresh: boolean) => Promise<GithubAuth>;
   computerUse: (fresh: boolean) => Promise<ComputerUseLook>;
   updates: () => Promise<UpdatesLook>;
+  /** The Slack workspace the Inbox reads, and how its feed is doing; null when none is connected. */
+  slackInbox: () => Promise<SlackConnection | null>;
   /** `aop computer-use setup` without sudo or questions; resolves with its exit code. */
   setupComputerUse: () => Promise<number>;
 }
