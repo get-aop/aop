@@ -54,8 +54,10 @@ Registered in `src/app.ts`:
 | `/api/usage` | Token and cost usage |
 | `/api/mcp` | The AOP MCP server (its tools depend on the calling session) |
 | `/api/fs` | Directory browse for settings UI |
+| `/api/updates` | The host's own update: status, check, apply now or once running turns finish, cancel, the update log; see [Updating AOP](../../docs/HOST.md#updating-aop) |
+| `/api/host/setup` | The host's setup checklist (AOP settings › Host) and its fixes; see [Set up a host](../../docs/HOST.md#set-up-a-host) |
 
-Every route except health, `POST /api/auth/pair`, and `/api/mcp` needs a device token, its session cookie, or a direct request from the host itself. Who may call what is in `src/auth/route-policy.ts`.
+Every route except health, `POST /api/auth/pair`, and `/api/mcp` needs a device token, its session cookie, or a direct request from the host itself. Who may call what is in `src/auth/route-policy.ts`: `owner` routes are the host machine's alone, and `manager` routes (updates, pairing codes, revoking devices, setup fixes) follow the `host_management` setting.
 
 ## Environment
 
@@ -90,7 +92,9 @@ src/
   runtime-configuration/  runtime catalog
   agent-cli/          agent CLI versions, the periodic check and updates (docs/RUNTIMES.md)
   event-log/  the project event stream
-  auth/               device tokens, pairing, cookie sessions, request guard
+  auth/               device tokens, pairing, cookie sessions, request guard, who may manage the host
+  update/             the host's self-update: release feed, install policy, background download, restart
+  host-setup/         the setup checklist and its fixes
   github-cli/, mcp/
   usage/, settings/, health/, db/, fs/
 ```
