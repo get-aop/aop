@@ -4,6 +4,7 @@ import { apiFetch, feedConfigFromEnv, fetchLatestRelease, messageOf } from "./re
 import { createSystemUpdateDeps } from "./system.ts";
 import { type OutcomeRecord, writeOutcomeRecord } from "./update-files.ts";
 import { type UpdateResult, updateHost } from "./update-host.ts";
+import { acquireUpdateLock } from "./update-lock.ts";
 import { restartNeededMessage } from "./update-progress.ts";
 
 export interface RunUpdateInput {
@@ -43,14 +44,35 @@ export const runUpdate = async (input: RunUpdateInput): Promise<number> => {
       print(selfUpdateRefusal(block, input.execPath));
       return 1;
     }
-    const result = await updateHost(createSystemUpdateDeps(layout, current, print, env));
-    await writeOutcomeRecord(outcomeOf(result, current, startedAt));
-    printResult(result, print);
-    return 0;
+    return await runLocked(() => updateHost(createSystemUpdateDeps(layout, current, print, env)), {
+      current,
+      startedAt,
+      print,
+    });
   } catch (error) {
     if (!input.checkOnly) await recordFailure(current, startedAt, error);
     print(`Update failed: ${messageOf(error)}`);
     return 1;
+  }
+};
+
+// One run at a time per install (update-lock.ts); the lock is let go however the run ends.
+const runLocked = async (
+  update: () => Promise<UpdateResult>,
+  run: { current: string; startedAt: string; print: (line: string) => void },
+): Promise<number> => {
+  const release = acquireUpdateLock();
+  if (!release) {
+    run.print("Another update of this host is running. Let it finish, then try again.");
+    return 1;
+  }
+  try {
+    const result = await update();
+    await writeOutcomeRecord(outcomeOf(result, run.current, run.startedAt));
+    printResult(result, run.print);
+    return 0;
+  } finally {
+    release();
   }
 };
 

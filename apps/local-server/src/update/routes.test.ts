@@ -90,7 +90,7 @@ describe("update routes", () => {
     db = await createTestDb();
     app = createApp({ ctx: createCommandContext(db), startTimeMs: Date.now(), updates });
     applied = [];
-    applyResult = { ok: true, queued: false };
+    applyResult = { ok: true, queued: false, version: "0.10.0" };
     cancelled = 0;
     callers = [];
   });
@@ -151,7 +151,7 @@ describe("update routes", () => {
     });
 
     expect(now.status).toBe(202);
-    expect(await now.json()).toEqual({ ok: true, queued: false });
+    expect(await now.json()).toEqual({ ok: true, queued: false, version: "0.10.0" });
     expect(later.status).toBe(202);
     expect(applied).toEqual([{ when: "now" }, { when: "idle" }]);
     expect(cancel.status).toBe(204);

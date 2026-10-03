@@ -80,7 +80,10 @@ export interface BackgroundDownload {
 }
 
 /** `queued`: turns were running, so it starts once they finish (queued-update.ts). */
-export type ApplyResult = { ok: true; queued: boolean } | { ok: false; error: string };
+/** `version`: the release it installs, which the host comes back on. */
+export type ApplyResult =
+  | { ok: true; queued: boolean; version: string }
+  | { ok: false; error: string };
 
 /** A caller that is not named (the host's own timers, tests) is the host machine. */
 const HOST_ITSELF: HostCaller = { kind: "owner", agent: false };
@@ -196,19 +199,31 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
     return version ? { version } : { error: checkError ?? "AOP is already up to date" };
   };
 
+  // The run is claimed before the first await: a person, the queue and the automatic install can
+  // all ask at once, and two update runs swapping the same install could leave a broken release.
   const startNow = async (): Promise<ApplyResult> => {
-    const target = await installable();
-    if ("error" in target) return { ok: false, error: target.error };
+    if (deps.unsupported !== null) return { ok: false, error: deps.unsupported };
+    if (applyingSince !== null) return { ok: false, error: "An update is already running" };
+    applyingSince = now();
+    await runCheck();
+    const version = await newerSeen();
+    if (!version) {
+      applyingSince = null;
+      return { ok: false, error: checkError ?? "AOP is already up to date" };
+    }
     queue.cancel();
     startError = null;
-    applyingSince = now();
+    return launchUpdater(version);
+  };
+
+  const launchUpdater = async (version: string): Promise<ApplyResult> => {
     try {
       await deps.startUpdater();
     } catch (error) {
       applyingSince = null;
       return { ok: false, error: `Could not start the update: ${messageOf(error)}` };
     }
-    return { ok: true, queued: false };
+    return { ok: true, queued: false, version };
   };
 
   const enqueue = async (by: "person" | "auto"): Promise<ApplyResult> => {
@@ -223,7 +238,7 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
       count: running.length,
     });
     scheduleQueue();
-    return { ok: true, queued: true };
+    return { ok: true, queued: true, version: target.version };
   };
 
   const apply = async (request: Partial<ApplyUpdateRequest> = {}): Promise<ApplyResult> =>
@@ -281,7 +296,8 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
 
   // A release installed on a host started by hand stays staged until that host restarts on it.
   const runBackgroundDownload = async (): Promise<void> => {
-    if (!deps.download || deps.unsupported !== null) return;
+    // An update run reads the staged files; pruning them under it would make it download again.
+    if (!deps.download || deps.unsupported !== null || applyingSince !== null) return;
     const version = await newerSeen();
     if (!version) return deps.download.stager.prune(null);
     if ((await deps.isEnabled()) && (await deps.download.enabled())) {

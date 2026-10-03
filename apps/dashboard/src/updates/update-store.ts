@@ -70,7 +70,7 @@ export const refreshUpdates = async (): Promise<void> => {
     const status = await getUpdateStatus();
     publish({ status });
     if (status.state === "updating" && state.target === null && status.latest) {
-      watchForHost(status.latest);
+      watchForHost(status.latest, status.current);
     }
   } catch {
     // A host that is unreachable or refuses to say has no update to show.
@@ -91,14 +91,16 @@ export const checkForHostUpdate = async (): Promise<void> => {
  * so it happens even after this window is closed.
  */
 export const startUpdate = async (when: ApplyUpdateRequest["when"] = "now"): Promise<void> => {
-  const latest = state.status?.latest;
-  if (!latest) return;
+  const { status } = state;
+  if (!status?.latest) return;
   publish({ error: null, sending: true });
   try {
-    const { queued } = await applyUpdate(when);
+    // The host looks at the feed again and installs the newest release, which may be newer than
+    // the one on screen: the page waits for the release it names.
+    const { queued, version } = await applyUpdate(when);
     publish({ sending: false });
     if (queued) await refreshUpdates();
-    else watchForHost(latest);
+    else watchForHost(version ?? status.latest, status.current);
   } catch (error) {
     publish({ sending: false, error: failureMessage(error, "The update could not start.") });
   }
@@ -127,19 +129,22 @@ export const resetUpdatesForTests = (next?: Partial<UpdateEnvironment>): void =>
   for (const listener of listeners) listener();
 };
 
-const watchForHost = (target: string): void => {
+// Back is any answer on another release than the one it left: normally `target`, or a newer
+// one published meanwhile. An answer on `from` is the old host, before the restart or after a
+// rollback, which the host's own status tells apart.
+const watchForHost = (target: string, from: string): void => {
   stopWatching();
   publish({ target, error: null });
   const deadline = Date.now() + environment.giveUpMs;
 
   const poll = async (): Promise<void> => {
     const reported = await hostRelease();
-    if (reported !== null && normalizeReleaseVersion(reported) === target) {
-      hostCameBack(target);
+    const release = reported === null ? null : normalizeReleaseVersion(reported);
+    if (release !== null && release !== from) {
+      hostCameBack(release);
       return;
     }
-    // A host that answers on another release may be the old one after a rollback: it says so.
-    if (reported !== null && (await updateFailed())) return;
+    if (release !== null && (await updateFailed())) return;
     if (Date.now() >= deadline) {
       publish({ target: null, error: `The host did not come back on ${target}.` });
       return;

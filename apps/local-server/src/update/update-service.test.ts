@@ -144,12 +144,23 @@ describe("update service apply", () => {
     const h = await createHarness();
     const service = createUpdateService(h.deps);
 
-    expect(await service.apply()).toEqual({ ok: true, queued: false });
+    expect(await service.apply()).toEqual({ ok: true, queued: false, version: "0.10.0" });
 
     expect(h.startedUpdaters).toBe(1);
     expect((await service.status()).state).toBe("updating");
     expect(await service.apply()).toEqual({ ok: false, error: "An update is already running" });
     expect(h.startedUpdaters).toBe(1);
+  });
+
+  test("two callers at once start one update run, never two", async () => {
+    const h = await createHarness();
+    const service = createUpdateService(h.deps);
+
+    const [first, second] = await Promise.all([service.apply(), service.apply()]);
+
+    expect(h.startedUpdaters).toBe(1);
+    expect([first, second]).toContainEqual({ ok: false, error: "An update is already running" });
+    expect([first, second]).toContainEqual({ ok: true, queued: false, version: "0.10.0" });
   });
 
   test("refuses when there is nothing newer", async () => {
@@ -249,7 +260,11 @@ describe("update when the turns finish", () => {
     const h = await createHarness();
     const service = createUpdateService(h.deps);
 
-    expect(await service.apply({ when: "idle" })).toEqual({ ok: true, queued: false });
+    expect(await service.apply({ when: "idle" })).toEqual({
+      ok: true,
+      queued: false,
+      version: "0.10.0",
+    });
     expect(h.startedUpdaters).toBe(1);
   });
 
@@ -258,7 +273,11 @@ describe("update when the turns finish", () => {
     const service = createUpdateService(h.deps);
     h.turns = [turn("r1"), turn("r2")];
 
-    expect(await service.apply({ when: "idle" })).toEqual({ ok: true, queued: true });
+    expect(await service.apply({ when: "idle" })).toEqual({
+      ok: true,
+      queued: true,
+      version: "0.10.0",
+    });
     expect(h.startedUpdaters).toBe(0);
     expect((await service.status()).queued).toMatchObject({
       version: "0.10.0",
@@ -293,7 +312,11 @@ describe("update when the turns finish", () => {
 
     h.turns = [turn("r2")];
     await service.apply({ when: "idle" });
-    expect(await service.apply({ when: "now" })).toEqual({ ok: true, queued: false });
+    expect(await service.apply({ when: "now" })).toEqual({
+      ok: true,
+      queued: false,
+      version: "0.10.0",
+    });
     expect(h.startedUpdaters).toBe(1);
     expect((await service.status()).queued).toBeNull();
   });

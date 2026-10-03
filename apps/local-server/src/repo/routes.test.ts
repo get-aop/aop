@@ -367,6 +367,16 @@ describe("repo/routes", () => {
       expect(existsSync(aopPaths.logs())).toBe(true);
     });
 
+    test("a factory reset keeps who may manage the host, so a device cannot widen its rights", async () => {
+      await createTestRepo(db, "repo-1", "/path/to/repo-1");
+      await ctx.settingsRepository.set(SettingKey.HOST_MANAGEMENT, "owner");
+
+      const res = await app.request("/api/repos/repo-1", { method: "DELETE" });
+
+      expect(((await res.json()) as AnyJson).factoryReset).toBe(true);
+      expect(await ctx.settingsRepository.get(SettingKey.HOST_MANAGEMENT)).toBe("owner");
+    });
+
     test("stops reset when checkpoint refs cannot be durably identified", async () => {
       await ctx.settingsRepository.set(SettingKey.CHAT_GLOBAL_INSTRUCTIONS, "17");
       // A checkpoint with no run can only exist in a database edited or restored

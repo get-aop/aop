@@ -60,6 +60,20 @@ describe("update store", () => {
     });
   });
 
+  test("a host that comes back on a release newer than the one on screen is back too", async () => {
+    const host = installFakeHost();
+    await store.refreshUpdates();
+    await store.startUpdate();
+
+    host.health = { version: "0.10.1+def5678" };
+    await settle(60);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(
+      JSON.parse(window.sessionStorage.getItem("aop:host-updated:v1") ?? "null")?.version,
+    ).toBe("0.10.1");
+  });
+
   test("update when they finish asks the host to queue it, and waits for no restart yet", async () => {
     const host = installFakeHost({ queues: true });
     await store.refreshUpdates();

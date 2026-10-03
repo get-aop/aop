@@ -35,7 +35,7 @@ describe("installed, restart needed", () => {
       updateError: "Restart the host to use 0.10.0: stop `aop run` and start it again",
     });
     // The run is over: Update host may run again.
-    expect(await service.apply()).toEqual({ ok: true, queued: false });
+    expect(await service.apply()).toEqual({ ok: true, queued: false, version: "0.10.0" });
   });
 
   test("stays so across a restart of the dashboard, and goes once the host runs the new release", async () => {

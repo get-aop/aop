@@ -16,8 +16,8 @@ export const checkForUpdate = async (): Promise<UpdateStatus> =>
  */
 export const applyUpdate = async (
   when: ApplyUpdateRequest["when"] = "now",
-): Promise<{ queued: boolean }> =>
-  request<{ queued: boolean }>("/updates/apply", {
+): Promise<{ queued: boolean; version: string }> =>
+  request<{ queued: boolean; version: string }>("/updates/apply", {
     method: "POST",
     body: JSON.stringify({ when }),
   });
