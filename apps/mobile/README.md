@@ -36,4 +36,7 @@ The release key never enters the repository. The build reads a properties file (
 
 ## Testing on emulators
 
+Screen sizes the layout is checked against (2026 specs): Galaxy Z Fold8 inner 1848×2448 / cover 1248×1972 at 420 dpi; Galaxy Z Fold8 Ultra inner 2256×2504 / cover 1080×2520; iPhone Duo inner 1878×2670 / outer 1398×2034 (emulated at 480 dpi, so dp match iOS points); and an ordinary 1080×2400 phone.
+
+
 Device profiles that match the Galaxy Z Fold8 (inner 1848×2448 at 420 dpi): an emulator with that screen and `adb shell wm size 1248x1972` for the cover screen (and `wm size reset` to unfold) drives a live fold. Point the app at a development host with `http://10.0.2.2:<port>` (plain HTTP is allowed only to the emulator's host alias and loopback). Use a host started with `--fake-runtime` (`.claude/skills/verify`) so no real model runs.
