@@ -30,7 +30,7 @@ const DRAFT = {
   contextLength: 1200,
   projectId: "p1",
   postBackPreview: [
-    "Opened a PR for this: owner/repo#123 x (via AOP)",
+    "Opened a PR for this: owner/repo#123 can you take the flaky deploy check? (via AOP)",
     "Merged: owner/repo#123 (via AOP)",
   ],
 };
@@ -138,8 +138,13 @@ describe("dispatching a thread", () => {
   test("the PR notes ask first, with the exact text, and stay off when kept off", async () => {
     renderPage();
     fireEvent.click(await screen.findByTestId("inbox-dispatch-open"));
+    fireEvent.change(await screen.findByTestId("inbox-dispatch-title"), {
+      target: { value: "Fix the deploy check" },
+    });
     fireEvent.click(await screen.findByTestId("inbox-dispatch-postback"));
     const dialog = await screen.findByRole("alertdialog");
+    // The note names the thread by the title the person gave it.
+    expect(dialog.textContent).toContain("owner/repo#123 Fix the deploy check (via AOP)");
     expect(dialog.textContent).toContain("Merged: owner/repo#123 (via AOP)");
     fireEvent.click(within(dialog).getByRole("button", { name: "Keep off" }));
     await waitFor(() =>

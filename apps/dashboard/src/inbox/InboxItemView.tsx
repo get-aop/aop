@@ -103,6 +103,9 @@ export const InboxItemView = forwardRef<
               timeStyle: "short",
             })}
             {item.messageCount > 1 ? ` · ${item.messageCount} messages` : ""}
+            {item.state === "snoozed" && item.snoozedUntil
+              ? ` · snoozed until ${new Date(item.snoozedUntil).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
+              : ""}
           </p>
         </div>
         {item.permalink ? (

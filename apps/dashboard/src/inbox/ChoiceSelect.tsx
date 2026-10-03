@@ -20,7 +20,11 @@ export const ChoiceSelect = ({
   none?: string;
   className?: string;
 }) => (
-  <Select value={value ?? NONE} onValueChange={(next) => onChange(next === NONE ? null : next)}>
+  <Select
+    // "" shows the placeholder: a required choice not made yet reads as its label.
+    value={value ?? (none ? NONE : "")}
+    onValueChange={(next) => onChange(next === NONE ? null : next)}
+  >
     <SelectTrigger
       aria-label={label}
       data-testid={testId}

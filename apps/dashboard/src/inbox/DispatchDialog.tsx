@@ -42,16 +42,21 @@ export const DispatchDialog = ({
   const [form, setForm] = useState<DispatchForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const active = Object.values(useProjectsState().byId).filter(
+    (entry) => entry.project.status === "active",
+  );
+  // With one project there is nothing to choose; a mapped channel or the filter wins otherwise.
+  const onlyProject = active.length === 1 ? (active[0]?.project.id ?? null) : null;
 
   useEffect(() => {
     void getDispatchDraft(item.id).then(
       (loaded) => {
         setDraft(loaded);
-        setForm(initialForm(loaded, item, projectFilter));
+        setForm(initialForm(loaded, item, projectFilter ?? onlyProject));
       },
       (cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)),
     );
-  }, [item, projectFilter]);
+  }, [item, projectFilter, onlyProject]);
 
   const start = async () => {
     const input = form ? toInput(form) : null;
@@ -252,7 +257,11 @@ const DispatchFields = ({
           <TickRow
             testId="inbox-dispatch-postback"
             checked={form.postBack}
-            onChange={(on) => void confirmPostBack(on, draft).then((postBack) => set({ postBack }))}
+            onChange={(on) =>
+              void confirmPostBack(on, previewFor(draft, form.title)).then((postBack) =>
+                set({ postBack }),
+              )
+            }
           >
             Post a note in the Slack thread when this thread opens or merges a PR (off by default)
           </TickRow>
@@ -263,11 +272,15 @@ const DispatchFields = ({
 };
 
 /** Turning the PR notes on asks once per dispatch, with the exact text they post. */
-const confirmPostBack = async (on: boolean, draft: InboxDispatchDraft): Promise<boolean> => {
+/** The notes as they will read: with the title the person gave the thread, not the draft's. */
+const previewFor = (draft: InboxDispatchDraft, title: string): string[] =>
+  draft.postBackPreview.map((note) => note.replace(draft.title, title.trim() || draft.title));
+
+const confirmPostBack = async (on: boolean, preview: string[]): Promise<boolean> => {
   if (!on) return false;
   return requestConfirmation({
     title: "Post to Slack as you?",
-    message: `When this thread opens or merges a pull request, AOP will reply in the Slack thread as you:\n\n${draft.postBackPreview.join("\n")}\n\nThe host posts these two fixed notes itself. The thread never gets a Slack tool, and you can turn this off on the item at any time.`,
+    message: `When this thread opens or merges a pull request, AOP will reply in the Slack thread as you:\n\n${preview.join("\n")}\n\nThe host posts these two fixed notes itself. The thread never gets a Slack tool, and you can turn this off on the item at any time.`,
     confirmLabel: "Post these notes",
     cancelLabel: "Keep off",
     large: true,
