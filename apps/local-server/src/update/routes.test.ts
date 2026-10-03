@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { PairedDeviceSchema, type UpdateStatus, UpdateStatusSchema } from "@aop/common";
+import {
+  AGENT_SESSION_HEADER,
+  type ApplyUpdateRequest,
+  PairedDeviceSchema,
+  type UpdateStatus,
+  UpdateStatusSchema,
+} from "@aop/common";
 import type { Kysely } from "kysely";
 import { createApp } from "../app.ts";
+import type { HostCaller } from "../auth/host-management.ts";
 import { LOOPBACK_PEER, REMOTE_PEER } from "../auth/test-utils.ts";
 import { createCommandContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
@@ -19,21 +26,37 @@ const STATUS: UpdateStatus = {
   checkError: null,
   state: "idle",
   updateError: null,
+  hostName: "soulf",
+  canUpdate: true,
+  owner: true,
+  hostManagement: "devices",
+  restart: "service",
+  runningTurns: [],
+  queued: null,
 };
 
 describe("update routes", () => {
   let db: Kysely<Database>;
   let app: ReturnType<typeof createApp>;
-  let applied: number;
+  let applied: Array<Partial<ApplyUpdateRequest> | undefined>;
   let applyResult: ApplyResult;
+  let cancelled: number;
+  let callers: Array<HostCaller | undefined>;
 
   const updates: UpdateService = {
-    status: async () => STATUS,
+    status: async (caller) => {
+      callers.push(caller);
+      return STATUS;
+    },
     check: async () => ({ ...STATUS, checkedAt: "2026-10-01T11:00:00.000Z" }),
-    apply: async () => {
-      applied += 1;
+    apply: async (request) => {
+      applied.push(request);
       return applyResult;
     },
+    cancel: async () => {
+      cancelled += 1;
+    },
+    runQueued: async () => {},
     runDueCheck: async () => {},
     runAutoApply: async () => {},
     start: () => {},
@@ -60,22 +83,35 @@ describe("update routes", () => {
   beforeEach(async () => {
     db = await createTestDb();
     app = createApp({ ctx: createCommandContext(db), startTimeMs: Date.now(), updates });
-    applied = 0;
-    applyResult = { ok: true };
+    applied = [];
+    applyResult = { ok: true, queued: false };
+    cancelled = 0;
+    callers = [];
   });
+
+  const json = (body: unknown, headers: Record<string, string> = {}): RequestInit => ({
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+  const narrowToHostMachine = async () =>
+    expect(
+      (await local("/api/settings/host_management", { method: "PUT", ...json({ value: "owner" }) }))
+        .status,
+    ).toBe(200);
 
   afterEach(async () => {
     await db.destroy();
   });
 
-  test("the owner reads the status the dashboard shows", async () => {
+  test("the owner reads the status the dashboard shows, as the owner", async () => {
     const res = await local("/api/updates");
 
     expect(res.status).toBe(200);
     expect(UpdateStatusSchema.parse(await res.json())).toEqual(STATUS);
+    expect(callers).toEqual([{ kind: "owner", agent: false }]);
   });
 
-  test("a paired device sees the notice and may ask for a fresh check", async () => {
+  test("a paired device sees the notice as a device and may ask for a fresh check", async () => {
     const authorization = `Bearer ${await pairDevice()}`;
 
     const read = await remote("/api/updates", { headers: { authorization } });
@@ -85,47 +121,170 @@ describe("update routes", () => {
     });
 
     expect(read.status).toBe(200);
-    expect(((await read.json()) as UpdateStatus).available).toBe(true);
+    expect(callers).toEqual([{ kind: "device", agent: false }]);
     expect(check.status).toBe(200);
     expect(((await check.json()) as UpdateStatus).checkedAt).toBe("2026-10-01T11:00:00.000Z");
   });
 
   test("a stranger sees nothing", async () => {
     expect((await remote("/api/updates")).status).toBe(401);
+    expect((await remote("/api/updates/apply", { method: "POST" })).status).toBe(401);
   });
 
-  test("only the owner may start an update; a paired device gets 403 and nothing starts", async () => {
+  test("by default a paired device may update the host, queue it for later, and cancel", async () => {
     const authorization = `Bearer ${await pairDevice()}`;
 
-    const device = await remote("/api/updates/apply", {
+    const now = await remote("/api/updates/apply", { method: "POST", headers: { authorization } });
+    const later = await remote("/api/updates/apply", {
       method: "POST",
+      ...json({ when: "idle" }, { authorization }),
+    });
+    const cancel = await remote("/api/updates/apply", {
+      method: "DELETE",
       headers: { authorization },
     });
-    const stranger = await remote("/api/updates/apply", { method: "POST" });
 
-    expect(device.status).toBe(403);
-    expect(await device.json()).toEqual({
+    expect(now.status).toBe(202);
+    expect(await now.json()).toEqual({ ok: true, queued: false });
+    expect(later.status).toBe(202);
+    expect(applied).toEqual([{ when: "now" }, { when: "idle" }]);
+    expect(cancel.status).toBe(204);
+    expect(cancelled).toBe(1);
+  });
+
+  test("narrowed to the host machine, a device is told why and where to change it, and nothing starts", async () => {
+    const authorization = `Bearer ${await pairDevice()}`;
+    await narrowToHostMachine();
+
+    for (const [path, method] of [
+      ["/api/updates/apply", "POST"],
+      ["/api/updates/apply", "DELETE"],
+      ["/api/updates/check", "POST"],
+      ["/api/agent-clis/claude-code/update", "POST"],
+      ["/api/agent-clis/check", "POST"],
+      ["/api/auth/pairing-codes", "POST"],
+      ["/api/auth/devices", "GET"],
+    ] as const) {
+      const res = await remote(path, { method, headers: { authorization } });
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({
+        error:
+          "Only the host machine can update this host. Its owner can let paired devices do it in AOP settings › General › Who can update this host.",
+        code: "HOST_ONLY",
+      });
+    }
+    expect((await remote("/api/updates", { headers: { authorization } })).status).toBe(200);
+    expect(applied).toEqual([]);
+    expect(cancelled).toBe(0);
+    expect((await local("/api/updates/apply", { method: "POST" })).status).toBe(202);
+  });
+
+  test("only the host machine changes who may update; a device cannot widen its own rights", async () => {
+    const authorization = `Bearer ${await pairDevice()}`;
+    await narrowToHostMachine();
+
+    const single = await remote("/api/settings/host_management", {
+      method: "PUT",
+      ...json({ value: "devices" }, { authorization }),
+    });
+    const bulk = await remote("/api/settings", {
+      method: "PUT",
+      ...json({ settings: [{ key: "host_management", value: "devices" }] }, { authorization }),
+    });
+
+    expect(single.status).toBe(403);
+    expect(bulk.status).toBe(403);
+    expect(await bulk.json()).toEqual({
       error: "Only available on the host machine",
       code: "HOST_ONLY",
     });
-    expect(stranger.status).toBe(401);
-    expect(applied).toBe(0);
+    const stored = await local("/api/settings/host_management");
+    expect(await stored.json()).toEqual({ key: "host_management", value: "owner" });
   });
 
-  test("the owner's apply answers 202 once the update has started", async () => {
-    const res = await local("/api/updates/apply", { method: "POST" });
+  test("narrowed to the host machine, a device cannot switch on the automatic installs either", async () => {
+    const authorization = `Bearer ${await pairDevice()}`;
+    await narrowToHostMachine();
 
-    expect(res.status).toBe(202);
-    expect(await res.json()).toEqual({ ok: true });
-    expect(applied).toBe(1);
+    for (const key of [
+      "update_check",
+      "update_auto_apply",
+      "agent_cli_auto_update",
+      "agent_cli_check_interval_minutes",
+    ]) {
+      const single = await remote(`/api/settings/${key}`, {
+        method: "PUT",
+        ...json({ value: "true" }, { authorization }),
+      });
+      const bulk = await remote("/api/settings", {
+        method: "PUT",
+        ...json(
+          {
+            settings: [
+              { key: "display_name", value: "M" },
+              { key, value: "true" },
+            ],
+          },
+          {
+            authorization,
+          },
+        ),
+      });
+      expect([key, single.status, bulk.status]).toEqual([key, 403, 403]);
+    }
+    const unrelated = await remote("/api/settings", {
+      method: "PUT",
+      ...json({ settings: [{ key: "display_name", value: "M" }] }, { authorization }),
+    });
+    expect(unrelated.status).toBe(200);
   });
 
-  test("an apply that cannot start says why with 409", async () => {
+  test("by default a device may change the update settings", async () => {
+    const authorization = `Bearer ${await pairDevice()}`;
+
+    const res = await remote("/api/settings", {
+      method: "PUT",
+      ...json({ settings: [{ key: "update_auto_apply", value: "false" }] }, { authorization }),
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  test("an agent using the aop CLI cannot update the host or change who may, even on the host machine", async () => {
+    const agent = { [AGENT_SESSION_HEADER]: "session-1" };
+
+    const apply = await local("/api/updates/apply", { method: "POST", headers: agent });
+    const setting = await local("/api/settings/host_management", {
+      method: "PUT",
+      ...json({ value: "devices" }, agent),
+    });
+    const autoApply = await local("/api/settings", {
+      method: "PUT",
+      ...json({ settings: [{ key: "update_auto_apply", value: "true" }] }, agent),
+    });
+    const bypass = await local("/api/settings/agent_cli_skip_permissions", {
+      method: "PUT",
+      ...json({ value: "true" }, agent),
+    });
+    const status = await local("/api/updates", { headers: agent });
+
+    for (const res of [apply, setting, autoApply, bypass]) {
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { code: string }).code).toBe("AGENT_REFUSED");
+    }
+    expect(applied).toEqual([]);
+    expect(status.status).toBe(200);
+    expect(callers).toEqual([{ kind: "owner", agent: true }]);
+  });
+
+  test("an apply that cannot start says why with 409, and a bad when is a 400", async () => {
     applyResult = { ok: false, error: "AOP is already up to date" };
 
     const res = await local("/api/updates/apply", { method: "POST" });
+    const bad = await local("/api/updates/apply", { method: "POST", ...json({ when: "later" }) });
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "AOP is already up to date" });
+    expect(bad.status).toBe(400);
   });
 });

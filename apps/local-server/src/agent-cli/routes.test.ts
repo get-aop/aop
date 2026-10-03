@@ -96,21 +96,26 @@ describe("agent CLI routes", () => {
     expect(AgentClisResponseSchema.parse(await res.json())).toEqual(RESPONSE);
   });
 
-  test("a paired device reads and checks, but may not install anything on the host", async () => {
+  test("a paired device reads, checks and updates by default, and only reads once the owner narrows it to the host machine", async () => {
     const authorization = `Bearer ${await pairDevice()}`;
-    expect((await remote("/api/agent-clis", { headers: { authorization } })).status).toBe(200);
-    const check = await remote("/api/agent-clis/check", {
-      method: "POST",
-      headers: { authorization },
-    });
-    expect(check.status).toBe(200);
+    const check = () =>
+      remote("/api/agent-clis/check", { method: "POST", headers: { authorization } });
+    const update = () =>
+      remote("/api/agent-clis/claude-code/update", { method: "POST", headers: { authorization } });
 
-    const update = await remote("/api/agent-clis/claude-code/update", {
-      method: "POST",
-      headers: { authorization },
+    expect((await check()).status).toBe(200);
+    expect((await update()).status).toBe(202);
+    expect(requested).toEqual(["claude-code"]);
+
+    await local("/api/settings/host_management", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: "owner" }),
     });
-    expect(update.status).toBe(403);
-    expect(requested).toEqual([]);
+    expect((await remote("/api/agent-clis", { headers: { authorization } })).status).toBe(200);
+    expect((await check()).status).toBe(403);
+    expect((await update()).status).toBe(403);
+    expect(requested).toEqual(["claude-code"]);
   });
 
   test("the owner's update answers 202 once it has started", async () => {

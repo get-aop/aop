@@ -60,6 +60,17 @@ describe("runUpdate", () => {
     expect(output).toContain("Update failed: Could not reach the release feed");
   });
 
+  test("an agent's turn may look but not update the host it runs on", async () => {
+    const env = { ...process.env, AOP_CHAT_SESSION_ID: "session-1" };
+
+    const update = await run({ env });
+    const check = await run({ env, checkOnly: true });
+
+    expect(update.code).toBe(1);
+    expect(update.output).toContain("An agent can't update the host it runs on");
+    expect(check.output).not.toContain("An agent can't");
+  });
+
   test("a source checkout is told to pull instead", async () => {
     const { code, output } = await run({ buildVersion: undefined });
 

@@ -1,10 +1,20 @@
-import { normalizeReleaseVersion } from "@aop/common";
+import { hostname } from "node:os";
+import { type HostRestart, normalizeReleaseVersion } from "@aop/common";
+import { readHostManagement } from "../auth/host-management.ts";
 import type { LocalServerContext } from "../context.ts";
-import { countRunningRuns } from "../scheduling/capacity.ts";
+import { listRunningTurns } from "../scheduling/capacity.ts";
 import { SettingKey } from "../settings/types.ts";
-import { layoutOf, selfUpdateBlock, selfUpdateRefusal } from "./install-layout.ts";
+import {
+  type InstallLayout,
+  layoutOf,
+  type SelfUpdateBlock,
+  selfUpdateBlock,
+  selfUpdateRefusal,
+} from "./install-layout.ts";
 import { feedConfigFromEnv } from "./release-feed.ts";
+import { detectRestartPlan } from "./restart.ts";
 import { startUpdaterProcess } from "./spawn-updater.ts";
+import { systemPlanInput } from "./system.ts";
 import { createUpdateService, type UpdateService } from "./update-service.ts";
 
 /**
@@ -28,13 +38,32 @@ export const createHostUpdateService = (
       if (!layout) throw new Error("not an installed build");
       await startUpdaterProcess(layout, env);
     },
+    hostName: shortHostName(hostname()),
+    restart: () => restartOf(block, layout, env),
+    runningTurns: () => listRunningTurns(ctx.db),
+    hostManagement: () => readHostManagement(ctx.settingsRepository),
     autoApply:
       feed.channel === "nightly"
         ? {
             enabled: async () =>
               (await ctx.settingsRepository.get(SettingKey.UPDATE_AUTO_APPLY)) === "true",
-            busy: async () => (await countRunningRuns(ctx.db)) > 0,
           }
         : undefined,
   });
+};
+
+// "soulf.local" and "soulf.tailffbdec.ts.net" are both "soulf" to the person.
+export const shortHostName = (name: string): string => name.split(".")[0] || name;
+
+// Read on each status call: a service can be installed while the host runs.
+const restartOf = async (
+  block: SelfUpdateBlock | null,
+  layout: InstallLayout | null,
+  env: NodeJS.ProcessEnv,
+): Promise<HostRestart> => {
+  if (block === "source" || block === "app") return block;
+  if (!layout) return "manual";
+  const plan = await detectRestartPlan({ ...systemPlanInput(env), layout });
+  if (plan.kind === "launchd" || plan.kind === "systemd") return "service";
+  return plan.kind;
 };

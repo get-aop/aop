@@ -11,6 +11,7 @@ import { createAttachmentRoutes } from "./attachment/routes.ts";
 import { createAttachmentService } from "./attachment/service.ts";
 import { type AuthEnv, createApiAuth } from "./auth/api-auth.ts";
 import { createApiCors } from "./auth/cross-origin.ts";
+import { readHostManagement } from "./auth/host-management.ts";
 import { createOriginGuard } from "./auth/origin-guard.ts";
 import { createAuthRoutes } from "./auth/routes.ts";
 import { createChatSessionRoutes } from "./chat-session/routes.ts";
@@ -112,7 +113,10 @@ export const createApp = (deps: AppDependencies) => {
   app.use("/api/*", createOriginGuard({ allowedOrigins }));
   app.use("/api/*", createApiCors(allowedOrigins));
 
-  app.use("/api/*", createApiAuth(ctx.authService));
+  app.use(
+    "/api/*",
+    createApiAuth(ctx.authService, () => readHostManagement(ctx.settingsRepository)),
+  );
 
   app.use("/api/*", async (c, next) => {
     await next();

@@ -2,10 +2,12 @@ import {
   BUILT_IN_RUNTIME_ID,
   buildChannel,
   DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
+  DEFAULT_HOST_MANAGEMENT,
   DEFAULT_LIVE_VIEW_MODE,
   DEFAULT_MAX_CONCURRENT_RUNS,
   DEFAULT_ROUTINE_MAX_ACTIVE,
   DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES,
+  HostManagementSchema,
   LIBRARY_CAP_MB_MAX,
   LIBRARY_DEFAULTS,
   LIBRARY_RETENTION_DAYS_MAX,
@@ -63,6 +65,13 @@ export const SettingKey = {
    */
   DISPLAY_NAME: "display_name",
   /**
+   * Who may manage this host: update it and its agent CLIs, change the update settings
+   * (`MANAGER_SETTING_KEYS`), and pair or revoke devices. "devices" (the default: the host machine
+   * and every paired device) or "owner" (the host machine only). Only the host owner may change it
+   * (`OWNER_ONLY_SETTING_KEYS`); see auth/route-policy.ts.
+   */
+  HOST_MANAGEMENT: "host_management",
+  /**
    * The Library's host-wide defaults (see library/retention.ts). Days an automatic item (a chat
    * attachment, an agent's artifact) stays, 0 keeping it; a project may set its own.
    */
@@ -94,13 +103,15 @@ export const SettingKey = {
   ROUTINE_MIN_INTERVAL: "routine_min_interval_minutes",
   /**
    * Whether the host looks for a newer release once a day and shows a notice. "true" or
-   * "false"; on by default. It never installs anything by itself.
+   * "false"; on by default. It never installs anything by itself. Written by whoever may manage
+   * the host (`MANAGER_SETTING_KEYS`), as are the other update keys.
    */
   UPDATE_CHECK: "update_check",
   /**
    * Whether AOP Nightly installs a newer nightly by itself once no turn is running. "true" or
-   * "false"; on by default in a nightly build. Only a nightly host reads it: a stable host never
-   * installs a release without the owner (docs/NIGHTLY.md).
+   * "false"; on by default in a nightly build. On a host that is never idle it installs once the
+   * turns running when it found the build have finished (update/update-service.ts). Only a nightly
+   * host reads it: a stable host never installs a release without a person (docs/NIGHTLY.md).
    */
   UPDATE_AUTO_APPLY: "update_auto_apply",
 } as const;
@@ -114,6 +125,7 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
   [SettingKey.DEFAULT_RUNTIME]: BUILT_IN_RUNTIME_ID,
   [SettingKey.DISPLAY_NAME]: "",
+  [SettingKey.HOST_MANAGEMENT]: DEFAULT_HOST_MANAGEMENT,
   [SettingKey.LIBRARY_RETENTION_DAYS]: String(LIBRARY_DEFAULTS.retentionDays),
   [SettingKey.LIBRARY_PROJECT_CAP_MB]: String(LIBRARY_DEFAULTS.projectCapMb),
   [SettingKey.LIBRARY_HOST_CAP_MB]: String(LIBRARY_DEFAULTS.hostCapMb),
@@ -134,12 +146,28 @@ export const VALID_KEYS: SettingKey[] = Object.values(SettingKey);
  */
 export const OWNER_ONLY_SETTING_KEYS: readonly SettingKey[] = [
   SettingKey.AGENT_CLI_SKIP_PERMISSIONS,
+  SettingKey.HOST_MANAGEMENT,
   SettingKey.ROUTINE_MAX_ACTIVE,
   SettingKey.ROUTINE_MIN_INTERVAL,
 ];
 
 export const isOwnerOnlySettingKey = (key: string): boolean =>
   OWNER_ONLY_SETTING_KEYS.includes(key as SettingKey);
+
+/**
+ * Keys that decide when the host updates itself and its agent CLIs: whoever may manage the host
+ * (`HOST_MANAGEMENT`) writes them. Otherwise a device refused "Update host" could still switch on
+ * the automatic install and have the host do it anyway.
+ */
+export const MANAGER_SETTING_KEYS: readonly SettingKey[] = [
+  SettingKey.UPDATE_CHECK,
+  SettingKey.UPDATE_AUTO_APPLY,
+  SettingKey.AGENT_CLI_AUTO_UPDATE,
+  SettingKey.AGENT_CLI_CHECK_INTERVAL,
+];
+
+export const isManagerSettingKey = (key: string): boolean =>
+  MANAGER_SETTING_KEYS.includes(key as SettingKey);
 
 export const isValidSettingKey = (key: string): key is SettingKey => {
   return VALID_KEYS.includes(key as SettingKey);
@@ -208,6 +236,11 @@ const VALUE_RULES: readonly {
     keys: [SettingKey.LIVE_VIEW],
     valid: (value) => LiveViewModeSchema.safeParse(value).success,
     message: (key) => `${key} must be "off", "remote" or "always"`,
+  },
+  {
+    keys: [SettingKey.HOST_MANAGEMENT],
+    valid: (value) => HostManagementSchema.safeParse(value).success,
+    message: (key) => `${key} must be "devices" or "owner"`,
   },
   {
     keys: [SettingKey.DEFAULT_RUNTIME],

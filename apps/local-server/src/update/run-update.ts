@@ -21,6 +21,10 @@ export interface RunUpdateInput {
  */
 export const runUpdate = async (input: RunUpdateInput): Promise<number> => {
   const { buildVersion, print, env = process.env } = input;
+  if (!input.checkOnly && env.AOP_CHAT_SESSION_ID?.trim()) {
+    print(AGENT_REFUSAL);
+    return 1;
+  }
   if (!buildVersion?.trim()) {
     print(selfUpdateRefusal("source", input.execPath));
     return 1;
@@ -47,6 +51,11 @@ export const runUpdate = async (input: RunUpdateInput): Promise<number> => {
     return 1;
   }
 };
+
+// The host sets AOP_CHAT_SESSION_ID in every agent turn. Updating restarts the host that runs the
+// turn, so an agent leaves it to the person; the host's own update run starts without it
+// (spawn-updater.ts).
+const AGENT_REFUSAL = `An agent can't update the host it runs on: the restart would cut its own turn. Ask the person to use Update host in AOP, or to run \`${buildChannel().binaryName} update\` in a terminal on the host.`;
 
 const printCheck = async (
   current: string,

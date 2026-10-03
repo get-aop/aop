@@ -14,8 +14,9 @@ import { systemPlanInput } from "./system.ts";
  */
 export const startUpdaterProcess = async (
   layout: InstallLayout,
-  env: NodeJS.ProcessEnv = process.env,
+  hostEnv: NodeJS.ProcessEnv = process.env,
 ): Promise<void> => {
+  const env = updaterEnv(hostEnv);
   const logPath = join(aopPaths.logs(), "update.log");
   mkdirSync(aopPaths.logs(), { recursive: true });
   const plan = await detectRestartPlan({ ...systemPlanInput(env), layout });
@@ -58,3 +59,10 @@ const systemdRunCommand = (
   layout.binaryPath,
   "update",
 ];
+
+// A host started from an agent's shell (a test stack) inherits the turn's session id; the update
+// run is the host's own, not the agent's, and `aop update` refuses one (run-update.ts).
+export const updaterEnv = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const { AOP_CHAT_SESSION_ID: _session, ...rest } = env;
+  return rest;
+};

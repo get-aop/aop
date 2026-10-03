@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { AGENT_SESSION_HEADER, type HostManagement } from "@aop/common";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { Kysely } from "kysely";
@@ -15,6 +16,7 @@ describe("createApiAuth", () => {
   let db: Kysely<Database>;
   let auth: AuthService;
   let app: Hono<AuthEnv>;
+  let management: HostManagement;
   let reached: string[];
 
   const pair = async (name = "Work Mac") => {
@@ -30,7 +32,11 @@ describe("createApiAuth", () => {
     auth = createAuthService({ deviceRepository: createDeviceRepository(db) });
     reached = [];
     app = new Hono<AuthEnv>();
-    app.use("/api/*", createApiAuth(auth));
+    management = "devices";
+    app.use(
+      "/api/*",
+      createApiAuth(auth, async () => management),
+    );
     app.get("/api/stream", (c) =>
       streamSSE(c, async (stream) => {
         await stream.writeSSE({ event: "hello", data: "connected" });
@@ -205,9 +211,9 @@ describe("createApiAuth", () => {
       const { token } = await pair();
       const authorization = `Bearer ${token}`;
       const hostOnly = [
-        ["POST", "/api/auth/pairing-codes"],
-        ["GET", "/api/auth/devices"],
-        ["DELETE", "/api/auth/devices/some-device"],
+        ["PUT", "/api/settings/host_management"],
+        ["PUT", "/api/settings/agent_cli_skip_permissions"],
+        ["POST", "/api/mcp-secret/rotate"],
       ] as const;
 
       for (const [method, path] of hostOnly) {
@@ -231,8 +237,47 @@ describe("createApiAuth", () => {
       }
     });
 
-    test("a trailing slash does not step around a host-only route", async () => {
+    test("manager routes follow host_management: devices by default, the owner only when narrowed", async () => {
       const { token } = await pair();
+      const asDevice = () =>
+        app.request(
+          `${BASE}/api/auth/devices`,
+          { headers: { authorization: `Bearer ${token}` } },
+          REMOTE_PEER,
+        );
+
+      expect((await asDevice()).status).toBe(200);
+      management = "owner";
+      const refused = await asDevice();
+      expect(refused.status).toBe(403);
+      expect(((await refused.json()) as { code: string }).code).toBe("HOST_ONLY");
+      const asOwner = await app.request(
+        "http://127.0.0.1:25150/api/auth/devices",
+        {},
+        LOOPBACK_PEER,
+      );
+      expect(asOwner.status).toBe(200);
+    });
+
+    test("an agent's request is refused manager and owner routes, and nothing else", async () => {
+      const agent = { [AGENT_SESSION_HEADER]: "session-1" };
+      const ask = (method: string, path: string) =>
+        app.request(`http://127.0.0.1:25150${path}`, { method, headers: agent }, LOOPBACK_PEER);
+
+      for (const [method, path] of [
+        ["POST", "/api/updates/apply"],
+        ["PUT", "/api/settings/host_management"],
+      ] as const) {
+        const res = await ask(method, path);
+        expect({ path, status: res.status }).toEqual({ path, status: 403 });
+        expect(((await res.json()) as { code: string }).code).toBe("AGENT_REFUSED");
+      }
+      expect((await ask("GET", "/api/updates")).status).toBe(200);
+    });
+
+    test("a trailing slash does not step around a guarded route", async () => {
+      const { token } = await pair();
+      management = "owner";
 
       const res = await app.request(
         `${BASE}/api/auth/devices/`,

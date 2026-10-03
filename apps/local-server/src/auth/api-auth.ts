@@ -1,22 +1,27 @@
-import type { AuthPrincipal } from "@aop/common";
+import type { AuthPrincipal, HostManagement } from "@aop/common";
 import { getLogger } from "@aop/infra";
 import type { Context, MiddlewareHandler } from "hono";
 import { bearerTokenOf, readSessionCookie } from "./credentials.ts";
+import { accessRefusal, type HostCaller, isAgentRequest } from "./host-management.ts";
 import { isDirectLocalRequest } from "./local-request.ts";
-import { routeAccess } from "./route-policy.ts";
+import { type RouteAccess, routeAccess } from "./route-policy.ts";
 import type { AuthService } from "./service.ts";
 
 const logger = getLogger("auth");
 
-export type AuthEnv = { Variables: { principal: AuthPrincipal } };
+export type AuthEnv = { Variables: { principal: AuthPrincipal; caller: HostCaller } };
 
 /**
  * Puts every `/api/*` route behind authentication unless `route-policy.ts` says otherwise.
  * A caller is the host owner (a direct request on the host machine, see `local-request.ts`)
  * or a device presenting its bearer token or session cookie. A revoked token stops matching
- * on the next request, and streams the device already holds open are closed.
+ * on the next request, and streams the device already holds open are closed. `hostManagement`
+ * reads who may manage the host, for the `manager` routes.
  */
-export const createApiAuth = (auth: AuthService): MiddlewareHandler<AuthEnv> => {
+export const createApiAuth = (
+  auth: AuthService,
+  hostManagement: () => Promise<HostManagement>,
+): MiddlewareHandler<AuthEnv> => {
   return async (c, next) => {
     const access = routeAccess(c.req.method, c.req.path);
     if (access === "public") return next();
@@ -31,15 +36,25 @@ export const createApiAuth = (auth: AuthService): MiddlewareHandler<AuthEnv> => 
         "WWW-Authenticate": "Bearer",
       });
     }
-    if (access === "owner" && principal.kind !== "owner") {
-      return c.json({ error: "Only available on the host machine", code: "HOST_ONLY" }, 403);
-    }
+    const caller: HostCaller = { kind: principal.kind, agent: isAgentRequest(c) };
+    const refusal = await guardRefusal(access, caller, hostManagement);
+    if (refusal) return c.json(refusal, 403);
 
     c.set("principal", principal);
+    c.set("caller", caller);
     await next();
     if (principal.kind === "device") closeStreamOnRevoke(c, auth, principal.device.id);
   };
 };
+
+const guardRefusal = (
+  access: RouteAccess,
+  caller: HostCaller,
+  hostManagement: () => Promise<HostManagement>,
+) =>
+  access === "owner" || access === "manager"
+    ? accessRefusal(access, caller, hostManagement)
+    : Promise.resolve(null);
 
 const resolvePrincipal = async (c: Context, auth: AuthService): Promise<AuthPrincipal | null> => {
   // Checked first: a stale cookie on the host's own dashboard must not lock the owner out.

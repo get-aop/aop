@@ -182,13 +182,31 @@ export type {
   SwitchSessionGitBranchResult,
 } from "./types/session-git.ts";
 export type { SSEServerStatus } from "./types/sse-events.ts";
-export type { ReleaseAsset, ReleaseInfo, UpdateStatus } from "./updates.ts";
+export type {
+  ApplyUpdateRequest,
+  HostManagement,
+  HostRestart,
+  QueuedUpdate,
+  ReleaseAsset,
+  ReleaseInfo,
+  RunningTurn,
+  UpdateStatus,
+} from "./updates.ts";
 export {
+  ApplyUpdateRequestSchema,
+  DEFAULT_HOST_MANAGEMENT,
   GITHUB_API_URL,
   GithubReleaseSchema,
+  HostManagementSchema,
+  HostRestartSchema,
   latestReleaseApiUrl,
+  mayManageHost,
   parseGithubRelease,
+  parseHostManagement,
+  QUEUED_UPDATE_MAX_WAIT_MS,
+  QueuedUpdateSchema,
   RELEASE_REPO,
+  RunningTurnSchema,
   UpdateStatusSchema,
 } from "./updates.ts";
 export {
