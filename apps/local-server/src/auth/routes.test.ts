@@ -300,11 +300,13 @@ describe("auth routes", () => {
 
       const { devices } = (await (await local("/api/auth/devices")).json()) as AnyJson;
 
+      // Both paired within one millisecond, so the list's order between them is not fixed.
+      const byName = [...devices].sort((a: AnyJson, b: AnyJson) => a.name.localeCompare(b.name));
       expect(
-        devices.map((device: AnyJson) => [device.name, device.client, device.outOfDate]),
+        byName.map((device: AnyJson) => [device.name, device.client, device.outOfDate]),
       ).toEqual([
-        ["Work Mac", { app: "desktop", version: "0.10.8", platform: "darwin" }, false],
         ["Chrome on Linux", { app: "browser", version: null, platform: "linux" }, false],
+        ["Work Mac", { app: "desktop", version: "0.10.8", platform: "darwin" }, false],
       ]);
     });
 
@@ -389,6 +391,7 @@ describe("auth routes", () => {
       const manager = [
         "POST /api/auth/pairing-codes",
         "DELETE /api/auth/devices/:id",
+        "POST /api/host/setup/:id/fix",
         "POST /api/updates/apply",
         "DELETE /api/updates/apply",
         "POST /api/updates/check",
