@@ -58,8 +58,9 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
 /**
  * An agent's reply: blocks on the left, no bubble. The same row draws a reply while it is being
  * written (`writing`) and once its message has arrived, so the reply goes on in place: prose that
- * arrives is typed out, and what is left when the turn ends is typed out quickly, not dropped in. A reply whose run failed is drawn as an error, so what the
- * runtime said is not read as the agent's answer.
+ * arrives is typed out, and what is left when the turn ends is typed out quickly, not dropped in.
+ * A reply whose run failed is drawn as an error, so what the runtime said is not read as the
+ * agent's answer.
  */
 export const AssistantRow = memo(function AssistantRow({
   message,
