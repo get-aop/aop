@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   CHANNELS,
+  CUA_DRIVER_VERSION,
   describeReleaseFile,
   latestReleaseApiUrl,
   parseReleaseChannel,
@@ -39,6 +40,11 @@ export interface FeedInput {
   channel?: ReleaseChannel;
   /** The commit the build was made from. */
   commit?: string;
+  /**
+   * The CUA Driver version the release pins; this checkout's `CUA_DRIVER_VERSION`, which is the
+   * release's own. A fake feed names another to show a host update that brings a new driver.
+   */
+  cuaDriver?: string;
 }
 
 /**
@@ -59,11 +65,27 @@ export interface FeedDocuments {
  */
 export const buildReleaseFeed = async (input: FeedInput): Promise<ReleaseFeed> => {
   const origin = (input.origin ?? RELEASE_FEED_ORIGIN).replace(/\/+$/, "");
-  const checksums = await Bun.file(join(input.releaseDir, CHECKSUMS_NAME)).text();
-  const listed = parseChecksums(checksums);
+  return {
+    schemaVersion: 1,
+    version: input.version,
+    publishedAt: input.publishedAt,
+    notes: input.notes,
+    notesUrl: releaseNotesUrl(input.version, origin),
+    files: await describeReleaseFiles(input.releaseDir, `${origin}/v${input.version}`),
+    cuaDriver: input.cuaDriver ?? CUA_DRIVER_VERSION,
+    ...(input.commit ? { commit: input.commit } : {}),
+    ...(input.channel === "nightly" ? { channel: "nightly" } : {}),
+  };
+};
+
+const describeReleaseFiles = async (
+  releaseDir: string,
+  versionedBase: string,
+): Promise<ReleaseFeedFile[]> => {
+  const listed = parseChecksums(await Bun.file(join(releaseDir, CHECKSUMS_NAME)).text());
   const files: ReleaseFeedFile[] = [];
   for (const name of [...RELEASE_CHECKSUM_ARTIFACTS, CHECKSUMS_NAME]) {
-    const file = Bun.file(join(input.releaseDir, name));
+    const file = Bun.file(join(releaseDir, name));
     if (!(await file.exists())) continue;
     const sha256 = await sha256Of(file);
     const expected = name === CHECKSUMS_NAME ? sha256 : listed.get(name);
@@ -73,21 +95,12 @@ export const buildReleaseFeed = async (input: FeedInput): Promise<ReleaseFeed> =
     files.push({
       name,
       ...describeReleaseFile(name),
-      url: `${origin}/v${input.version}/${name}`,
+      url: `${versionedBase}/${name}`,
       sha256,
       size: file.size,
     });
   }
-  return {
-    schemaVersion: 1,
-    version: input.version,
-    publishedAt: input.publishedAt,
-    notes: input.notes,
-    notesUrl: releaseNotesUrl(input.version, origin),
-    files,
-    ...(input.commit ? { commit: input.commit } : {}),
-    ...(input.channel === "nightly" ? { channel: "nightly" } : {}),
-  };
+  return files;
 };
 
 /** The feed and the documents derived from it, ready to upload under their keys. */

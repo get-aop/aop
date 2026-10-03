@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseGithubRelease, parseReleaseFeed, ReleaseFeedSchema } from "@aop/common";
+import {
+  CUA_DRIVER_VERSION,
+  parseGithubRelease,
+  parseReleaseFeed,
+  ReleaseFeedSchema,
+} from "@aop/common";
 import { generateReleaseChecksums } from "./checksums.ts";
 import { writeLatestMacYml } from "./macos-updater.ts";
 import {
@@ -64,6 +69,10 @@ describe("buildReleaseFeed", () => {
 
     expect(ReleaseFeedSchema.parse(feed)).toEqual(feed);
     expect(feed.version).toBe("0.10.5");
+    expect(feed.cuaDriver).toBe(CUA_DRIVER_VERSION);
+    expect((await buildReleaseFeed({ ...input(dir), cuaDriver: "0.33.0" })).cuaDriver).toBe(
+      "0.33.0",
+    );
     expect(feed.notesUrl).toBe(`${ORIGIN}/releases/v0.10.5.md`);
     expect(feed.files.map((file) => file.name).sort()).toEqual(
       [...ARTIFACTS, "checksums.sha256"].sort(),

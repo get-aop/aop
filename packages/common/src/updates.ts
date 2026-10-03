@@ -53,6 +53,8 @@ export interface ReleaseInfo {
   notes: string | null;
   /** Asset name to where it downloads from. */
   assets: Record<string, ReleaseAsset>;
+  /** The CUA Driver version the release pins, when its source says (the feed does, GitHub not). */
+  cuaDriver?: string;
 }
 
 /**
@@ -190,6 +192,16 @@ export const PreviousUpdateSchema = z.object({
   error: z.string().nullable(),
 });
 export type PreviousUpdate = z.infer<typeof PreviousUpdateSchema>;
+
+/**
+ * `GET /api/updates/log`: the end of the host's update log (`<data dir>/logs/update.log`), for
+ * "Show log" after a failed update. `lines` is empty when no update has run yet.
+ */
+export const UpdateLogSchema = z.object({
+  path: z.string(),
+  lines: z.array(z.string()),
+});
+export type UpdateLog = z.infer<typeof UpdateLogSchema>;
 
 /** When `POST /api/updates/apply` starts the update: at once, or once the running turns finish. */
 export const ApplyUpdateRequestSchema = z.object({
