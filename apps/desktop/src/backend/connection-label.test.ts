@@ -61,8 +61,10 @@ describe("hostShortName", () => {
   test("is the machine's name, this Mac's own host, or the address by number", () => {
     expect(hostShortName("https://soulf.tailffbdec.ts.net:25650")).toBe("soulf");
     expect(hostShortName("http://soulf:25650")).toBe("soulf");
-    expect(hostShortName("http://127.0.0.1:25150")).toBe("This Mac");
-    expect(hostShortName("http://localhost:25150")).toBe("This Mac");
+    // macOS calls it This Mac; elsewhere it is This computer.
+    const own = process.platform === "darwin" ? "This Mac" : "This computer";
+    expect(hostShortName("http://127.0.0.1:25150")).toBe(own);
+    expect(hostShortName("http://localhost:25150")).toBe(own);
     expect(hostShortName("http://100.64.0.7:25650")).toBe("100.64.0.7");
     expect(hostShortName("not a url")).toBe("not a url");
   });

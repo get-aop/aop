@@ -43,7 +43,14 @@ export const App = ({ backend }: AppProps): ReactElement | null => {
           state={state}
           backend={backend}
           update={update}
-          onBack={hasHostToGoBackTo ? () => show(null) : null}
+          onBack={
+            hasHostToGoBackTo
+              ? () => {
+                  show(null);
+                  void backend.openDashboard();
+                }
+              : null
+          }
           onManageLocalHost={() => void backend.startHostMode()}
         />
       );

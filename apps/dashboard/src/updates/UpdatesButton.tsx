@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
 import { Spinner } from "@/ui/spinner";
 import { formatAgo } from "../projects/selectors";
 import { useNow } from "../projects/use-now";
-import { openSettingsDialog } from "../shell/dialog-store";
+import { openSettingsDialog, useDialogs } from "../shell/dialog-store";
 import { appUpdateBridge } from "./app-update-store";
 import { UpdateRow } from "./UpdateRow";
 import { newsSignature, type UpdateRowView } from "./update-rows";
@@ -24,7 +24,13 @@ export const UpdatesButton = () => {
   const { host, rows, checking } = useUpdateRows({ poll: true });
   const open = usePopoverOpen();
   const [seen, setSeen] = useState(readSeen);
+  const settingsOpen = useDialogs().settings.open;
   useMenuOpensPopover();
+
+  // AOP settings opening from anywhere (the desktop menu's Host Setup…) takes the popover's place.
+  useEffect(() => {
+    if (settingsOpen) setPopoverOpen(false);
+  }, [settingsOpen]);
 
   const news = newsSignature(rows);
   const hostUpdating = rows.some((row) => row.id === "host" && row.status === "Updating host…");

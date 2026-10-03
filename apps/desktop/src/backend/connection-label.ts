@@ -33,7 +33,7 @@ export const windowTitle = (
 /**
  * The name a person calls their host: the machine's name, `soulf` for
  * `https://soulf.tailffbdec.ts.net:25650`. An address by number stays as it is, and this
- * computer's own address is "This Mac" (host mode).
+ * computer's own address is "This Mac" (host mode), or "This computer" off macOS.
  */
 export const hostShortName = (hostUrl: string): string => {
   let hostname: string;
@@ -42,12 +42,17 @@ export const hostShortName = (hostUrl: string): string => {
   } catch {
     return hostUrl;
   }
-  if (LOOPBACK.has(hostname)) return "This Mac";
+  if (LOOPBACK.has(hostname)) return onMac() ? "This Mac" : "This computer";
   if (/^[\d.]+$/.test(hostname) || hostname.includes(":")) return hostname;
   return hostname.split(".")[0] || hostname;
 };
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+// Read in the main process (Node) and in the app's own screens (a browser page) alike.
+const onMac = (): boolean =>
+  (globalThis as { process?: { platform?: string } }).process?.platform === "darwin" ||
+  /Macintosh|Mac OS X/.test(globalThis.navigator?.userAgent ?? "");
 
 /** The host's name and port, without the scheme: what a person recognises their host by. */
 export const hostName = (hostUrl: string): string => {

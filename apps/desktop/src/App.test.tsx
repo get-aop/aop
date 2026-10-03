@@ -37,6 +37,16 @@ describe("the app's address decides the screen", () => {
     expect(windows.view.getByTestId("connect-screen")).toBeDefined();
   });
 
+  test("Change Host's Back returns to the dashboard of the host it has", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    window.location.hash = "#/connect";
+    const app = await showApp(remote({ status: "connected", host: HOST, hostVersion: "0.10.7" }));
+
+    fireEvent.click(app.view.getByTestId("connect-back"));
+
+    expect(app.backend.openDashboard).toHaveBeenCalledTimes(1);
+  });
+
   test("stops listening for pushed state when the window goes away", async () => {
     const { view, listenerCount } = await showApp();
     expect(listenerCount()).toBe(1);
