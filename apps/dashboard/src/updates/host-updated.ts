@@ -33,7 +33,9 @@ export const useHostUpdatedToast = (): void => {
       if (!updated) return;
       const host = updated.hostName ? `Host ${updated.hostName}` : "The host";
       const { releaseUrl } = updated;
+      // Long enough to be seen after the reload, which lands while the person looks elsewhere.
       toast.success(`${host} updated to ${updated.version}`, {
+        duration: 15_000,
         action: releaseUrl
           ? { label: "Release notes", onClick: () => openExternalUrl(releaseUrl) }
           : undefined,

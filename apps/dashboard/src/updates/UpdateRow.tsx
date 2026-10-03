@@ -46,7 +46,10 @@ export const UpdateRow = ({ row, compact = false }: { row: UpdateRowView; compac
         ) : null}
       </p>
       {row.note ? (
-        <p data-testid="update-row-note" className="text-[12px] leading-relaxed text-text-muted">
+        <p
+          data-testid="update-row-note"
+          className="text-[12px] leading-relaxed break-words text-text-muted [overflow-wrap:anywhere]"
+        >
           <WithCode text={row.note} />
         </p>
       ) : null}
