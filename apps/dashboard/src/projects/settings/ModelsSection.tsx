@@ -1,15 +1,17 @@
-import {
-  formatRuntimeModelLabel,
-  getDefaultRuntimeModel,
-  getRuntimeModelOptions,
-  getThinkingOptions,
-  type Project,
-  type ReportedRuntime,
-  type RuntimePreference,
-} from "@aop/common";
+import type { Project, ReportedRuntime } from "@aop/common";
 import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
-import { defaultEffortLabel, defaultModelLabel } from "../chat/runtime-options";
+import { useRuntimeConfiguration } from "../../hooks/runtime-configuration";
+import {
+  changeModel,
+  changeRuntime,
+  defaultEffortLabel,
+  defaultModelLabel,
+  effortOptions,
+  type ModelOption,
+  modelOptions,
+} from "../chat/runtime-options";
+import { RuntimeNotReady, RuntimeSelect } from "../RuntimeSelect";
 import { ROW_SELECT_CLASS, SettingRow, SettingsGroup } from "./blocks";
 import { type AutosaveSettings, useSettingsAutosave } from "./use-settings-autosave";
 
@@ -17,56 +19,98 @@ import { type AutosaveSettings, useSettingsAutosave } from "./use-settings-autos
 const USE_DEFAULT = "default";
 
 type Kind = "coordinator" | "thread";
+type Row = "runtime" | "model" | "effort";
 
-const ROLES: Record<Kind, { title: string; group: string; model: string; effort: string }> = {
+const ROLES: Record<
+  Kind,
+  { title: string; group: string; runtime: string; model: string; effort: string }
+> = {
   coordinator: {
     title: "Coordinator",
     group: "Coordinator",
+    runtime: "The command the coordinator runs on. A change applies from its next turn.",
     model: "Model for reading every message and deciding what to do.",
     effort: "It rarely needs much thinking, so a low effort keeps it quick.",
   },
   thread: {
     title: "Thread",
     group: "Threads",
+    runtime:
+      "The command new threads run on. A thread keeps the runtime it started on for its whole life.",
     model: "Model for new threads. A new thread starts on these and keeps them for its whole life.",
     effort: "Effort for new threads. A change here applies to the threads you start next.",
   },
 };
 
 /**
- * Model and effort for the coordinator and for the threads, a group each. The "use default"
- * choice reads "Default (Opus 5.5)" once a run of the role reported what Claude Code picked, and
- * plain "Default" before one has. Each choice saves as it is made.
+ * Runtime, model and effort for the coordinator and for the threads, a group each. The model and
+ * effort lists are the chosen runtime's, from the same source as the coordinator's chips. The
+ * "use default" choice reads "Default (Opus 5.5)" once a run of the role reported what the CLI
+ * picked, and plain "Default" before one has. Each choice saves as it is made.
  */
 export const ModelsSection = ({ project }: { project: Project }) => {
   const settings = useSettingsAutosave(project);
   const reported = project.reportedRuntime;
   return (
     <div data-testid="settings-models" className="flex flex-col gap-6">
-      <RolePickers kind="coordinator" settings={settings} reported={reported.coordinator} />
-      <RolePickers kind="thread" settings={settings} reported={reported.thread} />
+      <RolePickers
+        kind="coordinator"
+        project={project}
+        settings={settings}
+        reported={reported.coordinator}
+      />
+      <RolePickers kind="thread" project={project} settings={settings} reported={reported.thread} />
     </div>
   );
 };
 
 const RolePickers = ({
   kind,
+  project,
   settings,
   reported,
 }: {
   kind: Kind;
+  project: Project;
   settings: AutosaveSettings;
   reported: ReportedRuntime;
 }) => {
   const role = ROLES[kind];
+  const { providers } = useRuntimeConfiguration();
+  // What the person chose, else what the project runs on; a stored role always names its runtime.
   const preference = settings.value(kind);
-  const efforts = effortOptions(preference);
-  // Model and effort are one setting; the row the person last changed says when it is saved.
-  const [changed, setChanged] = useState<"model" | "effort">("model");
+  const current = { ...preference, runtimeId: preference.runtimeId ?? project[kind].runtimeId };
+  const { runtimeId } = current;
+  const options = modelOptions(runtimeId, providers);
+  const efforts = effortOptions(current, options);
+  // Runtime, model and effort are one setting; the row the person last changed says when it is saved.
+  const [changed, setChanged] = useState<Row>("model");
   const status = settings.state(kind);
 
   return (
     <SettingsGroup testId={`settings-${kind}-runtime`} title={role.group}>
+      <SettingRow
+        label="Runtime"
+        description={role.runtime}
+        htmlFor={`settings-${kind}-runtime-select`}
+        status={changed === "runtime" ? status : undefined}
+        below={
+          <RuntimeNotReady runtimeId={runtimeId} testId={`settings-${kind}-runtime-not-ready`} />
+        }
+        control={
+          <RuntimeSelect
+            id={`settings-${kind}-runtime-select`}
+            testId={`settings-${kind}-runtime-select`}
+            label={`${role.title} runtime`}
+            className={ROW_SELECT_CLASS}
+            value={runtimeId}
+            onChange={(next) => {
+              setChanged("runtime");
+              settings.set(kind, changeRuntime(current, next, providers));
+            }}
+          />
+        }
+      />
       <SettingRow
         label="Model"
         description={role.model}
@@ -74,10 +118,13 @@ const RolePickers = ({
         status={changed === "model" ? status : undefined}
         control={
           <Select
-            value={preference.model ?? USE_DEFAULT}
+            value={current.model ?? USE_DEFAULT}
             onValueChange={(model) => {
               setChanged("model");
-              settings.set(kind, changeModel(preference, model === USE_DEFAULT ? null : model));
+              settings.set(
+                kind,
+                changeModel(current, model === USE_DEFAULT ? null : model, options),
+              );
             }}
           >
             <SelectTrigger
@@ -89,10 +136,10 @@ const RolePickers = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={USE_DEFAULT}>{defaultModelLabel(reported)}</SelectItem>
-              {modelOptions(preference).map((model) => (
-                <SelectItem key={model} value={model}>
-                  {formatRuntimeModelLabel(model)}
+              <SelectItem value={USE_DEFAULT}>{defaultModelLabel(reported, options)}</SelectItem>
+              {withCurrent(options, current.model).map((option) => (
+                <SelectItem key={option.model} value={option.model}>
+                  {option.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -106,11 +153,11 @@ const RolePickers = ({
         status={changed === "effort" ? status : undefined}
         control={
           <Select
-            value={preference.effort ?? USE_DEFAULT}
+            value={current.effort ?? USE_DEFAULT}
             onValueChange={(effort) => {
               setChanged("effort");
               settings.set(kind, {
-                ...preference,
+                ...current,
                 effort: efforts.find((option) => option.value === effort)?.value ?? null,
               });
             }}
@@ -125,7 +172,7 @@ const RolePickers = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={USE_DEFAULT}>
-                {defaultEffortLabel(preference.provider, reported)}
+                {defaultEffortLabel(current.provider, reported)}
               </SelectItem>
               {efforts.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
@@ -140,20 +187,12 @@ const RolePickers = ({
   );
 };
 
-// A model the catalog does not list (set by hand or by another tool) stays selectable, so
+// A model the runtime does not list (set by hand or by another tool) stays selectable, so
 // opening the settings never shows something the project is not using.
-const modelOptions = ({ provider, model }: RuntimePreference): readonly string[] => {
-  const catalog = getRuntimeModelOptions(provider);
-  return model && !catalog.includes(model) ? [model, ...catalog] : catalog;
-};
-
-// Not every model accepts every effort level; "use default" is judged against the default model.
-const effortOptions = ({ provider, model }: RuntimePreference) =>
-  getThinkingOptions(provider, model ?? getDefaultRuntimeModel(provider, ""));
-
-/** A new model keeps the effort only if that model accepts it, otherwise the effort falls back to its default. */
-const changeModel = (preference: RuntimePreference, model: string | null): RuntimePreference => {
-  const next = { ...preference, model };
-  const accepted = effortOptions(next).some((option) => option.value === preference.effort);
-  return accepted ? next : { ...next, effort: null };
-};
+const withCurrent = (
+  options: readonly ModelOption[],
+  model: string | null,
+): readonly ModelOption[] =>
+  model && !options.some((option) => option.model === model)
+    ? [{ model, label: model, efforts: [], isDefault: false }, ...options]
+    : options;

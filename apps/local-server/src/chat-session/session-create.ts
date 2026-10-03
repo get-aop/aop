@@ -10,6 +10,7 @@ import {
 import { generateTypeId } from "@aop/infra";
 import type { LocalServerContext } from "../context.ts";
 import type { Repo } from "../db/schema.ts";
+import { readDefaultRuntimeId } from "../runtime-configuration/default-runtime.ts";
 import type { RuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { DEFAULT_EFFORT } from "./runtime-configuration-patch.ts";
 import { toSessionDto } from "./session-dto.ts";
@@ -31,7 +32,10 @@ export const createChatSession = async (
   if (!target.success) return target;
   ctx.sessionMutationLock.assertAllowed("create", { repoId: target.repo?.id ?? null });
 
-  const defaults = await resolveCreateSessionRuntimeDefaults(runtimeConfigurations);
+  const defaults = await resolveCreateSessionRuntimeDefaults(
+    runtimeConfigurations,
+    await readDefaultRuntimeId(ctx, runtimeConfigurations),
+  );
   const now = new Date().toISOString();
   const workspacePath = target.repo
     ? await resolveChatWorkspace(target.repo.path, null)
@@ -91,9 +95,13 @@ const resolveCreateSessionTarget = async (
 const firstModelFor = (runtime: CliProvider): string =>
   getRuntimeModelOptions(runtime)[0] ?? "default";
 
-/** Prefer the first ordered runtime configuration; fall back to Claude Code catalog defaults. */
+/**
+ * Prefer the host's default runtime, then the first ordered runtime configuration that can run;
+ * fall back to Claude Code catalog defaults.
+ */
 const resolveCreateSessionRuntimeDefaults = async (
   runtimeConfigurations: RuntimeConfigurationRepository,
+  defaultRuntimeId: string,
 ): Promise<{
   runtime: CliProvider;
   runtimeConfigurationId: string | null;
@@ -102,7 +110,11 @@ const resolveCreateSessionRuntimeDefaults = async (
   runtimeAlias: string | null;
   fastMode: boolean;
 }> => {
-  const preferred = firstPreferredRuntimeConfiguration(await runtimeConfigurations.list());
+  const configurations = await runtimeConfigurations.list();
+  const preferred = firstPreferredRuntimeConfiguration([
+    ...configurations.filter((configuration) => configuration.id === defaultRuntimeId),
+    ...configurations,
+  ]);
   if (!preferred) {
     return {
       runtime: DEFAULT_RUNTIME,

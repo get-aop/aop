@@ -1,6 +1,21 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { setupDashboardDom } from "../test/setup-dom";
+import { answerRuntimes, makeRuntime, makeStatus } from "./runtime-test-utils";
 import { makeProject, makeState, stubLiveProjects } from "./test-utils";
+
+const RUNTIMES = {
+  providers: [
+    makeRuntime("claude-code", "Claude Code", [{ model: "claude-opus-5-5" }]),
+    makeRuntime("rt_wrap", "Wrapper", [{ model: "glm-4.6" }]),
+    makeRuntime("rt_gone", "Missing", [{ model: "m" }]),
+  ],
+  statuses: [
+    makeStatus("claude-code"),
+    makeStatus("rt_wrap"),
+    makeStatus("rt_gone", "The command `/opt/bin/rt_gone` was not found on this host's PATH."),
+  ],
+  defaultRuntimeId: "rt_wrap",
+};
 
 setupDashboardDom();
 
@@ -11,6 +26,7 @@ const { announceRepoAttached, getDialogs, openNewProjectDialog, resetDialogs } =
   "../shell/dialog-store"
 );
 const { ProjectsProvider } = await import("./ProjectsProvider");
+const { RuntimeConfigurationProvider } = await import("../hooks/runtime-configuration");
 const { NewProjectDialog } = await import("./NewProjectDialog");
 
 const originalFetch = globalThis.fetch;
@@ -27,6 +43,12 @@ beforeEach(() => {
   globalThis.fetch = mock(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     if (url === "/api/status") return Response.json({ repos });
+    const runtimes = answerRuntimes(RUNTIMES)({
+      method: init?.method ?? "GET",
+      path: url.replace(/^\/api/, ""),
+      body: undefined,
+    });
+    if (runtimes) return runtimes;
     if (url === "/api/projects" && init?.method === "POST") {
       created.push({ method: "POST", url, body: JSON.parse(String(init.body)) });
       return createResponse();
@@ -44,9 +66,11 @@ afterEach(() => {
 const renderDialog = () => {
   const stub = stubLiveProjects(makeState([]));
   render(
-    <ProjectsProvider live={stub.live}>
-      <NewProjectDialog />
-    </ProjectsProvider>,
+    <RuntimeConfigurationProvider>
+      <ProjectsProvider live={stub.live}>
+        <NewProjectDialog />
+      </ProjectsProvider>
+    </RuntimeConfigurationProvider>,
   );
   act(() => openNewProjectDialog());
   return stub;
@@ -109,11 +133,44 @@ describe("NewProjectDialog", () => {
       goal: "Keep checkout fast",
       instructions: "Never touch the payments schema.",
       repoIds: ["repo_1"],
+      // No runtime picked: the host gives the project its default one.
+      coordinator: { provider: "claude-code", model: null, effort: "low" },
+      thread: { provider: "claude-code", model: null, effort: "high" },
       lookAround: true,
     });
     await waitFor(() => expect(getDialogs().newProject).toBe(false));
     expect(stub.calls.adopted.map((project) => project.id)).toEqual(["new"]);
     expect(window.location.pathname).toBe("/projects/new");
+  });
+
+  test("starts both roles on the host's default runtime, and sends the one picked for threads", async () => {
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByTestId("new-project-thread-runtime").textContent).toBe("Wrapper"),
+    );
+    expect(screen.getByTestId("new-project-coordinator-runtime").textContent).toBe("Wrapper");
+
+    const trigger = screen.getByTestId("new-project-thread-runtime");
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+    fireEvent.click(trigger);
+    const missing = await screen.findByTestId("new-project-thread-runtime-option-rt_gone");
+    expect(missing.getAttribute("data-disabled") !== null).toBe(true);
+    fireEvent.click(screen.getByRole("option", { name: "Claude Code" }));
+    type("new-project-name", "Checkout");
+    fireEvent.click(screen.getByTestId("new-project-submit"));
+
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(created[0]?.body.coordinator).toEqual({
+      provider: "claude-code",
+      model: null,
+      effort: "low",
+    });
+    expect(created[0]?.body.thread).toEqual({
+      provider: "claude-code",
+      runtimeId: "claude-code",
+      model: null,
+      effort: "high",
+    });
   });
 
   test("says a new project runs commands with full access, and that settings can change it", async () => {
@@ -138,6 +195,8 @@ describe("NewProjectDialog", () => {
       goal: "",
       instructions: "",
       repoIds: [],
+      coordinator: { provider: "claude-code", model: null, effort: "low" },
+      thread: { provider: "claude-code", model: null, effort: "high" },
       lookAround: true,
     });
   });

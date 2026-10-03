@@ -6,6 +6,7 @@ import type { Kysely } from "kysely";
 import { createChatSessionRepository } from "../chat-session/repository.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession, Database } from "../db/schema.ts";
+import { readDefaultRuntimeId } from "../runtime-configuration/default-runtime.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { resolveSessionRuntime, type SessionRuntime } from "./runtime.ts";
 
@@ -21,11 +22,17 @@ export const prepareCoordinatorWorkspace = async (projectId: string): Promise<st
   return realpath(workspace);
 };
 
-export const resolveCoordinatorRuntime = (
+export const resolveCoordinatorRuntime = async (
   ctx: LocalServerContext,
   preference: Project["coordinator"],
-): Promise<SessionRuntime> =>
-  resolveSessionRuntime(createRuntimeConfigurationRepository(ctx.db), preference);
+): Promise<SessionRuntime> => {
+  const configurations = createRuntimeConfigurationRepository(ctx.db);
+  return resolveSessionRuntime(
+    configurations,
+    preference,
+    await readDefaultRuntimeId(ctx, configurations),
+  );
+};
 
 export const insertCoordinatorSession = async (
   db: Kysely<Database>,

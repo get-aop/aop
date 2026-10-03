@@ -15,7 +15,12 @@ import { makeProject, rejectedPaths } from "./test-utils.ts";
 
 describe("ProjectSchema", () => {
   test("accepts a project, keeping null model and effort as use-default", () => {
-    const useDefaults = { provider: "claude-code" as const, model: null, effort: null };
+    const useDefaults = {
+      provider: "claude-code" as const,
+      runtimeId: "claude-code",
+      model: null,
+      effort: null,
+    };
     const project = ProjectSchema.parse(makeProject({ coordinator: useDefaults }));
     expect(project.coordinator).toEqual(useDefaults);
     expect(project.thread.model).toBe("claude-opus-5");
@@ -84,13 +89,25 @@ describe("ProjectSchema", () => {
 
   test("rejects a coordinator or thread runtime on a provider AOP does not drive", () => {
     for (const provider of ["codex-cli", "pi", "grok-build", "opencode"]) {
-      const coordinator = { provider, model: null, effort: null };
+      const coordinator = { provider, runtimeId: "claude-code", model: null, effort: null };
       expect(rejectedPaths(ProjectSchema, makeProject({ coordinator }))).toEqual([
         "coordinator.provider",
       ]);
     }
-    const thread = { provider: "claude-code", model: null, effort: "turbo" };
+    const thread = {
+      provider: "claude-code",
+      runtimeId: "claude-code",
+      model: null,
+      effort: "turbo",
+    };
     expect(rejectedPaths(ProjectSchema, makeProject({ thread }))).toEqual(["thread.effort"]);
+  });
+
+  test("a stored project always names the runtime each role runs on", () => {
+    const coordinator = { provider: "claude-code", model: null, effort: null };
+    expect(rejectedPaths(ProjectSchema, makeProject({ coordinator }))).toEqual([
+      "coordinator.runtimeId",
+    ]);
   });
 
   test("rejects attaching the same repo twice", () => {
@@ -120,6 +137,13 @@ describe("ProjectSettingsSchema", () => {
     const { id: _id, status: _status, createdAt: _c, updatedAt: _u, ...settings } = makeProject();
     expect(ProjectSettingsSchema.safeParse(settings).success).toBe(true);
   });
+
+  test("a role may leave its runtime out, for the host to fill in", () => {
+    const { id: _id, status: _status, createdAt: _c, updatedAt: _u, ...settings } = makeProject();
+    const coordinator = { provider: "claude-code", model: null, effort: "low" };
+    const result = ProjectSettingsSchema.safeParse({ ...settings, coordinator });
+    expect(result.success && result.data.coordinator.runtimeId).toBeUndefined();
+  });
 });
 
 describe("CreateProjectInputSchema", () => {
@@ -130,6 +154,7 @@ describe("CreateProjectInputSchema", () => {
       color: null,
       goal: "",
       instructions: "",
+      // No runtime named: the host gives a new project its default runtime.
       coordinator: { provider: "claude-code", model: null, effort: "low" },
       thread: { provider: "claude-code", model: null, effort: "high" },
       notificationLevel: "coordinator",

@@ -160,6 +160,8 @@ export {
   runtimeSupportsFastMode,
 } from "./types/runtime-configuration.ts";
 export type { RuntimeEventKind } from "./types/runtime-events.ts";
+export type { RuntimeAuthState, RuntimeStatus, RuntimeUsage } from "./types/runtime-status.ts";
+export { DefaultRuntimeInputSchema } from "./types/runtime-status.ts";
 export type {
   CreateSessionPrMode,
   CreateSessionPrResult,

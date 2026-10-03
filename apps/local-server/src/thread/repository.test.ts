@@ -63,7 +63,13 @@ describe("thread repository", () => {
       id: "t1",
       projectId: "p1",
       title: "t1",
-      runtime: { provider: "claude-code", model: "claude-opus-4-8", effort: "medium" },
+      // A session bound to no runtime configuration ran on the built-in one.
+      runtime: {
+        provider: "claude-code",
+        runtimeId: "claude-code",
+        model: "claude-opus-4-8",
+        effort: "medium",
+      },
       target: { kind: "host" },
       repoId: null,
       branch: null,

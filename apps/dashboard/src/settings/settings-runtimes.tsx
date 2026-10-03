@@ -1,340 +1,151 @@
-import type { RuntimeConfigurationModelInput } from "@aop/common";
-import {
-  describeFirstIssue,
-  type RuntimeConfigurationProvider,
-  RuntimeConfigurationProviderInputSchema,
-  type RuntimeDriver,
-} from "@aop/common";
-import { EllipsisIcon, PlusIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { BUILT_IN_RUNTIME_ID, type RuntimeConfigurationProvider } from "@aop/common";
+import { PlusIcon } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/ui/alert-dialog";
-import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/ui/dropdown-menu";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/ui/empty";
-import { Field, FieldDescription, FieldLabel } from "@/ui/field";
-import { Input } from "@/ui/input";
-import { RuntimeProviderIcon } from "@/ui/provider-icon";
-import { Textarea } from "@/ui/textarea";
 import { AgentCliPanel } from "../agent-clis/AgentCliPanel";
-import {
-  cloneRuntimeConfigurationProvider,
-  createRuntimeConfigurationModel,
-  createRuntimeConfigurationProvider,
-  deleteRuntimeConfigurationProvider,
-  getRuntimeConfiguration,
-  updateRuntimeConfigurationProvider,
-} from "../api/client";
+import { cloneRuntimeConfigurationProvider, setDefaultRuntime } from "../api/client";
 import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
+import { RuntimeNotReady, RuntimeSelect } from "../projects/RuntimeSelect";
+import {
+  draftOf,
+  emptyDraft,
+  RemoveRuntimeDialog,
+  type RuntimeDraft,
+  RuntimeEditDialog,
+} from "./settings-runtime-dialogs";
+import { RuntimeRow } from "./settings-runtime-row";
 
-/** Mirrors @aop/common SAFE_CUSTOM_RUNTIME_MODEL_PATTERN (not re-exported). */
-const SAFE_CUSTOM_RUNTIME_MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]{0,199}$/;
-
-interface RuntimeDraft {
-  id?: string;
-  name: string;
-  command: string;
-  driver: RuntimeDriver;
-  models: string;
-}
-
-const emptyDraft = (): RuntimeDraft => ({
-  name: "",
-  command: "",
-  driver: "claude-code",
-  models: "",
-});
-
-/** Settings §Runtimes — simplified: provider rows with model chips + add/clone/remove. */
+/**
+ * Settings §Runtimes: the agent CLIs the host has, then every runtime a project can run on (the
+ * built-in Claude Code and custom commands that speak its dialect) with what the host finds for
+ * each, and the default runtime new projects start on.
+ */
 export const SettingsRuntimes = () => {
-  const { refresh: refreshConfiguration } = useRuntimeConfiguration();
-  const [providers, setProviders] = useState<RuntimeConfigurationProvider[] | null>(null);
+  const { providers, defaultRuntimeId, statuses, refresh, refreshStatuses } =
+    useRuntimeConfiguration();
   const [draft, setDraft] = useState<RuntimeDraft | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<RuntimeConfigurationProvider | null>(null);
+  const [removing, setRemoving] = useState<RuntimeConfigurationProvider | null>(null);
+  const [checking, setChecking] = useState(false);
 
-  const reload = useCallback(async () => {
+  const checkAgain = async () => {
+    setChecking(true);
+    await refreshStatuses(true);
+    setChecking(false);
+  };
+
+  const clone = async (runtime: RuntimeConfigurationProvider) => {
     try {
-      setProviders(await getRuntimeConfiguration());
-    } catch {
-      setProviders([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  // Claude Code is the only built-in runtime and is fixed inside AOP; the settings page only
-  // manages custom commands that speak its dialect.
-  const customProviders = providers?.filter((provider) => !provider.builtIn) ?? null;
-
-  const parseModels = (modelsText: string): RuntimeConfigurationModelInput[] =>
-    modelsText
-      .split("\n")
-      .map((model) => model.trim())
-      .filter(Boolean)
-      .map((model) => {
-        if (!SAFE_CUSTOM_RUNTIME_MODEL_PATTERN.test(model)) {
-          throw new Error(`Model must be a valid identifier: ${model}`);
-        }
-        return { description: model, model, thinkingLevels: ["low", "medium", "high"] };
-      });
-
-  const persist = async (draftToSave: RuntimeDraft) => {
-    setSaving(true);
-    try {
-      const parsed = parseDraft(draftToSave);
-      if (parsed) await finishSave(draftToSave, parsed);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save the runtime");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const finishSave = async (
-    draftToSave: RuntimeDraft,
-    parsed: { name: string; command: string; driver: RuntimeDriver },
-  ) => {
-    await saveRuntime(draftToSave, parsed);
-    toast.success(draftToSave.id ? "Runtime updated" : "Runtime added");
-    setDraft(null);
-    await reload();
-    void refreshConfiguration();
-  };
-
-  const parseDraft = (
-    draftToSave: RuntimeDraft,
-  ): { name: string; command: string; driver: RuntimeDriver } | null => {
-    const parsed = RuntimeConfigurationProviderInputSchema.safeParse({
-      name: draftToSave.name,
-      command: draftToSave.command,
-      driver: draftToSave.driver,
-    });
-    if (!parsed.success) {
-      toast.error(describeFirstIssue(parsed.error.issues, "Invalid runtime"));
-      return null;
-    }
-    return parsed.data;
-  };
-
-  const saveRuntime = async (
-    draftToSave: RuntimeDraft,
-    input: { name: string; command: string; driver: RuntimeDriver },
-  ) => {
-    const models = parseModels(draftToSave.models);
-    if (draftToSave.id) {
-      await updateRuntimeConfigurationProvider(draftToSave.id, input);
-      return;
-    }
-    const provider = await createRuntimeConfigurationProvider(input);
-    for (const model of models) {
-      await createRuntimeConfigurationModel(provider.id, model);
-    }
-  };
-
-  const clone = async (provider: RuntimeConfigurationProvider) => {
-    try {
-      await cloneRuntimeConfigurationProvider(provider.id, {
-        name: `${provider.name} copy`,
-        command: provider.command,
-        driver: provider.driver,
+      await cloneRuntimeConfigurationProvider(runtime.id, {
+        name: `${runtime.name} copy`,
+        command: runtime.command,
+        driver: runtime.driver,
       });
       toast.success("Runtime cloned");
-      await reload();
-      void refreshConfiguration();
+      await refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not clone the runtime");
     }
   };
 
-  const remove = async (provider: RuntimeConfigurationProvider) => {
-    setDeleteTarget(null);
-    try {
-      await deleteRuntimeConfigurationProvider(provider.id);
-      toast.success("Runtime removed");
-      await reload();
-      void refreshConfiguration();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not remove the runtime");
-    }
-  };
+  // Removing the default moves its projects to the built-in runtime, which then becomes the default.
+  const moveTargetId = removing?.id === defaultRuntimeId ? BUILT_IN_RUNTIME_ID : defaultRuntimeId;
+  const moveTargetName =
+    providers.find((provider) => provider.id === moveTargetId)?.name ?? "the default runtime";
 
   return (
     <div data-testid="section-runtimes" className="flex flex-col gap-2 p-4">
       <AgentCliPanel />
       <div className="mt-4 flex items-center gap-2">
-        <h2 className="flex-1 text-[13px] font-semibold text-text">Custom runtimes</h2>
+        <h2 className="flex-1 text-[13px] font-semibold text-text">Runtimes</h2>
+        <Button
+          variant="ghost"
+          size="xs"
+          data-testid="runtimes-check"
+          disabled={checking}
+          onClick={() => void checkAgain()}
+        >
+          {checking ? "Checking…" : "Check again"}
+        </Button>
         <Button variant="secondary" size="sm" onClick={() => setDraft(emptyDraft())}>
           <PlusIcon className="size-3.5" />
           Add custom runtime
         </Button>
       </div>
       <p className="text-[12px] text-text-subtle">
-        Custom Claude Code commands (a wrapper or alias) and their model lists. Claude Code is the
-        only built-in runtime and is fixed inside AOP; effort and Fast remain usage-time choices in
-        the composer.
+        What a project's coordinator and threads run on: Claude Code, or a custom command that runs
+        it (a wrapper or alias) with its own models. Pick one per project in its settings › Models.
+        A runtime is ready when its command is on the host's PATH and it is not logged out.
       </p>
 
-      {customProviders === null ? (
+      <DefaultRuntimeRow defaultRuntimeId={defaultRuntimeId} onChanged={refresh} />
+
+      {providers.length === 0 ? (
         <p className="py-6 text-center text-[12px] text-text-subtle">Loading runtimes…</p>
-      ) : customProviders.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No custom runtimes</EmptyTitle>
-            <EmptyDescription>
-              Add a custom runtime to bind another Claude Code command.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
       ) : (
-        customProviders.map((provider) => (
-          <div
-            key={provider.id}
-            data-testid="runtime-row"
-            className="flex min-w-0 items-center gap-3 rounded-row border border-border bg-raised px-3 py-2"
-          >
-            <RuntimeProviderIcon runtime={provider.driver} className="size-5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-[13px] font-medium text-text">{provider.name}</span>
-              </div>
-              <div className="truncate font-mono text-[11px] text-text-subtle">
-                {provider.command}
-              </div>
-            </div>
-            <div className="hidden max-w-56 flex-wrap justify-end gap-1 md:flex">
-              {provider.models.slice(0, 4).map((model) => (
-                <Badge key={model.id} variant="tag">
-                  {model.model}
-                </Badge>
-              ))}
-              {provider.models.length > 4 ? (
-                <Badge variant="tag">+{provider.models.length - 4}</Badge>
-              ) : null}
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={`Actions for ${provider.name}`}
-                  className="grid size-6 shrink-0 place-items-center rounded text-text-subtle transition-colors duration-[120ms] hover:bg-hover hover:text-text"
-                >
-                  <EllipsisIcon className="size-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onSelect={() =>
-                    setDraft({
-                      id: provider.id,
-                      name: provider.name,
-                      command: provider.command,
-                      driver: provider.driver,
-                      models: provider.models.map((m) => m.model).join("\n"),
-                    })
-                  }
-                >
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void clone(provider)}>Clone</DropdownMenuItem>
-                <DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(provider)}>
-                  Remove
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+        providers.map((runtime) => (
+          <RuntimeRow
+            key={runtime.id}
+            runtime={runtime}
+            status={statuses?.[runtime.id]}
+            isDefault={runtime.id === defaultRuntimeId}
+            onEdit={() => setDraft(draftOf(runtime))}
+            onClone={() => void clone(runtime)}
+            onRemove={() => setRemoving(runtime)}
+          />
         ))
       )}
 
-      <Dialog open={draft !== null} onOpenChange={(open) => !open && setDraft(null)}>
-        <DialogContent className="w-[480px]">
-          <DialogHeader>
-            <DialogTitle>{draft?.id ? "Edit runtime" : "Add custom runtime"}</DialogTitle>
-          </DialogHeader>
-          {draft ? (
-            <div className="flex flex-col gap-3">
-              <Field>
-                <FieldLabel htmlFor="runtime-name">Name</FieldLabel>
-                <Input
-                  id="runtime-name"
-                  value={draft.name}
-                  onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="runtime-command">Command</FieldLabel>
-                <Input
-                  id="runtime-command"
-                  value={draft.command}
-                  onChange={(event) => setDraft({ ...draft, command: event.target.value })}
-                />
-                <FieldDescription>A single executable token (e.g. claude).</FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="runtime-models">Models</FieldLabel>
-                <Textarea
-                  id="runtime-models"
-                  rows={4}
-                  value={draft.models}
-                  onChange={(event) => setDraft({ ...draft, models: event.target.value })}
-                  placeholder={"one model id per line"}
-                />
-                <FieldDescription>One model identifier per line.</FieldDescription>
-              </Field>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setDraft(null)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              disabled={saving || !draft}
-              onClick={() => draft && void persist(draft)}
-            >
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RuntimeEditDialog draft={draft} onDraft={setDraft} onSaved={refresh} />
+      <RemoveRuntimeDialog
+        runtime={removing}
+        moveTargetName={moveTargetName}
+        onClose={() => setRemoving(null)}
+        onRemoved={refresh}
+      />
+    </div>
+  );
+};
 
-      <AlertDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
-        <AlertDialogContent className="w-[512px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove runtime?</AlertDialogTitle>
-            <AlertDialogDescription>
-              “{deleteTarget?.name}” will be removed from the runtime catalog.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteTarget && void remove(deleteTarget)}>
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+const DefaultRuntimeRow = ({
+  defaultRuntimeId,
+  onChanged,
+}: {
+  defaultRuntimeId: string;
+  onChanged: () => Promise<void>;
+}) => {
+  const choose = async (runtimeId: string) => {
+    try {
+      await setDefaultRuntime(runtimeId);
+      await onChanged();
+      toast.success("Default runtime changed");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not change the default runtime");
+    }
+  };
+  return (
+    <div
+      data-testid="default-runtime"
+      className="flex flex-col gap-2 rounded-row border border-border bg-raised px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <label htmlFor="default-runtime-select" className="text-[13px] font-medium text-text">
+          Default runtime
+        </label>
+        <span className="text-[12px] text-text-subtle">
+          New projects start on it, for the coordinator and for threads. Existing projects keep
+          theirs.
+        </span>
+        <RuntimeNotReady runtimeId={defaultRuntimeId} testId="default-runtime-not-ready" />
+      </div>
+      <RuntimeSelect
+        id="default-runtime-select"
+        testId="default-runtime-select"
+        label="Default runtime"
+        className="w-full sm:w-56"
+        value={defaultRuntimeId}
+        onChange={(runtimeId) => void choose(runtimeId)}
+      />
     </div>
   );
 };

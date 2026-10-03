@@ -14,6 +14,23 @@ Install and authenticate Claude Code on the machine that hosts AOP before you us
 
 Each adapter launches a detached process, ingests its JSONL events, and persists the runtime session id when the CLI reports one, so a later turn can resume the same conversation. Detached processes keep running when the browser closes.
 
+## Custom runtimes and choosing one
+
+AOP settings › Runtimes lists every runtime a project can run on. The built-in **Claude Code** runs `claude`. **Add custom runtime** adds another command that runs Claude Code (a wrapper or alias, say `cpe`, or a full path) with its own model list; its driver is always `claude-code` in Phase 1. Each row shows what the host finds for the runtime, looked at again every minute or with **Check again**:
+
+- **Found** or **Not found**: whether the command is on the host's PATH, where a turn would look for it.
+- **Version**: what `<command> --version` prints.
+- **Logged in**, **Not logged in** or **Login unknown**: what `<command> auth status` says. A wrapper that does not answer leaves it unknown, which does not stop it from running.
+
+A runtime is **ready** when its command is found, it is not logged out, and it has at least one model. Only ready runtimes can be picked; the others are listed with the reason.
+
+- **Default runtime** (the setting `default_runtime_id`, `claude-code` by default) is what new projects start on, for the coordinator and for threads. Changing it does not move existing projects.
+- **Per project.** Project settings › Models has a Runtime picker for the coordinator and for threads, above Model and Effort, and the New project dialog has one per role. The model and effort lists follow the runtime. The coordinator's chips show its runtime and switch it; a change applies from its next turn. A thread keeps the runtime it started on for its whole life.
+- **When a runtime cannot run.** A turn on a runtime whose command is missing or logged out ends at once with the reason in the chat or thread, instead of hanging or failing to spawn. If the runtime a project names is gone, the role runs on the default runtime, then on the built-in one.
+- **Removing one.** A runtime that projects name, or that open threads run on, is not removed as is: the dialog lists them and offers to move them to the default runtime first.
+
+[Choosing a runtime](./architecture/runtime-choice.md) has the storage, the resolution order, the readiness check and the API.
+
 ## Reasoning effort and Fast mode
 
 Reasoning effort runs from Low to Max where the runtime and model support it. Provider labels differ: Codex-family selections use Light through Ultra, and Claude labels Extra-High as Extra. Fast mode is available only where the runtime and model support it. The dashboard shows only the controls the selected model supports.

@@ -25,7 +25,12 @@ describe("the coordinator's model and effort", () => {
     setup({
       project: makeProject({
         id: "prj_1",
-        coordinator: { provider: "claude-code", model: "claude-opus-5", effort: "high" },
+        coordinator: {
+          provider: "claude-code",
+          runtimeId: "claude-code",
+          model: "claude-opus-5",
+          effort: "high",
+        },
       }),
     });
     await settled();
@@ -50,7 +55,14 @@ describe("the coordinator's model and effort", () => {
     expect(net.requests.at(-1)).toEqual({
       method: "PATCH",
       url: "/api/projects/prj_1",
-      body: { coordinator: { provider: "claude-code", model: "claude-opus-5", effort: "low" } },
+      body: {
+        coordinator: {
+          provider: "claude-code",
+          runtimeId: "claude-code",
+          model: "claude-opus-5",
+          effort: "low",
+        },
+      },
     });
     expect(stub.calls.adopted.at(-1)?.coordinator.model).toBe("claude-opus-5");
   });
@@ -65,14 +77,19 @@ describe("the coordinator's model and effort", () => {
     fireEvent.click(await screen.findByTestId("coordinator-effort-high"));
     await settled();
     expect(net.requests.at(-1)?.body).toEqual({
-      coordinator: { provider: "claude-code", model: null, effort: "high" },
+      coordinator: {
+        provider: "claude-code",
+        runtimeId: "claude-code",
+        model: null,
+        effort: "high",
+      },
     });
 
     fireEvent.pointerDown(screen.getByTestId("coordinator-effort"), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByTestId("coordinator-effort-default"));
     await settled();
     expect(net.requests.at(-1)?.body).toEqual({
-      coordinator: { provider: "claude-code", model: null, effort: null },
+      coordinator: { provider: "claude-code", runtimeId: "claude-code", model: null, effort: null },
     });
   });
 
@@ -80,7 +97,12 @@ describe("the coordinator's model and effort", () => {
     setup({
       project: makeProject({
         id: "prj_1",
-        coordinator: { provider: "claude-code", model: null, effort: null },
+        coordinator: {
+          provider: "claude-code",
+          runtimeId: "claude-code",
+          model: null,
+          effort: null,
+        },
         reportedRuntime: {
           coordinator: { model: "claude-opus-5-5", effort: null },
           thread: { model: null, effort: null },
@@ -101,7 +123,12 @@ describe("the coordinator's model and effort", () => {
     setup({
       project: makeProject({
         id: "prj_1",
-        coordinator: { provider: "claude-code", model: null, effort: null },
+        coordinator: {
+          provider: "claude-code",
+          runtimeId: "claude-code",
+          model: null,
+          effort: null,
+        },
       }),
     });
     await settled();

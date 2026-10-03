@@ -22,6 +22,7 @@ describe("resolveSessionRuntime", () => {
 
     const runtime = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
+      runtimeId: "claude-code",
       model: null,
       effort: null,
     });
@@ -45,11 +46,13 @@ describe("resolveSessionRuntime", () => {
 
     const effortOnly = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
+      runtimeId: "claude-code",
       model: null,
       effort,
     });
     const modelOnly = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
+      runtimeId: "claude-code",
       model: offered.model,
       effort: null,
     });
@@ -68,16 +71,19 @@ describe("resolveSessionRuntime", () => {
     }
     const kept = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
+      runtimeId: "claude-code",
       model: offered.model,
       effort: offered.thinkingLevels[1] ?? null,
     });
     const unknownModel = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
+      runtimeId: "claude-code",
       model: "not-a-model",
       effort: null,
     });
     const unofferedEffort = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
+      runtimeId: "claude-code",
       model: offered.model,
       effort: "ultra" as never,
     });
@@ -90,30 +96,19 @@ describe("resolveSessionRuntime", () => {
     expect(offered.thinkingLevels).toContain(unofferedEffort.reasoningEffort as never);
   });
 
-  test("uses the first runnable runtime configuration, so a fake or aliased CLI wins when ordered first", async () => {
+  test("runs on the runtime the project names, wherever it sits in the order", async () => {
     const configurations = createRuntimeConfigurationRepository(db);
-    const custom = await configurations.createProvider({
-      name: "My claude",
-      command: "/opt/bin/my-claude",
-      driver: "claude-code",
-    });
-    await configurations.createModel(custom.id, {
-      description: "Custom",
-      model: "custom-model",
-      thinkingLevels: [],
-    });
-    const others = (await configurations.list())
-      .map(({ id }) => id)
-      .filter((id) => id !== custom.id);
-    await configurations.reorderProviders([custom.id, ...others]);
+    const custom = await createCustomRuntime(configurations);
 
     const onDefault = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
+      runtimeId: custom.id,
       model: null,
       effort: null,
     });
     const named = await resolveSessionRuntime(configurations, {
       provider: "claude-code",
+      runtimeId: custom.id,
       model: "custom-model",
       effort: "high",
     });
@@ -134,4 +129,78 @@ describe("resolveSessionRuntime", () => {
       reasoningEffort: null,
     });
   });
+
+  test("a custom runtime placed first no longer wins over the one a project names", async () => {
+    const configurations = createRuntimeConfigurationRepository(db);
+    const custom = await createCustomRuntime(configurations);
+    const others = (await configurations.list())
+      .map(({ id }) => id)
+      .filter((id) => id !== custom.id);
+    await configurations.reorderProviders([custom.id, ...others]);
+
+    const runtime = await resolveSessionRuntime(configurations, onRuntime("claude-code"));
+
+    expect(runtime).toMatchObject({
+      runtimeConfigurationId: "claude-code",
+      runtimeAlias: "claude",
+    });
+  });
+
+  test("a runtime that is gone falls back to the host's default, then to the built-in one", async () => {
+    const configurations = createRuntimeConfigurationRepository(db);
+    const hostDefault = await createCustomRuntime(configurations);
+
+    const toDefault = await resolveSessionRuntime(
+      configurations,
+      onRuntime("rtprov_removed"),
+      hostDefault.id,
+    );
+    const toBuiltIn = await resolveSessionRuntime(
+      configurations,
+      onRuntime("rtprov_removed"),
+      "rtprov_also_removed",
+    );
+
+    expect(toDefault.runtimeConfigurationId).toBe(hostDefault.id);
+    expect(toBuiltIn).toMatchObject({
+      runtimeConfigurationId: "claude-code",
+      runtimeAlias: "claude",
+    });
+  });
+
+  test("a runtime with no models cannot run a turn, so the role falls back", async () => {
+    const configurations = createRuntimeConfigurationRepository(db);
+    const empty = await configurations.createProvider({
+      name: "No models",
+      command: "/opt/bin/empty",
+      driver: "claude-code",
+    });
+
+    const runtime = await resolveSessionRuntime(configurations, onRuntime(empty.id));
+
+    expect(runtime.runtimeConfigurationId).toBe("claude-code");
+  });
 });
+
+const onRuntime = (runtimeId: string) => ({
+  provider: "claude-code" as const,
+  runtimeId,
+  model: null,
+  effort: null,
+});
+
+const createCustomRuntime = async (
+  configurations: ReturnType<typeof createRuntimeConfigurationRepository>,
+) => {
+  const custom = await configurations.createProvider({
+    name: "My claude",
+    command: "/opt/bin/my-claude",
+    driver: "claude-code",
+  });
+  await configurations.createModel(custom.id, {
+    description: "Custom",
+    model: "custom-model",
+    thinkingLevels: [],
+  });
+  return custom;
+};

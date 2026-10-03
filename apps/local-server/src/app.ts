@@ -32,6 +32,7 @@ import { createLibraryRoutes } from "./library/routes.ts";
 import { createMcpRoutes } from "./mcp/routes.ts";
 import { createMcpSecretRoutes } from "./mcp/secret-routes.ts";
 import { createProjectRoutes } from "./project/routes.ts";
+import { createRuntimeUsers } from "./project/runtime-users.ts";
 import { createProjectServices, type ProjectServices } from "./project/services.ts";
 import { createPullRequestListRoutes } from "./pull-request-list/routes.ts";
 import { createPullRequestListService } from "./pull-request-list/service.ts";
@@ -45,6 +46,7 @@ import { listRepoSummaries } from "./repo/handlers.ts";
 import { createRepoRoutes } from "./repo/routes";
 import { createRoutineRoutes } from "./routine/routes.ts";
 import { createRuntimeConfigurationRoutes } from "./runtime-configuration/routes.ts";
+import { createRuntimeConfigurationService } from "./runtime-configuration/service.ts";
 import { createSessionGitRoutes } from "./session-git/routes.ts";
 import { createSettingsRoutes } from "./settings/routes";
 import { SettingKey } from "./settings/types.ts";
@@ -186,7 +188,13 @@ export const createApp = (deps: AppDependencies) => {
       deps.liveView ?? createHostLiveView(ctx),
     ),
   );
-  app.route("/api/runtime-configuration", createRuntimeConfigurationRoutes(ctx));
+  app.route(
+    "/api/runtime-configuration",
+    createRuntimeConfigurationRoutes(
+      ctx,
+      createRuntimeConfigurationService(ctx, createRuntimeUsers(ctx, projects.projects)),
+    ),
+  );
   app.route("/api/fs", createFsRoutes(ctx));
   app.route("/api/usage", createUsageRoutes(ctx));
 

@@ -41,6 +41,7 @@ describe("settings/routes", () => {
         { key: "agent_cli_check_interval_minutes", value: "60" },
         { key: "agent_cli_skip_permissions", value: "false" },
         { key: "chat_global_instructions", value: "" },
+        { key: "default_runtime_id", value: "claude-code" },
         { key: "display_name", value: "" },
         { key: "library_retention_days", value: "30" },
         { key: "library_project_cap_mb", value: "1024" },

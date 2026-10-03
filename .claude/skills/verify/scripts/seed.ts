@@ -9,7 +9,7 @@
  * `seed`. Re-running returns the recorded ids.
  *
  * `--fake-runtime` also registers the fake CLI
- * (packages/llm-provider/test-fixtures/fake-cli.ts) as the first runtime
+ * (packages/llm-provider/test-fixtures/fake-cli.ts) as the default runtime
  * configuration, so new chat sessions spawn it instead of the user's real
  * `claude`. Chat then costs nothing; script a reply with `[fake: ...]` in the
  * message (see that directory's README). Recorded under `fakeRuntime`.
@@ -68,10 +68,8 @@ async function seedFakeRuntime(): Promise<FakeRuntime> {
     model: "fake-model",
     thinkingLevels: [],
   });
-  // New sessions take the first runtime configuration in this order.
-  const { providers } = await call<{ providers: { id: string }[] }>("GET", base);
-  const others = providers.map(({ id }) => id).filter((id) => id !== provider.id);
-  await call("PUT", `${base}/providers/order`, { providerIds: [provider.id, ...others] });
+  // New projects (and plain chats) start on the host's default runtime.
+  await call("PUT", `${base}/default`, { runtimeId: provider.id });
   return { providerId: provider.id, command: FAKE_CLI_PATH };
 }
 

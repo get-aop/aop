@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { ComputerUseSchema } from "./computer-use.ts";
 import { IdSchema, TimestampSchema } from "./primitives.ts";
-import { ReasoningEffortSchema, RuntimePreferenceSchema } from "./runtime.ts";
+import {
+  ReasoningEffortSchema,
+  type RuntimePreferenceInput,
+  RuntimePreferenceInputSchema,
+  RuntimePreferenceSchema,
+} from "./runtime.ts";
 
 export const PROJECT_GOAL_MAX_LENGTH = 8000;
 export const PROJECT_INSTRUCTIONS_MAX_LENGTH = 16000;
@@ -70,8 +75,9 @@ export const ProjectSettingsSchema = z.object({
   goal: z.string().max(PROJECT_GOAL_MAX_LENGTH),
   /** Sent to the coordinator and to every new thread. */
   instructions: z.string().max(PROJECT_INSTRUCTIONS_MAX_LENGTH),
-  coordinator: RuntimePreferenceSchema,
-  thread: RuntimePreferenceSchema,
+  /** Without a `runtimeId`, see `RuntimePreferenceInputSchema`: the host fills it in. */
+  coordinator: RuntimePreferenceInputSchema,
+  thread: RuntimePreferenceInputSchema,
   notificationLevel: NotificationLevelSchema,
   threadAccess: ThreadAccessSchema,
   /**
@@ -106,6 +112,9 @@ const NOTHING_REPORTED: ReportedRuntime = { model: null, effort: null };
 
 export const ProjectSchema = ProjectSettingsSchema.extend({
   id: IdSchema,
+  /** A stored project always names its runtimes; projects from before v25 name the built-in one. */
+  coordinator: RuntimePreferenceSchema,
+  thread: RuntimePreferenceSchema,
   /** Changed by pause, archive, and restore actions, never by editing settings. */
   status: ProjectStatusSchema,
   /**
@@ -126,9 +135,24 @@ export type Project = z.infer<typeof ProjectSchema>;
 const { shape } = ProjectSettingsSchema;
 
 /**
+ * Where a new project's roles start: a quiet coordinator (low effort), thinking threads (high
+ * effort), and the runtime's default model. No runtime is named, so the host's default applies.
+ */
+export const DEFAULT_COORDINATOR_PREFERENCE: RuntimePreferenceInput = {
+  provider: "claude-code",
+  model: null,
+  effort: "low",
+};
+export const DEFAULT_THREAD_PREFERENCE: RuntimePreferenceInput = {
+  provider: "claude-code",
+  model: null,
+  effort: "high",
+};
+
+/**
  * What a client sends to create a project: only the name is required. The rest starts at Claude
- * Projects' own defaults: a quiet coordinator (low effort), thinking threads (high effort), the
- * provider's default model, and threads with full access (any command on the host).
+ * Projects' own defaults: the roles above on the host's default runtime, and threads with full
+ * access (any command on the host).
  *
  * `lookAround` is not a setting but what happens once, on creation: the coordinator welcomes the
  * person and, with a repository, one read-only thread looks at the project so the coordinator
@@ -140,8 +164,8 @@ export const CreateProjectInputSchema = ProjectSettingsSchema.extend({
   color: shape.color.default(null),
   goal: shape.goal.default(""),
   instructions: shape.instructions.default(""),
-  coordinator: shape.coordinator.default({ provider: "claude-code", model: null, effort: "low" }),
-  thread: shape.thread.default({ provider: "claude-code", model: null, effort: "high" }),
+  coordinator: shape.coordinator.default(DEFAULT_COORDINATOR_PREFERENCE),
+  thread: shape.thread.default(DEFAULT_THREAD_PREFERENCE),
   notificationLevel: shape.notificationLevel.default("coordinator"),
   threadAccess: shape.threadAccess.default("full-access"),
   autoFixPullRequests: shape.autoFixPullRequests.default(true),

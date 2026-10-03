@@ -162,6 +162,8 @@ export type {
 } from "./project.ts";
 export {
   CreateProjectInputSchema,
+  DEFAULT_COORDINATOR_PREFERENCE,
+  DEFAULT_THREAD_PREFERENCE,
   NotificationLevelSchema,
   PROJECT_GOAL_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
@@ -233,8 +235,20 @@ export {
   MAX_CONCURRENT_RUNS_LIMIT,
   parseMaxConcurrentRuns,
 } from "./run-cap.ts";
-export type { CliProvider, ReasoningEffort, RuntimePreference } from "./runtime.ts";
-export { CliProviderSchema, ReasoningEffortSchema, RuntimePreferenceSchema } from "./runtime.ts";
+export type {
+  CliProvider,
+  ReasoningEffort,
+  RuntimePreference,
+  RuntimePreferenceInput,
+} from "./runtime.ts";
+export {
+  BUILT_IN_RUNTIME_ID,
+  CliProviderSchema,
+  ReasoningEffortSchema,
+  RuntimeIdSchema,
+  RuntimePreferenceInputSchema,
+  RuntimePreferenceSchema,
+} from "./runtime.ts";
 export type { LiveOp, LiveSnapshot, MessageDelta, Resync, ResyncReason } from "./stream.ts";
 export {
   LiveOpSchema,

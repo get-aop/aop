@@ -16,6 +16,8 @@ import type { ChatMidRunMode } from "../chat-session/mid-run-mode.ts";
 import type { LocalServerContext } from "../context.ts";
 import type { ChatSession } from "../db/schema.ts";
 import { createLinearConnectionStore } from "../issues/linear-connection-store.ts";
+import { readDefaultRuntimeId } from "../runtime-configuration/default-runtime.ts";
+import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import type { ThreadGit } from "../thread/git.ts";
 import { createThreadRepository } from "../thread/repository.ts";
 import { readMessageInput } from "../thread/spawn-target.ts";
@@ -30,6 +32,7 @@ import type { ChatEngine } from "./engine.ts";
 import { recordProjectRemoved, recordProjectUpserted } from "./events.ts";
 import { type ProjectKickoff, recordKickoff } from "./kickoff.ts";
 import { createProjectRepository } from "./repository.ts";
+import { chooseRuntime, isRuntimeChoiceError, type RuntimeChoiceError } from "./runtime-choice.ts";
 import { createProjectTeardown } from "./teardown.ts";
 import {
   getWireMessage,
@@ -47,6 +50,7 @@ export type ProjectError =
   | { code: "INVALID_TRANSITION"; action: ProjectAction; status: ProjectStatus }
   | { code: "SESSION_BUSY"; sessionId: string }
   | { code: "COMPUTER_USE_UNAVAILABLE"; option: ComputerUseOption }
+  | RuntimeChoiceError
   | Extract<
       ThreadError,
       { code: "PROJECT_NOT_ACTIVE" | "INVALID_MESSAGE" | "SEND_FAILED" | "WORKTREE_FAILED" }
@@ -139,6 +143,36 @@ export const createProjectService = (
     if (project.status === "archived") await teardown.parkThreads(project.id);
   };
 
+  const configurations = createRuntimeConfigurationRepository(ctx.db);
+
+  // A new project's roles run on the runtime the client named, or on the host's default.
+  const withRuntimes = async (
+    sent: ProjectSettings,
+    defaultRuntimeId: string,
+  ): Promise<(ProjectSettings & Pick<Project, "coordinator" | "thread">) | RuntimeChoiceError> => {
+    const coordinator = await chooseRuntime(configurations, sent.coordinator, defaultRuntimeId);
+    if (isRuntimeChoiceError(coordinator)) return coordinator;
+    const thread = await chooseRuntime(configurations, sent.thread, defaultRuntimeId);
+    if (isRuntimeChoiceError(thread)) return thread;
+    return { ...sent, coordinator, thread };
+  };
+
+  // A changed role keeps the runtime it has unless the change names another one.
+  const patchRuntimes = async (
+    sent: ProjectPatch,
+    current: Project,
+  ): Promise<ProjectPatch | RuntimeChoiceError> => {
+    const patch = { ...sent };
+    for (const role of ["coordinator", "thread"] as const) {
+      const preference = sent[role];
+      if (!preference) continue;
+      const chosen = await chooseRuntime(configurations, preference, current[role].runtimeId);
+      if (isRuntimeChoiceError(chosen)) return chosen;
+      patch[role] = chosen;
+    }
+    return patch;
+  };
+
   const missingRepo = async (repoIds: readonly string[]): Promise<string | null> => {
     for (const repoId of repoIds) {
       if (!(await ctx.repoRepository.getById(repoId))) return repoId;
@@ -187,9 +221,11 @@ export const createProjectService = (
   };
 
   return {
-    create: async (settings, options = {}) => {
-      const unknown = await missingRepo(settings.repoIds);
+    create: async (sent, options = {}) => {
+      const unknown = await missingRepo(sent.repoIds);
       if (unknown) return { success: false, error: { code: "REPO_NOT_FOUND", repoId: unknown } };
+      const settings = await withRuntimes(sent, await readDefaultRuntimeId(ctx, configurations));
+      if ("code" in settings) return { success: false, error: settings };
 
       const projectId = generateTypeId("proj");
       const workspace = await prepareCoordinatorWorkspace(projectId);
@@ -220,11 +256,13 @@ export const createProjectService = (
       return project ? { success: true, project } : notFound;
     },
 
-    update: async (projectId, patch) => {
+    update: async (projectId, sent) => {
       const current = await ctx.projectRepository.getById(projectId);
       if (!current) return notFound;
-      const refused = await refuseRepoChange(current, patch.repoIds);
+      const refused = await refuseRepoChange(current, sent.repoIds);
       if (refused) return { success: false, error: refused };
+      const patch = await patchRuntimes(sent, current);
+      if ("code" in patch) return { success: false, error: patch };
 
       const project = await applyUpdate(projectId, patch);
       if (!project) return notFound;

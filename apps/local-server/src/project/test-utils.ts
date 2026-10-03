@@ -24,6 +24,8 @@ import type { PullRequestWatcherDeps } from "../pull-request-watch/watcher.ts";
 import type { RoutineDeps } from "../routine/create.ts";
 import { createRoutineRoutes } from "../routine/routes.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import { createSettingsRepository, type SettingsRepository } from "../settings/repository.ts";
+import { SettingKey } from "../settings/types.ts";
 import { createSuggestionRoutes } from "../suggestion/routes.ts";
 import type { ThreadGitDeps } from "../thread/git.ts";
 import { attachBareOrigin } from "../thread/git-test-utils.ts";
@@ -123,8 +125,11 @@ export const useTempAopHome = (): { path: () => string } => {
   return { path: () => home };
 };
 
-/** Registers the fake CLI as the first runtime configuration, so projects run on it. */
-export const registerFakeRuntime = async (db: Kysely<Database>): Promise<void> => {
+/** Registers the fake CLI as a runtime and makes it the host's default, so new projects run on it. */
+export const registerFakeRuntime = async (
+  db: Kysely<Database>,
+  settings: SettingsRepository = createSettingsRepository(db),
+): Promise<string> => {
   const configurations = createRuntimeConfigurationRepository(db);
   const provider = await configurations.createProvider({
     name: "Fake CLI",
@@ -136,10 +141,8 @@ export const registerFakeRuntime = async (db: Kysely<Database>): Promise<void> =
     model: "fake-model",
     thinkingLevels: [],
   });
-  const others = (await configurations.list())
-    .map(({ id }) => id)
-    .filter((id) => id !== provider.id);
-  await configurations.reorderProviders([provider.id, ...others]);
+  await settings.set(SettingKey.DEFAULT_RUNTIME, provider.id);
+  return provider.id;
 };
 
 export interface McpToolResponse {
@@ -211,7 +214,7 @@ export const createProjectStack = async (
     await createTestRepo(db, id, path);
     repos.push({ id, path, ...(options.origin && { origin: attachBareOrigin(path) }) });
   }
-  await registerFakeRuntime(db);
+  await registerFakeRuntime(db, ctx.settingsRepository);
 
   const runs: RunOptions[] = [];
   const recordingProvider: LLMProvider = {

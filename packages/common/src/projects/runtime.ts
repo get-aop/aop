@@ -22,14 +22,37 @@ export const ModelSchema = z.string().regex(SAFE_CUSTOM_RUNTIME_MODEL_PATTERN, {
 });
 
 /**
- * What one role (the coordinator, or a thread) runs on: a provider plus an optional model and
- * effort. A null model or effort is "use default": AOP passes no `--model` or `--effort` to the
- * CLI and the CLI decides, so a changed default follows and a plan without a catalog model
- * still runs. A project setting stores it, and a thread records the one it started with.
+ * The runtime configuration a role runs on when nothing else is chosen: the built-in Claude Code
+ * one (seeded with this id). Projects stored before runtimes could be picked run on it.
+ */
+export const BUILT_IN_RUNTIME_ID = "claude-code";
+
+/** A runtime configuration id (AOP settings › Runtimes): the built-in one or a custom command. */
+export const RuntimeIdSchema = z.string().min(1).max(200);
+
+/**
+ * What one role (the coordinator, or a thread) runs on: a runtime configuration (the command
+ * that is launched and the models it offers), its provider (the adapter that command speaks,
+ * always the configuration's driver), and an optional model and effort. A null model or effort
+ * is "use default": AOP passes no `--model` or `--effort` to the CLI and the CLI decides, so a
+ * changed default follows and a plan without a catalog model still runs. A project setting
+ * stores it, and a thread records the one it started with.
  */
 export const RuntimePreferenceSchema = z.object({
   provider: CliProviderSchema,
+  runtimeId: RuntimeIdSchema,
   model: ModelSchema.nullable(),
   effort: ReasoningEffortSchema.nullable(),
 });
 export type RuntimePreference = z.infer<typeof RuntimePreferenceSchema>;
+
+/**
+ * A role as a client sends it. Without `runtimeId` the host decides: a new project takes the
+ * host's default runtime, and a change keeps the runtime the project already has, so a client
+ * written before runtimes could be picked (or a tool that only sets the model) changes nothing
+ * it does not name.
+ */
+export const RuntimePreferenceInputSchema = RuntimePreferenceSchema.extend({
+  runtimeId: RuntimeIdSchema.optional(),
+});
+export type RuntimePreferenceInput = z.infer<typeof RuntimePreferenceInputSchema>;

@@ -36,6 +36,9 @@ describe("project repository", () => {
     expect(created).toEqual({
       id: "p1",
       ...settings,
+      // A role that names no runtime is stored on the built-in one.
+      coordinator: { ...settings.coordinator, runtimeId: "claude-code" },
+      thread: { ...settings.thread, runtimeId: "claude-code" },
       status: "active",
       computerUse: "model-default",
       reportedRuntime: {
@@ -154,10 +157,53 @@ describe("project repository", () => {
     expect(updated).toEqual({
       ...created,
       name: "Renamed",
-      coordinator: { provider: "claude-code", model: "claude-opus-4-8", effort: null },
+      // Sent without a runtime, the role keeps the one it had.
+      coordinator: {
+        provider: "claude-code",
+        runtimeId: "claude-code",
+        model: "claude-opus-4-8",
+        effort: null,
+      },
       updatedAt: T1.toISOString(),
     });
     expect(await projects.getById("p1")).toEqual(updated);
+  });
+
+  test("stores the runtime each role names, and an update can move one role", async () => {
+    await projects.create({
+      id: "p1",
+      ...projectSettings({
+        coordinator: { provider: "claude-code", runtimeId: "rtprov_a", model: null, effort: "low" },
+      }),
+    });
+
+    const moved = await projects.update("p1", {
+      thread: { provider: "claude-code", runtimeId: "rtprov_b", model: null, effort: "high" },
+    });
+
+    expect(moved?.coordinator.runtimeId).toBe("rtprov_a");
+    expect(moved?.thread.runtimeId).toBe("rtprov_b");
+    expect((await projects.getById("p1"))?.thread.runtimeId).toBe("rtprov_b");
+  });
+
+  test("a role moved to another runtime forgets what its last run reported; one left alone keeps it", async () => {
+    await projects.create({ id: "p1", ...projectSettings() });
+    await projects.recordReportedRuntime("p1", "coordinator", {
+      model: "fake-claude",
+      effort: "low",
+    });
+    await projects.recordReportedRuntime("p1", "thread", { model: "fake-claude", effort: null });
+
+    const moved = await projects.update("p1", {
+      coordinator: { provider: "claude-code", runtimeId: "rtprov_a", model: null, effort: null },
+      thread: { provider: "claude-code", model: null, effort: "high" },
+    });
+
+    expect(moved?.reportedRuntime).toEqual({
+      coordinator: { model: null, effort: null },
+      thread: { model: "fake-claude", effort: null },
+    });
+    expect((await projects.getById("p1"))?.reportedRuntime).toEqual(moved?.reportedRuntime);
   });
 
   test("an update can clear a text setting and replace or empty the repo list", async () => {

@@ -5,11 +5,17 @@ import type {
   ProjectSettings,
   ProjectStatus,
   ReportedRuntime,
+  RuntimePreferenceInput,
 } from "@aop/common";
+import { BUILT_IN_RUNTIME_ID } from "@aop/common";
 import type { Kysely } from "kysely";
 import type { ProjectRow } from "../db/projects-schema.ts";
 import type { Database } from "../db/schema.ts";
 
+/**
+ * A role that names no runtime is stored on the built-in one, as the v25 column default has it;
+ * the service names one before it gets here (see runtime-choice.ts).
+ */
 export type NewProject = ProjectSettings & { id: string };
 
 export type ProjectRole = "coordinator" | "thread";
@@ -20,7 +26,11 @@ export interface ProjectRepository {
   getById: (id: string) => Promise<Project | null>;
   /** Oldest first. */
   list: () => Promise<Project[]>;
-  /** Applies only the settings present in the patch; `repoIds`, when present, replaces the list. */
+  /**
+   * Applies only the settings present in the patch; `repoIds`, when present, replaces the list.
+   * A role sent without a runtime keeps the one it has. A role moved to another runtime forgets
+   * what its last run reported: that was the old runtime's default, which the new one may not have.
+   */
   update: (id: string, patch: ProjectPatch) => Promise<Project | null>;
   setStatus: (id: string, status: ProjectStatus) => Promise<Project | null>;
   /** Not one of the settings a patch carries: only the host owner changes it (project/service.ts). */
@@ -45,8 +55,9 @@ export const createProjectRepository = (
   db: Kysely<Database>,
   now: () => Date = () => new Date(),
 ): ProjectRepository => ({
-  create: (project) =>
+  create: (input) =>
     atomically<Project>(db, async (trx) => {
+      const project = withRuntimes(input);
       const at = now().toISOString();
       await trx
         .insertInto("projects")
@@ -94,13 +105,14 @@ export const createProjectRepository = (
       if (!current) return null;
       const next = applyPatch(current, patch);
       const updatedAt = now().toISOString();
+      const reportedRuntime = forgetMovedRoles(current, next);
       await trx
         .updateTable("projects")
-        .set({ ...toColumns(next), updated_at: updatedAt })
+        .set({ ...toColumns(next), ...reportedColumns(reportedRuntime), updated_at: updatedAt })
         .where("id", "=", id)
         .execute();
       if (patch.repoIds) await replaceRepos(trx, id, patch.repoIds);
-      return { ...current, ...next, updatedAt };
+      return { ...current, ...next, reportedRuntime, updatedAt };
     }),
 
   setStatus: (id, status) =>
@@ -168,21 +180,68 @@ const NOTHING_REPORTED: ReportedRuntime = { model: null, effort: null };
 
 // Only a field left out keeps its value: null is a value of its own (an icon or colour cleared
 // back to the letter tile), so it replaces what was there.
-const applyPatch = (current: ProjectSettings, patch: ProjectPatch): ProjectSettings => ({
-  ...current,
-  ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)),
+const applyPatch = (current: Project, patch: ProjectPatch): StoredSettings => {
+  const next = {
+    ...current,
+    ...Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)),
+  };
+  return {
+    ...next,
+    coordinator: keepRuntime(current.coordinator, patch.coordinator),
+    thread: keepRuntime(current.thread, patch.thread),
+  };
+};
+
+type StoredSettings = Omit<ProjectSettings, "coordinator" | "thread"> &
+  Pick<Project, "coordinator" | "thread">;
+
+const withRuntimes = <T extends ProjectSettings>(
+  settings: T,
+): Omit<T, "coordinator" | "thread"> & Pick<Project, "coordinator" | "thread"> => ({
+  ...settings,
+  coordinator: {
+    ...settings.coordinator,
+    runtimeId: settings.coordinator.runtimeId ?? BUILT_IN_RUNTIME_ID,
+  },
+  thread: { ...settings.thread, runtimeId: settings.thread.runtimeId ?? BUILT_IN_RUNTIME_ID },
 });
 
-const toColumns = (settings: ProjectSettings) => ({
+const keepRuntime = (
+  current: Project["coordinator"],
+  sent: RuntimePreferenceInput | undefined,
+): Project["coordinator"] =>
+  sent ? { ...sent, runtimeId: sent.runtimeId ?? current.runtimeId } : current;
+
+const forgetMovedRoles = (current: Project, next: StoredSettings): Project["reportedRuntime"] => ({
+  coordinator:
+    current.coordinator.runtimeId === next.coordinator.runtimeId
+      ? current.reportedRuntime.coordinator
+      : NOTHING_REPORTED,
+  thread:
+    current.thread.runtimeId === next.thread.runtimeId
+      ? current.reportedRuntime.thread
+      : NOTHING_REPORTED,
+});
+
+const reportedColumns = ({ coordinator, thread }: Project["reportedRuntime"]) => ({
+  coordinator_reported_model: coordinator.model,
+  coordinator_reported_effort: coordinator.effort,
+  thread_reported_model: thread.model,
+  thread_reported_effort: thread.effort,
+});
+
+const toColumns = (settings: StoredSettings) => ({
   name: settings.name,
   icon: settings.icon,
   color: settings.color,
   goal: settings.goal,
   instructions: settings.instructions,
   coordinator_provider: settings.coordinator.provider,
+  coordinator_runtime_id: settings.coordinator.runtimeId,
   coordinator_model: settings.coordinator.model,
   coordinator_effort: settings.coordinator.effort,
   thread_provider: settings.thread.provider,
+  thread_runtime_id: settings.thread.runtimeId,
   thread_model: settings.thread.model,
   thread_effort: settings.thread.effort,
   notification_level: settings.notificationLevel,
@@ -230,11 +289,13 @@ const toProject = (row: ProjectRow, repoIds: string[]): Project => ({
   instructions: row.instructions,
   coordinator: {
     provider: row.coordinator_provider,
+    runtimeId: row.coordinator_runtime_id,
     model: row.coordinator_model,
     effort: row.coordinator_effort,
   },
   thread: {
     provider: row.thread_provider,
+    runtimeId: row.thread_runtime_id,
     model: row.thread_model,
     effort: row.thread_effort,
   },

@@ -1,21 +1,39 @@
 import {
+  DefaultRuntimeInputSchema,
   describeFirstIssue,
   type RuntimeConfigurationModelInput,
   RuntimeConfigurationModelInputSchema,
   type RuntimeConfigurationProviderInput,
   RuntimeConfigurationProviderInputSchema,
   RuntimeThinkingLevelSchema,
+  type RuntimeUsage,
 } from "@aop/common";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { LocalServerContext } from "../context.ts";
 import { createRuntimeConfigurationRepository } from "./repository.ts";
+import type { RuntimeConfigurationService } from "./service.ts";
 
-export const createRuntimeConfigurationRoutes = (ctx: LocalServerContext) => {
+export const createRuntimeConfigurationRoutes = (
+  ctx: LocalServerContext,
+  service: RuntimeConfigurationService,
+) => {
   const app = new Hono();
   const repository = createRuntimeConfigurationRepository(ctx.db);
 
-  app.get("/", async (c) => c.json({ providers: await repository.list() }));
+  app.get("/", async (c) => c.json(await service.list()));
+  // `?fresh=1` looks at every command again instead of using looks from the last minute.
+  app.get("/status", async (c) =>
+    c.json({ statuses: await service.statuses({ fresh: c.req.query("fresh") === "1" }) }),
+  );
+  app.put("/default", async (c) => {
+    const input = DefaultRuntimeInputSchema.safeParse(await readBody(c));
+    if (!input.success) return c.json({ error: "Invalid runtime" }, 400);
+    const result = await service.setDefault(input.data.runtimeId);
+    return result.success
+      ? c.json({ defaultRuntimeId: result.defaultRuntimeId })
+      : c.json({ error: "Runtime not found", code: result.error.code }, 404);
+  });
   app.post("/providers", async (c) => {
     const input = RuntimeConfigurationProviderInputSchema.safeParse(await readBody(c));
     if (!input.success)
@@ -49,11 +67,27 @@ export const createRuntimeConfigurationRoutes = (ctx: LocalServerContext) => {
       throw error;
     }
   });
-  app.delete("/providers/:id", async (c) =>
-    (await repository.deleteProvider(c.req.param("id")))
-      ? c.body(null, 204)
-      : c.json({ error: "Provider not found or locked" }, 404),
+  app.get("/providers/:id/usage", async (c) =>
+    c.json({ usage: await service.usage(c.req.param("id")) }),
   );
+  // `?moveTo=default` moves the projects and threads using it to the host's default first.
+  app.delete("/providers/:id", async (c) => {
+    const result = await service.remove(c.req.param("id"), {
+      moveToDefault: c.req.query("moveTo") === "default",
+    });
+    if (result.success) return c.body(null, 204);
+    if (result.error.code === "RUNTIME_IN_USE") {
+      return c.json(
+        {
+          error: describeUsage(result.error.usage),
+          code: result.error.code,
+          usage: result.error.usage,
+        },
+        409,
+      );
+    }
+    return c.json({ error: "Provider not found or locked", code: result.error.code }, 404);
+  });
   app.post("/providers/:id/models", async (c) => {
     const input = RuntimeConfigurationModelInputSchema.safeParse(await readBody(c));
     if (!input.success)
@@ -115,6 +149,10 @@ export const createRuntimeConfigurationRoutes = (ctx: LocalServerContext) => {
   });
   return app;
 };
+
+const describeUsage = (usage: readonly RuntimeUsage[]): string =>
+  `Projects use this runtime: ${usage.map((entry) => entry.projectName).join(", ")}. ` +
+  "Move them to another runtime first, or move them to the default runtime and remove it.";
 
 const readBody = async (c: { req: { json: () => Promise<unknown> } }): Promise<unknown> =>
   c.req.json().catch(() => null);

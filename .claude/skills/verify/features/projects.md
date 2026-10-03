@@ -2,7 +2,7 @@
 
 A project is one coordinator chat plus the threads it starts. This map covers the HTTP API. The dashboard shows the result as projects in the top bar's project switcher and threads as rows in the panel beside the chat, and [Projects shell](./projects-shell.md) is the recipe for watching that; the coordinator chat is drawn by the Coordinator tab ([Projects chat](./projects-chat.md)), and a thread's transcript, question, pull request bar and changes by the thread pane ([Projects thread pane and Overview](./projects-thread.md)). Coordinator and thread sessions never appear in `GET /api/chat-sessions`.
 
-Everything here needs a stack seeded with `--fake-runtime`: projects resolve their coordinator and thread runtime from the first runtime configuration, which then is the fake CLI, so no model is called. Confirm before sending anything: `sqlite3 "$AOP_DB_PATH" "select kind, runtime_alias from chat_sessions"` shows the path of `fake-cli.ts` for the coordinator and every thread.
+Everything here needs a stack seeded with `--fake-runtime`: new projects start on the host's default runtime, which the seed makes the fake CLI, so no model is called (recipe for picking runtimes: `features/runtimes.md`). Confirm before sending anything: `sqlite3 "$AOP_DB_PATH" "select kind, runtime_alias from chat_sessions"` shows the path of `fake-cli.ts` for the coordinator and every thread.
 
 ## Sub-features
 

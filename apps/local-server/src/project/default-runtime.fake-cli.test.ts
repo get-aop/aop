@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import type { Project, ProjectSettings, RuntimePreference } from "@aop/common";
+import type { Project, ProjectSettings, RuntimePreferenceInput } from "@aop/common";
 import { ClaudeCodeProvider, type RunOptions } from "@aop/llm-provider";
 import { FAKE_CLI_PATH, readLaunches } from "@aop/llm-provider/test-fixtures";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
@@ -19,8 +19,11 @@ afterEach(async () => {
   stack = undefined;
 });
 
-const DEFAULT: RuntimePreference = { provider: "claude-code", model: null, effort: null };
-const explicit = (model: string, effort: RuntimePreference["effort"]): RuntimePreference => ({
+const DEFAULT: RuntimePreferenceInput = { provider: "claude-code", model: null, effort: null };
+const explicit = (
+  model: string,
+  effort: RuntimePreferenceInput["effort"],
+): RuntimePreferenceInput => ({
   provider: "claude-code",
   model,
   effort,
@@ -155,7 +158,12 @@ describe("a project whose roles are on default", () => {
     const session = await s.ctx.chatSessionRepository.getById(threadId);
     expect(session).toMatchObject({ model: null, reasoning_effort: null });
     const thread = await s.services.threads.get(threadId);
-    expect(thread.success && thread.thread.runtime).toEqual(DEFAULT);
+    // The project names no runtime, so it runs on the host's default: the fake.
+    expect(thread.success && thread.thread.runtime).toEqual({
+      ...DEFAULT,
+      runtimeId: project.thread.runtimeId,
+    });
+    expect(project.thread.runtimeId).not.toBe("claude-code");
   }, 60_000);
 
   test("each role's first run on default reports the model it ran on, once, and still passes no flag", async () => {
@@ -283,7 +291,7 @@ describe("a project that names a model and an effort", () => {
 describe("changing a project's models", () => {
   test("the coordinator's next turn follows the setting, both ways, on the same conversation", async () => {
     const { s, project } = await setup({ coordinator: DEFAULT, thread: DEFAULT });
-    const change = async (coordinator: RuntimePreference) => {
+    const change = async (coordinator: RuntimePreferenceInput) => {
       const patched = await s.api("PATCH", `/api/projects/${project.id}`, { coordinator });
       expect(patched.status).toBe(200);
     };

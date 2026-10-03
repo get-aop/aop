@@ -6,7 +6,9 @@ import type {
   RuntimeConfigurationModelInput,
   RuntimeConfigurationProvider,
   RuntimeConfigurationProviderInput,
+  RuntimeStatus,
   RuntimeThinkingLevel,
+  RuntimeUsage,
   SSEServerStatus,
 } from "@aop/common";
 import { request } from "./request";
@@ -90,6 +92,36 @@ export const getRuntimeConfiguration = async (): Promise<RuntimeConfigurationPro
   return data.providers;
 };
 
+/** Every runtime and the one new projects start on (AOP settings › Runtimes › Default runtime). */
+export const getRuntimeConfigurationState = (): Promise<{
+  providers: RuntimeConfigurationProvider[];
+  defaultRuntimeId: string;
+}> => request("/runtime-configuration");
+
+/** What the host finds for each runtime; `fresh` makes it look again now. */
+export const getRuntimeStatuses = async (fresh = false): Promise<RuntimeStatus[]> => {
+  const data = await request<{ statuses: RuntimeStatus[] }>(
+    `/runtime-configuration/status${fresh ? "?fresh=1" : ""}`,
+  );
+  return data.statuses;
+};
+
+export const setDefaultRuntime = async (runtimeId: string): Promise<string> => {
+  const data = await request<{ defaultRuntimeId: string }>("/runtime-configuration/default", {
+    method: "PUT",
+    body: JSON.stringify({ runtimeId }),
+  });
+  return data.defaultRuntimeId;
+};
+
+/** The projects that name a runtime or have open threads on it. */
+export const getRuntimeUsage = async (id: string): Promise<RuntimeUsage[]> => {
+  const data = await request<{ usage: RuntimeUsage[] }>(
+    `/runtime-configuration/providers/${encodeURIComponent(id)}/usage`,
+  );
+  return data.usage;
+};
+
 export const createRuntimeConfigurationProvider = async (
   input: RuntimeConfigurationProviderInput,
 ): Promise<RuntimeConfigurationProvider> => {
@@ -125,8 +157,15 @@ export const cloneRuntimeConfigurationProvider = async (
   return data.provider;
 };
 
-export const deleteRuntimeConfigurationProvider = async (id: string): Promise<void> => {
-  await request(`/runtime-configuration/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
+/** Refused (409) while projects use it, unless `moveToDefault` moves them to the default first. */
+export const deleteRuntimeConfigurationProvider = async (
+  id: string,
+  options: { moveToDefault?: boolean } = {},
+): Promise<void> => {
+  const query = options.moveToDefault ? "?moveTo=default" : "";
+  await request(`/runtime-configuration/providers/${encodeURIComponent(id)}${query}`, {
+    method: "DELETE",
+  });
 };
 
 export const createRuntimeConfigurationModel = async (

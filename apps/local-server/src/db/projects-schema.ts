@@ -24,6 +24,9 @@ export interface ProjectsTable {
   thread_provider: CliProvider;
   thread_model: string | null;
   thread_effort: ReasoningEffort | null;
+  /** Added by migration v25: the runtime configuration each role runs on (`claude-code` before). */
+  coordinator_runtime_id: Generated<string>;
+  thread_runtime_id: Generated<string>;
   notification_level: Generated<NotificationLevel>;
   /** Added by migration v4. */
   thread_access: Generated<ThreadAccess>;

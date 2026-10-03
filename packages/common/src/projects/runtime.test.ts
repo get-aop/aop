@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { CliProviderSchema, ReasoningEffortSchema, RuntimePreferenceSchema } from "./runtime.ts";
+import {
+  CliProviderSchema,
+  ReasoningEffortSchema,
+  RuntimePreferenceInputSchema,
+  RuntimePreferenceSchema,
+} from "./runtime.ts";
 import { makeRuntimePreference, parsed, rejectedPaths } from "./test-utils.ts";
 
 describe("CliProviderSchema", () => {
@@ -41,10 +46,19 @@ describe("RuntimePreferenceSchema", () => {
     }
   });
 
-  test("still requires a provider", () => {
+  test("still requires a provider and a runtime", () => {
     expect(rejectedPaths(RuntimePreferenceSchema, { model: null, effort: null })).toEqual([
       "provider",
+      "runtimeId",
     ]);
+  });
+
+  test("the input form may leave the runtime out, for the host to fill in", () => {
+    const { runtimeId: _runtimeId, ...withoutRuntime } = makeRuntimePreference();
+    expect(RuntimePreferenceInputSchema.safeParse(withoutRuntime).success).toBe(true);
+    expect(
+      rejectedPaths(RuntimePreferenceInputSchema, makeRuntimePreference({ runtimeId: "" })),
+    ).toEqual(["runtimeId"]);
   });
 
   test("validates a model and an effort when one is set", () => {

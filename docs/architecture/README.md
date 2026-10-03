@@ -24,6 +24,8 @@ A project holds a goal, instructions, attached repositories, memory files, and t
 
 Phase 1 exposes Claude Code only. The Codex CLI (`codex-cli`) and PI (`pi`) adapters remain in `packages/llm-provider` but are not in the runtime catalog, provider lists or pickers until Phase 2. See [Runtimes](../RUNTIMES.md) for configuration.
 
+A project picks a runtime configuration for its coordinator and one for its threads: the built-in Claude Code, or a custom command that runs it with models of its own. New projects start on the host's default runtime, a turn on a runtime that is missing or logged out fails at once with the reason, and a runtime a project uses cannot be removed until its projects move. See [Choosing a runtime](./runtime-choice.md).
+
 ## A turn, and how the page follows it
 
 Every turn is one runtime process, launched detached from the server so it outlives a browser close. The adapter writes the CLI's JSONL output to a log under `~/.aop/logs/chat-sessions/<session-id>/`; the host tails it (text and reasoning arrive token by token: Claude Code runs with `--include-partial-messages`), streams the turn's parts to clients as they grow, records the reply as those parts on the session, and persists the runtime session id so the next turn resumes the same conversation. At startup the host looks at every run still marked running and picks each one up again, so a server restart does not lose a turn. Token and cost usage attach to a run when the CLI reports them. The Claude plan's 5-hour and 7-day usage comes from the same tail: each `rate_limit_event` Claude Code writes updates one host-wide snapshot (kept in `~/.aop/plan-usage.json` across restarts), which `GET /api/usage/plan` serves to the usage meter in the project top bar. Reading it costs no request and no token; an API-key login writes no such event, and the meter stays hidden.
@@ -65,6 +67,7 @@ The desktop app also has the AOP Browser: a Chromium browser shown in the coordi
 
 ## Related guides
 
+- [Choosing a runtime](./runtime-choice.md)
 - [The Issues tab](./issues-tab.md)
 - [The live view of the host's screen](./live-view.md)
 - [Runtimes](../RUNTIMES.md)

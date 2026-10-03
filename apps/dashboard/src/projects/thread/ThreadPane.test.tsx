@@ -391,7 +391,12 @@ describe("steering", () => {
   });
 
   test("a thread started on default says so instead of naming a model it never asked for", async () => {
-    const runtime = { provider: "claude-code" as const, model: null, effort: null };
+    const runtime = {
+      provider: "claude-code" as const,
+      runtimeId: "claude-code",
+      model: null,
+      effort: null,
+    };
     await setupPane(host, { thread: makeThread({ id: "thr_1", status: "idle", runtime }) });
 
     expect(screen.getByTestId("thread-model").textContent).toBe("Default model");
@@ -400,7 +405,12 @@ describe("steering", () => {
   });
 
   test("a thread that names only one of them shows the other as default", async () => {
-    const runtime = { provider: "claude-code" as const, model: "claude-sonnet-4-6", effort: null };
+    const runtime = {
+      provider: "claude-code" as const,
+      runtimeId: "claude-code",
+      model: "claude-sonnet-4-6",
+      effort: null,
+    };
     await setupPane(host, { thread: makeThread({ id: "thr_1", status: "idle", runtime }) });
 
     expect(screen.getByTestId("thread-model").textContent).toBe("Sonnet 4.6");
