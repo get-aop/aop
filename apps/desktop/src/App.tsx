@@ -42,13 +42,19 @@ export const App = ({ backend }: AppProps): ReactElement | null => {
         <ConnectScreen
           state={state}
           backend={backend}
+          update={update}
           onBack={hasHostToGoBackTo ? () => show(null) : null}
           onManageLocalHost={() => void backend.startHostMode()}
         />
       );
     case "host":
       return (
-        <HostModeScreen state={state} backend={backend} onChangeHost={() => show("connect")} />
+        <HostModeScreen
+          state={state}
+          backend={backend}
+          update={update}
+          onChangeHost={() => show("connect")}
+        />
       );
     case "status":
       return (
@@ -83,9 +89,9 @@ const useDesktopState = (backend: DesktopBackend): DesktopState | null => {
   return state;
 };
 
-/** The app's own update: read once, then kept current by what the app pushes. */
-const useUpdateState = (backend: DesktopBackend): AppUpdateState => {
-  const [update, setUpdate] = useState<AppUpdateState>({ status: "idle" });
+/** The app's own update: read once, then kept current by what the app pushes. Null until known. */
+const useUpdateState = (backend: DesktopBackend): AppUpdateState | null => {
+  const [update, setUpdate] = useState<AppUpdateState | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +99,7 @@ const useUpdateState = (backend: DesktopBackend): AppUpdateState => {
       if (!cancelled) setUpdate(next);
     });
     void backend.getUpdateState().then((initial) => {
-      if (!cancelled) setUpdate((current) => (current.status === "idle" ? initial : current));
+      if (!cancelled) setUpdate((current) => current ?? initial);
     });
     return () => {
       cancelled = true;

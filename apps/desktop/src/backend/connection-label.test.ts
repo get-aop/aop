@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { connectionLabel, hostName, windowTitle } from "./connection-label";
+import { connectionLabel, hostName, hostShortName, windowTitle } from "./connection-label";
 import type { ConnectionState } from "./types";
 
 const HOST = "https://mac.tail1234.ts.net";
@@ -38,29 +38,33 @@ describe("connectionLabel", () => {
 describe("windowTitle", () => {
   test("is the app's name until there is a host to name", () => {
     expect(windowTitle({ status: "unconfigured" })).toBe("AOP");
-    expect(windowTitle({ status: "connected", host: HOST, hostVersion: "1" })).toBe(
-      "AOP · Connected to mac.tail1234.ts.net",
-    );
+    expect(windowTitle({ status: "connected", host: HOST, hostVersion: "1" })).toBe("AOP · mac");
   });
 
-  test("appends the asides that apply and skips the ones that do not", () => {
-    const connected = { status: "connected", host: HOST, hostVersion: "1" } as const;
+  test("names the app and its host, whatever the connection or the updates are doing", () => {
+    const soulf = "https://soulf.tailffbdec.ts.net:25650";
 
-    expect(
-      windowTitle(connected, ["Update available (0.10.0)", null, "host 0.10.0 is newer"]),
-    ).toBe(
-      "AOP · Connected to mac.tail1234.ts.net · Update available (0.10.0) · host 0.10.0 is newer",
+    expect(windowTitle({ status: "connected", host: soulf, hostVersion: "1" }, "AOP Nightly")).toBe(
+      "AOP Nightly · soulf",
     );
-    expect(windowTitle({ status: "unconfigured" }, ["Update available (0.10.0)"])).toBe(
-      "AOP · Update available (0.10.0)",
+    expect(windowTitle({ status: "unreachable", host: soulf, message: "x" }, "AOP Nightly")).toBe(
+      "AOP Nightly · soulf",
     );
   });
 
   test("AOP Nightly's title names it, so it is never taken for the stable app", () => {
-    expect(windowTitle({ status: "unconfigured" }, [], "AOP Nightly")).toBe("AOP Nightly");
-    expect(
-      windowTitle({ status: "connected", host: HOST, hostVersion: "1" }, [], "AOP Nightly"),
-    ).toStartWith("AOP Nightly · Connected to");
+    expect(windowTitle({ status: "unconfigured" }, "AOP Nightly")).toBe("AOP Nightly");
+  });
+});
+
+describe("hostShortName", () => {
+  test("is the machine's name, this Mac's own host, or the address by number", () => {
+    expect(hostShortName("https://soulf.tailffbdec.ts.net:25650")).toBe("soulf");
+    expect(hostShortName("http://soulf:25650")).toBe("soulf");
+    expect(hostShortName("http://127.0.0.1:25150")).toBe("This Mac");
+    expect(hostShortName("http://localhost:25150")).toBe("This Mac");
+    expect(hostShortName("http://100.64.0.7:25650")).toBe("100.64.0.7");
+    expect(hostShortName("not a url")).toBe("not a url");
   });
 });
 

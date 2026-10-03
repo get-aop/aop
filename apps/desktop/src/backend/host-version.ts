@@ -17,18 +17,18 @@ export const compareHostToApp = (hostVersion: string, appVersion: string): HostV
 export const displayVersion = (version: string): string => version.split("+")[0] ?? version;
 
 /**
- * A line for the person when host and app are on different releases, or null. It is only a
- * notice: the API version handshake, not this, decides whether they can talk.
+ * The "This app" row's note when the host runs a newer release, or null. Only a notice: the API
+ * version handshake, not this, decides whether they can talk.
  */
-export const hostVersionNotice = (hostVersion: string, appVersion: string): string | null => {
-  const host = displayVersion(hostVersion);
-  const app = displayVersion(appVersion);
-  switch (compareHostToApp(hostVersion, appVersion)) {
-    case "newer":
-      return `The host (${host}) is newer than this app (${app}). Update the app.`;
-    case "older":
-      return `The host (${host}) is older than this app (${app}). Update the host with "aop update".`;
-    default:
-      return null;
-  }
-};
+export const appBehindHostNote = (
+  hostName: string,
+  hostVersion: string,
+  appVersion: string,
+): string | null =>
+  compareHostToApp(hostVersion, appVersion) === "newer"
+    ? `${hostName} runs ${displayVersion(hostVersion)}; this app is older`
+    : null;
+
+/** The host's own note when it runs an older release than this app, or null. */
+export const hostBehindAppNote = (hostVersion: string, appVersion: string): string | null =>
+  compareHostToApp(hostVersion, appVersion) === "older" ? "Older than this app" : null;
