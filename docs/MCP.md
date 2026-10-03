@@ -18,7 +18,7 @@ The coordinator is hermetic: it runs with the AOP tools only, with no Claude set
 | `thread_steer` | Sends a message to an existing thread of this project. While the thread works, the message reaches its running turn after the tool call it is on, so a correction changes the work in progress; `when: "after-turn"` holds it until that turn ends instead. While the thread is idle it starts a new turn. Counts toward the reply's routing receipt. |
 | `thread_stop` | Ends the thread's running turn and drops its queued messages. |
 | `thread_list` | Lists the project's threads with status, progress and the question of any thread waiting on the person. |
-| `thread_report` | Returns one thread's state and the end of its transcript. |
+| `thread_report` | Returns one thread's state and the end of its transcript, each message with its sender (`from`: `thread`, `person`, `coordinator`, `routine` or `system`), the person's words a coordinator message forwarded (`quote`) and whether it was the brief. |
 | `thread_open_pr` | Opens a thread's pull request: its changes are committed, its branch pushed, the pull request opened. A thread has one, so asking again pushes what the thread did since and returns the same one; a merged or closed one is refused. |
 | `thread_merge_pr` | Merges a thread's pull request when the person asks. The thread is then resolved and its branch removed. Refused while the thread holds work the pull request lacks, and when GitHub will not merge it; the error says why. |
 | `thread_resolve` | Marks a thread resolved: its worktree is removed, its branch kept, and a later `thread_steer` reopens it. Refused while the thread is working. |

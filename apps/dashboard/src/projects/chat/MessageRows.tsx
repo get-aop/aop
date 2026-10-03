@@ -13,28 +13,30 @@ import { Bubble } from "@/ui/bubble";
 import { ChatOriginContext } from "./artifact-links";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { useChatThread } from "./chat-context";
+import { Folded } from "./Folded";
 import { MessageBlocks } from "./MessageBlocks";
 import { MessageImages } from "./MessageImages";
 import { MessageMeta } from "./MessageMeta";
+import { isSent, SentCard, SentRow } from "./SentMessage";
 import { ThreadChip } from "./ThreadChip";
 import { useThreadPresence } from "./thread-presence";
 import { useTurnReveal } from "./use-turn-reveal";
 
-const COLLAPSED_MAX_CHARS = 600;
-const COLLAPSED_MAX_LINES = 8;
-
 /**
- * The person's words: a bubble on the right, folded when long, with the time and a copy button
- * on hover. The images they sent sit above it; a message of images alone has no bubble. A brief
- * one of their routines sent is labelled with the routine's name.
+ * A message an agent was told. The person's words: a bubble on the right, folded when long, with
+ * the time and a copy button on hover. The images they sent sit above it; a message of images
+ * alone has no bubble. A brief one of their routines sent is labelled with the routine's name.
+ * The coordinator's words and AOP's are a card on the left that names who sent them.
  */
 export const UserRow = memo(function UserRow({ message }: { message: UserMessage }) {
+  if (isSent(message)) return <SentRow message={message} />;
   return (
     <div
       className="group flex flex-col items-end gap-1 pb-5"
       data-testid="user-message"
       data-message-id={message.id}
       data-message-role="user"
+      data-sender={message.sender}
     >
       {message.routine ? (
         <span
@@ -42,15 +44,10 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
           className="flex items-center gap-1 text-meta text-text-subtle"
         >
           <ClockIcon aria-hidden="true" className="size-3.5" />
-          Routine · {message.routine.name}
+          {message.brief ? "Brief from routine" : "Routine"} · {message.routine.name}
         </span>
       ) : null}
-      {message.images ? <MessageImages images={message.images} /> : null}
-      {message.text ? (
-        <Bubble className="relative">
-          <FoldedText text={message.text} />
-        </Bubble>
-      ) : null}
+      <PersonWords message={message} />
       <div className="w-full max-w-[80%]">
         <MessageMeta timestamp={message.createdAt} copyText={message.text} align="end" />
       </div>
@@ -59,7 +56,7 @@ export const UserRow = memo(function UserRow({ message }: { message: UserMessage
 });
 
 /**
- * An agent's reply, or a message the coordinator relayed: blocks on the left, no bubble. The same
+ * An agent's reply: blocks on the left, no bubble. The same
  * row draws a reply while it is being written (`writing`) and once its message has arrived, so
  * the reply goes on in place: prose that arrives is typed out, and what is left when the turn ends
  * is typed out quickly, not dropped in. A reply whose run failed is drawn as an error, so what the
@@ -165,7 +162,7 @@ const STEER_CAPTION = {
 /**
  * A message sent into a turn while it ran, drawn inside the reply: where the agent took it in,
  * or, until it does, at the reply's end. The person's words are a bubble, as anywhere else; the
- * coordinator's words relayed into a thread keep their quote.
+ * coordinator's words keep their card, which names it and shows the person's words it forwards.
  */
 const SteeredMessage = memo(function SteeredMessage({
   message,
@@ -174,28 +171,17 @@ const SteeredMessage = memo(function SteeredMessage({
   message: Message;
   state: keyof typeof STEER_CAPTION;
 }) {
+  // Only what an agent is told is sent into its turn.
+  if (message.role !== "user") return null;
   return (
     <div
       data-testid="steered-message"
       data-message-id={message.id}
       data-state={state}
-      className={cn(
-        "my-3 flex flex-col gap-1",
-        message.role === "user" ? "items-end" : "border-l border-border pl-3",
-      )}
+      data-sender={message.sender}
+      className={cn("my-3 flex flex-col gap-1", isSent(message) ? "items-start" : "items-end")}
     >
-      {message.role === "user" ? (
-        <>
-          {message.images ? <MessageImages images={message.images} /> : null}
-          {message.text ? (
-            <Bubble className="relative">
-              <FoldedText text={message.text} />
-            </Bubble>
-          ) : null}
-        </>
-      ) : message.role === "assistant" ? (
-        <MessageBlocks messageId={message.id} blocks={message.blocks} />
-      ) : null}
+      {isSent(message) ? <SentCard message={message} /> : <PersonWords message={message} />}
       <p data-testid="steered-message-caption" className="text-meta text-text-subtle">
         {STEER_CAPTION[state]}
       </p>
@@ -279,44 +265,25 @@ export const ThreadReportRow = memo(function ThreadReportRow({
   );
 });
 
-const FoldedText = ({ text }: { text: string }) => {
-  const [expanded, setExpanded] = useState(false);
-  const foldable =
-    text.length > COLLAPSED_MAX_CHARS || text.split("\n").length > COLLAPSED_MAX_LINES;
-  const folded = foldable && !expanded;
-  return (
-    <>
-      <div
-        data-user-message-collapsed={folded ? "true" : "false"}
-        className={cn("relative", folded && "max-h-44 overflow-hidden")}
-        style={
-          folded
-            ? {
-                maskImage: "linear-gradient(to bottom, black calc(100% - 1.75rem), transparent)",
-                WebkitMaskImage:
-                  "linear-gradient(to bottom, black calc(100% - 1.75rem), transparent)",
-              }
-            : undefined
-        }
-      >
-        <p data-testid="user-message-text" className="min-w-0 whitespace-pre-wrap break-words">
-          {text}
-        </p>
-      </div>
-      {foldable ? (
-        <button
-          type="button"
-          aria-expanded={expanded}
-          data-testid="user-message-fold"
-          onClick={() => setExpanded((value) => !value)}
-          className="-ml-1 mt-1.5 h-7 rounded-md px-1.5 text-meta text-text-subtle hover:bg-hover hover:text-text-muted"
-        >
-          {expanded ? "Show less" : "Show full message"}
-        </button>
-      ) : null}
-    </>
-  );
-};
+// The images the person sent, above their words in a bubble.
+const PersonWords = ({ message }: { message: UserMessage }) => (
+  <>
+    {message.images ? <MessageImages images={message.images} /> : null}
+    {message.text ? (
+      <Bubble className="relative">
+        <FoldedText text={message.text} />
+      </Bubble>
+    ) : null}
+  </>
+);
+
+const FoldedText = ({ text }: { text: string }) => (
+  <Folded text={text}>
+    <p data-testid="user-message-text" className="min-w-0 whitespace-pre-wrap break-words">
+      {text}
+    </p>
+  </Folded>
+);
 
 const textOf = (message: AssistantMessage): string =>
   message.blocks.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n\n");

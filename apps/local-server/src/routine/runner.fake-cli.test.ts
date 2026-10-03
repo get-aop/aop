@@ -35,6 +35,12 @@ describe("a routine coming due", () => {
     const [brief] = await s.ctx.chatSessionRepository.listMessages(threadId);
     expect(brief?.content).toContain("Summarize new issues");
     expect(brief?.content).toContain('started by the routine "Morning digest"');
+    // The thread's chat shows it as the routine's brief, not the coordinator's.
+    expect(parseMessageOrigin(brief?.origin_json ?? null)).toMatchObject({
+      type: "routine",
+      routineId: made.id,
+      name: "Morning digest",
+    });
 
     expect((await routine(made.id)).nextRunAt).toBe("2026-06-02T09:00:00.000Z");
     // The run's status follows its thread: working, then done when the fake's turn ends.

@@ -84,7 +84,14 @@ describe("listWireMessages", () => {
     const { messages } = await list(coordinator);
 
     expect(messages).toMatchObject([
-      { id: "m1", role: "user", text: "Fix checkout", threadId: null, projectId: "proj_1" },
+      {
+        id: "m1",
+        role: "user",
+        sender: "person",
+        text: "Fix checkout",
+        threadId: null,
+        projectId: "proj_1",
+      },
       { id: "m2", role: "assistant", blocks: [{ type: "text", text: "On it." }] },
       {
         id: "m3",
@@ -137,19 +144,19 @@ describe("listWireMessages", () => {
       { id: "m2", role: "user", text: "Skip the beta", steers: "m3" },
     ]);
     expect((await list(coordinator)).messages[0]).not.toHaveProperty("steers");
-    // The coordinator's words relayed into a thread keep their shape, and say where they went.
+    // The coordinator's words relayed into a thread keep their sender, and say where they went.
     expect((await list(thread)).messages).toMatchObject([
-      { id: "t0", role: "user" },
-      { id: "t1", role: "assistant", steers: "t9" },
+      { id: "t0", role: "user", sender: "person" },
+      { id: "t1", role: "user", sender: "coordinator", steers: "t9" },
     ]);
   });
 
-  test("a brief the coordinator relayed into a thread is an assistant message with the forwarded quote first", async () => {
+  test("each message to a thread names its sender: the coordinator's brief with the person's quote, a steer, the person, a routine, AOP", async () => {
     await addMessage(thread.id, {
       id: "m1",
       role: "user",
       content: "Redate the draft",
-      origin: { type: "coordinator-relay", quote: "release moved to Monday" },
+      origin: { type: "coordinator-relay", quote: "release moved to Monday", brief: true },
       turn: 1,
     });
     await addMessage(thread.id, {
@@ -160,21 +167,66 @@ describe("listWireMessages", () => {
       turn: 2,
     });
     await addMessage(thread.id, { id: "m3", role: "user", content: "b", turn: 3 });
+    await addMessage(thread.id, {
+      id: "m4",
+      role: "user",
+      content: "CI failed on the PR. Fix it.",
+      origin: { type: "pull-request-watch", claimId: "fix_1" },
+      turn: 4,
+    });
+    await addMessage(thread.id, {
+      id: "m5",
+      role: "user",
+      content: 'This thread was started by the routine "Deps".\n\nCheck the deps',
+      origin: { type: "routine", routineId: "rtn_1", name: "Deps", prompt: "Check the deps" },
+      turn: 5,
+    });
 
     const { messages } = await list(thread);
 
-    expect(messages).toMatchObject([
-      {
-        role: "assistant",
+    expect(messages).toEqual([
+      expect.objectContaining({
+        role: "user",
         threadId: "isess_thread",
-        blocks: [
-          { type: "quote-forwarded", text: "release moved to Monday" },
-          { type: "text", text: "Redate the draft" },
-        ],
-      },
-      { role: "assistant", blocks: [{ type: "text", text: "Audit the retries" }] },
-      { role: "user", text: "b", threadId: "isess_thread" },
+        sender: "coordinator",
+        brief: true,
+        quote: "release moved to Monday",
+        text: "Redate the draft",
+      }),
+      expect.objectContaining({ role: "user", sender: "coordinator", text: "Audit the retries" }),
+      expect.objectContaining({ role: "user", sender: "person", text: "b" }),
+      expect.objectContaining({
+        role: "user",
+        sender: "system",
+        text: "CI failed on the PR. Fix it.",
+      }),
+      expect.objectContaining({
+        role: "user",
+        sender: "routine",
+        brief: true,
+        routine: { id: "rtn_1", name: "Deps" },
+        text: "Check the deps",
+      }),
     ]);
+    // Only a brief says so, and only a forward carries a quote.
+    expect(messages[1]).not.toHaveProperty("brief");
+    expect(messages[1]).not.toHaveProperty("quote");
+    expect(messages[2]).not.toHaveProperty("brief");
+  });
+
+  test("a routine's message to the coordinator is the routine's, and no brief", async () => {
+    await addMessage(coordinator.id, {
+      id: "m1",
+      role: "user",
+      content: "[Routine] Check the deps",
+      origin: { type: "routine", routineId: "rtn_1", name: "Deps", prompt: "Check the deps" },
+      turn: 1,
+    });
+
+    const [message] = (await list(coordinator)).messages;
+
+    expect(message).toMatchObject({ role: "user", sender: "routine", text: "Check the deps" });
+    expect(message).not.toHaveProperty("brief");
   });
 
   test("an assistant message is its text followed by the blocks its run's tools produced", async () => {

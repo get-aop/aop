@@ -11,7 +11,6 @@ import {
   type InlineBlock,
   proseOf,
 } from "./inline-run";
-import { QuoteForwarded } from "./QuoteForwarded";
 import { RoutingReceipt } from "./RoutingReceipt";
 import { SuggestedThreads } from "./SuggestedThreads";
 import { ThreadChip } from "./ThreadChip";
@@ -97,8 +96,6 @@ const GroupView = ({
       );
     case "suggested-threads":
       return <SuggestedThreads messageId={messageId} suggestions={block.suggestions} />;
-    case "quote-forwarded":
-      return <QuoteForwarded text={block.text} />;
     case "steer":
       return renderSteer?.(block.messageId) ?? null;
     case "artifact":

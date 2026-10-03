@@ -31,6 +31,7 @@ export const launchRun = async (
       const spawned = await services.threads.spawn(routine.project_id, {
         title: `${routine.name} · ${shortDate(run.occurrence)}`,
         prompt: threadBrief(routine, run.occurrence),
+        routine: { id: routine.id, name: routine.name, prompt: routine.prompt },
         repoId: routine.repo_id,
         model: routine.model,
         effort: routine.effort,

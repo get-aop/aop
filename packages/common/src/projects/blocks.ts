@@ -111,12 +111,6 @@ const RoutingReceiptBlockSchema = z.object({
     }),
 });
 
-/** The collapsible "Message forwarded from project chat" quote at the top of a thread. */
-const QuoteForwardedBlockSchema = z.object({
-  type: z.literal("quote-forwarded"),
-  text: z.string().min(1),
-});
-
 export const SUGGESTED_THREADS_MAX = 8;
 /** A reason is one line under the title, so it is kept to what one line holds. */
 export const SUGGESTION_REASON_MAX = 140;
@@ -175,7 +169,6 @@ export const MessageBlockSchema = z.discriminatedUnion("type", [
   PrChipBlockSchema,
   ThreadCardBlockSchema,
   RoutingReceiptBlockSchema,
-  QuoteForwardedBlockSchema,
   SuggestedThreadsBlockSchema,
 ]);
 export type MessageBlock = z.infer<typeof MessageBlockSchema>;

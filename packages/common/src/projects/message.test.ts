@@ -48,15 +48,28 @@ describe("MessageSchema", () => {
     expect(parsed(MessageSchema, message)).toEqual(message);
   });
 
-  test("accepts a relay into a thread: forwarded quote, then the brief", () => {
-    const message = makeAssistantMessage({
+  test("accepts the coordinator's brief to a thread, with the person's words it forwards", () => {
+    const message = makeUserMessage({
       threadId: "thr_1",
-      blocks: [
-        { type: "quote-forwarded", text: "release moved to Monday" },
-        { type: "text", text: "Redate the draft and confirm here." },
-      ],
+      sender: "coordinator",
+      brief: true,
+      quote: "release moved to Monday",
+      text: "Redate the draft and confirm here.",
     });
     expect(parsed(MessageSchema, message)).toEqual(message);
+  });
+
+  test("accepts each sender, and a message from a host that names none", () => {
+    for (const sender of ["person", "coordinator", "routine", "system", undefined]) {
+      const message = makeUserMessage({ threadId: "thr_1", ...(sender && { sender }) });
+      expect(parsed(MessageSchema, message)).toEqual(message);
+    }
+  });
+
+  test("refuses an unknown sender, an empty quote, and a brief flag that is not true", () => {
+    expect(rejectedPaths(MessageSchema, makeUserMessage({ sender: "thread" }))).toEqual(["sender"]);
+    expect(rejectedPaths(MessageSchema, makeUserMessage({ quote: "" }))).toEqual(["quote"]);
+    expect(rejectedPaths(MessageSchema, makeUserMessage({ brief: false }))).toEqual(["brief"]);
   });
 
   test("accepts a thread report, which lives in the coordinator chat", () => {

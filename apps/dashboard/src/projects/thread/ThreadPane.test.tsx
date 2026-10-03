@@ -88,17 +88,15 @@ describe("a thread that is not there", () => {
 
 describe("the transcript", () => {
   const brief = () =>
-    reply(
-      "m_brief",
-      1,
-      [
-        { type: "quote-forwarded", text: "release moved to Monday" },
-        { type: "text", text: "Redate the draft to Monday." },
-      ],
-      inThread,
-    );
+    userMessage("m_brief", 1, {
+      ...inThread,
+      sender: "coordinator",
+      brief: true,
+      quote: "release moved to Monday",
+      text: "Redate the draft to Monday.",
+    });
 
-  test("loads the thread's own messages: the brief with its forwarded quote, the person's words, the agent's reply", async () => {
+  test("loads the thread's own messages: the coordinator's brief with the person's quote, the person's words, the agent's reply", async () => {
     await setupPane(host, {
       messages: [
         brief(),
@@ -107,14 +105,21 @@ describe("the transcript", () => {
       ],
     });
 
-    expect(await screen.findByTestId("quote-forwarded-text")).toBeTruthy();
-    expect(screen.getByTestId("quote-forwarded-text").textContent).toBe("release moved to Monday");
+    expect(await screen.findByTestId("forwarded-quote-text")).toBeTruthy();
+    expect(screen.getByTestId("forwarded-quote-text").textContent).toBe("release moved to Monday");
+    expect(screen.getByTestId("sent-message-sender").textContent).toBe(
+      "Brief from the coordinator",
+    );
     const text = screen.getByTestId("chat-scroll").textContent ?? "";
     expect(text).toContain("Redate the draft to Monday.");
     expect(text).toContain("Also fix the footer");
     expect(text).toContain("Both done.");
-    expect(screen.getAllByTestId("user-message")).toHaveLength(1);
-    expect(screen.getAllByTestId("assistant-message")).toHaveLength(2);
+    // The brief is the coordinator's, the footer the person's: one card on the left, one bubble.
+    expect(
+      screen.getAllByTestId("user-message").map((row) => row.getAttribute("data-sender")),
+    ).toEqual(["coordinator", null]);
+    expect(screen.getAllByTestId("sent-message")).toHaveLength(1);
+    expect(screen.getAllByTestId("assistant-message")).toHaveLength(1);
     expect(messagesRequests()).toHaveLength(1);
   });
 
@@ -147,7 +152,7 @@ describe("the transcript", () => {
       thread: makeThread({ id: "thr_1", status: "working" }),
       messages: [brief()],
     });
-    await screen.findByTestId("assistant-message");
+    await screen.findByTestId("sent-message");
     expect(screen.getByTestId("thread-working").textContent).toContain("is working");
 
     act(() =>
@@ -181,7 +186,7 @@ describe("the transcript", () => {
       thread: makeThread({ id: "thr_1", status: "working" }),
       messages: [brief()],
     });
-    await screen.findByTestId("assistant-message");
+    await screen.findByTestId("sent-message");
 
     act(() =>
       stream.stub.emit({ kind: "delta", delta: delta("m_live", "Running the tests.", inThread) }),
@@ -285,7 +290,7 @@ describe("the transcript", () => {
       thread: makeThread({ id: "thr_1", status: "working" }),
       messages: [brief()],
     });
-    await screen.findByTestId("assistant-message");
+    await screen.findByTestId("sent-message");
 
     act(() => {
       stream.stub.emit({
@@ -312,12 +317,13 @@ describe("the transcript", () => {
     expect(text).not.toContain("Coordinator text");
     expect(text).not.toContain("From thread two");
     expect(text).not.toContain("From the coordinator");
-    expect(screen.getAllByTestId("assistant-message")).toHaveLength(1);
+    expect(screen.queryAllByTestId("assistant-message")).toHaveLength(0);
+    expect(screen.getAllByTestId("user-message")).toHaveLength(1);
   });
 
   test("a resync refetches the transcript", async () => {
     const stream = await setupPane(host, { messages: [brief()] });
-    await screen.findByTestId("assistant-message");
+    await screen.findByTestId("sent-message");
     stream.serveMessages([
       brief(),
       reply("m_late", 4, [{ type: "text", text: "Caught up." }], inThread),

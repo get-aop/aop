@@ -169,6 +169,21 @@ describe("the coordinator", () => {
 
     expect(decide(entryFor({ message: typed }))).toBeNull();
   });
+
+  test("does not announce what the coordinator sends a thread: its own chat already says so", () => {
+    for (const brief of [true, undefined]) {
+      const sent = coordinatorPost("x", {
+        role: "user",
+        threadId: "thr_1",
+        sender: "coordinator",
+        text: "Fix the login redirect.",
+        blocks: undefined,
+        ...(brief && { brief }),
+      });
+
+      expect(decide(entryFor({ message: sent }))).toBeNull();
+    }
+  });
 });
 
 describe("pull requests", () => {

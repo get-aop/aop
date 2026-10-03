@@ -342,6 +342,38 @@ describe("a message sent into a turn while it ran", () => {
     expect(assistantOf("a1").contains(row)).toBe(true);
   });
 
+  test("the coordinator's message keeps its card and the person's quote inside the reply", () => {
+    renderList({
+      messages: [
+        userMessage("u1", 1, { threadId: "thr_1" }),
+        reply(
+          "a1",
+          3,
+          [
+            { type: "text", text: "Building for x86" },
+            { type: "steer", messageId: "c1" },
+          ],
+          { inReplyTo: "u1", threadId: "thr_1" },
+        ),
+        userMessage("c1", 2, {
+          threadId: "thr_1",
+          sender: "coordinator",
+          quote: "use arm64",
+          text: "The person wants arm64.",
+          steers: "a1",
+        }),
+      ],
+      worker: THREAD_WORKER,
+    });
+
+    const row = steered("c1");
+    expect(row.getAttribute("data-sender")).toBe("coordinator");
+    expect(row.className).toContain("items-start");
+    expect(within(row).getByTestId("sent-message-sender").textContent).toBe("Coordinator");
+    expect(within(row).getByTestId("forwarded-quote-text").textContent).toBe("use arm64");
+    expect(assistantOf("a1").contains(row)).toBe(true);
+  });
+
   test("a stopped turn that never took it in says so", () => {
     renderList({
       messages: [

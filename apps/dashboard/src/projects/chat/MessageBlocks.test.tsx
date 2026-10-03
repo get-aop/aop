@@ -313,20 +313,6 @@ describe("thread card", () => {
   });
 });
 
-describe("forwarded quote", () => {
-  test("shows what the person said, under the label the thread reads", () => {
-    renderBlocks([
-      { type: "quote-forwarded", text: "release moved to Monday" },
-      { type: "text", text: "Redate the draft." },
-    ]);
-
-    expect(screen.getByTestId("quote-forwarded").textContent).toContain(
-      "Message forwarded from project chat",
-    );
-    expect(screen.getByTestId("quote-forwarded-text").textContent).toBe("release moved to Monday");
-  });
-});
-
 describe("a block the app does not know", () => {
   test("is left out and the rest of the message still shows", async () => {
     renderBlocks([

@@ -119,14 +119,14 @@ describe("thread_steer to a working thread", () => {
 
     const messages = await messagesOf(s, `/api/threads/${threadId}/messages`);
     const replies = messages.filter(
-      (message): message is AssistantMessage => message.role === "assistant" && !message.steers,
+      (message): message is AssistantMessage => message.role === "assistant",
     );
-    // The brief, the thread's one reply, and the relayed steer inside it.
-    expect(replies).toHaveLength(2);
+    // The thread's one reply, with the coordinator's steer inside it.
+    expect(replies).toHaveLength(1);
     const reply = replies.at(-1);
     const [steerId] = steerPartsOf(reply);
     const relayed = messages.find((message) => message.id === steerId);
-    expect(relayed).toMatchObject({ role: "assistant", steers: reply?.id });
+    expect(relayed).toMatchObject({ role: "user", sender: "coordinator", steers: reply?.id });
     expect(JSON.stringify(reply?.blocks)).toContain("Built for arm64");
     expect((await runsOf(s, threadId)).map((run) => run.status)).toEqual(["completed"]);
     const thread = (await s.api<{ thread: Thread }>("GET", `/api/threads/${threadId}`)).body.thread;

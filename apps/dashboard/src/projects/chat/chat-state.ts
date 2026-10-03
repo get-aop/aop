@@ -199,7 +199,7 @@ export const isUserSide = (message: Message): boolean =>
  * inside it, and needs no reply of its own; it is neither a reply nor something left to answer.
  */
 export const steersOf = (message: Message): string | undefined =>
-  message.role === "thread-report" ? undefined : message.steers;
+  message.role === "user" ? message.steers : undefined;
 
 /**
  * Where a message that is new to the page goes. A reply sits right after the message it says it

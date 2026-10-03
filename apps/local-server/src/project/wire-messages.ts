@@ -230,7 +230,7 @@ export const scopeOf = (session: ChatSession): MessageScope => {
 };
 
 // A user-role row is the person's words, unless an origin says the server or the coordinator
-// wrote it: a report (shown as an event line) or a brief relayed into a thread.
+// wrote it: a report (shown as an event line), or a message whose sender the chat names.
 const userSideMessage = (
   base: { id: string; projectId: string; threadId: string | null; createdAt: string },
   text: string,
@@ -249,23 +249,29 @@ const userSideMessage = (
     case "coordinator-relay":
       return {
         ...base,
-        role: "assistant",
-        blocks: [
-          ...(origin.quote ? [{ type: "quote-forwarded", text: origin.quote }] : []),
-          { type: "text", text },
-        ],
+        role: "user",
+        sender: "coordinator",
+        text,
+        ...(origin.quote && { quote: origin.quote }),
+        ...(origin.brief && { brief: true }),
       };
     case "routine":
       return {
         ...base,
         role: "user",
+        sender: "routine",
         text: origin.prompt,
         routine: { id: origin.routineId, name: origin.name },
+        // In a thread, a routine's message is the brief of the thread its run started.
+        ...(base.threadId !== null && { brief: true }),
       };
+    case "pull-request-watch":
+      return { ...base, role: "user", sender: "system", text };
     default:
       return {
         ...base,
         role: "user",
+        sender: "person",
         text: shownUserText(text, origin),
         ...(images.length > 0 && { images }),
       };

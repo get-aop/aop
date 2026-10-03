@@ -94,13 +94,7 @@ describe("a thread's transcript, steering and reply", () => {
     );
 
     expect(messages.body.messages).toMatchObject([
-      {
-        role: "assistant",
-        blocks: [
-          { type: "quote-forwarded", text: "make it safer" },
-          { type: "text", text: "Audit" },
-        ],
-      },
+      { role: "user", sender: "coordinator", brief: true, quote: "make it safer", text: "Audit" },
       {
         role: "assistant",
         blocks: [{ type: "text", text: expect.stringContaining("Fake reply") }],
@@ -125,7 +119,7 @@ describe("a thread's transcript, steering and reply", () => {
     ]);
     expect(newest.body.hasMore).toBe(true);
     expect(older.body.messages).toMatchObject([
-      { role: "assistant", blocks: [{ type: "text", text: "Audit" }] },
+      { role: "user", sender: "coordinator", brief: true, text: "Audit" },
     ]);
     expect(older.body.hasMore).toBe(false);
     expect(unknown).toMatchObject({ status: 400, body: { code: "INVALID_MESSAGE" } });

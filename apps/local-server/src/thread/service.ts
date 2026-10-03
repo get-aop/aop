@@ -55,6 +55,11 @@ export interface SpawnThreadInput {
   /** The person's own words, shown as a forwarded quote above the brief. */
   quote?: string | null;
   /**
+   * The routine whose run starts the thread, and its brief as the person wrote it: the brief is
+   * shown as the routine's. Without one the brief is the coordinator's.
+   */
+  routine?: { id: string; name: string; prompt: string };
+  /**
    * Runs the thread read-only whatever access the project gives its threads: file edits and
    * commands that change things are denied, for good (a new project's survey).
    */
@@ -305,7 +310,7 @@ export const createThreadService = (
     }
     const sent = await chat.sendMessage(thread.id, {
       content: input.prompt,
-      origin: { type: "coordinator-relay", quote: input.quote?.trim() || null },
+      origin: briefOrigin(input),
     });
     if (sent.success) return reload(thread.id);
     await removeThread(thread);
@@ -425,3 +430,9 @@ const threadSession = async (ctx: LocalServerContext, threadId: string) => {
   const session = await ctx.chatSessionRepository.getById(threadId);
   return session?.kind === "thread" ? session : null;
 };
+
+// Who wrote a new thread's brief: the routine that started it, or the coordinator.
+const briefOrigin = ({ routine, quote }: SpawnThreadInput): MessageOrigin =>
+  routine
+    ? { type: "routine", routineId: routine.id, name: routine.name, prompt: routine.prompt }
+    : { type: "coordinator-relay", quote: quote?.trim() || null, brief: true };
