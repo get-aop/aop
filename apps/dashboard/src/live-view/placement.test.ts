@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
   clampToViewport,
+  cornerColumn,
   cornerPosition,
   DEFAULT_CORNER,
+  floorAbove,
   INSETS,
   isCorner,
   movedPastThreshold,
   nearestCorner,
   popupWidth,
+  restingPlace,
 } from "./placement";
 
 const viewport = { width: 1200, height: 800 };
@@ -21,8 +24,64 @@ describe("live view placement", () => {
     expect(cornerPosition("bottom-right", size, viewport)).toEqual({ x: 900, y: 576 });
   });
 
-  test("starts top right, away from the composers' send buttons at the bottom", () => {
-    expect(DEFAULT_CORNER).toBe("top-right");
+  test("starts bottom right, in the gap under the threads list", () => {
+    expect(DEFAULT_CORNER).toBe("bottom-right");
+    const floor = floorAbove([], cornerColumn("bottom-right", 288, viewport), viewport);
+    expect(restingPlace(DEFAULT_CORNER, size, viewport, floor)).toEqual({
+      position: { x: 900, y: 576 },
+      shown: "bottom-right",
+    });
+  });
+
+  test("a bottom corner rests above a composer in its column, not one in another column", () => {
+    // A thread's composer across the threads panel (right), the coordinator's in the chat (left).
+    const threadComposer = { left: 700, top: 650, right: 1180, bottom: 788 };
+    const chatComposer = { left: 24, top: 600, right: 640, bottom: 788 };
+    const right = cornerColumn("bottom-right", 288, viewport);
+    expect(right).toEqual({ left: 900, right: 1188 });
+
+    const floor = floorAbove([threadComposer, chatComposer], right, viewport);
+    expect(floor).toBe(650 - INSETS.bottom);
+    expect(restingPlace("bottom-right", size, viewport, floor).position).toEqual({
+      x: 900,
+      y: 650 - 12 - 212,
+    });
+
+    const left = cornerColumn("bottom-left", 288, viewport);
+    expect(floorAbove([threadComposer, chatComposer], left, viewport)).toBe(600 - 12);
+  });
+
+  test("a composer that is not on screen (no box) is not in the way", () => {
+    const hidden = { left: 0, top: 0, right: 0, bottom: 0 };
+    const column = cornerColumn("bottom-right", 288, viewport);
+    expect(floorAbove([hidden], column, viewport)).toBe(800 - 12);
+  });
+
+  test("with no room above the composer it rests top right instead, and says so", () => {
+    // A 400px phone-sized window, 420px tall: the composer leaves 120px above it.
+    const small = { width: 400, height: 420 };
+    const popup = { width: popupWidth(400), height: 32 + 105 };
+    const composer = { left: 0, top: 280, right: 400, bottom: 420 };
+    const floor = floorAbove([composer], cornerColumn("bottom-right", popup.width, small), small);
+    expect(restingPlace("bottom-right", popup, small, floor)).toEqual({
+      position: { x: 400 - 12 - 168, y: INSETS.top },
+      shown: "top-right",
+    });
+    // Taller, the same window has room: back to the bottom.
+    const tall = { width: 400, height: 800 };
+    const lower = { ...composer, top: 660, bottom: 800 };
+    const tallFloor = floorAbove([lower], cornerColumn("bottom-right", 168, tall), tall);
+    expect(restingPlace("bottom-right", popup, tall, tallFloor)).toEqual({
+      position: { x: 220, y: 660 - 12 - 137 },
+      shown: "bottom-right",
+    });
+  });
+
+  test("a top corner ignores the composers", () => {
+    expect(restingPlace("top-left", size, viewport, 300)).toEqual({
+      position: { x: 12, y: INSETS.top },
+      shown: "top-left",
+    });
   });
 
   test("snaps to the corner nearest to where it was let go", () => {

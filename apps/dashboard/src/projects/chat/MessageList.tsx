@@ -4,6 +4,7 @@ import { memo, type ReactNode, useMemo, useRef, useState } from "react";
 import { MarkerSeparator } from "@/ui/marker";
 import { MessageScroller } from "@/ui/message-scroller";
 import { Spinner } from "@/ui/spinner";
+import { useLiveViewClearance } from "../../live-view/live-view-clearance";
 import { useNow } from "../use-now";
 import { buildRows, type ChatRow } from "./chat-rows";
 import type { EarlierMessages, LiveTurn } from "./chat-state";
@@ -54,6 +55,8 @@ export const MessageList = ({
   const [window, setWindow] = useState(INITIAL_WINDOW);
   const [atEnd, setAtEnd] = useState(true);
   const scroller = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const clearance = useLiveViewClearance(content);
 
   const { rows, hidden } = useMemo(
     () => buildRows({ messages, live, working, firstNewId, window }),
@@ -81,7 +84,12 @@ export const MessageList = ({
           onEdgeChange={setAtEnd}
           className="overflow-x-hidden overscroll-contain"
         >
-          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end px-6 pb-4 pt-6">
+          {/* Room at the end for the live view's popup, when it rests at the bottom over the messages. */}
+          <div
+            ref={content}
+            style={clearance ? { paddingBottom: clearance } : undefined}
+            className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end px-6 pb-4 pt-6"
+          >
             {hidden > 0 ? (
               <button
                 type="button"
