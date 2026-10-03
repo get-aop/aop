@@ -1,5 +1,6 @@
 package com.getaop.mobile.core.notify
 
+import com.getaop.mobile.core.chat.questionOf
 import com.getaop.mobile.core.session.HostChange
 import com.getaop.mobile.core.wire.Message
 import com.getaop.mobile.core.wire.MessageRole
@@ -39,7 +40,9 @@ data class NotificationPrefs(
  * Which host changes deserve a phone notification. It follows the desktop app's policy
  * (apps/desktop/electron/notifications/policy.ts) so both say the same things: a thread that
  * needs you or failed, a pull request that landed or was closed, coordinator posts, and each
- * finished turn on `every-turn`. A phone adds one: a pull request that became ready for review.
+ * finished turn on `every-turn`. A phone adds two: a pull request that became ready for review,
+ * and a coordinator reply that asks the person something counts as needing them, so it shows
+ * even with coordinator replies switched off.
  *
  * Changes older than [staleAfterMs] are history: a phone that slept replays what it missed,
  * and a burst of old alerts would bury the one that matters. The window is wider than the
@@ -60,6 +63,10 @@ class NotificationPolicy(private val staleAfterMs: Long = 30 * 60_000L) {
 
     /** True when a notification about this thread should be taken back: it was dealt with elsewhere. */
     fun isSettled(thread: Thread): Boolean = !thread.unread && !thread.needsYou
+
+    /** True when the person spoke in the coordinator chat, here or elsewhere: what it asked is answered. */
+    fun settlesChat(message: Message): Boolean =
+        message.threadId == null && message.role == MessageRole.USER && (message.sender ?: "person") == "person"
 
     private fun forThread(change: HostChange.ThreadChanged): NotificationIntent? {
         val thread = change.thread
@@ -106,7 +113,12 @@ class NotificationPolicy(private val staleAfterMs: Long = 30 * 60_000L) {
     private fun forMessage(change: HostChange.MessageArrived): NotificationIntent? {
         val message = change.message
         if (message.role == MessageRole.ASSISTANT && message.threadId == null) {
-            return intent(change, NotificationKind.COORDINATOR, firstText(message), null)
+            val question = questionOf(message)?.question
+            return if (question != null) {
+                intent(change, NotificationKind.NEEDS_YOU, question, null)
+            } else {
+                intent(change, NotificationKind.COORDINATOR, firstText(message), null)
+            }
         }
         if (message.role != MessageRole.THREAD_REPORT) return null
         val title = change.threadTitle ?: "A thread"

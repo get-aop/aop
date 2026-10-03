@@ -20,11 +20,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.getaop.mobile.core.chat.answersOf
 import com.getaop.mobile.core.session.HostState
 import com.getaop.mobile.ui.main.Detail
 import com.getaop.mobile.ui.main.MainViewModel
@@ -42,6 +49,24 @@ fun ChatPane(
 ) {
     LaunchedEffect(detail) { viewModel.load(detail) }
     val project = host.project(detail.projectId)
+    val composer = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val messages = host.chats[detail.chatKey]?.messages.orEmpty()
+    val answers = remember(messages) { answersOf(messages) }
+    val sends by viewModel.questionSends.collectAsStateWithLifecycle()
+    val paused = project?.status == "paused"
+    val answering = remember(answers, sends, paused, detail.projectId) {
+        QuestionAnswering(
+            answers = answers,
+            sends = sends,
+            disabledReason = if (paused) "Paused. Resume the project to talk to the coordinator." else null,
+            onAnswer = { messageId, label -> viewModel.answerQuestion(detail.projectId, messageId, label) },
+            onOther = {
+                composer.requestFocus()
+                keyboard?.show()
+            },
+        )
+    }
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             navigationIcon = {
@@ -55,12 +80,15 @@ fun ChatPane(
             },
             windowInsets = WindowInsets(0),
         )
-        Conversation(host, detail, onOpenThread = { onOpen(Detail(detail.projectId, it)) }, modifier = Modifier.weight(1f))
+        CompositionLocalProvider(LocalQuestionAnswering provides answering) {
+            Conversation(host, detail, onOpenThread = { onOpen(Detail(detail.projectId, it)) }, modifier = Modifier.weight(1f))
+        }
         Composer(
             initial = viewModel.draft(detail.chatKey),
             placeholder = "Message the coordinator",
             onDraft = { viewModel.setDraft(detail.chatKey, it) },
             onSend = { viewModel.send(detail.chatKey, it) },
+            focusRequester = composer,
         )
     }
 }

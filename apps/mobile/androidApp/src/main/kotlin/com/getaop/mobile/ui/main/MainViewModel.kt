@@ -13,15 +13,19 @@ import com.getaop.mobile.core.session.HostState
 import com.getaop.mobile.data.PairState
 import com.getaop.mobile.data.PhoneSettings
 import com.getaop.mobile.notify.ConnectionService
+import com.getaop.mobile.ui.chat.QuestionSend
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 
@@ -59,6 +63,14 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     /** Drafts per conversation, so text typed on the cover screen is still there unfolded. */
     private val drafts = mutableMapOf<ChatKey, String>()
 
+    private val sendingAnswers = MutableStateFlow<Map<String, QuestionSend>>(emptyMap())
+
+    /**
+     * Taps on a coordinator question's options on their way, by the id of the reply that asks.
+     * Kept here, not in the pane, so a fold or unfold mid-send keeps the button busy.
+     */
+    val questionSends: StateFlow<Map<String, QuestionSend>> = sendingAnswers.asStateFlow()
+
     fun selectProject(projectId: String?) {
         saved[KEY_PROJECT] = projectId
         if (projectId != null) viewModelScope.launch { app.sessions.session?.loadThreads(projectId) }
@@ -88,12 +100,29 @@ class MainViewModel(application: Application, private val saved: SavedStateHandl
     }
 
     /** Sends to the coordinator or a thread; returns why it failed, or null. The draft clears on success. */
-    suspend fun send(key: ChatKey, text: String): String? {
+    suspend fun send(key: ChatKey, text: String): String? =
+        deliver(key, text).also { if (it == null) drafts.remove(key) }
+
+    /**
+     * Answers a coordinator question with an option's label, as the person's reply. A draft in
+     * the message box stays. The button stays busy until the reply is in the chat, which closes
+     * the question; on failure it is usable again, with the reason.
+     */
+    fun answerQuestion(projectId: String, messageId: String, label: String) {
+        if (sendingAnswers.value[messageId]?.let { it.error == null } == true) return
+        sendingAnswers.update { it + (messageId to QuestionSend(label)) }
+        viewModelScope.launch {
+            val failure = deliver(ChatKey(projectId, null), label)
+            if (failure == null) app.notifier.cancel(projectId, null)
+            sendingAnswers.update { if (failure == null) it - messageId else it + (messageId to QuestionSend(label, failure)) }
+        }
+    }
+
+    private suspend fun deliver(key: ChatKey, text: String): String? {
         val session = app.sessions.session ?: return "Not connected."
         return try {
             val threadId = key.threadId
             if (threadId == null) session.sendCoordinatorMessage(key.projectId, text) else session.sendThreadMessage(threadId, text)
-            drafts.remove(key)
             session.loadChat(key)
             null
         } catch (error: HostError) {

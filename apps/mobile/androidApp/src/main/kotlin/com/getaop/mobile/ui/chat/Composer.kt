@@ -25,6 +25,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.getaop.mobile.ui.theme.AopColors
 import com.getaop.mobile.ui.theme.ComposerShape
@@ -41,6 +44,8 @@ fun Composer(
     onDraft: (String) -> Unit,
     onSend: suspend (String) -> String?,
     enabled: Boolean = true,
+    /** Lets the conversation put the cursor here, as a question's "Other…" does. */
+    focusRequester: FocusRequester? = null,
 ) {
     var text by remember(initial) { mutableStateOf(initial) }
     var sending by remember { mutableStateOf(false) }
@@ -71,7 +76,11 @@ fun Composer(
                 placeholder = { Text(placeholder) },
                 shape = ComposerShape,
                 maxLines = 6,
-                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                    .testTag("composer"),
             )
             IconButton(onClick = { send() }, enabled = enabled && text.isNotBlank() && !sending) {
                 if (sending) CircularProgressIndicator(Modifier.padding(4.dp), strokeWidth = 2.dp) else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
