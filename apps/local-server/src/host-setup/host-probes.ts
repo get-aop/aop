@@ -4,6 +4,7 @@ import {
   buildChannel,
   type CuaLeaseState,
   type UpdateInstallMode,
+  UpdateInstallModeSchema,
 } from "@aop/common";
 import { getLogger } from "@aop/infra";
 import { runWithTimeout } from "../agent-cli/probe.ts";
@@ -89,17 +90,14 @@ export const createHostProbes = (sources: HostSetupSources): HostSetupProbes => 
   };
 };
 
-/**
- * When the host installs a new build by itself. Reads the one setting this build has for it:
- * AOP Nightly installs when idle while `update_auto_apply` is on, and Stable always asks. Kept to
- * this one function so the `update_install` setting (ask | idle | window) replaces it here.
- */
+/** When the host installs a new build by itself: the `update_install` setting and its window. */
 export const readUpdateInstall = async (
   settings: SettingsRepository,
 ): Promise<{ mode: UpdateInstallMode; window: string | null }> => {
-  if (buildChannel().id !== "nightly") return { mode: "ask", window: null };
-  const autoApply = await settings.get(SettingKey.UPDATE_AUTO_APPLY);
-  return { mode: autoApply === "true" ? "idle" : "ask", window: null };
+  const mode = UpdateInstallModeSchema.safeParse(await settings.get(SettingKey.UPDATE_INSTALL));
+  const window = await settings.get(SettingKey.UPDATE_INSTALL_WINDOW);
+  const installs = mode.data ?? "ask";
+  return { mode: installs, window: installs === "window" ? window : null };
 };
 
 // Read on each look: a service can be installed while the host runs.

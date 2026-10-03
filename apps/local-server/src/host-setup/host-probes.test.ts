@@ -104,17 +104,17 @@ describe("host probes", () => {
 });
 
 describe("readUpdateInstall", () => {
-  test("follows update_auto_apply on Nightly and always asks on Stable", async () => {
+  test("reads update_install, and the window only when it installs in one", async () => {
     const ctx = await createTestContext();
     try {
-      await ctx.settingsRepository.set(SettingKey.UPDATE_AUTO_APPLY, "true");
-      const on = await readUpdateInstall(ctx.settingsRepository);
-      await ctx.settingsRepository.set(SettingKey.UPDATE_AUTO_APPLY, "false");
-      const off = await readUpdateInstall(ctx.settingsRepository);
+      await ctx.settingsRepository.set(SettingKey.UPDATE_INSTALL, "idle");
+      const idle = await readUpdateInstall(ctx.settingsRepository);
+      await ctx.settingsRepository.set(SettingKey.UPDATE_INSTALL, "window");
+      await ctx.settingsRepository.set(SettingKey.UPDATE_INSTALL_WINDOW, "02:00-05:00");
+      const window = await readUpdateInstall(ctx.settingsRepository);
 
-      const nightly = buildChannel().id === "nightly";
-      expect(on).toEqual({ mode: nightly ? "idle" : "ask", window: null });
-      expect(off).toEqual({ mode: "ask", window: null });
+      expect(idle).toEqual({ mode: "idle", window: null });
+      expect(window).toEqual({ mode: "window", window: "02:00-05:00" });
     } finally {
       await ctx.db.destroy();
     }

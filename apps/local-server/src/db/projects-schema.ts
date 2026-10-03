@@ -68,7 +68,7 @@ export interface DevicesTable {
   token_hash: string;
   created_at: Generated<string>;
   last_seen_at: string | null;
-  /** The client it last connected with (migration v27): `desktop` or `browser`; null until then. */
+  /** The client it last connected with (migration v28): `desktop` or `browser`; null until then. */
   client_app: string | null;
   client_version: string | null;
   client_platform: string | null;
