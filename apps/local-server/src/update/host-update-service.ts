@@ -3,7 +3,9 @@ import { type HostRestart, normalizeReleaseVersion } from "@aop/common";
 import { readHostManagement } from "../auth/host-management.ts";
 import type { LocalServerContext } from "../context.ts";
 import { listRunningTurns } from "../scheduling/capacity.ts";
+import type { SettingsRepository } from "../settings/repository.ts";
 import { SettingKey } from "../settings/types.ts";
+import { createReleaseStager } from "./background-download.ts";
 import {
   type InstallLayout,
   layoutOf,
@@ -11,11 +13,17 @@ import {
   selfUpdateBlock,
   selfUpdateRefusal,
 } from "./install-layout.ts";
-import { feedConfigFromEnv } from "./release-feed.ts";
+import { type InstallPolicy, parseInstallPolicy } from "./install-policy.ts";
+import { type FeedConfig, feedConfigFromEnv } from "./release-feed.ts";
 import { detectRestartPlan } from "./restart.ts";
 import { startUpdaterProcess } from "./spawn-updater.ts";
-import { systemPlanInput } from "./system.ts";
-import { createUpdateService, type UpdateService } from "./update-service.ts";
+import { stagedReleasesDir } from "./staged-files.ts";
+import { hostPlatform, systemPlanInput } from "./system.ts";
+import {
+  type BackgroundDownload,
+  createUpdateService,
+  type UpdateService,
+} from "./update-service.ts";
 
 /**
  * The update service of the host this process is. `AOP_BUILD_VERSION` is set by the compiled
@@ -42,14 +50,28 @@ export const createHostUpdateService = (
     restart: () => restartOf(block, layout, env),
     runningTurns: () => listRunningTurns(ctx.db),
     hostManagement: () => readHostManagement(ctx.settingsRepository),
-    autoApply:
-      feed.channel === "nightly"
-        ? {
-            enabled: async () =>
-              (await ctx.settingsRepository.get(SettingKey.UPDATE_AUTO_APPLY)) === "true",
-          }
-        : undefined,
+    installPolicy: () => readInstallPolicy(ctx.settingsRepository),
+    download: layout ? backgroundDownload(ctx.settingsRepository, feed) : undefined,
   });
+};
+
+const readInstallPolicy = async (settings: SettingsRepository): Promise<InstallPolicy> =>
+  parseInstallPolicy(
+    await settings.get(SettingKey.UPDATE_INSTALL),
+    await settings.get(SettingKey.UPDATE_INSTALL_WINDOW),
+  );
+
+// Only an installed build stages releases, and only for a platform AOP publishes a host for.
+const backgroundDownload = (
+  settings: SettingsRepository,
+  feed: FeedConfig,
+): BackgroundDownload | undefined => {
+  const platform = hostPlatform();
+  if (!platform) return undefined;
+  return {
+    enabled: async () => (await settings.get(SettingKey.UPDATE_BACKGROUND_DOWNLOAD)) === "true",
+    stager: createReleaseStager({ root: stagedReleasesDir(), feed, platform }),
+  };
 };
 
 // "soulf.local" and "soulf.tailffbdec.ts.net" are both "soulf" to the person.

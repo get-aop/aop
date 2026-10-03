@@ -3,6 +3,7 @@ import {
   AGENT_SESSION_HEADER,
   type ApplyUpdateRequest,
   PairedDeviceSchema,
+  UpdateLogSchema,
   type UpdateStatus,
   UpdateStatusSchema,
 } from "@aop/common";
@@ -61,7 +62,9 @@ describe("update routes", () => {
     },
     runQueued: async () => {},
     runDueCheck: async () => {},
-    runAutoApply: async () => {},
+    runBackgroundDownload: async () => {},
+    runAutoInstall: async () => {},
+    log: async () => ({ path: "/home/m/.aop/logs/update.log", lines: ["Downloading AOP 0.10.0"] }),
     start: () => {},
     stop: () => {},
   };
@@ -211,7 +214,9 @@ describe("update routes", () => {
 
     for (const key of [
       "update_check",
-      "update_auto_apply",
+      "update_install",
+      "update_install_window",
+      "update_background_download",
       "agent_cli_auto_update",
       "agent_cli_check_interval_minutes",
     ]) {
@@ -247,7 +252,7 @@ describe("update routes", () => {
 
     const res = await remote("/api/settings", {
       method: "PUT",
-      ...json({ settings: [{ key: "update_auto_apply", value: "false" }] }, { authorization }),
+      ...json({ settings: [{ key: "update_install", value: "window" }] }, { authorization }),
     });
 
     expect(res.status).toBe(200);
@@ -261,9 +266,9 @@ describe("update routes", () => {
       method: "PUT",
       ...json({ value: "devices" }, agent),
     });
-    const autoApply = await local("/api/settings", {
+    const autoInstall = await local("/api/settings", {
       method: "PUT",
-      ...json({ settings: [{ key: "update_auto_apply", value: "true" }] }, agent),
+      ...json({ settings: [{ key: "update_install", value: "idle" }] }, agent),
     });
     const bypass = await local("/api/settings/agent_cli_skip_permissions", {
       method: "PUT",
@@ -271,13 +276,28 @@ describe("update routes", () => {
     });
     const status = await local("/api/updates", { headers: agent });
 
-    for (const res of [apply, setting, autoApply, bypass]) {
+    for (const res of [apply, setting, autoInstall, bypass]) {
       expect(res.status).toBe(403);
       expect(((await res.json()) as { code: string }).code).toBe("AGENT_REFUSED");
     }
     expect(applied).toEqual([]);
     expect(status.status).toBe(200);
     expect(callers).toEqual([{ kind: "owner", agent: true }]);
+  });
+
+  test("the update log is for whoever may update the host", async () => {
+    const authorization = `Bearer ${await pairDevice()}`;
+
+    const owner = await local("/api/updates/log");
+    expect(owner.status).toBe(200);
+    expect(UpdateLogSchema.parse(await owner.json())).toEqual({
+      path: "/home/m/.aop/logs/update.log",
+      lines: ["Downloading AOP 0.10.0"],
+    });
+    expect((await remote("/api/updates/log", { headers: { authorization } })).status).toBe(200);
+
+    await narrowToHostMachine();
+    expect((await remote("/api/updates/log", { headers: { authorization } })).status).toBe(403);
   });
 
   test("an apply that cannot start says why with 409, and a bad when is a 400", async () => {

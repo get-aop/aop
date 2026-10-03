@@ -52,7 +52,9 @@ describe("settings/routes", () => {
         { key: "routine_max_active_per_project", value: "10" },
         { key: "routine_min_interval_minutes", value: "15" },
         { key: "update_check", value: "true" },
-        { key: "update_auto_apply", value: "false" },
+        { key: "update_background_download", value: "true" },
+        { key: "update_install", value: "ask" },
+        { key: "update_install_window", value: "01:00-06:00" },
       ]);
       expect(body.settings).toHaveLength(VALID_KEYS.length);
     });
@@ -145,6 +147,34 @@ describe("settings/routes", () => {
       expect(bulk.status).toBe(400);
       expect(((await bulk.json()) as AnyJson).error).toBe("Invalid value");
       expect(await ctx.settingsRepository.get("max_concurrent_runs")).toBe("4");
+    });
+
+    test("takes an install policy and window hours only in their own shapes", async () => {
+      const mode = await putJson(app, "/api/settings/update_install", { value: "window" });
+      const hours = await putJson(app, "/api/settings/update_install_window", {
+        value: "22:30-05:00",
+      });
+      expect([mode.status, hours.status]).toEqual([200, 200]);
+
+      const badMode = await putJson(app, "/api/settings/update_install", { value: "true" });
+      const badHours = await putJson(app, "/api/settings/update_install_window", {
+        value: "06:00-06:00",
+      });
+      const badDownload = await putJson(app, "/api/settings/update_background_download", {
+        value: "yes",
+      });
+      expect([badMode.status, badHours.status, badDownload.status]).toEqual([400, 400, 400]);
+      expect(((await badMode.json()) as AnyJson).message).toBe(
+        'update_install must be "ask", "idle" or "window"',
+      );
+      expect(await ctx.settingsRepository.get("update_install")).toBe("window");
+      expect(await ctx.settingsRepository.get("update_install_window")).toBe("22:30-05:00");
+    });
+
+    test("no longer knows update_auto_apply", async () => {
+      const res = await putJson(app, "/api/settings/update_auto_apply", { value: "true" });
+
+      expect(res.status).toBe(400);
     });
 
     test("rejects removed keys such as Jira credentials", async () => {

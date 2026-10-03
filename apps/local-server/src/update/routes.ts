@@ -29,5 +29,8 @@ export const createUpdateRoutes = (updates: UpdateService) => {
     return c.body(null, 204);
   });
 
+  // "Show log" after a failed update: the end of the updater's own log.
+  routes.get("/log", async (c) => c.json(await updates.log()));
+
   return routes;
 };

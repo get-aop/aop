@@ -26,6 +26,7 @@ import { SUGGESTION_ANSWERS_V10_STATEMENTS } from "./suggestion-answers-v10.ts";
 import { THREAD_ATTENTION_V21_STATEMENTS } from "./thread-attention-v21.ts";
 import { THREAD_GIT_V6_STATEMENTS } from "./thread-git-v6.ts";
 import { TURN_PARTS_V16_STATEMENTS } from "./turn-parts-v16.ts";
+import { UPDATE_INSTALL_V27_STATEMENTS } from "./update-install-v27.ts";
 import { USAGE_V3_STATEMENTS } from "./usage-v3.ts";
 
 export interface Migration {
@@ -66,6 +67,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 24, name: "artifacts", statements: ARTIFACTS_V24_STATEMENTS },
   { version: 25, name: "project-runtime", statements: PROJECT_RUNTIME_V25_STATEMENTS },
   { version: 26, name: "message-senders", statements: MESSAGE_SENDERS_V26_STATEMENTS },
+  { version: 27, name: "update-install", statements: UPDATE_INSTALL_V27_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

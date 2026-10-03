@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { isNewerBuild } from "@aop/common";
+import { isNewerBuild, type ReleaseInfo } from "@aop/common";
 import type { HostPlatform, InstallLayout } from "./install-layout.ts";
 import { type FeedConfig, type FetchFn, fetchLatestRelease, messageOf } from "./release-feed.ts";
 import {
@@ -9,7 +9,8 @@ import {
   type RestartTools,
   restartHost,
 } from "./restart.ts";
-import { type StageTools, stageRelease } from "./stage.ts";
+import { type StagedRelease, type StageTools, stageRelease } from "./stage.ts";
+import { pruneStagedReleases, stagedFetch } from "./staged-files.ts";
 import { swapIn } from "./swap.ts";
 
 export type UpdateResult =
@@ -29,6 +30,8 @@ export interface UpdateDeps {
   planInput: Omit<PlanInput, "layout">;
   /** True once the host answers `/api/health` with `version`, false after the wait runs out. */
   waitForVersion: (version: string) => Promise<boolean>;
+  /** Where the host stages releases ahead of time (staged-files.ts); none, always download. */
+  stagedDir?: string;
   log: (line: string) => void;
 }
 
@@ -46,8 +49,7 @@ export const updateHost = async (deps: UpdateDeps): Promise<UpdateResult> => {
     return { status: "up-to-date", current, latest: release.version };
   }
 
-  log(`Downloading AOP ${release.version}`);
-  const staged = await stageRelease(release, deps.platform, deps.layout, deps.stageTools);
+  const staged = await stage(release, deps);
   const plan = await detectRestartPlan({ ...deps.planInput, layout: deps.layout });
   log(`Installing AOP ${release.version}`);
   const swapped = await swapIn(staged, deps.layout).catch(async (error) => {
@@ -74,6 +76,28 @@ export const updateHost = async (deps: UpdateDeps): Promise<UpdateResult> => {
   }
   await swapped.commit();
   return { status: "updated", from: current, to: release.version, restarted: true };
+};
+
+// A release the host downloaded ahead of time is taken from there and checked again like a
+// download; if it cannot be used after all, it is dropped and the release downloaded afresh.
+const stage = async (release: ReleaseInfo, deps: UpdateDeps): Promise<StagedRelease> => {
+  const local = deps.stagedDir
+    ? await stagedFetch(release, deps.stagedDir, deps.stageTools.fetch)
+    : null;
+  if (local && deps.stagedDir) {
+    deps.log(`Using AOP ${release.version}, downloaded ahead of time`);
+    try {
+      return await stageRelease(release, deps.platform, deps.layout, {
+        ...deps.stageTools,
+        fetch: local,
+      });
+    } catch (error) {
+      deps.log(`The download made ahead of time cannot be used (${messageOf(error)})`);
+      await pruneStagedReleases(deps.stagedDir, null);
+    }
+  }
+  deps.log(`Downloading AOP ${release.version}`);
+  return stageRelease(release, deps.platform, deps.layout, deps.stageTools);
 };
 
 const putOldBack = async (

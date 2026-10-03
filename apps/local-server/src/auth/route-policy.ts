@@ -37,13 +37,15 @@ const MANAGER_ROUTES: readonly RoutePattern[] = [
   // cancels an update queued for later.
   ["POST", /^\/api\/updates\/(apply|check)\/?$/],
   ["DELETE", /^\/api\/updates\/apply\/?$/],
+  // The updater's log, for "Show log" after a failed update: paths and errors from the host.
+  ["GET", /^\/api\/updates\/log\/?$/],
   // Installs a new version of an agent CLI on the host.
   ["POST", /^\/api\/agent-clis\/([^/]+\/update|check)\/?$/],
   // When the host updates itself and its agent CLIs (settings/types.ts MANAGER_SETTING_KEYS; a
   // bulk write of them is checked in settings/routes.ts).
   [
     "PUT",
-    /^\/api\/settings\/(update_check|update_auto_apply|agent_cli_auto_update|agent_cli_check_interval_minutes)\/?$/,
+    /^\/api\/settings\/(update_check|update_install|update_install_window|update_background_download|agent_cli_auto_update|agent_cli_check_interval_minutes)\/?$/,
   ],
 ];
 

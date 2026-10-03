@@ -2,9 +2,13 @@ import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { HostManagement, ReleaseChannel } from "@aop/common";
 import { type InstallLayout, layoutOf } from "./install-layout.ts";
+import type { InstallPolicy } from "./install-policy.ts";
+import type { RunningTurnRef } from "./queued-update.ts";
 import { downloadFetch } from "./release-feed.ts";
 import type { StageTools } from "./stage.ts";
+import type { UpdateServiceDeps } from "./update-service.ts";
 
 export const PLATFORM = { os: "darwin", arch: "arm64" } as const;
 export const BINARY_ASSET = "aop-darwin-arm64";
@@ -36,6 +40,8 @@ export interface FakeRelease {
   files: Map<string, Uint8Array>;
   /** Each request as `<path> <authorization or "-">`. */
   requests: string[];
+  /** Fields added to `releases/latest.json`, such as the `cuaDriver` a release pins. */
+  feedExtras: Record<string, unknown>;
   stop: () => void;
 }
 
@@ -65,6 +71,7 @@ export const startFakeRelease = async (options: FakeReleaseOptions): Promise<Fak
   const digests = new Map([...files].map(([name, data]) => [name, sha256(data)]));
   if (options.corruptBinary) digests.set(binaryAssetOf(options), sha256(PROMISED));
   const requests: string[] = [];
+  const feedExtras: Record<string, unknown> = {};
   const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     hostname: "127.0.0.1",
@@ -73,13 +80,22 @@ export const startFakeRelease = async (options: FakeReleaseOptions): Promise<Fak
       const authorization = request.headers.get("authorization");
       requests.push(`${pathname} ${authorization ?? "-"}`);
       const base = `http://127.0.0.1:${server.port}`;
-      return routeFakeRelease({ pathname, authorization, base, options, files, digests });
+      return routeFakeRelease({
+        pathname,
+        authorization,
+        base,
+        options,
+        files,
+        digests,
+        feedExtras,
+      });
     },
   });
   return {
     url: `http://127.0.0.1:${server.port}`,
     files,
     requests,
+    feedExtras,
     stop: () => server.stop(true),
   };
 };
@@ -93,6 +109,7 @@ interface FakeRequest {
   options: FakeReleaseOptions;
   files: Map<string, Uint8Array>;
   digests: Map<string, string>;
+  feedExtras: Record<string, unknown>;
 }
 
 const routeFakeRelease = (req: FakeRequest): Response => {
@@ -101,7 +118,7 @@ const routeFakeRelease = (req: FakeRequest): Response => {
   if (pathname === "/releases/latest.json") {
     return options.feedDown
       ? new Response("missing", { status: 404 })
-      : Response.json(feedOf(options, base, files, req.digests));
+      : Response.json({ ...feedOf(options, base, files, req.digests), ...req.feedExtras });
   }
   if (pathname.endsWith("/releases/latest")) {
     return withToken(req, () => Response.json(githubReleaseOf(options.version, base, files)));
@@ -202,4 +219,83 @@ export const serve = (handler: (request: Request) => Response) => {
     port: server.port ?? 0,
     stop: () => server.stop(true),
   };
+};
+
+export interface ServiceHarness {
+  deps: UpdateServiceDeps;
+  home: string;
+  release: FakeRelease;
+  startedUpdaters: number;
+  clock: { now: number };
+  setEnabled: (enabled: boolean) => void;
+  /** The turns the host is running; tests change it as turns start and end. */
+  turns: RunningTurnRef[];
+  management: { setting: HostManagement };
+  /** The `update_install` settings; tests change them. */
+  policy: InstallPolicy;
+  /** The minute of the day on the host's clock. */
+  minute: { value: number };
+}
+
+export interface ServiceHarnessOptions {
+  latest?: string;
+  current?: string;
+  supported?: boolean;
+  startUpdater?: () => Promise<void>;
+  channel?: ReleaseChannel;
+}
+
+export const serviceTurn = (runId: string, title = `Thread ${runId}`): RunningTurnRef => ({
+  runId,
+  title,
+  kind: "thread",
+});
+
+/** An update service over a fake feed and a scratch home; `cleanup` gets what to stop after. */
+export const createServiceHarness = async (
+  options: ServiceHarnessOptions,
+  cleanup: Array<() => void>,
+): Promise<ServiceHarness> => {
+  const release = await startFakeRelease({ version: options.latest ?? "0.10.0" });
+  cleanup.push(release.stop);
+  const home = await scratchDir("service");
+  let enabled = true;
+  const harness: ServiceHarness = {
+    deps: {} as UpdateServiceDeps,
+    home,
+    release,
+    startedUpdaters: 0,
+    clock: { now: Date.parse("2026-10-01T10:00:00Z") },
+    setEnabled: (value) => {
+      enabled = value;
+    },
+    turns: [],
+    management: { setting: "devices" },
+    policy: { mode: "ask", window: [60, 360] },
+    minute: { value: 10 * 60 },
+  };
+  harness.deps = {
+    isEnabled: async () => enabled,
+    unsupported:
+      options.supported === false
+        ? "This host runs from source and cannot update itself: pull and rebuild instead."
+        : null,
+    current: options.current ?? "0.9.51",
+    feed: { origin: release.url, channel: options.channel ?? "stable", github: null },
+    startUpdater:
+      options.startUpdater ??
+      (async () => {
+        harness.startedUpdaters += 1;
+      }),
+    now: () => harness.clock.now,
+    minuteOfDay: () => harness.minute.value,
+    home,
+    logFile: join(home, "logs", "update.log"),
+    hostName: "soulf",
+    restart: async () => "service",
+    runningTurns: async () => harness.turns,
+    hostManagement: async () => harness.management.setting,
+    installPolicy: async () => harness.policy,
+  };
+  return harness;
 };

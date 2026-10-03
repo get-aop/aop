@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { buildChannel } from "@aop/common";
 import { hostPort } from "./host-port.ts";
 import { waitForHostVersion, waitUntilHostDown } from "./host-probe.ts";
-import { detectPlatform, type InstallLayout } from "./install-layout.ts";
+import { detectPlatform, type HostPlatform, type InstallLayout } from "./install-layout.ts";
 import { apiFetch, downloadFetch, feedConfigFromEnv, messageOf } from "./release-feed.ts";
 import type { PlanInput, RestartTools } from "./restart.ts";
 import type { StageTools } from "./stage.ts";
+import { stagedReleasesDir } from "./staged-files.ts";
 import type { UpdateDeps } from "./update-host.ts";
 
 const START_TIMEOUT_MS = 60_000;
@@ -20,7 +21,7 @@ export const createSystemUpdateDeps = (
   log: (line: string) => void,
   env: NodeJS.ProcessEnv = process.env,
 ): UpdateDeps => {
-  const platform = detectPlatform(process.platform, process.arch, runsUnderRosetta());
+  const platform = hostPlatform();
   if (!platform)
     throw new Error(`No AOP host is published for ${process.platform}-${process.arch}`);
   const port = hostPort(env);
@@ -34,9 +35,14 @@ export const createSystemUpdateDeps = (
     restartTools: restartTools(port, env),
     planInput: systemPlanInput(env),
     waitForVersion: (version) => waitForHostVersion(port, version, START_TIMEOUT_MS),
+    stagedDir: stagedReleasesDir(),
     log,
   };
 };
+
+/** The published host build this machine runs, or null when AOP publishes none for it. */
+export const hostPlatform = (): HostPlatform | null =>
+  detectPlatform(process.platform, process.arch, runsUnderRosetta());
 
 /** What tells the restart how this host is kept running: the service files and `server.pid`. */
 export const systemPlanInput = (
