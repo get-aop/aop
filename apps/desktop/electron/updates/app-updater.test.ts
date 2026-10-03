@@ -180,6 +180,45 @@ describe("auto mode (Windows, and macOS once signed)", () => {
       message: "net::ERR_INTERNET_DISCONNECTED",
     });
   });
+
+  test("a download that fails stops saying it is downloading", async () => {
+    const { updater, states, fake } = setup({ mode: "auto" });
+    updater.start();
+    await settle();
+
+    fake.emit().available("0.10.0");
+    fake.emit().progress(30);
+    fake.emit().failed("net::ERR_CONNECTION_RESET");
+
+    expect(updater.state()).toEqual({ status: "idle" });
+    expect(states.at(-1)).toEqual({ status: "idle" });
+  });
+
+  test("a check after the download keeps the update ready to restart", async () => {
+    const { updater, fake } = setup({ mode: "auto" });
+    updater.start();
+    await settle();
+    fake.emit().available("0.10.0");
+    fake.emit().downloaded("0.10.0");
+
+    fake.emit().available("0.10.0");
+    fake.emit().failed("a later check could not reach the feed");
+
+    expect(updater.state()).toEqual({ status: "ready", version: "0.10.0" });
+    updater.restartToUpdate();
+    expect(fake.port.quitAndInstall).toHaveBeenCalledTimes(1);
+  });
+
+  test("a newer release than the one downloaded is downloaded in its turn", async () => {
+    const { updater, fake } = setup({ mode: "auto" });
+    updater.start();
+    await settle();
+    fake.emit().downloaded("0.10.0");
+
+    fake.emit().available("0.10.1");
+
+    expect(updater.state()).toEqual({ status: "downloading", version: "0.10.1", percent: 0 });
+  });
 });
 
 describe("off mode", () => {

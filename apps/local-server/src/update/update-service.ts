@@ -26,8 +26,8 @@ const APPLY_TIMEOUT_MS = 10 * 60 * 1000;
 export interface UpdateServiceDeps {
   /** The `update_check` setting. */
   isEnabled: () => Promise<boolean>;
-  /** Whether this host is an installed build that can replace itself. */
-  supported: boolean;
+  /** Why this host cannot replace itself (install-layout.ts selfUpdateRefusal), or null when it can. */
+  unsupported: string | null;
   /** The running release, `x.y.z`, or `dev`. */
   current: string;
   feed: FeedConfig;
@@ -106,7 +106,7 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
     if (progress.finished) applyingSince = null;
     return {
       enabled: await deps.isEnabled(),
-      supported: deps.supported,
+      supported: deps.unsupported === null,
       current: deps.current,
       latest: seen?.latest ?? null,
       available: seen !== null && isNewerBuild(seen.latest, deps.current, deps.feed.channel),
@@ -124,9 +124,7 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
   };
 
   const apply = async (): Promise<ApplyResult> => {
-    if (!deps.supported) {
-      return { ok: false, error: "This host runs from source and cannot update itself" };
-    }
+    if (deps.unsupported !== null) return { ok: false, error: deps.unsupported };
     if (applyingSince !== null) return { ok: false, error: "An update is already running" };
     await runCheck();
     const seen = await loadRecord();
@@ -155,7 +153,7 @@ export const createUpdateService = (deps: UpdateServiceDeps): UpdateService => {
 
   // The newer build the last check saw, when this host may install it by itself; else null.
   const autoApplyCandidate = async (auto: AutoApply): Promise<string | null> => {
-    if (!deps.supported || applyingSince !== null) return null;
+    if (deps.unsupported !== null || applyingSince !== null) return null;
     const seen = await loadRecord();
     if (!seen || !isNewerBuild(seen.latest, deps.current, deps.feed.channel)) return null;
     const allowed =

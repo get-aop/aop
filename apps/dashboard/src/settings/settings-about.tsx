@@ -1,14 +1,17 @@
+import { buildChannel, type UpdateStatus } from "@aop/common";
 import { ExternalLinkIcon } from "lucide-react";
 
 import { Button } from "@/ui/button";
 import { DashboardVersion } from "../components/DashboardVersion";
-import { UpdateNowButton } from "../updates/UpdateNotice";
-import { checkForUpdates } from "../updates/update-store";
+import { ReleaseNotesLink, UpdateNowButton } from "../updates/UpdateNotice";
+import { checkForUpdates, useUpdates } from "../updates/update-store";
 import { useUpdateStatus } from "../updates/use-update-status";
 import { useIsHostOwner } from "./use-host-owner";
 
 /** Settings §About: the host's version, whether a newer one is out, and a link to the release notes. */
 export const SettingsAbout = () => {
+  // UpdateStatusRow below reads the host's status; this only shares what it found.
+  const notesUrl = releaseNotesUrl(useUpdates().status);
   return (
     <div data-testid="section-about" className="flex flex-col gap-3 p-4">
       <div className="flex items-center gap-3 rounded-row border border-border bg-raised px-3 py-2.5">
@@ -18,18 +21,26 @@ export const SettingsAbout = () => {
 
       <UpdateStatusRow />
 
-      <a
-        href="https://github.com/get-aop/aop/releases"
-        target="_blank"
-        rel="noreferrer"
-        className="flex items-center gap-1.5 rounded-row px-1 text-[12.5px] text-running hover:underline"
-      >
-        Release notes
-        <ExternalLinkIcon className="size-3" />
-      </a>
+      {notesUrl ? (
+        <ReleaseNotesLink
+          url={notesUrl}
+          testId="about-release-notes"
+          className="flex items-center gap-1.5 rounded-row px-1 text-[12.5px] text-running hover:underline"
+        >
+          Release notes
+          <ExternalLinkIcon className="size-3" />
+        </ReleaseNotesLink>
+      ) : null}
     </div>
   );
 };
+
+/** Stable releases are also on GitHub; AOP Nightly's builds are only in the host's feed. */
+const STABLE_RELEASES_URL = "https://github.com/get-aop/aop/releases";
+
+/** The notes of the newest release the host has seen, else the stable release list. */
+const releaseNotesUrl = (status: UpdateStatus | null): string | null =>
+  status?.releaseUrl ?? (buildChannel().id === "stable" ? STABLE_RELEASES_URL : null);
 
 const UpdateStatusRow = () => {
   const { status, checking, target } = useUpdateStatus();

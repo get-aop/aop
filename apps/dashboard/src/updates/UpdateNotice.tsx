@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
 import { openExternalUrl } from "../api/settings";
@@ -86,9 +86,19 @@ const Available = ({ version, releaseUrl, owner, failure, onDismiss }: Available
   </>
 );
 
-export const ReleaseNotesLink = ({ url }: { url: string }) => (
+export const ReleaseNotesLink = ({
+  url,
+  testId = "update-release-notes-link",
+  className = "text-running hover:underline",
+  children = "Release notes",
+}: {
+  url: string;
+  testId?: string;
+  className?: string;
+  children?: ReactNode;
+}) => (
   <a
-    data-testid="update-release-notes-link"
+    data-testid={testId}
     href={url}
     target="_blank"
     rel="noreferrer"
@@ -96,9 +106,9 @@ export const ReleaseNotesLink = ({ url }: { url: string }) => (
       event.preventDefault();
       openExternalUrl(url);
     }}
-    className="text-running hover:underline"
+    className={className}
   >
-    Release notes
+    {children}
   </a>
 );
 

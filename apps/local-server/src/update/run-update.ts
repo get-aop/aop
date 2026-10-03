@@ -1,5 +1,5 @@
 import { buildChannel, isNewerBuild, normalizeReleaseVersion } from "@aop/common";
-import { detectInstall } from "./install-layout.ts";
+import { detectInstall, selfUpdateBlock, selfUpdateRefusal } from "./install-layout.ts";
 import { apiFetch, feedConfigFromEnv, fetchLatestRelease, messageOf } from "./release-feed.ts";
 import { createSystemUpdateDeps } from "./system.ts";
 import { type OutcomeRecord, writeOutcomeRecord } from "./update-files.ts";
@@ -22,9 +22,7 @@ export interface RunUpdateInput {
 export const runUpdate = async (input: RunUpdateInput): Promise<number> => {
   const { buildVersion, print, env = process.env } = input;
   if (!buildVersion?.trim()) {
-    print(
-      "aop update works on an installed aop. This one runs from source: pull and rebuild instead.",
-    );
+    print(selfUpdateRefusal("source", input.execPath));
     return 1;
   }
   const current = normalizeReleaseVersion(buildVersion);
@@ -35,8 +33,8 @@ export const runUpdate = async (input: RunUpdateInput): Promise<number> => {
     }
     const layout = detectInstall(input.execPath, buildVersion);
     if (!layout) {
-      print(`aop update replaces the installed "aop" binary, and this one is ${input.execPath}.`);
-      print("Install the release with install.sh, or run `aop update --check` to only look.");
+      const block = selfUpdateBlock(input.execPath, buildVersion) ?? "other-binary";
+      print(selfUpdateRefusal(block, input.execPath));
       return 1;
     }
     const result = await updateHost(createSystemUpdateDeps(layout, current, print, env));
@@ -96,8 +94,9 @@ const printResult = (result: UpdateResult, print: (line: string) => void): void 
   } else if (result.status === "updated") {
     print(`Updated AOP from ${result.from} to ${result.to}.`);
     if (!result.restarted) {
-      print("This host was not started as a service or with `aop run --background`, so it is");
-      print("still running the old release. Stop it and run `aop run` to use the new one.");
+      const bin = buildChannel().binaryName;
+      print(`This host was not started as a service or with \`${bin} run --background\`, so it is`);
+      print(`still running the old release. Stop it and run \`${bin} run\` to use the new one.`);
     }
   }
 };

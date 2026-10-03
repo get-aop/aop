@@ -100,12 +100,22 @@ export const createAppUpdater = (deps: AppUpdaterDeps): AppUpdater => {
 
   const listen = (port: AutoUpdaterPort): void =>
     port.listen({
-      available: (version) => set({ status: "downloading", version, percent: 0 }),
+      // electron-updater announces a release it has already downloaded again at every check;
+      // that must not take a ready update back to "downloading".
+      available: (version) => {
+        if (state.status === "ready" && state.version === version) return;
+        set({ status: "downloading", version, percent: 0 });
+      },
       progress: (percent) => {
         if (state.status === "downloading") set({ ...state, percent: Math.round(percent) });
       },
       downloaded: (version) => set({ status: "ready", version }),
-      failed: (message) => deps.log("update failed", { message }),
+      // A download that failed is over: the next check starts it again. Left as it was, the menu
+      // would say "Downloading… N%" until then.
+      failed: (message) => {
+        deps.log("update failed", { message });
+        if (state.status === "downloading") set({ status: "idle" });
+      },
     });
 
   return {

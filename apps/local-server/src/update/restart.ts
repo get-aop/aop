@@ -87,7 +87,9 @@ export const restartHost = async (
     case "background":
       return restartBackground(plan, layout, tools);
     case "manual":
-      throw new Error("The host was not started as a service or with `aop run --background`");
+      throw new Error(
+        `The host was not started as a service or with \`${buildChannel().binaryName} run --background\``,
+      );
   }
 };
 

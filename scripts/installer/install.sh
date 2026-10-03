@@ -264,11 +264,22 @@ resolve_install_dir() {
 
 EXISTING_VERSION=""
 
+# The bare release version an installed binary reports. It prints
+# `aop/<version>[+<commit>] <platform> <runtime>` (`aop-nightly/…` for AOP Nightly), and the
+# release version has no commit.
+installed_version() {
+  local printed
+  printed="$("$1" --version 2>/dev/null || true)"
+  printed="${printed#*/}"
+  printed="${printed%% *}"
+  printf '%s' "${printed%%+*}"
+}
+
 check_existing_installation() {
   local existing_bin="${INSTALL_DIR}/${BIN_NAME}"
 
   if [ -x "$existing_bin" ]; then
-    EXISTING_VERSION="$("$existing_bin" --version 2>/dev/null || echo "")"
+    EXISTING_VERSION="$(installed_version "$existing_bin")"
     if [ "$EXISTING_VERSION" = "$VERSION" ]; then
       echo "${PRODUCT_NAME} $VERSION is already installed; refreshing assets and service"
     fi
@@ -406,7 +417,9 @@ install_binary() {
     codesign --force --sign - "$target"
   fi
 
-  if [ -n "$EXISTING_VERSION" ]; then
+  if [ "$EXISTING_VERSION" = "$VERSION" ]; then
+    echo "Reinstalled ${PRODUCT_NAME} $VERSION at $target"
+  elif [ -n "$EXISTING_VERSION" ]; then
     echo "Upgraded ${PRODUCT_NAME} from $EXISTING_VERSION to $VERSION"
   else
     echo "Installed ${PRODUCT_NAME} $VERSION to $target"

@@ -57,6 +57,33 @@ describe("install.sh host install", () => {
     expect(await box.runInstalled(["--version"])).toBe(`aop/${VERSION} stub`);
   });
 
+  test("reinstalling the same release says so instead of an upgrade", async () => {
+    const box = await createBox();
+    await box.install(["--version", VERSION, "--no-service"]);
+
+    const result = await box.install(["--version", VERSION, "--no-service"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain(`AOP ${VERSION} is already installed`);
+    expect(result.output).toContain(`Reinstalled AOP ${VERSION}`);
+    expect(result.output).not.toContain("Upgraded");
+  });
+
+  test("an upgrade names the old release by its version alone", async () => {
+    const box = await createBox();
+    await mkdir(join(box.prefix, "bin"), { recursive: true });
+    await writeFile(
+      join(box.prefix, "bin", "aop"),
+      '#!/bin/sh\necho "aop/9.9.8+abc1234 darwin-arm64 bun-v1.3.14"\n',
+      { mode: 0o755 },
+    );
+
+    const result = await box.install(["--version", VERSION, "--no-service"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain(`Upgraded AOP from 9.9.8 to ${VERSION}`);
+  });
+
   test("an unstamped copy refuses to guess a version", async () => {
     const box = await createBox();
 
