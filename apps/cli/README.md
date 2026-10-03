@@ -44,7 +44,15 @@ Keys:
 | `max_concurrent_runs` | How many thread turns the host runs at once, from 1 to 32 (default 4); see [Run scheduling](../../docs/SCHEDULING.md) |
 | `agent_cli_skip_permissions` | `true` runs every Claude Code session with `--dangerously-skip-permissions` from its next turn (default `false`); host only, see [Runtimes](../../docs/RUNTIMES.md#skipping-permission-checks) |
 
-Runtime providers and models are easier to manage through **Settings → Runtimes**.
+Runtime providers and models are easier to manage through **AOP settings › Runtimes**.
+
+## Pairing
+
+```bash
+aop pair
+```
+
+Prints a one-time pairing code (it expires after ten minutes) and the host's addresses to enter it at, in the AOP app or a browser on another device. Run it on the host; AOP Nightly's is `aop-nightly pair`. When the host is not reachable from other devices yet, it prints the `tailscale serve` command too. See [Running the host](../../docs/HOST.md#pair-a-device).
 
 ## Service management
 

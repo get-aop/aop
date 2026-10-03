@@ -57,7 +57,7 @@ Clients follow a project over `GET /api/projects/:id/stream`, a server-sent even
 
 ## Dashboard
 
-The dashboard is Projects-first. `/` lists projects as cards, and a project opens on its Overview, its threads grouped by what they need from the person. The other project screens are the Coordinator chat, a single thread, and the project's settings. There is no sidebar: each screen has one top bar whose project switcher (the chip with the project's name, or ⌘K) lists every project with what waits in it, and holds New project, All projects and the AOP settings (⌘,); a + beside it starts a project. Settings for the host itself open as a dialog: General, Repositories, Runtimes, Devices and About. Any other path is rewritten to `/`. [Dashboard](../../apps/dashboard/README.md) has the route table and how the page stays current.
+The dashboard is Projects-first. `/` lists projects as cards, and a project opens on its Overview, its threads grouped by what they need from the person. The other project screens are the Coordinator chat, a single thread, and the project's settings. There is no sidebar: each screen has one top bar whose project switcher (the chip with the project's name, or ⌘K) lists every project with what waits in it, and holds New project, All projects and the AOP settings (⌘,); a + beside it starts a project. Settings for the host itself open as a dialog: General, Host (the setup checklist and paired devices), Updates, Repositories, Runtimes, Computer use and About. Any other path is rewritten to `/`. [Dashboard](../../apps/dashboard/README.md) has the route table and how the page stays current.
 
 ## Desktop and Windows
 
