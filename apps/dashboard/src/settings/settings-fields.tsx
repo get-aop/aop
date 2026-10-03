@@ -78,13 +78,13 @@ export const SETTING_META: Record<string, SettingMeta> = {
     description:
       buildChannel().id === "nightly"
         ? "Every hour the host looks for a newer nightly build of main and shows a notice here."
-        : "Once a day the host looks for a newer AOP release on GitHub and shows a notice here. It never installs anything without you.",
+        : "Once a day the host looks for a newer AOP release on getaop.com and shows a notice here. It never installs anything without you.",
     type: "toggle",
   },
   update_auto_apply: {
     label: "Install nightly builds automatically",
     description:
-      "When a newer nightly is out, the host installs it and restarts once no turn is running. Turn it off to stay on this build; Update now still works.",
+      "When a newer nightly is out, the host installs it and restarts once no turn is running. Turn it off to stay on this build; the host machine can still update it with Update now.",
     type: "toggle",
   },
   agent_cli_check_interval_minutes: {

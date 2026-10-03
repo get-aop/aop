@@ -9,7 +9,7 @@ import { configureLogging, getLogger } from "@aop/infra";
 import { startServer } from "@aop/local-server/server";
 import { runUpdate } from "@aop/local-server/update";
 import cac from "cac";
-import { isSystemdUserServiceActive, stopSystemdUserService } from "./systemd.ts";
+import { stopRunningService } from "./service.ts";
 
 declare const BUILD_VERSION: string;
 
@@ -87,8 +87,17 @@ const configureRuntimeEnvironment = (port?: string): number => {
   return Number.parseInt(localServerPort, 10);
 };
 
-const spawnSystemctl = (command: string[]): { exitCode: number | null } =>
+const spawnQuietly = (command: string[]): { exitCode: number | null } =>
   Bun.spawnSync(command, { stdout: "ignore", stderr: "ignore" });
+
+/** No launchctl or no systemd user session: there is no service, so fall back to the PID file. */
+const stopRunningServiceSafely = (): ReturnType<typeof stopRunningService> => {
+  try {
+    return stopRunningService({ platform: process.platform, spawnSync: spawnQuietly });
+  } catch {
+    return { kind: "none" };
+  }
+};
 
 const cli = cac(CHANNEL.binaryName);
 
@@ -148,22 +157,16 @@ cli
   });
 
 cli.command("stop", "Stop the local server").action(async () => {
-  // `aop run` under the systemd unit never writes a PID file, so the PID-file stop
-  // below would silently do nothing. Stop the unit when it manages this server; its detached
-  // agent runs keep going (KillMode=process), as they do under launchd.
-  if (process.platform === "linux") {
-    try {
-      if (isSystemdUserServiceActive(spawnSystemctl)) {
-        if (stopSystemdUserService(spawnSystemctl)) {
-          logger.info("Stopped the AOP local server systemd unit");
-          process.exit(0);
-        }
-        logger.error("Failed to stop the AOP local server systemd unit");
-        process.exit(1);
-      }
-    } catch {
-      // No systemd user session; fall back to the PID-file stop below.
-    }
+  // A host run by launchd or systemd never writes the PID file below, and launchd would start a
+  // killed one again: stop this channel's service through its manager first.
+  const service = stopRunningServiceSafely();
+  if (service.kind === "stopped") {
+    logger.info("Stopped the {service} service", { service: service.service });
+    process.exit(0);
+  }
+  if (service.kind === "failed") {
+    logger.error("Failed to stop the {service} service", { service: service.service });
+    process.exit(1);
   }
 
   const pid = await readPidFile();

@@ -44,7 +44,10 @@ const createHarness = async (
   };
   harness.deps = {
     isEnabled: async () => enabled,
-    supported: options.supported ?? true,
+    unsupported:
+      options.supported === false
+        ? "This host runs from source and cannot update itself: pull and rebuild instead."
+        : null,
     current: options.current ?? "0.9.51",
     feed: { origin: release.url, channel: "stable" as const, github: null },
     startUpdater:
@@ -165,7 +168,7 @@ describe("update service apply", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "This host runs from source and cannot update itself",
+      error: "This host runs from source and cannot update itself: pull and rebuild instead.",
     });
   });
 

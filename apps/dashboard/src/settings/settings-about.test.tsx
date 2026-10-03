@@ -54,6 +54,39 @@ describe("SettingsAbout update status", () => {
     expect(screen.queryByTestId("update-now-button")).toBeNull();
   });
 
+  test("links the notes of the release the host found, opened outside the app", async () => {
+    installFakeHost({
+      status: makeUpdateStatus({ releaseUrl: "https://getaop.com/nightly/releases/v0.10.8.md" }),
+    });
+    const opened: string[] = [];
+    const originalOpen = window.open;
+    window.open = ((url: string) => {
+      opened.push(url);
+      return null;
+    }) as typeof window.open;
+    try {
+      render(<SettingsAbout />);
+
+      await waitFor(() => expect(screen.getByTestId("about-release-notes")).toBeTruthy());
+      fireEvent.click(screen.getByTestId("about-release-notes"));
+
+      expect(opened).toEqual(["https://getaop.com/nightly/releases/v0.10.8.md"]);
+    } finally {
+      window.open = originalOpen;
+    }
+  });
+
+  test("a stable host that has not checked yet links the stable release list", async () => {
+    installFakeHost({ status: makeUpdateStatus({ releaseUrl: null, latest: null }) });
+    render(<SettingsAbout />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("about-release-notes").getAttribute("href")).toBe(
+        "https://github.com/get-aop/aop/releases",
+      ),
+    );
+  });
+
   test("shows no update row for a host that cannot update itself", async () => {
     const host = installFakeHost({ status: makeUpdateStatus({ supported: false }) });
     render(<SettingsAbout />);
