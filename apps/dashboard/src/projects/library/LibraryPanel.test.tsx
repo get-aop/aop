@@ -52,8 +52,8 @@ const brief = () =>
   });
 
 beforeEach(() => {
-  // The items' dates are relative to NOW, so "Removed in 2 days" must not drift with the real clock.
-  setSystemTime(new Date(NOW));
+  // The fixtures' dates are relative to NOW, and the panel counts days from the clock.
+  setSystemTime(NOW);
   window.localStorage.clear();
   window.history.replaceState(null, "", "/projects/p1/library");
   items = [report(), screenshot(), brief()];
@@ -104,9 +104,9 @@ const contentOf = (item: LibraryItem | undefined): Response =>
     : new Response(`# Report\n\nAll **good**. ${item?.name}`);
 
 afterEach(() => {
+  setSystemTime();
   cleanup();
   api.restore();
-  setSystemTime();
 });
 
 const renderPanel = async () => {
@@ -167,7 +167,7 @@ describe("the Library tab", () => {
 
     expect(rowNames()).toEqual(["lib_report"]);
     const expiry = screen.getByTestId("library-item-expiry");
-    expect(expiry.textContent).toMatch(/^Removed in [23] days$/);
+    expect(expiry.textContent).toBe("Removed in 2 days");
     expect(expiry.className).toContain("text-waiting");
     fireEvent.click(screen.getByTestId("library-crumb"));
     expect(screen.getAllByTestId("library-folder")).toHaveLength(3);

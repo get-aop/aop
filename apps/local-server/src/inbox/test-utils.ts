@@ -9,6 +9,7 @@ import type { IncomingMessage } from "./matcher.ts";
 import { createInboxService, type InboxService } from "./service.ts";
 import { createSlackConnectionStore } from "./sources/slack/connection-store.ts";
 import type { FakeSlack } from "./sources/slack/fake-slack.ts";
+import type { SlackServiceDeps } from "./sources/slack/service.ts";
 import { createSlackWebApi } from "./sources/slack/web-api.ts";
 
 export const SOURCE = "slack:T1";
@@ -54,7 +55,13 @@ export const createTestInbox = (
  */
 export const createTestHostInbox = (
   ctx: LocalServerContext,
-  options: { slack?: FakeSlack; deps?: Partial<HostInboxDeps>; testWaitMs?: number } = {},
+  options: {
+    slack?: FakeSlack;
+    deps?: Partial<HostInboxDeps>;
+    testWaitMs?: number;
+    now?: () => number;
+    createSocket?: SlackServiceDeps["createSocket"];
+  } = {},
 ) => {
   const db = openInboxDatabase(":memory:");
   const dir = mkdtempSync(join(tmpdir(), "aop-inbox-host-"));
@@ -76,6 +83,8 @@ export const createTestHostInbox = (
       spikeDir: join(dir, "spike"),
       testWaitMs: options.testWaitMs ?? 3_000,
       catchUpPauseMs: 0,
+      now: options.now,
+      createSocket: options.createSocket,
     },
   });
   return {
