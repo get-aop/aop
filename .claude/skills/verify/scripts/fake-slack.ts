@@ -46,25 +46,40 @@ const post = async (path: string, body: unknown = {}): Promise<unknown> => {
 
 const serve = (): void => {
   const slack = startFakeSlack({ port, events: !args.includes("--no-events") });
-  Bun.serve({ port: port + 1, hostname: "127.0.0.1", fetch: (request) => controlRoute(slack, request) });
+  Bun.serve({
+    port: port + 1,
+    hostname: "127.0.0.1",
+    fetch: (request) => controlRoute(slack, request),
+  });
   process.stdout.write(`fake Slack on ${slack.apiUrl} (control ${control})\n`);
+};
+
+type Body = Record<string, string>;
+
+const CONTROL: Record<string, (slack: FakeSlack, body: Body) => unknown> = {
+  "/say": (slack, body) =>
+    slack.say({
+      channel: body.channel ?? "",
+      user: body.user ?? "",
+      text: body.text ?? "",
+      threadTs: body.thread,
+    }),
+  "/edit": (slack, body) => slack.edit(body.channel ?? "", body.ts ?? "", body.text ?? ""),
+  "/remove": (slack, body) => slack.remove(body.channel ?? "", body.ts ?? ""),
+  "/events": (slack, body) => slack.setEvents(body.on === "on"),
+  "/refresh": (slack) => slack.refresh(),
+  "/drop": (slack) => slack.drop(),
+  "/state": () => undefined,
 };
 
 const controlRoute = async (slack: FakeSlack, request: Request): Promise<Response> => {
   const path = new URL(request.url).pathname;
-  const body = (await request.json().catch(() => ({}))) as Record<string, string>;
+  const body = (await request.json().catch(() => ({}))) as Body;
   process.stdout.write(`${new Date().toISOString()} control ${path} ${JSON.stringify(body)}\n`);
-  if (path === "/say") {
-    return Response.json(
-      slack.say({ channel: body.channel ?? "", user: body.user ?? "", text: body.text ?? "", threadTs: body.thread }),
-    );
-  }
-  if (path === "/edit") slack.edit(body.channel ?? "", body.ts ?? "", body.text ?? "");
-  else if (path === "/remove") slack.remove(body.channel ?? "", body.ts ?? "");
-  else if (path === "/events") slack.setEvents(body.on === "on");
-  else if (path === "/refresh") slack.refresh();
-  else if (path === "/drop") slack.drop();
-  else if (path !== "/state") return Response.json({ error: `unknown ${path}` }, { status: 404 });
+  const action = CONTROL[path];
+  if (!action) return Response.json({ error: `unknown ${path}` }, { status: 404 });
+  const result = action(slack, body);
+  if (result !== undefined) return Response.json(result);
   return Response.json({
     sockets: slack.sockets(),
     posted: slack.posted,
@@ -81,9 +96,23 @@ const scenario = async (): Promise<void> => {
   const say = (channel: string, user: string, text: string, thread?: string) =>
     post("/say", { channel, user, text, thread }) as Promise<{ ts: string }>;
   await say("D0JONAS", "U0JONAS", "are we still on for the release review at 3?");
-  const parent = await say("C0INFRA", "U0ANA", "deploy-check failed again on main. log: https://ci.example.dev/runs/412");
-  await say("C0INFRA", "U0MEI", "looks like the health probe starts before migrations finish", parent.ts);
-  await say("C0INFRA", "U0PRIYA", "<@U0ME> can you take the flaky deploy check? Blocking the 0.11 release.", parent.ts);
+  const parent = await say(
+    "C0INFRA",
+    "U0ANA",
+    "deploy-check failed again on main. log: https://ci.example.dev/runs/412",
+  );
+  await say(
+    "C0INFRA",
+    "U0MEI",
+    "looks like the health probe starts before migrations finish",
+    parent.ts,
+  );
+  await say(
+    "C0INFRA",
+    "U0PRIYA",
+    "<@U0ME> can you take the flaky deploy check? Blocking the 0.11 release.",
+    parent.ts,
+  );
   await say("C0ANNOUNCE", "U0ANA", "<!here> staging DB maintenance tonight 22:00-23:00 UTC");
   await say("C0DESIGN", "U0SAM", "<!subteam^S0PLATFORM|@platform-team> new tokens are in Figma");
   const mine = await say("C0PLATFORM", "U0ME", "retry backoff PR is up");
@@ -95,10 +124,11 @@ const scenario = async (): Promise<void> => {
   await post("/remove", { channel: "D0JONAS", ts: oops.ts });
 };
 
-const commands: Record<string, () => Promise<unknown> | void> = {
+const commands: Record<string, () => unknown> = {
   serve,
   scenario,
-  say: () => post("/say", { channel: rest[0], user: rest[1], text: rest[2], thread: flag("--thread") }),
+  say: () =>
+    post("/say", { channel: rest[0], user: rest[1], text: rest[2], thread: flag("--thread") }),
   edit: () => post("/edit", { channel: rest[0], ts: rest[1], text: rest[2] }),
   remove: () => post("/remove", { channel: rest[0], ts: rest[1] }),
   events: () => post("/events", { on: rest[0] }),
@@ -109,7 +139,9 @@ const commands: Record<string, () => Promise<unknown> | void> = {
 
 const run = commands[command];
 if (!run) {
-  process.stdout.write("usage: fake-slack.ts serve|scenario|say|edit|remove|events|refresh|drop|state\n");
+  process.stdout.write(
+    "usage: fake-slack.ts serve|scenario|say|edit|remove|events|refresh|drop|state\n",
+  );
   process.exit(1);
 }
 await run();

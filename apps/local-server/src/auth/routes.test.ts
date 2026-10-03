@@ -365,6 +365,8 @@ describe("auth routes", () => {
       // CUA Driver's gate for threads checks the same per-session MCP token itself.
       "POST /api/mcp/cua",
       "GET /api/mcp/cua",
+      // Slack sends the person's browser back here; the single-use sign-in state authenticates it.
+      "GET /api/inbox/sources/slack/oauth/callback",
     ]);
     const concrete = (path: string) => path.replace(/:[^/]+/g, "x");
 
