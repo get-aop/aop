@@ -10,6 +10,7 @@ import cac, { type CAC } from "cac";
 import {
   configGetCommand,
   configSetCommand,
+  pairCommand,
   repoInitCommand,
   repoRemoveCommand,
   sessionWorkspaceResetCommand,
@@ -21,6 +22,7 @@ declare const BUILD_VERSION: string;
 type CommandHandlers = {
   configGetCommand: typeof configGetCommand;
   configSetCommand: typeof configSetCommand;
+  pairCommand: typeof pairCommand;
   repoInitCommand: typeof repoInitCommand;
   repoRemoveCommand: typeof repoRemoveCommand;
   sessionWorkspaceResetCommand: typeof sessionWorkspaceResetCommand;
@@ -43,6 +45,7 @@ type CliDependencies = {
 const defaultCommandHandlers: CommandHandlers = {
   configGetCommand,
   configSetCommand,
+  pairCommand,
   repoInitCommand,
   repoRemoveCommand,
   sessionWorkspaceResetCommand,
@@ -158,6 +161,10 @@ export const registerCommands = (
   cli
     .command("config:set <key> <value>", "Set config value")
     .action((key, value) => commands.configSetCommand(key, value));
+
+  cli
+    .command("pair", "Print a code that pairs another device with this host (run it on the host)")
+    .action(async () => process.exit(await commands.pairCommand()));
 };
 
 export const createCli = (
