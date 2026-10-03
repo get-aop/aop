@@ -1,9 +1,10 @@
 import type { CuaLeaseState, LiveViewSession } from "@aop/common";
 import { ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { LiveViewFullscreen } from "./LiveViewFullscreen";
 import { FramePicture, LeaseSummary, LiveDot, SessionSwitcher, ThreadTitle } from "./LiveViewParts";
+import { setPopupAtBottom } from "./live-view-clearance";
 import {
   closeLiveView,
   setLiveViewFullscreen,
@@ -72,6 +73,20 @@ const LiveViewPopup = ({
     viewport,
     openFullscreen,
   );
+  const atBottom = !dragging && corner.startsWith("bottom");
+  useEffect(() => {
+    setPopupAtBottom(
+      atBottom
+        ? {
+            left: position.x,
+            top: position.y,
+            right: position.x + width,
+            bottom: position.y + height,
+          }
+        : null,
+    );
+  }, [atBottom, position.x, position.y, width, height]);
+  useEffect(() => () => setPopupAtBottom(null), []);
 
   return (
     <section

@@ -57,7 +57,7 @@ describe("when the live view shows", () => {
     expect(link.textContent).toBe("Check the login page");
     expect(link.getAttribute("href")).toBe("/projects/prj_1/threads/thr_1");
     expect(has("live-view-dot")).toBe(true);
-    expect(view.dataset.corner).toBe("top-right");
+    expect(view.dataset.corner).toBe("bottom-right");
   });
 
   test("the person at the host sees nothing by default (remote viewers only)", async () => {
@@ -178,7 +178,7 @@ describe("the popup", () => {
     fireEvent.pointerUp(minimize, { pointerId: 1, clientX: 100, clientY: 600 });
     fireEvent.click(minimize);
 
-    expect(view.dataset.corner).toBe("top-right");
+    expect(view.dataset.corner).toBe("bottom-right");
     expect(has("live-view-fullscreen")).toBe(false);
     expect(has("live-view-body")).toBe(false);
   });
