@@ -11,7 +11,9 @@ export type TypeIdPrefix =
   | "img"
   | "rtn"
   | "rrun"
-  | "lib";
+  | "lib"
+  | "inbx"
+  | "inlk";
 
 export const generateTypeId = (prefix: TypeIdPrefix): string => typeidUnboxed(prefix);
 
