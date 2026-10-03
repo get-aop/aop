@@ -69,7 +69,6 @@ export const SettingsHost = () => {
         )}
       </Card>
       <Card className="gap-2 px-4 py-3.5">
-        <h3 className="text-[12.5px] font-semibold text-text">Paired devices</h3>
         {setup && setup.addresses.length > 0 ? (
           <p data-testid="host-addresses" className="text-[12px] text-text-subtle">
             Other devices reach this host at {setup.addresses.join(", ")}

@@ -1,6 +1,7 @@
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
+import { WithCode } from "../components/WithCode";
 import { ReleaseNotesLink } from "./ReleaseNotesLink";
 import { runUpdateAction } from "./update-actions";
 import type { UpdateRowView } from "./update-rows";
@@ -46,7 +47,7 @@ export const UpdateRow = ({ row, compact = false }: { row: UpdateRowView; compac
       </p>
       {row.note ? (
         <p data-testid="update-row-note" className="text-[12px] leading-relaxed text-text-muted">
-          {row.note}
+          <WithCode text={row.note} />
         </p>
       ) : null}
       {row.blocked ? (

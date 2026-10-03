@@ -8,7 +8,7 @@ import {
   restartAppToUpdate,
 } from "./app-update-store";
 import type { UpdateAction } from "./update-rows";
-import { cancelQueued, getUpdates, startUpdate } from "./update-store";
+import { cancelQueued, getUpdates, refreshUpdates, startUpdate } from "./update-store";
 
 /** Which of the update dialogs is open: one at a time, mounted once by UpdateDialogs. */
 export type UpdateDialog = "turns" | "log" | null;
@@ -34,7 +34,9 @@ export const openUpdateDialog = (next: UpdateDialog): void => {
 export const runUpdateAction = async (action: UpdateAction): Promise<void> => {
   switch (action.kind) {
     case "update-host":
-      // A restart never surprises a running turn: with turns running, the person chooses.
+      // A restart never surprises a running turn: with turns running, the person chooses. The
+      // turns are read again first: the status on screen may be minutes old.
+      await refreshUpdates();
       if ((getUpdates().status?.runningTurns.length ?? 0) > 0) openUpdateDialog("turns");
       else await startUpdate("now");
       return;

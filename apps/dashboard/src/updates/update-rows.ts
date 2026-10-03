@@ -373,8 +373,9 @@ const cliState = (cli: AgentCliStatus, canUpdate: boolean, hostName: string): Ho
       attention: true,
     };
   }
-  if (!cli.updateAvailable)
-    return cli.checkError ? { note: `Could not check: ${cli.checkError}` } : {};
+  if (!cli.updateAvailable) {
+    return cli.checkError ? { status: "Could not check", tone: "bad", note: cli.checkError } : {};
+  }
   return {
     status: "Update available",
     tone: "news",

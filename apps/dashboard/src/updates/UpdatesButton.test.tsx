@@ -142,6 +142,18 @@ describe("the Updates button", () => {
     expect(screen.queryByTestId("updates-host-chip")).toBeNull();
   });
 
+  test("asks about turns that started after the page last read the host", async () => {
+    installHost();
+    renderButton();
+    const popover = await openPopover();
+    host.status = { ...host.status, runningTurns: [{ title: "Late turn", kind: "thread" }] };
+
+    fireEvent.click(popover.getByTestId("update-action-update-host"));
+
+    expect(await screen.findByTestId("update-turns-dialog")).toBeTruthy();
+    expect(host.bodies["POST /updates/apply"]).toBeUndefined();
+  });
+
   test("a queued update reads Waiting for N turns, with Update now and Cancel", async () => {
     installHost({
       queued: {

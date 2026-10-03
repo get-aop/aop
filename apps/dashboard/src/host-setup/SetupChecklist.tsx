@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Spinner } from "@/ui/spinner";
+import { WithCode } from "../components/WithCode";
 import { showLiveView } from "../live-view/live-view-store";
 import { CopyCommand } from "../projects/settings/CuaSetupGuide";
 import { closeSettingsDialog, openSettingsDialog } from "../shell/dialog-store";
@@ -72,7 +73,7 @@ const SetupCheckRow = ({
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-text">{check.title}</p>
           <p data-testid="setup-check-detail" className="text-[12px] break-words text-text-subtle">
-            {check.detail}
+            <WithCode text={check.detail} />
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
@@ -169,7 +170,9 @@ const HowTo = ({ action }: { action: HowToAction }) => (
   >
     <ol className="list-decimal pl-4 text-[12px] leading-relaxed text-text-muted">
       {action.steps.map((step) => (
-        <li key={step}>{step}</li>
+        <li key={step}>
+          <WithCode text={step} />
+        </li>
       ))}
     </ol>
     {action.command ? (
