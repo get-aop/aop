@@ -41,6 +41,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - [Pull requests tab](./pull-requests.md) covers the threads panel's tab strip ("+" menu) and the Pull requests tab: rows, filters, search, sort, paging, refresh, not-signed-in and no-repository states, and opening a pull request in the PR View, against the fake `gh`.
 - [Project event stream](./project-stream.md) covers `GET /api/projects/:id/stream`: live entries, resume, restart, removal.
 - [Issues tab](./issues.md) covers the panel's Issues tab: GitHub, Linear and Jira issues against a fake `gh`, a fake Linear and a fake Jira, grouping, filters, pull request chips, the issue view, Start thread, the Linear and Jira connections (test, reconnect, rate limits), and every empty, error and not-connected state.
+- [Inbox (Slack)](./inbox.md) covers the top bar's Inbox, the `/inbox` page (views, an item, reply, dispatch, link, done, snooze, keys, channel rules) and AOP settings › Connections › Slack (sign in with Slack, the token paste, the connection test, import, rules, notifications, disconnect), against a fake Slack.
 - [Repositories](./repositories.md) covers `aop repo:init`, `aop repo:remove`, and the attach dialog.
 - [Sessions](./sessions.md) covers plain chat sessions through the API (no page in the dashboard): fake chat, usage, a server crash mid-turn.
 - [Settings](./settings.md) covers the Settings dialog and its sections.
