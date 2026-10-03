@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
+import { HostSetupCard } from "../host-setup/HostSetupCard";
 import { AppTopBar } from "../shell/AppTopBar";
 import { openNewProjectDialog } from "../shell/dialog-store";
 import { Link, projectPath } from "../shell/router";
@@ -58,6 +59,7 @@ export const ProjectsIndex = () => {
           </Button>
         </header>
 
+        <HostSetupCard />
         {state.phase === "error" ? (
           <p data-testid="projects-error" className="px-6 text-[13px] text-blocked">
             Could not load projects. {state.error}
