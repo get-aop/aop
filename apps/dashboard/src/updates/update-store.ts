@@ -23,6 +23,8 @@ export interface UpdatesState {
 export interface UpdateEnvironment {
   /** Called once the host answers on the new release. */
   onHostBack: () => void;
+  /** The page reloads when the host is back (a browser), rather than reading it again. */
+  reloads: () => boolean;
   /** How often the returning host is looked for, in milliseconds. */
   pollMs: number;
   /** How long to wait for the host before saying it did not come back. */
@@ -44,6 +46,7 @@ const defaultEnvironment = (): UpdateEnvironment => ({
     if (hasDesktopBridge()) void refreshUpdates();
     else window.location.reload();
   },
+  reloads: () => !hasDesktopBridge(),
   pollMs: 1_500,
   giveUpMs: 3 * 60_000,
 });
@@ -148,11 +151,10 @@ const watchForHost = (target: string): void => {
 
 const hostCameBack = (version: string): void => {
   const { status } = state;
-  rememberHostUpdated({
-    version,
-    hostName: status?.hostName ?? "",
-    releaseUrl: status?.releaseUrl ?? null,
-  });
+  rememberHostUpdated(
+    { version, hostName: status?.hostName ?? "", releaseUrl: status?.releaseUrl ?? null },
+    { reloading: environment.reloads() },
+  );
   publish({ target: null });
   environment.onHostBack();
 };
