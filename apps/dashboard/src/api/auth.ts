@@ -1,7 +1,6 @@
 import type {
   AuthPrincipal,
   Device,
-  HostHealth,
   PairDeviceRequest,
   PairedDevice,
   PairingCode,
@@ -15,19 +14,15 @@ export const getPrincipal = (): Promise<AuthPrincipal> => request<AuthPrincipal>
 export const pairDevice = (input: PairDeviceRequest): Promise<PairedDevice> =>
   request<PairedDevice>("/auth/pair", { method: "POST", body: JSON.stringify(input) });
 
-/** The port the host listens on, as it tells a client that is not paired yet; null from an older host. */
-export const getHostPort = async (): Promise<number | null> =>
-  (await request<Pick<HostHealth, "port">>("/health")).port ?? null;
-
-/** Host owner only. A new code replaces the one before it and works once. */
+/** Whoever may manage the host (`host_management`). A new code replaces the one before it and works once. */
 export const createPairingCode = (): Promise<PairingCode> =>
   request<PairingCode>("/auth/pairing-codes", { method: "POST" });
 
-/** Host owner only. */
+/** Any paired device may read the list. */
 export const listDevices = async (): Promise<Device[]> =>
   (await request<{ devices: Device[] }>("/auth/devices")).devices;
 
-/** Host owner only. The device's next request answers 401 and its open streams are closed. */
+/** Whoever may manage the host. The device's next request answers 401 and its open streams are closed. */
 export const revokeDevice = async (deviceId: string): Promise<void> => {
   await request<unknown>(`/auth/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
 };
