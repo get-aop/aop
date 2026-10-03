@@ -51,6 +51,11 @@ export const ReleaseFeedSchema = z.object({
   commit: z.string().optional(),
   /** `nightly` for a nightly feed; absent on stable, whose feed predates channels. */
   channel: z.string().optional(),
+  /**
+   * The CUA Driver version this release pins (`CUA_DRIVER_VERSION`), which a host updated to it
+   * installs too. Absent from feeds published before it was added.
+   */
+  cuaDriver: z.string().min(1).optional(),
 });
 export type ReleaseFeed = z.infer<typeof ReleaseFeedSchema>;
 
@@ -72,6 +77,7 @@ export const parseReleaseFeed = (
     assets: Object.fromEntries(
       feed.files.map((file) => [file.name, { url: file.url, sha256: file.sha256 }]),
     ),
+    ...(feed.cuaDriver ? { cuaDriver: feed.cuaDriver } : {}),
   };
 };
 

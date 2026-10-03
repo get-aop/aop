@@ -211,6 +211,22 @@ describe("when the host turns the device away", () => {
     expect(window.calls.at(-1)).toBe("shell:status");
   });
 
+  test("a refused token the host still accepts reloads the dashboard, so it never sits waiting", async () => {
+    const { client } = revokedAfterConnect();
+    const { controller, window } = await setup({ config: remote, client });
+    await controller.boot();
+    await flush();
+
+    await controller.hostRejected();
+    await flush();
+    expect(window.calls).toEqual(["dashboard", "dashboard"]);
+
+    // Refused again: the status screen, not a reload loop.
+    await controller.hostRejected();
+    await flush();
+    expect(window.calls).toEqual(["dashboard", "dashboard", "shell:status"]);
+  });
+
   test("a host that only went quiet does not move the person off the dashboard", async () => {
     let up = true;
     const client = fakeHostClient({

@@ -118,7 +118,7 @@ const OverriddenNote = () => (
       className="h-auto p-0 text-[12.5px]"
       onClick={() => openSettingsDialog("runtimes")}
     >
-      Settings › Runtimes
+      AOP settings › Runtimes
     </Button>
   </SettingNote>
 );

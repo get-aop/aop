@@ -2,10 +2,13 @@ import {
   BUILT_IN_RUNTIME_ID,
   buildChannel,
   DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
+  DEFAULT_HOST_MANAGEMENT,
   DEFAULT_LIVE_VIEW_MODE,
   DEFAULT_MAX_CONCURRENT_RUNS,
   DEFAULT_ROUTINE_MAX_ACTIVE,
   DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES,
+  DEFAULT_UPDATE_INSTALL_WINDOW,
+  HostManagementSchema,
   INBOX_DEFAULTS,
   LIBRARY_CAP_MB_MAX,
   LIBRARY_DEFAULTS,
@@ -16,12 +19,14 @@ import {
   MAX_ROUTINE_MAX_ACTIVE,
   MAX_ROUTINE_MIN_INTERVAL_MINUTES,
   parseAgentCliCheckInterval,
+  parseInstallWindow,
   parseLibraryCapMb,
   parseLibraryRetentionDays,
   parseMaxConcurrentRuns,
   parseRoutineMaxActive,
   parseRoutineMinInterval,
   RuntimeIdSchema,
+  UpdateInstallModeSchema,
 } from "@aop/common";
 import type { Setting } from "../db/schema.ts";
 
@@ -64,6 +69,13 @@ export const SettingKey = {
    */
   DISPLAY_NAME: "display_name",
   /**
+   * Who may manage this host: update it and its agent CLIs, change the update settings
+   * (`MANAGER_SETTING_KEYS`), and pair or revoke devices. "devices" (the default: the host machine
+   * and every paired device) or "owner" (the host machine only). Only the host owner may change it
+   * (`OWNER_ONLY_SETTING_KEYS`); see auth/route-policy.ts.
+   */
+  HOST_MANAGEMENT: "host_management",
+  /**
    * Days the Inbox keeps a matched message after its last activity, 0 keeping it (see
    * inbox/retention.ts). Linked items past it keep their links and lose their text.
    */
@@ -99,16 +111,27 @@ export const SettingKey = {
    */
   ROUTINE_MIN_INTERVAL: "routine_min_interval_minutes",
   /**
-   * Whether the host looks for a newer release once a day and shows a notice. "true" or
-   * "false"; on by default. It never installs anything by itself.
+   * Whether the host looks for a newer release (daily on Stable, hourly on Nightly) and shows it.
+   * "true" or "false"; on by default. Off, nothing is checked, downloaded or installed by itself.
+   * Written by whoever may manage the host (`MANAGER_SETTING_KEYS`), as are the other update keys.
    */
   UPDATE_CHECK: "update_check",
   /**
-   * Whether AOP Nightly installs a newer nightly by itself once no turn is running. "true" or
-   * "false"; on by default in a nightly build. Only a nightly host reads it: a stable host never
-   * installs a release without the owner (docs/NIGHTLY.md).
+   * Whether the host downloads and checks a newer release ahead of time, without installing it, so
+   * "Update host" only has to swap and restart (update/background-download.ts). "true" or "false";
+   * on by default.
    */
-  UPDATE_AUTO_APPLY: "update_auto_apply",
+  UPDATE_BACKGROUND_DOWNLOAD: "update_background_download",
+  /**
+   * When the host installs a newer release by itself (`UpdateInstallMode`): "ask" never (a person
+   * does, from the Updates button; the default on Stable), "idle" once the turns running when it
+   * found the release have finished (the default on Nightly), "window" the same but only between
+   * the `update_install_window` hours (update/install-policy.ts). Hosts that had the older
+   * `update_auto_apply` keep their choice (db/update-install-v27.ts).
+   */
+  UPDATE_INSTALL: "update_install",
+  /** The hours of `update_install` "window": `HH:MM-HH:MM`, host time, wrapping past midnight. */
+  UPDATE_INSTALL_WINDOW: "update_install_window",
 } as const;
 
 export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
@@ -120,6 +143,7 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
   [SettingKey.DEFAULT_RUNTIME]: BUILT_IN_RUNTIME_ID,
   [SettingKey.DISPLAY_NAME]: "",
+  [SettingKey.HOST_MANAGEMENT]: DEFAULT_HOST_MANAGEMENT,
   [SettingKey.INBOX_RETENTION_DAYS]: String(INBOX_DEFAULTS.retentionDays),
   [SettingKey.LIBRARY_RETENTION_DAYS]: String(LIBRARY_DEFAULTS.retentionDays),
   [SettingKey.LIBRARY_PROJECT_CAP_MB]: String(LIBRARY_DEFAULTS.projectCapMb),
@@ -129,7 +153,9 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.ROUTINE_MAX_ACTIVE]: String(DEFAULT_ROUTINE_MAX_ACTIVE),
   [SettingKey.ROUTINE_MIN_INTERVAL]: String(DEFAULT_ROUTINE_MIN_INTERVAL_MINUTES),
   [SettingKey.UPDATE_CHECK]: "true",
-  [SettingKey.UPDATE_AUTO_APPLY]: buildChannel().id === "nightly" ? "true" : "false",
+  [SettingKey.UPDATE_BACKGROUND_DOWNLOAD]: "true",
+  [SettingKey.UPDATE_INSTALL]: buildChannel().id === "nightly" ? "idle" : "ask",
+  [SettingKey.UPDATE_INSTALL_WINDOW]: DEFAULT_UPDATE_INSTALL_WINDOW,
 };
 
 export const VALID_KEYS: SettingKey[] = Object.values(SettingKey);
@@ -141,6 +167,7 @@ export const VALID_KEYS: SettingKey[] = Object.values(SettingKey);
  */
 export const OWNER_ONLY_SETTING_KEYS: readonly SettingKey[] = [
   SettingKey.AGENT_CLI_SKIP_PERMISSIONS,
+  SettingKey.HOST_MANAGEMENT,
   SettingKey.ROUTINE_MAX_ACTIVE,
   SettingKey.ROUTINE_MIN_INTERVAL,
 ];
@@ -148,13 +175,30 @@ export const OWNER_ONLY_SETTING_KEYS: readonly SettingKey[] = [
 export const isOwnerOnlySettingKey = (key: string): boolean =>
   OWNER_ONLY_SETTING_KEYS.includes(key as SettingKey);
 
+/**
+ * Keys that decide when the host updates itself and its agent CLIs: whoever may manage the host
+ * (`HOST_MANAGEMENT`) writes them. Otherwise a device refused "Update host" could still switch on
+ * the automatic install and have the host do it anyway.
+ */
+export const MANAGER_SETTING_KEYS: readonly SettingKey[] = [
+  SettingKey.UPDATE_CHECK,
+  SettingKey.UPDATE_INSTALL,
+  SettingKey.UPDATE_INSTALL_WINDOW,
+  SettingKey.UPDATE_BACKGROUND_DOWNLOAD,
+  SettingKey.AGENT_CLI_AUTO_UPDATE,
+  SettingKey.AGENT_CLI_CHECK_INTERVAL,
+];
+
+export const isManagerSettingKey = (key: string): boolean =>
+  MANAGER_SETTING_KEYS.includes(key as SettingKey);
+
 export const isValidSettingKey = (key: string): key is SettingKey => {
   return VALID_KEYS.includes(key as SettingKey);
 };
 
 const BOOLEAN_KEYS: readonly SettingKey[] = [
   SettingKey.UPDATE_CHECK,
-  SettingKey.UPDATE_AUTO_APPLY,
+  SettingKey.UPDATE_BACKGROUND_DOWNLOAD,
   SettingKey.AGENT_CLI_AUTO_UPDATE,
   SettingKey.AGENT_CLI_SKIP_PERMISSIONS,
 ];
@@ -216,6 +260,21 @@ const VALUE_RULES: readonly {
     keys: [SettingKey.LIVE_VIEW],
     valid: (value) => LiveViewModeSchema.safeParse(value).success,
     message: (key) => `${key} must be "off", "remote" or "always"`,
+  },
+  {
+    keys: [SettingKey.HOST_MANAGEMENT],
+    valid: (value) => HostManagementSchema.safeParse(value).success,
+    message: (key) => `${key} must be "devices" or "owner"`,
+  },
+  {
+    keys: [SettingKey.UPDATE_INSTALL],
+    valid: (value) => UpdateInstallModeSchema.safeParse(value).success,
+    message: (key) => `${key} must be "ask", "idle" or "window"`,
+  },
+  {
+    keys: [SettingKey.UPDATE_INSTALL_WINDOW],
+    valid: (value) => parseInstallWindow(value) !== null,
+    message: (key) => `${key} must be two different times as HH:MM-HH:MM, such as 01:00-06:00`,
   },
   {
     keys: [SettingKey.DEFAULT_RUNTIME],

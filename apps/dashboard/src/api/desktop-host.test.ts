@@ -4,7 +4,9 @@ import { setupDashboardDom } from "../test/setup-dom";
 setupDashboardDom();
 
 const { getHostConfig, setManagedHostConfig } = await import("./host");
-const { bootstrapDesktopHost } = await import("./desktop-host");
+const { bootstrapDesktopHost, handBackToDesktopApp, isInsideDesktopApp } = await import(
+  "./desktop-host"
+);
 const { request } = await import("./request");
 
 const originalFetch = globalThis.fetch;
@@ -60,5 +62,27 @@ describe("bootstrapDesktopHost", () => {
     });
 
     expect(getHostConfig()).toEqual({ baseUrl: null, token: null });
+  });
+});
+
+describe("the desktop app owns pairing", () => {
+  const bridge = () => ({
+    getHostConfig: async () => ({ baseUrl: "https://mac.tail1234.ts.net", token: "aop_t" }),
+    hostRejected: mock(async () => {}),
+  });
+
+  test("knows it is inside the app only when the app's bridge is there", () => {
+    expect(isInsideDesktopApp(bridge())).toBe(true);
+    expect(isInsideDesktopApp(undefined)).toBe(false);
+    expect(isInsideDesktopApp({ hostRejected: async () => {} })).toBe(false);
+  });
+
+  test("hands a refused token back to the app, and does nothing in a browser", async () => {
+    const app = bridge();
+
+    await handBackToDesktopApp(app);
+    await handBackToDesktopApp(undefined);
+
+    expect(app.hostRejected).toHaveBeenCalledTimes(1);
   });
 });

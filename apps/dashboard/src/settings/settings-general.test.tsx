@@ -22,7 +22,13 @@ const saved = {
 
 /** The dialog's own wiring: edits live in state, and a save folds back into what is saved. */
 const Harness = () => {
-  const initial = { ...saved, display_name: "", max_concurrent_runs: "4", update_check: "true" };
+  const initial = {
+    ...saved,
+    display_name: "",
+    max_concurrent_runs: "4",
+    library_retention_days: "30",
+    update_check: "true",
+  };
   const [savedValues, setSavedValues] = useState<Record<string, string>>(initial);
   const [editedValues, setEditedValues] = useState<Record<string, string>>(initial);
   return (
@@ -146,12 +152,13 @@ describe("SettingsGeneral", () => {
   test("takes your name in Profile, first of the groups, and saves it as display_name", async () => {
     render(<Harness />);
 
-    expect(screen.getAllByText(/^(Profile|Chat|Runs|Updates)$/).map((h) => h.textContent)).toEqual([
+    expect(screen.getAllByText(/^(Profile|Chat|Runs|Library)$/).map((h) => h.textContent)).toEqual([
       "Profile",
       "Chat",
       "Runs",
-      "Updates",
+      "Library",
     ]);
+    expect(screen.queryByText("Updates")).toBeNull();
     fireEvent.change(screen.getByLabelText("Your name"), {
       target: { value: "Marcelo Ribeiro Mendes" },
     });
@@ -160,18 +167,6 @@ describe("SettingsGeneral", () => {
     expect(mockUpdateSettings).toHaveBeenCalledWith([
       { key: "display_name", value: "Marcelo Ribeiro Mendes" },
     ]);
-  });
-
-  test("turns the daily update check off from a switch and saves it as 'false'", async () => {
-    render(<Harness />);
-
-    const toggle = screen.getByLabelText("Check for updates");
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(toggle);
-
-    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalledTimes(1));
-    expect(mockUpdateSettings).toHaveBeenCalledWith([{ key: "update_check", value: "false" }]);
-    expect(screen.getByLabelText("Check for updates").getAttribute("aria-checked")).toBe("false");
   });
 
   test("saves a valid run cap after the debounce, and only the key that changed", async () => {

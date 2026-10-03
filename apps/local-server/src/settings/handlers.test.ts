@@ -30,6 +30,7 @@ describe("settings/handlers", () => {
         { key: "chat_global_instructions", value: "" },
         { key: "default_runtime_id", value: "claude-code" },
         { key: "display_name", value: "" },
+        { key: "host_management", value: "devices" },
         { key: "inbox_retention_days", value: "30" },
         { key: "library_retention_days", value: "30" },
         { key: "library_project_cap_mb", value: "1024" },
@@ -39,7 +40,9 @@ describe("settings/handlers", () => {
         { key: "routine_max_active_per_project", value: "10" },
         { key: "routine_min_interval_minutes", value: "15" },
         { key: "update_check", value: "true" },
-        { key: "update_auto_apply", value: "false" },
+        { key: "update_background_download", value: "true" },
+        { key: "update_install", value: "ask" },
+        { key: "update_install_window", value: "01:00-06:00" },
       ]);
       expect(result.settings.map(({ key }) => key).sort()).toEqual(
         Object.keys(DEFAULT_SETTINGS).sort(),

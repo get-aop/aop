@@ -1,4 +1,4 @@
-import { buildChannel, type RuntimeConfigurationProvider } from "@aop/common";
+import type { RuntimeConfigurationProvider } from "@aop/common";
 import { Input } from "@/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Switch } from "@/ui/switch";
@@ -36,14 +36,6 @@ export const SETTINGS_GROUPS: { label: string; keys: string[] }[] = [
     keys: ["live_view"],
   },
   {
-    label: "Updates",
-    keys: ["update_check", "update_auto_apply"],
-  },
-  {
-    label: "Agent CLIs",
-    keys: ["agent_cli_check_interval_minutes", "agent_cli_auto_update"],
-  },
-  {
     label: "Library",
     keys: ["library_retention_days", "library_project_cap_mb", "library_host_cap_mb"],
   },
@@ -72,33 +64,6 @@ export const SETTING_META: Record<string, SettingMeta> = {
       { value: "remote", label: "Remote viewers only" },
       { value: "always", label: "Always" },
     ],
-  },
-  update_check: {
-    label: "Check for updates",
-    description:
-      buildChannel().id === "nightly"
-        ? "Every hour the host looks for a newer nightly build of main and shows a notice here."
-        : "Once a day the host looks for a newer AOP release on getaop.com and shows a notice here. It never installs anything without you.",
-    type: "toggle",
-  },
-  update_auto_apply: {
-    label: "Install nightly builds automatically",
-    description:
-      "When a newer nightly is out, the host installs it and restarts once no turn is running. Turn it off to stay on this build; the host machine can still update it with Update now.",
-    type: "toggle",
-  },
-  agent_cli_check_interval_minutes: {
-    label: "Check for CLI updates every",
-    description:
-      "How often the host looks for a newer Claude Code release (and once shortly after it starts). 0 turns the check off. Updating is under Settings › Runtimes.",
-    type: "number",
-    suffix: "min",
-  },
-  agent_cli_auto_update: {
-    label: "Update CLIs automatically",
-    description:
-      "When a check finds a newer version, the host installs it. A native install updates right away; a package-manager install waits until no turn is running. Running turns are never interrupted.",
-    type: "toggle",
   },
   library_retention_days: {
     label: "Keep chat attachments and agent files for",
@@ -135,13 +100,6 @@ export const resolveSettingOptions = (
   _values: Record<string, string>,
   _runtimeConfigurations: RuntimeConfigurationProvider[] = [],
 ): SettingMeta["options"] => SETTING_META[settingKey]?.options;
-
-// Only AOP Nightly installs builds by itself; a stable host never reads update_auto_apply.
-export const isSettingVisible = (
-  settingKey: string,
-  _values: Record<string, string>,
-  _runtimeConfigurations: RuntimeConfigurationProvider[] = [],
-): boolean => settingKey !== "update_auto_apply" || buildChannel().id === "nightly";
 
 interface SettingRowProps {
   settingKey: string;

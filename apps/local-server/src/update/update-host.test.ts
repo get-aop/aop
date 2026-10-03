@@ -2,7 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createReleaseStager } from "./background-download.ts";
 import type { InstallLayout } from "./install-layout.ts";
+import { downloadFetch } from "./release-feed.ts";
 import { LAUNCHD_LABEL } from "./restart.ts";
 import {
   createInstall,
@@ -89,6 +91,18 @@ const writePlist = async (home: string, layout: InstallLayout): Promise<void> =>
 const installedVersion = async (layout: InstallLayout): Promise<string> => {
   const proc = Bun.spawn([layout.binaryPath, "--version"], { stdout: "pipe" });
   return (await new Response(proc.stdout).text()).trim();
+};
+
+// What the host's background download leaves in its data folder.
+const stageAhead = async (h: Harness): Promise<string> => {
+  const root = join(h.home, "update-staged");
+  await createReleaseStager({
+    root,
+    feed: { ...h.deps.feed, github: null },
+    platform: PLATFORM,
+    downloadFetch,
+  }).stage("0.10.0");
+  return root;
 };
 
 const dashboardMarker = (layout: InstallLayout): Promise<string> =>
@@ -213,6 +227,32 @@ describe("updateHost", () => {
 
     expect(await installedVersion(h.layout)).toBe("aop/0.9.51+abc1234 darwin-arm64 bun-v1.0.0");
     expect(existsSync(`${h.layout.binaryPath}.previous`)).toBe(false);
+  });
+
+  test("takes a release staged ahead of time instead of downloading it again", async () => {
+    const h = await createHarness({ version: "0.10.0" });
+    h.deps.stagedDir = await stageAhead(h);
+    h.release.requests.length = 0;
+
+    const result = await updateHost(h.deps);
+
+    expect(result).toMatchObject({ status: "updated", to: "0.10.0" });
+    expect(await installedVersion(h.layout)).toBe("aop/0.10.0+abc1234 darwin-arm64 bun-v1.0.0");
+    expect(h.release.requests.filter((line) => line.startsWith("/v0.10.0/"))).toEqual([]);
+  });
+
+  test("a staged release that no longer matches the feed is dropped and downloaded afresh", async () => {
+    const h = await createHarness({ version: "0.10.0" });
+    const root = await stageAhead(h);
+    h.deps.stagedDir = root;
+    await writeFile(join(root, "0.10.0", "aop-darwin-arm64"), "damaged on disk");
+    h.release.requests.length = 0;
+
+    await updateHost(h.deps);
+
+    expect(await installedVersion(h.layout)).toBe("aop/0.10.0+abc1234 darwin-arm64 bun-v1.0.0");
+    expect(h.release.requests).toContain("/v0.10.0/aop-darwin-arm64 -");
+    expect(await readdir(root)).toEqual([]);
   });
 
   test("never touches the data folder", async () => {

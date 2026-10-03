@@ -1,19 +1,29 @@
+import type { UpdateStatus } from "@aop/common";
 import { useEffect } from "react";
 import { refreshUpdates, type UpdatesState, useUpdates } from "./update-store";
 
-const REFRESH_EVERY_MS = 10 * 60_000;
+const QUIET_MS = 10 * 60_000;
+const AVAILABLE_MS = 60_000;
+const QUEUED_MS = 10_000;
 
 /**
- * The host's update state, read on mount and again every ten minutes and whenever the tab comes
- * back to the front. The host itself checks for releases once a day; this only re-reads what it
- * found. Only the surface that lives as long as the page turns `poll` on.
+ * The host's update state, read on mount, whenever the tab comes back to the front, and again
+ * on a cadence that follows what is going on: every ten minutes when nothing is, every minute
+ * once an update is out (so every device sees "Updating host…" when someone starts it), and
+ * every ten seconds while one waits for turns to finish. Only the surface that lives as long as
+ * the page turns `poll` on.
  */
 export const useUpdateStatus = ({ poll = false }: { poll?: boolean } = {}): UpdatesState => {
+  const updates = useUpdates();
+  const every = pollInterval(updates.status);
+
   useEffect(() => {
     void refreshUpdates();
-    if (!poll) return;
+  }, []);
 
-    const timer = window.setInterval(() => void refreshUpdates(), REFRESH_EVERY_MS);
+  useEffect(() => {
+    if (!poll) return;
+    const timer = window.setInterval(() => void refreshUpdates(), every);
     const onVisible = () => {
       if (document.visibilityState === "visible") void refreshUpdates();
     };
@@ -22,7 +32,12 @@ export const useUpdateStatus = ({ poll = false }: { poll?: boolean } = {}): Upda
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [poll]);
+  }, [poll, every]);
 
-  return useUpdates();
+  return updates;
+};
+
+export const pollInterval = (status: UpdateStatus | null): number => {
+  if (status?.queued) return QUEUED_MS;
+  return status?.available ? AVAILABLE_MS : QUIET_MS;
 };

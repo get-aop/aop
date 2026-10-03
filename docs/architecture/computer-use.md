@@ -29,7 +29,7 @@ Setup does, in order:
 - `checks`: installed, answers, running and the two grants (macOS), up to date (against the pin), and on Linux the screen (required), system packages and browser (informational: without a browser CUA Driver accepts, the browser tools fail and the desktop tools still work).
 - `fix`: `command` (the host's own `aop computer-use setup`, or null when there is nothing for it to do), `sudoCommand` (the one command for what needs root, or null), `missing` (labels of each missing piece) and `pinnedVersion`.
 
-Dashboard: Settings › Computer use shows this checklist with Copy buttons, the pinned version, Check again, and who holds the screen. The project settings row shows the same steps as a guide (`cuaSetupSteps`).
+Dashboard: AOP settings › Computer use shows this checklist with Copy buttons, the pinned version, Check again, and who holds the screen. The project settings row shows the same steps as a guide (`cuaSetupSteps`).
 
 ## One thread at a time
 

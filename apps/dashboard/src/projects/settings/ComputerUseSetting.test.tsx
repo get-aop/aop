@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { CUA_COMMANDS, type CuaStatus, type Project } from "@aop/common";
+import type { CuaStatus, Project } from "@aop/common";
 import { type ApiCall, mockApi } from "../../test/mock-api";
 import { setupDashboardDom } from "../../test/setup-dom";
 import { makeEntry, makeProject, makeState, stubLiveProjects } from "../test-utils";
@@ -10,6 +10,7 @@ const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@test
 const { ProjectsProvider } = await import("../ProjectsProvider");
 const { ComputerUseSetting } = await import("./ComputerUseSetting");
 const { savePhase } = await import("./section-test-utils");
+const { getDialogs, resetDialogs } = await import("../../shell/dialog-store");
 const { refreshAgentClis, resetAgentClisForTests } = await import(
   "../../agent-clis/agent-cli-store"
 );
@@ -51,32 +52,13 @@ const MISSING_GRANT: CuaStatus = {
     { id: "screen-recording", label: "Screen Recording", required: true, ok: false, detail: "" },
   ],
 };
-const NO_DISPLAY: CuaStatus = {
-  ...READY,
-  status: "not-ready",
-  reason: "no-display",
-  detail: "No X display is up for CUA Driver to drive.",
-  checks: [
-    { id: "installed", label: "Installed", required: true, ok: true, detail: "" },
-    { id: "display", label: "Display", required: true, ok: false, detail: "No DISPLAY" },
-    { id: "system-packages", label: "System packages", required: true, ok: false, detail: "" },
-  ],
-  fix: {
-    command: "aop-nightly computer-use setup",
-    sudoCommand: "sudo apt-get install -y xvfb openbox",
-    missing: ["Xvfb", "a window manager"],
-    pinnedVersion: "0.32.0",
-  },
-  host: { name: "build-box", platform: "linux" },
-};
-const SETUP = "aop-nightly computer-use setup";
-
 let api: ReturnType<typeof mockApi> | undefined;
 
 afterEach(() => {
   cleanup();
   api?.restore();
   resetAgentClisForTests();
+  resetDialogs();
 });
 
 interface SettingOptions {
@@ -178,7 +160,7 @@ describe("ComputerUseSetting", () => {
     expect(screen.queryByTestId("settings-cua-guide")).toBeNull();
   });
 
-  test("not installed: CUA stays selectable, and the guide installs it on the host", async () => {
+  test("not installed: CUA stays selectable, and the setup is one click away on AOP settings › Host", async () => {
     await renderSetting({
       project: makeProject({ id: "p1", computerUse: "cua" }),
       cua: NOT_INSTALLED,
@@ -189,34 +171,19 @@ describe("ComputerUseSetting", () => {
     expect(status.textContent).toContain(
       "CUA Driver is not installed on Studio Mac. Threads run without its tools until it is.",
     );
-    expect(screen.getByTestId("settings-cua-host").textContent).toContain(
-      "Run these on this machine, Studio Mac: it is the AOP host.",
+    expect(screen.getByTestId("settings-cua-host").textContent).toBe(
+      "Set it up on this machine, Studio Mac: it is the AOP host.",
     );
-    const steps = ["install", "start", "permissions", "config"].map((id) =>
-      screen.getByTestId(`settings-cua-step-${id}`),
-    );
-    expect(steps.map((step) => step.textContent?.slice(0, 2))).toEqual(["1.", "2.", "3.", "4."]);
-    // Backticked words in a step's text are shown as code, not with their backticks.
-    expect(steps[1]?.querySelector("p code")?.textContent).toBe("cua-driver mcp");
-    expect(steps[1]?.textContent).not.toContain("`");
-    const commands = screen.getAllByTestId("settings-cua-command").map((c) => c.textContent);
-    // The host's own setup command, as its status names it.
-    expect(commands).toEqual([
-      SETUP,
-      CUA_COMMANDS.start,
-      CUA_COMMANDS.grant,
-      CUA_COMMANDS.permissionsStatus,
-    ]);
-    expect(screen.getByTestId("settings-cua-step-permissions").textContent).toContain(
-      "System Settings › Privacy & Security › Accessibility",
-    );
+    expect(screen.queryByTestId("settings-cua-step-install")).toBeNull();
+    fireEvent.click(screen.getByTestId("settings-cua-open-host"));
+    expect(getDialogs().settings).toEqual({ open: true, section: "host" });
     openOptions();
     const option = await screen.findByTestId("settings-computer-use-cua");
     expect(option.textContent).toContain("Not ready");
     expect(option.getAttribute("data-disabled")).toBeNull();
   });
 
-  test("installed but not ready: names the missing grant and how to give it", async () => {
+  test("installed but not ready: says so, with what the host found", async () => {
     await renderSetting({
       project: makeProject({ id: "p1", computerUse: "cua" }),
       cua: MISSING_GRANT,
@@ -225,54 +192,18 @@ describe("ComputerUseSetting", () => {
     expect((await screen.findByTestId("settings-cua-status")).textContent).toContain(
       "CUA Driver is installed on Studio Mac but not ready.",
     );
-    expect(screen.getByTestId("settings-cua-step-permissions").textContent).toContain(
-      "Screen & System Audio Recording",
-    );
-    expect(screen.queryByTestId("settings-cua-step-install")).toBeNull();
+    expect(screen.getByTestId("settings-cua-open-host")).toBeTruthy();
   });
 
-  test("Copy puts the command on the clipboard", async () => {
-    const copied: string[] = [];
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: async (text: string) => void copied.push(text) },
-    });
-    await renderSetting({
-      project: makeProject({ id: "p1", computerUse: "cua" }),
-      cua: NOT_INSTALLED,
-    });
-
-    fireEvent.click((await screen.findAllByTestId("settings-cua-copy"))[0] as HTMLElement);
-
-    await waitFor(() => expect(copied).toEqual([SETUP]));
-    expect(await screen.findByText("Copied")).toBeTruthy();
-  });
-
-  test("on Linux, one sudo command for the system packages, then the host's setup for the screen", async () => {
-    await renderSetting({
-      project: makeProject({ id: "p1", computerUse: "cua" }),
-      cua: NO_DISPLAY,
-    });
-
-    await screen.findByTestId("settings-cua-guide");
-    const steps = ["packages", "display", "config"].map((id) =>
-      screen.getByTestId(`settings-cua-step-${id}`),
-    );
-    expect(steps[0]?.textContent).toContain("needs Xvfb and a window manager");
-    expect(screen.queryByTestId("settings-cua-step-permissions")).toBeNull();
-    const commands = screen.getAllByTestId("settings-cua-command").map((c) => c.textContent);
-    expect(commands).toEqual(["sudo apt-get install -y xvfb openbox", SETUP]);
-  });
-
-  test("a paired device is told to run the commands on the host, by name", async () => {
+  test("a paired device is told the setup happens on the host, by name", async () => {
     await renderSetting({
       project: makeProject({ id: "p1", computerUse: "cua" }),
       owner: false,
       cua: NOT_INSTALLED,
     });
 
-    expect((await screen.findByTestId("settings-cua-host")).textContent).toContain(
-      "Run these on the AOP host, Studio Mac, not on this device.",
+    expect((await screen.findByTestId("settings-cua-host")).textContent).toBe(
+      "Set it up on the AOP host, Studio Mac, not on this device.",
     );
   });
 

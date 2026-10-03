@@ -31,6 +31,7 @@ describe("auth service", () => {
     auth = createAuthService({
       deviceRepository: createDeviceRepository(db, () => clock),
       now: () => clock,
+      host: { version: "0.10.8", channel: "stable" },
     });
   });
 
@@ -127,6 +128,58 @@ describe("auth service", () => {
 
       expect(afterBurst?.lastSeenAt).toBe(T0.toISOString());
       expect(afterMinute?.lastSeenAt).toBe(new Date(T0.getTime() + 90_000).toISOString());
+    });
+  });
+
+  describe("clients", () => {
+    const MAC_APP = { app: "desktop", version: "0.10.7", platform: "darwin" } as const;
+
+    test("records the client a device connects with, and says when its app is older than the host", async () => {
+      const { token } = await pair();
+
+      const seen = await auth.authenticate(token, MAC_APP);
+      const [listed] = await auth.listDevices();
+
+      expect(seen).toMatchObject({ client: MAC_APP, outOfDate: true });
+      expect(listed).toMatchObject({ client: MAC_APP, outOfDate: true });
+    });
+
+    test("writes the client only when it changed", async () => {
+      const { device, token } = await pair();
+      const writes: string[] = [];
+      const repository = createDeviceRepository(db, () => clock);
+      const counting = createAuthService({
+        deviceRepository: {
+          ...repository,
+          recordClient: async (id, client) => {
+            writes.push(`${id} ${client.version}`);
+            await repository.recordClient(id, client);
+          },
+        },
+        now: () => clock,
+        host: { version: "0.10.8", channel: "stable" },
+      });
+
+      await counting.authenticate(token, MAC_APP);
+      await counting.authenticate(token, { ...MAC_APP });
+      await counting.authenticate(token);
+      await counting.authenticate(token, { ...MAC_APP, version: "0.10.8" });
+
+      expect(writes).toEqual([`${device.id} 0.10.7`, `${device.id} 0.10.8`]);
+      expect((await counting.listDevices())[0]).toMatchObject({ outOfDate: false });
+    });
+
+    test("keeps the client a device paired from", async () => {
+      const result = await auth.pairDevice({
+        code: auth.issuePairingCode().code,
+        name: "Chrome",
+        client: { app: "browser", version: null, platform: "linux" },
+      });
+
+      expect(result).toMatchObject({
+        status: "paired",
+        device: { client: { app: "browser", version: null, platform: "linux" }, outOfDate: false },
+      });
     });
   });
 

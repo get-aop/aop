@@ -12,6 +12,8 @@ export interface DesktopConfig {
   deviceName: string | null;
   localPort: number;
   serveOverTailscale: boolean;
+  /** The app downloads a new build of itself by itself. Off: "Download and restart" fetches it. */
+  autoDownloadUpdates: boolean;
 }
 
 export interface ConfigStore {
@@ -42,6 +44,7 @@ export const defaultConfig = (): DesktopConfig => ({
   deviceName: null,
   localPort: DEFAULT_LOCAL_PORT,
   serveOverTailscale: false,
+  autoDownloadUpdates: true,
 });
 
 /** Reads a saved config field by field, so one bad field does not throw away the rest. */
@@ -55,6 +58,8 @@ export const parseConfig = (raw: unknown): DesktopConfig => {
     deviceName: nonEmptyString(value.deviceName),
     localPort: isPort(value.localPort) ? value.localPort : defaults.localPort,
     serveOverTailscale: value.serveOverTailscale === true,
+    // On unless switched off: a config saved before the option existed keeps updating itself.
+    autoDownloadUpdates: value.autoDownloadUpdates !== false,
   };
 };
 

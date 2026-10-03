@@ -12,6 +12,16 @@ export const makeUpdateStatus = (overrides: Partial<UpdateStatus> = {}): UpdateS
   checkError: null,
   state: "idle",
   updateError: null,
+  hostName: "soulf",
+  canUpdate: true,
+  owner: true,
+  hostManagement: "devices",
+  restart: "service",
+  runningTurns: [],
+  queued: null,
+  download: { state: "idle", version: null, error: null },
+  previous: null,
+  includes: { cuaDriver: null },
   ...overrides,
 });
 
@@ -21,6 +31,8 @@ export interface FakeHost {
   status: UpdateStatus;
   owner: boolean;
   applyStatus: number;
+  /** The host queues the update instead of starting it. */
+  queues: boolean;
   calls: string[];
 }
 
@@ -31,6 +43,7 @@ export const installFakeHost = (initial: Partial<FakeHost> = {}) => {
     status: makeUpdateStatus(),
     owner: true,
     applyStatus: 202,
+    queues: false,
     calls: [],
     ...initial,
   };
@@ -47,6 +60,11 @@ const answer = (host: FakeHost, path: string): Response | Promise<Response> => {
   if (path === "/auth/me") return answerPrincipal(host);
   if (path === "/updates" || path === "/updates/check") return Response.json(host.status);
   if (path === "/updates/apply") return answerApply(host);
+  if (path === "/updates/log")
+    return Response.json({
+      path: "update.log",
+      lines: ["Downloading AOP 0.10.0", "Update failed"],
+    });
   return Response.json({});
 };
 
@@ -64,5 +82,5 @@ const answerPrincipal = (host: FakeHost): Response =>
 
 const answerApply = (host: FakeHost): Response =>
   host.applyStatus === 202
-    ? Response.json({ ok: true }, { status: 202 })
+    ? Response.json({ ok: true, queued: host.queues }, { status: 202 })
     : Response.json({ error: "Nothing to update" }, { status: host.applyStatus });

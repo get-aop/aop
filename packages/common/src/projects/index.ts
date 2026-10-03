@@ -65,6 +65,7 @@ export type {
   PairingCode,
 } from "./device-auth.ts";
 export {
+  AGENT_SESSION_HEADER,
   AuthPrincipalSchema,
   PairDeviceRequestSchema,
   PairedDeviceSchema,

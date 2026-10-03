@@ -3,11 +3,17 @@
  *
  * - `public`: no credentials. Only what a client must reach before it can authenticate, and
  *   what carries its own authentication.
- * - `owner`: the person at the host machine only. Administers the host itself.
+ * - `owner`: the person at the host machine only. Lowers a guard on the host itself.
+ * - `manager`: whoever may manage the host under its `host_management` setting: the owner, and
+ *   paired devices unless the owner narrowed it to the host machine (auth/host-management.ts).
+ *   Updates the host and its agent CLIs, and pairs and revokes devices.
  * - `device`: any authenticated caller, the host owner or a paired device. The default:
  *   a route added later is closed until someone decides otherwise.
+ *
+ * A request an agent makes through the `aop` CLI during a turn is refused `owner` and `manager`
+ * routes whoever it authenticates as (auth/agent-request.ts).
  */
-export type RouteAccess = "public" | "owner" | "device";
+export type RouteAccess = "public" | "owner" | "manager" | "device";
 
 type RoutePattern = readonly [method: string, path: RegExp];
 
@@ -19,17 +25,36 @@ const PUBLIC_ROUTES: readonly RoutePattern[] = [
   ["*", /^\/api\/mcp(\/.*)?$/],
 ];
 
-// A device is trusted with the work (chats, repos, settings) but not with the host itself:
-// pairing more devices or revoking them. A stolen laptop therefore cannot mint itself a fresh
-// token or lock the owner out of the device list.
-const OWNER_ROUTES: readonly RoutePattern[] = [
+// Looking after the host: keeping it and its agent CLIs current, and who is paired with it. The
+// person's everyday setup is an app on another computer, so paired devices may do this unless
+// the owner says otherwise; with "owner", a stolen laptop cannot mint itself a fresh token or
+// lock the owner out of the device list. Reading the list (`GET /api/auth/devices`) is any
+// device's: AOP settings › Host shows it read-only to those who may not manage the host.
+const MANAGER_ROUTES: readonly RoutePattern[] = [
   ["POST", /^\/api\/auth\/pairing-codes\/?$/],
-  ["GET", /^\/api\/auth\/devices\/?$/],
   ["DELETE", /^\/api\/auth\/devices\/[^/]+\/?$/],
-  // Replaces the host's own binary and restarts its service.
-  ["POST", /^\/api\/updates\/apply\/?$/],
+  // Runs a setup check's fix on the host (host-setup/), such as `aop computer-use setup`.
+  ["POST", /^\/api\/host\/setup\/[^/]+\/fix\/?$/],
+  // Replaces the host's own binary and restarts its service, now or once turns finish; DELETE
+  // cancels an update queued for later.
+  ["POST", /^\/api\/updates\/(apply|check)\/?$/],
+  ["DELETE", /^\/api\/updates\/apply\/?$/],
+  // The updater's log, for "Show log" after a failed update: paths and errors from the host.
+  ["GET", /^\/api\/updates\/log\/?$/],
   // Installs a new version of an agent CLI on the host.
-  ["POST", /^\/api\/agent-clis\/[^/]+\/update\/?$/],
+  ["POST", /^\/api\/agent-clis\/([^/]+\/update|check)\/?$/],
+  // When the host updates itself and its agent CLIs (settings/types.ts MANAGER_SETTING_KEYS; a
+  // bulk write of them is checked in settings/routes.ts).
+  [
+    "PUT",
+    /^\/api\/settings\/(update_check|update_install|update_install_window|update_background_download|agent_cli_auto_update|agent_cli_check_interval_minutes)\/?$/,
+  ],
+];
+
+// A device is trusted with the work (chats, repos, settings) but not with the host's guards.
+const OWNER_ROUTES: readonly RoutePattern[] = [
+  // Who may manage the host: a device must not widen its own rights.
+  ["PUT", /^\/api\/settings\/host_management\/?$/],
   // Lets every agent run any command without asking (settings/types.ts OWNER_ONLY_SETTING_KEYS;
   // a bulk write of it is refused in settings/routes.ts, since this table sees paths only).
   ["PUT", /^\/api\/settings\/agent_cli_skip_permissions\/?$/],
@@ -65,6 +90,7 @@ const OWNER_ROUTES: readonly RoutePattern[] = [
 export const routeAccess = (method: string, pathname: string): RouteAccess => {
   if (matches(PUBLIC_ROUTES, method, pathname)) return "public";
   if (matches(OWNER_ROUTES, method, pathname)) return "owner";
+  if (matches(MANAGER_ROUTES, method, pathname)) return "manager";
   return "device";
 };
 

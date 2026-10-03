@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { getRemoteOrigin, inspectGitFolder, listLocalBranches } from "@aop/git-manager";
 import { aopPaths, generateTypeId, getLogger, resolveExecHost } from "@aop/infra";
+import { readHostManagement } from "../auth/host-management.ts";
 import {
   type ChatHistoryMaintenanceFailureReason,
   type ChatHistoryMaintenanceResult,
@@ -12,7 +13,7 @@ import {
 } from "../chat-session/history-maintenance.ts";
 import { forceAbortChatSessionsForPurge } from "../chat-session/service.ts";
 import type { LocalServerContext } from "../context.ts";
-import { DEFAULT_SETTINGS, type SettingKey } from "../settings/types.ts";
+import { DEFAULT_SETTINGS, SettingKey } from "../settings/types.ts";
 import { announceThreadRemoval } from "../thread/purge-events.ts";
 import { extractRepoName } from "./repository.ts";
 
@@ -260,11 +261,14 @@ export const resetAllRuntimeData = async (
   }
   await removeChatSessionArtifacts(chatPurge);
 
+  // A paired device may reset the host's data, so the reset keeps who may manage the host: the
+  // default lets every device in, and a device must not widen its own rights this way.
+  const hostManagement = await readHostManagement(ctx.settingsRepository);
   await deleteUserDataRows(ctx);
   await ctx.settingsRepository.setAll(
     (Object.entries(DEFAULT_SETTINGS) as [SettingKey, string][]).map(([key, value]) => ({
       key,
-      value,
+      value: key === SettingKey.HOST_MANAGEMENT ? hostManagement : value,
     })),
   );
   await resetRuntimeDirs();

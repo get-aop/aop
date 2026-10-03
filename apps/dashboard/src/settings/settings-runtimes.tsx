@@ -3,7 +3,7 @@ import { PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/ui/button";
-import { AgentCliPanel } from "../agent-clis/AgentCliPanel";
+import { PermissionChecks } from "../agent-clis/PermissionChecks";
 import { cloneRuntimeConfigurationProvider, setDefaultRuntime } from "../api/client";
 import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
 import { RuntimeNotReady, RuntimeSelect } from "../projects/RuntimeSelect";
@@ -17,9 +17,10 @@ import {
 import { RuntimeRow } from "./settings-runtime-row";
 
 /**
- * Settings §Runtimes: the agent CLIs the host has, then every runtime a project can run on (the
- * built-in Claude Code and custom commands that speak its dialect) with what the host finds for
- * each, and the default runtime new projects start on.
+ * Settings §Runtimes: whether agents skip permission checks, then every runtime a project can run
+ * on (the built-in Claude Code and custom commands that speak its dialect) with what the host
+ * finds for each, and the default runtime new projects start on. Agent CLI versions and updates
+ * are on AOP settings › Updates.
  */
 export const SettingsRuntimes = () => {
   const { providers, defaultRuntimeId, statuses, refresh, refreshStatuses } =
@@ -55,7 +56,7 @@ export const SettingsRuntimes = () => {
 
   return (
     <div data-testid="section-runtimes" className="flex flex-col gap-2 p-4">
-      <AgentCliPanel />
+      <PermissionChecks />
       <div className="mt-4 flex items-center gap-2">
         <h2 className="flex-1 text-[13px] font-semibold text-text">Runtimes</h2>
         <Button

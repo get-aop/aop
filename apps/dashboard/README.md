@@ -44,7 +44,7 @@ There is no router library: `src/shell/router.tsx` parses the path and `navigate
 
 ## Pairing
 
-The host answers `401 UNAUTHENTICATED` to a browser it does not know. `src/auth/AuthGate.tsx` asks `GET /api/auth/me` first: the host owner's own dashboard is recognized and goes straight in; any other browser gets the pairing screen (`PairingScreen.tsx`), which trades the one-time code for a device with `POST /api/auth/pair`. The host sets the `aop_device` cookie, which authenticates every request and the event streams. A later 401 (a revoked device) brings the pairing screen back. See `docs/HOST.md`.
+The host answers `401 UNAUTHENTICATED` to a browser it does not know. `src/auth/AuthGate.tsx` asks `GET /api/auth/me` first: the host owner's own dashboard is recognized and goes straight in; any other browser gets the pairing screen (`PairingScreen.tsx`), which trades the one-time code for a device with `POST /api/auth/pair`. The host sets the `aop_device` cookie, which authenticates every request and the event streams. A later 401 (a revoked device) brings the pairing screen back. The pairing screen tells the person to get a code from AOP settings › Host › Pair a device or `aop pair` on the host. Inside the desktop app the pairing screen never shows: the app pairs on its own screens, so a 401 hands over to the app's status screen (`api/desktop-host.ts`). See `docs/HOST.md`.
 
 `src/api/host.ts` also lets a client served from another origin point at a host and send its device token as a bearer header. A browser keeps that pair in local storage. The desktop app's bundled dashboard is such a client: `src/api/desktop-host.ts` asks the app's main process which host to use before the first request and holds the pair in memory only, so the token never reaches a file the page owns. Such a client reads project streams with `fetch` (`src/api/host-event-source.ts`), because an `EventSource` cannot send the header and the session cookie does not cross origins.
 
@@ -69,7 +69,7 @@ The dashboard has no sidebar; every screen has one top bar, so the project scree
 - **Back and forward** walk the app's own history (hidden under 640px).
 - **The project switcher** (`shell/project-switcher/`) is the app's menu. Its chip names the open project (or reads "Select a project") and carries a dot while another project has a thread waiting on the person. A click or ⌘K (anywhere, even while typing) opens a popover: a search field, focused, that filters by name or goal; the projects in three groups (Pinned, Projects, Archived), each with its waiting count or working dot and a check on the open one; then New project (⌘N), All projects and AOP settings (⌘,); and a last line with the host connection and version that opens About. Arrows (they wrap and reach the actions), Enter and Escape work as in any command list. Picking another project keeps the panel's tab or the settings section (`switchProjectPath`); from a thread, pull request, artifact or the browser it lands on the project's home. The open state lives in the dialog store, so ⌘K reaches whichever top bar is on screen.
 - **+** opens the New project dialog (⌘N).
-- **The far end** (`ShellStatus`) holds host-wide state: a newer agent CLI and permission checks off (each opens Settings › Runtimes; their words drop on a narrow bar), "Host unreachable" when the host stops answering, then the Claude plan's usage meter.
+- **The far end** (`ShellStatus`) holds host-wide state: the live view's Show button, the Updates button (`updates/UpdatesButton.tsx`, shown only when something can be updated, an update is running or one failed; it reads "Updating host…" on every device while the host updates, and opens the popover with This app, Host <name> and the agent CLIs), permission checks off (opens AOP settings › Runtimes; its words drop on a narrow bar), "Host unreachable" when the host stops answering, then the Claude plan's usage meter.
 
 Project actions (Overview, the AOP Browser, the gear, the `…` menu, "Live") stay with the project, apart from the app-wide items in the switcher, so the scope of each menu is clear. In the desktop app the Mac's app menu has AOP › Settings… (⌘,), which the app hands to the page through the preload bridge (`onOpenSettings`), loading the dashboard first if it is not showing.
 
@@ -83,6 +83,8 @@ src/
   projects/thread/  the thread pane: header, transcript, answer card, pull request bar
   projects/thread/changes/  the thread's changed files: diff view and review comments
   auth/         the authentication gate and the pairing screen
+  updates/      the Updates button and popover, its rows, the turns-running dialog
+  host-setup/   the "Set up this host" card on the home page
   shell/        top bar start and end (ShellNav, project-switcher/, ShellStatus), router, dialog store, settings dialog, shortcuts
   api/          typed fetch wrapper (request/domain modules), host config, re-export hub
   ui/           the one component kit (shadcn + custom)
@@ -92,7 +94,7 @@ src/
 ## Settings
 
 - A project's own settings are a dialog over the project at `/projects/:id/settings` (`src/projects/settings/`), in sections with a side nav: General (name and icon, goal, instructions), Models, Threads & permissions (thread access, pull requests, auto-continue), Computer use, Notifications, Environment (repositories), Memory (memory files), Usage and Advanced (pause, restart, archive, and delete under Danger zone). Every setting saves as it changes (`use-settings-autosave.ts`): no Save button, and each row says when it is saved.
-- The Settings dialog is for the host: General, Repositories (attach dialog with git badges), Runtimes (add/clone/remove custom), Devices (host owner only: pairing code, paired devices, revoke) and About (version/update).
+- The AOP settings dialog is for the host: General, Host (the setup checklist with Fix and How to, and the paired devices with their app version, pairing and revoke), Updates (every update setting: this app, the host, the agent CLIs, and who can update this host), Repositories (attach dialog with git badges), Runtimes (permission checks, and add/clone/remove custom), Computer use and About (versions only). Until the setup checklist is complete, the home page shows it as a "Set up this host" card (`host-setup/HostSetupCard.tsx`).
 - Kit chrome only: one chip, one menu, one badge. No ad-hoc controls outside `src/ui`
 
 ## Scripts

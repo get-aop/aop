@@ -4,7 +4,7 @@ import { mkdir } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { AOP_BROWSER_PARTITION, buildChannel } from "@aop/common";
+import { AOP_BROWSER_PARTITION, type AppUpdateState, buildChannel } from "@aop/common";
 import {
   app,
   BrowserWindow,
@@ -21,12 +21,12 @@ import {
 } from "electron";
 import packageInfo from "../../../package.json";
 import { windowTitle } from "../src/backend/connection-label";
-import type { AppUpdateState, DesktopState } from "../src/backend/types";
-import { hostDriftTag, updateLabel } from "../src/backend/update-label";
+import type { DesktopState } from "../src/backend/types";
 import { APP_SCHEME, createAppProtocolHandler, DASHBOARD_HOST, SHELL_HOST } from "./app-protocol";
 import { type BrowserHost, createBrowserHost } from "./browser/browser-host";
 import { IPC_CHANNELS } from "./channels";
-import { buildMenuTemplate } from "./chrome";
+import { aboutPanelOptions, buildMenuTemplate } from "./chrome";
+import { clientHeaderValue, installClientHeader, withClientHeader } from "./client-header";
 import { createHostClient, type FetchLike } from "./connection/host-client";
 import { createConnectionMonitor } from "./connection/monitor";
 import { createDesktopController, type ShellView, type WindowPort } from "./desktop-controller";
@@ -51,6 +51,7 @@ import { registerDesktopIpc } from "./ipc";
 import { createLogger, type Logger } from "./log";
 import { createNotifier } from "./notifications/notifier";
 import { createProjectWatcher } from "./notifications/project-watcher";
+import { portFromEnv, sleep, timer } from "./runtime-env";
 import { resolveDesktopPaths } from "./runtime-paths";
 import {
   isAllowedNavigation,
@@ -58,6 +59,7 @@ import {
   isSafeExternalUrl,
   isSafeUpdateUrl,
 } from "./security";
+import { createAppUpdateHost } from "./updates/app-update-host";
 import { type AppUpdater, createAppUpdater } from "./updates/app-updater";
 import { createElectronUpdaterPort } from "./updates/electron-updater-port";
 import { appBundleOf, isDeveloperIdSigned } from "./updates/mac-signature";
@@ -109,7 +111,10 @@ async function start(): Promise<void> {
     development || process.env.AOP_DESKTOP_LOG_STDOUT === "1",
   );
   logChrome = log;
-  const fetchImpl: FetchLike = (input, init) => net.fetch(input, init);
+  const netFetch: FetchLike = (input, init) => net.fetch(input, init);
+  const clientHeader = clientHeaderValue(appVersion, process.platform);
+  // What goes to a host says which app sent it; the release feed is not a host.
+  const fetchImpl = withClientHeader(netFetch, clientHeader);
   const clientFor = (hostUrl: string) => createHostClient(hostUrl, fetchImpl);
 
   const portOverride = portFromEnv(process.env.AOP_DESKTOP_LOCAL_SERVER_PORT);
@@ -117,7 +122,7 @@ async function start(): Promise<void> {
     createJsonFile(join(userData, "desktop-config.json"), parseConfig, defaultConfig),
     portOverride === null ? {} : { localPort: portOverride },
   );
-  const localPort = (await config.load()).localPort;
+  const { localPort, autoDownloadUpdates } = await config.load();
   const tokens = createTokenStore(
     createSafeStorageKeychain(safeStorage),
     createJsonFile<EncryptedTokens>(
@@ -187,6 +192,7 @@ async function start(): Promise<void> {
     platform: process.platform,
     packaged: app.isPackaged,
     disabled: process.env.AOP_DESKTOP_DISABLE_UPDATES === "1",
+    forced: process.env.AOP_DESKTOP_UPDATE_MODE,
     // Only a packaged app is asked: the Electron binary a development run starts is signed by
     // the Electron project, not by us.
     macSigned:
@@ -194,22 +200,34 @@ async function start(): Promise<void> {
       app.isPackaged &&
       (await isDeveloperIdSigned(appBundleOf(app.getPath("exe")))),
   });
-  appUpdater = createAppUpdater({
+  const updater = createAppUpdater({
     mode: updateMode,
     appVersion,
     arch: process.arch,
+    autoDownload: autoDownloadUpdates,
     feedOrigin: feedOverride,
-    fetch: fetchImpl,
+    fetch: netFetch,
     createAutoUpdater: createElectronUpdaterPort,
     schedule: timer,
     onChange: applyUpdate,
     log,
+  });
+  appUpdater = updater;
+  const appUpdateHost = createAppUpdateHost({
+    updater,
+    info: { name: buildChannel().productName, version: appVersion, platform: process.platform },
+    autoDownload: autoDownloadUpdates,
+    saveAutoDownload: async (enabled) =>
+      void (await config.update({ autoDownloadUpdates: enabled })),
+    openExternal: (url) => shell.openExternal(url),
+    isSafeDownloadUrl: (url) => isSafeUpdateUrl(url, feedOverride !== undefined),
   });
 
   await registerAppProtocol(paths, controller.activeHostUrl);
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
     callback(false),
   );
+  installClientHeader(session.defaultSession, controller.activeHostUrl, clientHeader);
   browserHost = createElectronBrowserHost(log);
   mainWindow = createMainWindow(paths.preloadPath, log);
   registerDesktopIpc(
@@ -233,9 +251,7 @@ async function start(): Promise<void> {
       getHostConfig: controller.hostConfigForDashboard,
       hostRejected: controller.hostRejected,
       setZoom: async (factor) => void mainWindow?.webContents.setZoomFactor(factor),
-      getUpdateState: () => updateState,
-      openUpdateDownload: openDownload,
-      restartToUpdate: async () => appUpdater?.restartToUpdate(),
+      ...appUpdateHost,
       browserSetActive: (active) => browserHost?.setActive(active),
       browserAnswerPrompt: (id, allow) => browserHost?.answerPrompt(id, allow),
       browserDownloadAction: (id, action) => browserHost?.downloadAction(id, action),
@@ -253,14 +269,13 @@ async function start(): Promise<void> {
     updates: updateMode,
   });
   await controller.boot();
-  appUpdater.start();
+  updater.start();
 }
 
 // The menu's actions need the controller, which exists only once the app has started.
 let menuActions: Parameters<typeof buildMenuTemplate>[1] | null = null;
 let lastState: DesktopState | null = null;
 let appUpdater: AppUpdater | null = null;
-let updateState: AppUpdateState = { status: "idle" };
 let logChrome: Logger = () => {};
 let browserHost: BrowserHost | null = null;
 
@@ -289,25 +304,36 @@ function createElectronBrowserHost(log: Logger): BrowserHost {
 function installMenuActions(controller: ReturnType<typeof createDesktopController>): void {
   menuActions = {
     showDashboard: () => void controller.openDashboard(),
-    openSettings: () => void openDashboardSettings(controller),
+    openSettings: () => void signalDashboard(controller, IPC_CHANNELS.openSettings),
+    openHostSetup: () => void signalDashboard(controller, IPC_CHANNELS.openHostSetup),
     reconnect: () => void controller.reconnect(),
     changeHost: () => void controller.showChangeHost(),
     manageHost: () => void controller.showHostMode(),
     startHost: () => void controller.startHostMode(),
     stopHost: () => void controller.stopHostMode(),
-    openUpdateDownload: () => void openDownload(),
+    checkForUpdates: () => void checkFromMenu(),
     restartToUpdate: () => appUpdater?.restartToUpdate(),
     quit: () => app.quit(),
   };
   if (lastState) applyChrome(lastState);
 }
 
-// The dashboard opens its settings when told; one that is not showing is loaded first.
-async function openDashboardSettings(
+// The dashboard opens its settings (or AOP settings › Host) when told; one that is not showing
+// is loaded first, and the bridge holds the signal until it listens.
+async function signalDashboard(
   controller: ReturnType<typeof createDesktopController>,
+  channel: string,
 ): Promise<void> {
   if (currentSurface() !== "dashboard") await controller.openDashboard();
-  mainWindow?.webContents.send(IPC_CHANNELS.openSettings);
+  mainWindow?.webContents.send(channel);
+}
+
+// Check for Updates…: the dashboard's Updates popover follows the check as it runs. The app's
+// own screens show the same row, so they need no signal.
+async function checkFromMenu(): Promise<void> {
+  const checking = appUpdater?.check();
+  if (currentSurface() === "dashboard") mainWindow?.webContents.send(IPC_CHANNELS.openUpdates);
+  await checking;
 }
 
 function installLifecycle(controller: ReturnType<typeof createDesktopController>): void {
@@ -338,10 +364,18 @@ function installLifecycle(controller: ReturnType<typeof createDesktopController>
 
 function applyChrome(state: DesktopState): void {
   lastState = state;
-  const title = titleFor(state);
+  const title = windowTitle(state.connection);
   logChrome("window title", { title });
   mainWindow?.setTitle(title);
   mainWindow?.webContents.send(IPC_CHANNELS.stateChanged, state);
+  app.setAboutPanelOptions(
+    aboutPanelOptions({
+      appName: buildChannel().productName,
+      appVersion: state.appVersion,
+      platform: process.platform,
+      connection: state.connection,
+    }),
+  );
   if (!menuActions) return;
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(
@@ -351,8 +385,7 @@ function applyChrome(state: DesktopState): void {
           connection: state.connection,
           hostProcess: state.hostProcess,
           hostModeAvailable: state.hostModeAvailable,
-          update: updateState,
-          appVersion: state.appVersion,
+          update: appUpdater?.state() ?? { status: "off" },
         },
         menuActions,
       ),
@@ -360,24 +393,7 @@ function applyChrome(state: DesktopState): void {
   );
 }
 
-// The update and a host on another release are asides in the title: quiet, and always in view.
-function titleFor(state: DesktopState): string {
-  const { connection } = state;
-  return windowTitle(connection, [
-    updateLabel(updateState),
-    connection.status === "connected"
-      ? hostDriftTag(connection.hostVersion, state.appVersion)
-      : null,
-  ]);
-}
-
-async function openDownload(): Promise<void> {
-  const url = appUpdater?.downloadUrl();
-  if (url && isSafeUpdateUrl(url, feedOverride !== undefined)) await shell.openExternal(url);
-}
-
 function applyUpdate(next: AppUpdateState): void {
-  updateState = next;
   mainWindow?.webContents.send(IPC_CHANNELS.updateStateChanged, next);
   if (lastState) applyChrome(lastState);
 }
@@ -445,7 +461,7 @@ function createMainWindow(preloadPath: string, log?: Logger): BrowserWindow {
   window.on("closed", () => {
     if (mainWindow === window) mainWindow = null;
   });
-  if (lastState) window.setTitle(titleFor(lastState));
+  if (lastState) window.setTitle(windowTitle(lastState.connection));
   window.webContents.on("did-finish-load", () =>
     log?.("page loaded", { url: window.webContents.getURL(), title: window.getTitle() }),
   );
@@ -480,16 +496,3 @@ function secureNavigation(webContents: WebContents): void {
     return { action: "deny" };
   });
 }
-
-// Development runs a second app beside a released one, on its own port.
-function portFromEnv(value: string | undefined): number | null {
-  const port = Number(value);
-  return Number.isInteger(port) && port > 0 && port <= 65_535 ? port : null;
-}
-
-const timer = (run: () => void, delayMs: number): (() => void) => {
-  const handle = setTimeout(run, delayMs);
-  return () => clearTimeout(handle);
-};
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

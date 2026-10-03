@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import type { AgentCliService } from "./service.ts";
 
 /**
- * The agent CLIs on the host. Any paired device may read and check, so a remote dashboard shows
- * the badge; running an update is the host owner's alone (see auth/route-policy.ts), because it
- * installs software on the machine.
+ * The agent CLIs on the host. Any paired device may read, so a remote dashboard shows the badge;
+ * checking and updating follow the `host_management` setting (see auth/route-policy.ts), because
+ * an update installs software on the machine.
  */
 export const createAgentCliRoutes = (clis: AgentCliService) => {
   const routes = new Hono();

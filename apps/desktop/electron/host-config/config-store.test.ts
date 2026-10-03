@@ -20,6 +20,7 @@ describe("config store", () => {
       deviceName: null,
       localPort: DEFAULT_LOCAL_PORT,
       serveOverTailscale: false,
+      autoDownloadUpdates: true,
     });
   });
 
@@ -60,9 +61,16 @@ describe("parseConfig", () => {
       deviceName: "MacBook",
       localPort: 25360,
       serveOverTailscale: true,
+      autoDownloadUpdates: false,
     };
 
     expect(parseConfig(saved)).toEqual(saved);
+  });
+
+  test("downloads updates by itself unless switched off, also for a config saved before the option", () => {
+    expect(parseConfig({ mode: "remote" }).autoDownloadUpdates).toBe(true);
+    expect(parseConfig({ autoDownloadUpdates: "no" }).autoDownloadUpdates).toBe(true);
+    expect(parseConfig({ autoDownloadUpdates: false }).autoDownloadUpdates).toBe(false);
   });
 
   test("falls back field by field, so one bad value does not lose the rest", () => {

@@ -177,6 +177,14 @@ describe("install.sh host install", () => {
       expect(result.exitCode).toBe(0);
       expect(result.output).toContain("Started AOP local server with launchd");
       expect(result.output).toContain("AOP local server is ready");
+      // The last lines: pairing, remote access and where updates live.
+      expect(result.output).toContain("Pair another device: run `aop pair` on this computer");
+      expect(result.output).toContain(
+        `tailscale serve --bg --https=443 http://127.0.0.1:${health.port}`,
+      );
+      expect(result.stdout.trim().split("\n").at(-1)).toBe(
+        "Updates: AOP settings › Updates. Setup status: AOP settings › Host.",
+      );
       const plist = await readFile(
         join(box.home, "Library", "LaunchAgents", "com.aop.local-server.plist"),
         "utf8",
@@ -230,6 +238,11 @@ describe("install.sh AOP Nightly", () => {
       expect(result.exitCode).toBe(0);
       expect(result.output).toContain(`Installing AOP Nightly ${VERSION}`);
       expect(result.output).toContain("AOP Nightly local server is ready");
+      expect(result.output).toContain("run `aop-nightly pair` on this computer");
+      // Its https port is its own, so stable keeps 443.
+      expect(result.output).toContain(
+        `tailscale serve --bg --https=${health.port} http://127.0.0.1:${health.port}`,
+      );
       const bin = join(box.home, ".aop-nightly", "bin");
       expect(existsSync(join(bin, "aop-nightly"))).toBe(true);
       expect(existsSync(join(bin, "dashboard", "index.html"))).toBe(true);

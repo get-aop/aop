@@ -1,25 +1,25 @@
 import { ShieldOffIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { CliUpdateDot } from "../agent-clis/AgentCliPanel";
-import { pendingCliUpdates, skipsPermissions, useAgentClis } from "../agent-clis/agent-cli-store";
-import { useAgentCliStatus } from "../agent-clis/use-agent-clis";
+import { skipsPermissions, useAgentClis } from "../agent-clis/agent-cli-store";
 import { LiveViewNotice } from "../live-view/LiveViewNotice";
 import { PlanUsageMeter } from "../plan-usage/PlanUsageMeter";
 import { useProjectsState } from "../projects/ProjectsProvider";
 import { hostConnection } from "../projects/selectors";
+import { UpdatesButton } from "../updates/UpdatesButton";
 import { openSettingsDialog } from "./dialog-store";
 import { CONNECTION_DOT } from "./project-switcher/SwitcherConnection";
 
 /**
  * The far end of every top bar: host-wide state. The live view's "Show" button while it is
- * closed and a thread uses computer use, a newer agent CLI and agents that skip
- * permission checks (each opens the Runtimes settings), a host out of reach, then the Claude
- * plan's usage meter. The notices drop their words when the bar is narrow; their titles keep them.
+ * closed and a thread uses computer use, the Updates button (shown only when something can be
+ * updated, is updating or failed), agents that skip permission checks (opens the Runtimes
+ * settings), a host out of reach, then the Claude plan's usage meter. The notices drop their
+ * words when the bar is narrow; their titles keep them.
  */
 export const ShellStatus = ({ testId }: { testId: string }) => (
   <div data-testid={testId} className="ml-auto flex shrink-0 items-center gap-0.5">
     <LiveViewNotice className={noticeClass} />
-    <CliUpdateNotice />
+    <UpdatesButton />
     <PermissionBypassNotice />
     <HostOfflineNotice />
     <PlanUsageMeter />
@@ -30,35 +30,8 @@ const noticeClass =
   "flex h-8 shrink-0 items-center gap-1.5 rounded-row px-1.5 text-meta transition-colors @md:px-2 duration-[120ms] hover:bg-hover";
 
 /**
- * Shown while an agent CLI has a newer version out: noticeable without a bar across the screen,
- * since Claude Code ships several times a week.
- */
-const CliUpdateNotice = () => {
-  const pending = pendingCliUpdates(useAgentCliStatus({ poll: true }).data);
-  const [first] = pending;
-  if (!first) return null;
-  const label =
-    pending.length === 1
-      ? `${first.label} ${first.latest} available`
-      : `${pending.length} CLI updates available`;
-  return (
-    <button
-      type="button"
-      data-testid="cli-update-notice"
-      title={label}
-      aria-label={label}
-      onClick={() => openSettingsDialog("runtimes")}
-      className={cn(noticeClass, "text-running")}
-    >
-      <CliUpdateDot className="m-[5px]" />
-      <span className="hidden max-w-48 truncate @5xl:inline">{label}</span>
-    </button>
-  );
-};
-
-/**
  * Shown for as long as the agents this host starts skip permission checks, on every screen, so
- * it is never forgotten on. The notice above keeps the shared status fresh.
+ * it is never forgotten on. The Updates button keeps the shared CLI status fresh.
  */
 const PermissionBypassNotice = () => {
   if (!skipsPermissions(useAgentClis().data)) return null;

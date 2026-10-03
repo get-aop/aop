@@ -1,4 +1,4 @@
-import type { Device } from "@aop/common";
+import { type ClientInfo, ClientInfoSchema, type Device } from "@aop/common";
 import type { Kysely } from "kysely";
 import type { DeviceRow } from "../db/projects-schema.ts";
 import type { Database } from "../db/schema.ts";
@@ -8,6 +8,8 @@ export interface NewDevice {
   name: string;
   /** Hash of the bearer token. The token itself never reaches the repository. */
   tokenHash: string;
+  /** The client it paired from, when the request said. */
+  client?: ClientInfo | null;
 }
 
 /**
@@ -20,6 +22,8 @@ export interface DeviceRepository {
   /** Oldest first. */
   list: () => Promise<Device[]>;
   touchLastSeen: (id: string) => Promise<void>;
+  /** The app, version and platform the device connected with last. */
+  recordClient: (id: string, client: ClientInfo) => Promise<void>;
   /** Revokes the device: its token stops matching. */
   remove: (id: string) => Promise<boolean>;
 }
@@ -30,6 +34,7 @@ export const createDeviceRepository = (
 ): DeviceRepository => ({
   create: async (device) => {
     const createdAt = now().toISOString();
+    const client = device.client ?? null;
     await db
       .insertInto("devices")
       .values({
@@ -37,9 +42,10 @@ export const createDeviceRepository = (
         name: device.name,
         token_hash: device.tokenHash,
         created_at: createdAt,
+        ...clientColumns(client),
       })
       .execute();
-    return { id: device.id, name: device.name, createdAt, lastSeenAt: null };
+    return { id: device.id, name: device.name, createdAt, lastSeenAt: null, client };
   },
 
   findByTokenHash: async (tokenHash) => {
@@ -69,6 +75,10 @@ export const createDeviceRepository = (
       .execute();
   },
 
+  recordClient: async (id, client) => {
+    await db.updateTable("devices").set(clientColumns(client)).where("id", "=", id).execute();
+  },
+
   remove: async (id) => {
     // The dialect reports no affected-row count, so existence is read first.
     const existing = await db
@@ -82,9 +92,26 @@ export const createDeviceRepository = (
   },
 });
 
+const clientColumns = (client: ClientInfo | null) => ({
+  client_app: client?.app ?? null,
+  client_version: client?.version ?? null,
+  client_platform: client?.platform ?? null,
+});
+
 const toDevice = (row: DeviceRow): Device => ({
   id: row.id,
   name: row.name,
   createdAt: row.created_at,
   lastSeenAt: row.last_seen_at,
+  client: clientOf(row),
 });
+
+// A row from before migration v27, or one a build that knew other apps wrote, reads as no client.
+const clientOf = (row: DeviceRow): ClientInfo | null => {
+  const parsed = ClientInfoSchema.safeParse({
+    app: row.client_app,
+    version: row.client_version,
+    platform: row.client_platform,
+  });
+  return parsed.success ? parsed.data : null;
+};

@@ -10,15 +10,25 @@ export interface CheckRecord {
   checkedAt: string;
   latest: string;
   releaseUrl: string;
+  /** The CUA Driver version `latest` pins, when the feed said. */
+  cuaDriver?: string;
 }
 
 /** How the last update run ended. `from` is the release it started on. */
 export interface OutcomeRecord {
+  /** When it ended. */
   at: string;
+  /** When it started; absent from records older runs wrote. */
+  startedAt?: string;
   ok: boolean;
   from: string;
   to: string | null;
   error: string | null;
+  /**
+   * The new release is in place but the host still runs `from`: it was started by hand, so
+   * nothing here could restart it. Only on an `ok` record.
+   */
+  restartNeeded?: boolean;
 }
 
 export const readCheckRecord = (home: string = aopPaths.home()): Promise<CheckRecord | null> =>
