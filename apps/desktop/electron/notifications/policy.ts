@@ -171,7 +171,10 @@ const alreadyAsked = (previous: Thread | undefined, question: string): boolean =
 const pullRequestOf = (thread: Thread) =>
   thread.artifacts.find((artifact) => artifact.type === "pr");
 
+// A reply that asks the person something is announced by its question, which is what needs them.
 const firstText = (message: Extract<Message, { role: "assistant" }>): string => {
+  const question = message.blocks.find((block) => block.type === "question");
+  if (question?.type === "question") return question.question;
   const text = message.blocks.find((block) => block.type === "text");
   return text?.type === "text" ? text.text : "The coordinator posted an update.";
 };

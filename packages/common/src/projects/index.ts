@@ -8,6 +8,8 @@ export { ArtifactSchema, PullRequestChecksSchema, PullRequestRefSchema } from ".
 export type {
   MessageBlock,
   ProsePart,
+  QuestionBlock,
+  QuestionOption,
   SteerPart,
   SuggestedThread,
   SuggestionAnswer,
@@ -17,6 +19,11 @@ export type {
 } from "./blocks.ts";
 export {
   MessageBlockSchema,
+  QUESTION_MAX,
+  QUESTION_OPTION_MAX,
+  QUESTION_OPTIONS_MAX,
+  QUESTION_OPTIONS_MIN,
+  QuestionOptionSchema,
   SUGGESTED_THREADS_MAX,
   SUGGESTION_REASON_MAX,
   SuggestedThreadSchema,

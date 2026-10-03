@@ -8,6 +8,7 @@ import {
   type McpToolResult,
 } from "./registry.ts";
 import { artifactCreateTool, artifactUpdateTool } from "./tools-artifact.ts";
+import { askPersonTool } from "./tools-ask-person.ts";
 import {
   projectSettingsGetTool,
   projectSettingsSetTool,
@@ -49,6 +50,7 @@ const TOOLS: readonly McpTool[] = [
   threadMergePrTool,
   threadResolveTool,
   proposeThreadsTool,
+  askPersonTool,
   projectSettingsGetTool,
   projectSettingsSetTool,
   routineCreateTool,

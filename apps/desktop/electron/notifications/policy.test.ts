@@ -148,6 +148,24 @@ describe("the coordinator", () => {
     );
   });
 
+  test("announces a reply that asks the person something by its question", () => {
+    const asking = coordinatorPost("The checkout thread is done.", {
+      blocks: [
+        { type: "text", text: "The checkout thread is done." },
+        {
+          type: "question",
+          question: "Merge it by itself, or wait for you?",
+          options: [{ label: "Merge by itself" }, { label: "Wait for me" }],
+          other: false,
+        },
+      ],
+    });
+
+    expect(decide(entryFor({ message: asking }))?.body).toBe(
+      "Merge it by itself, or wait for you?",
+    );
+  });
+
   test("keeps a long reply to one short line", () => {
     const body = decide(
       entryFor({ message: coordinatorPost(`${"word ".repeat(200)}\n\nmore`) }),

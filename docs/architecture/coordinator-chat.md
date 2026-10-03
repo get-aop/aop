@@ -53,6 +53,7 @@ An assistant message is a list of blocks (`MessageBlocks.tsx`). It starts with t
 | `routing-receipt` | "Sent to one thread" or "Sent to 3 threads", after what the reply said, with a chip for each thread that has no card of its own in the same message. Blocks keep the order they were written in, so nothing lands above what the person has read. |
 | `thread-card` | A card that follows its thread: `needs-call` with the question and View thread while the thread waits on the person, `live` with the status line and steps while it works, `done` with the pull request chip. The variant in the block is only what the card shows until the thread has loaded. |
 | `suggested-threads` | Proposals, each its title and one line of reason with a start button (↵); Skip shows on hover, and "Start N threads" starts the ones still waiting. |
+| `question` | The question the coordinator asked with `ask_person`, with each option as a button (the recommended one filled) and "Other…" when it offered one. See [Questions](#questions). |
 
 The coordinator writes a thread into a reply as `[its title](thread:<id>)`; the text keeps the link, and the chip shows the thread's own title, state and, on hover, how many replies and how long ago. `thread_spawn` and `thread_steer` add the thread to the reply's routing receipt.
 
@@ -108,3 +109,13 @@ The host keeps no read state for the chat, so the page does. The first time a de
 ## Paused and archived projects
 
 The host refuses a message to a project that is not active. The pane says so, disables the box, and offers Resume or Restore. Threads cannot be started from a proposal either.
+
+## Questions
+
+The coordinator's `ask_person` tool attaches a `question` block to its reply: the question, 2 to 5 options (a label of at most 120 characters each, at most one `recommended`, no label twice) and `other`. Its system prompt tells it to use the tool for yes/no and pick-one questions and to end its turn after asking, and to keep using `propose_threads` to offer threads. The dashboard draws the block under the reply (`AskedQuestion.tsx`): the question, then the options as buttons that wrap on a narrow screen, and an "Other…" button that puts the cursor in the chat box.
+
+**Answering.** A click sends the option's label as the person's message, through the same send as the box (`sender: "person"`), so the coordinator reads the answer as their next message. Typing a reply instead answers it too. A send the host refuses says why under the buttons and leaves them on.
+
+**No record of its own.** The host stores no answer: the conversation is the record (`question-answers.ts`). A question is answered once a message from the person was stored after the reply that asks it; the option chosen is the one whose label that message says, word for word, and none for a reply in their own words. A message the person sent before the question was asked (one that waited while the coordinator worked), a routine's brief and a thread's report answer nothing. One message answers every question still open before it. Answered, the buttons are off and the chosen one keeps a check; every device, and a reload, read the same from the messages. A paused or archived project shows the buttons off, with the reason on hover. Outside the coordinator chat a question is only shown.
+
+**Notifications.** The desktop app announces a reply that asks a question by its question.

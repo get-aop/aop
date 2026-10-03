@@ -125,6 +125,7 @@ describe("MCP HTTP routes", () => {
       "aop_library_list",
       "aop_library_read",
       "aop_library_save",
+      "ask_person",
       "memory_delete",
       "memory_read",
       "memory_write",
