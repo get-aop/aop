@@ -12,6 +12,8 @@ export interface Directives {
   think?: string;
   /** Tool-call rounds before the final reply. */
   steps: number;
+  /** After the steps, a shell command that runs this long: a long step a message waits behind. */
+  holdMs?: number;
   /** Final reply text; replaces the default echo. */
   say?: string;
   ask?: AskUser;
@@ -68,6 +70,7 @@ export const parseDirectives = (prompt: string, envScript = ""): Directives => {
     streamMs: toNumber(tokens.get("stream"), 0),
     think: tokens.get("think") || undefined,
     steps: toNumber(tokens.get("steps"), 0),
+    holdMs: optionalNumber(tokens.get("hold")),
     say: tokens.get("say") || undefined,
     ask: question === undefined ? undefined : readAsk(question, tokens),
     writes: readWrites(tokens.get("write")),

@@ -85,6 +85,42 @@ describe("persistFinalizedChatRun", () => {
     ]);
   });
 
+  test("drops when each step started: only a turn being written needs it", async () => {
+    const { db, run } = await setupRun({ runtime: "claude-code" });
+
+    await db.transaction().execute((trx) =>
+      persistFinalizedChatRun(
+        trx,
+        run,
+        "Done.",
+        null,
+        null,
+        { status: "completed", errorMessage: null },
+        [
+          {
+            type: "tool",
+            id: "t1",
+            name: "Bash",
+            detail: "bun test",
+            status: "done",
+            startedAt: "2026-10-03T10:00:00.000Z",
+          },
+          { type: "text", text: "Done." },
+        ],
+      ),
+    );
+
+    const reply = await db
+      .selectFrom("chat_messages")
+      .select("parts")
+      .where("id", "=", run.assistant_message_id)
+      .executeTakeFirstOrThrow();
+    expect(JSON.parse(reply.parts ?? "[]")).toEqual([
+      { type: "tool", id: "t1", name: "Bash", detail: "bun test", status: "done" },
+      { type: "text", text: "Done." },
+    ]);
+  });
+
   test("records no CLI version for a log without an init event", async () => {
     const { db, run } = await setupRun({ runtime: "claude-code" });
 

@@ -97,6 +97,15 @@ export const createProjectRoutes = ({ projects, memory }: ProjectServices) => {
       : errorResponse(c, result.error);
   });
 
+  // "Interrupt now" on a message sent to the coordinator or one of the project's threads.
+  routes.post("/:projectId/messages/:messageId/interrupt", async (c) => {
+    const result = await projects.interruptForMessage(
+      c.req.param("projectId"),
+      c.req.param("messageId"),
+    );
+    return result.success ? c.json({ outcome: result.outcome }) : errorResponse(c, result.error);
+  });
+
   routes.get("/:projectId/memory", async (c) => {
     const result = await memory.list(c.req.param("projectId"));
     return result.success ? c.json({ files: result.files }) : errorResponse(c, result.error);

@@ -18,6 +18,8 @@ export interface LiveTurns {
   settle: (entry: EventLogEntry) => void;
   /** Every running turn of the project, each as a delta that replaces what a client holds. */
   list: (projectId: string) => MessageDelta[];
+  /** One running turn's parts so far; empty when it is not running. */
+  parts: (projectId: string, messageId: string) => readonly TurnPart[];
 }
 
 type HeldTurn = Omit<MessageDelta, "ops"> & { parts: TurnPart[] };
@@ -63,6 +65,8 @@ export const createLiveTurns = (): LiveTurns => {
         byProject.delete(entry.projectId);
       }
     },
+
+    parts: (projectId, messageId) => byProject.get(projectId)?.get(messageId)?.parts ?? [],
 
     list: (projectId) =>
       [...(byProject.get(projectId)?.values() ?? [])].map(({ parts, ...turn }) => ({

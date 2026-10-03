@@ -166,9 +166,17 @@ describe("clients hear of project changes through the event publisher", () => {
       (parts, delta) => applyLiveOps(parts ?? [], delta.ops),
       [],
     );
-    // What a client watched being written is the finished message, part for part.
+    // What a client watched being written is the finished message, part for part, save when each
+    // step started, which only a turn being written carries.
     expect(live?.map((part) => part.type)).toEqual(["text", "tool", "text", "tool", "text"]);
-    expect(reply?.role === "assistant" && reply.blocks).toEqual(live ?? []);
+    const tools = (live ?? []).filter((part) => part.type === "tool");
+    expect(tools.every((part) => typeof part.startedAt === "string")).toBe(true);
+    const finished = (live ?? []).map((part) => {
+      if (part.type !== "tool") return part;
+      const { startedAt: _startedAt, ...rest } = part;
+      return rest;
+    });
+    expect(reply?.role === "assistant" && reply.blocks).toEqual(finished);
     // The user's message and the finished reply were each committed with their log entries.
     expect(heard.commits()).toBeGreaterThanOrEqual(2);
   });

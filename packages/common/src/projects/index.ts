@@ -50,6 +50,12 @@ export {
 } from "./computer-use.ts";
 export type { CuaSetupCommand, CuaSetupStep } from "./cua-setup.ts";
 export { CUA_COMMANDS, cuaSetupSteps } from "./cua-setup.ts";
+export {
+  type CurrentStep,
+  currentStepOf,
+  describeStep,
+  formatElapsed,
+} from "./current-step.ts";
 export type { Device } from "./device.ts";
 export { DeviceSchema } from "./device.ts";
 export type {

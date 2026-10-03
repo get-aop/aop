@@ -9,6 +9,7 @@ export type ChatRow =
    * A message, or a reply still being written (`streaming`), drawn by the same row under the same
    * key: when the reply's message arrives, only the data under the row changes. `steers` are the
    * messages sent into a reply's turn while it ran, which the reply draws, not rows of their own.
+   * `queued` marks a message sent after the reply being written, held for a turn of its own.
    */
   | {
       kind: "message";
@@ -16,6 +17,7 @@ export type ChatRow =
       message: Message;
       streaming: boolean;
       steers?: readonly Message[];
+      queued?: true;
     }
   /** The agent at work, and since when: the message it is answering. */
   | { kind: "working"; key: string; since: string | null };
@@ -61,11 +63,16 @@ export const buildRows = ({
   };
   const rows: ChatRow[] = [];
   let previous: Message | null = null;
+  // What the person or the coordinator sends after a reply being written waits for that turn.
+  let afterLive = false;
 
   for (const message of shown) {
     if (inside.has(message.id)) continue;
-    rows.push(...rowsOf(message, previous, firstNewId, now).map(withSteers));
-    rows.push(...(replies.get(message.id) ?? []).map(withSteers));
+    const queued = afterLive && message.role === "user";
+    rows.push(...rowsOf(message, previous, firstNewId, now, queued).map(withSteers));
+    const following = replies.get(message.id) ?? [];
+    rows.push(...following.map(withSteers));
+    afterLive ||= following.some((row) => row.kind === "message" && row.streaming);
     previous = message;
   }
   rows.push(...(replies.get(END) ?? []).map(withSteers));
@@ -79,12 +86,19 @@ const rowsOf = (
   previous: Message | null,
   firstNewId: string | null,
   now: Date | undefined,
+  queued: boolean,
 ): ChatRow[] => {
   const rows: ChatRow[] = [];
   const day = dayMarkerLabel(message.createdAt, previous?.createdAt ?? null, now);
   if (day) rows.push({ kind: "day", key: `day:${message.id}`, label: day });
   if (message.id === firstNewId) rows.push({ kind: "new", key: "new" });
-  rows.push({ kind: "message", key: message.id, message, streaming: false });
+  rows.push({
+    kind: "message",
+    key: message.id,
+    message,
+    streaming: false,
+    ...(queued && { queued }),
+  });
   return rows;
 };
 

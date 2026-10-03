@@ -128,6 +128,20 @@ describe("a thread's system prompt", () => {
     );
   });
 
+  test("a thread is told to keep blocking calls short, so a message sent to it lands within a minute", () => {
+    const prompt = buildThreadSystemPrompt({
+      project,
+      repos,
+      memory: noMemory,
+      thread,
+      workspace: "/work/web",
+    });
+
+    expect(prompt).toContain("Keep each blocking call to about a minute.");
+    expect(prompt).toContain("calls that block 60 seconds at most");
+    expect(prompt).toContain("an idle thread is not woken when a background job ends");
+  });
+
   test("a thread with a branch is told it has a worktree of its own and opens its pull request through aop_open_pr", () => {
     const prompt = buildThreadSystemPrompt({
       project,

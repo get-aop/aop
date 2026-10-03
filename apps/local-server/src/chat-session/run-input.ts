@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getLogger, typeIdToUuid } from "@aop/infra";
 import {
+  buildClaudeInterruptRequest,
   buildClaudeUserMessage,
   endInput,
   type InputChannel,
@@ -132,6 +133,33 @@ export const settleRunInput = async (ctx: LocalServerContext, runId: string): Pr
     if (run.pid !== null) endInput(run.pid);
     return true;
   });
+
+/**
+ * Stops the step a run is on, so the messages written into it are read now instead of once that
+ * step ends: the CLI cancels the tool call in flight (and the process it started), ends that turn,
+ * and starts the messages it has not taken yet as the next turn of the same run. False when the
+ * run takes no more input: it ended, is ending, or never took any.
+ */
+export const interruptRun = async (ctx: LocalServerContext, runId: string): Promise<boolean> =>
+  perRun(runId, async () => {
+    if (endedInputs.has(runId)) return false;
+    const run = await ctx.db
+      .selectFrom("chat_runs")
+      .select(["status", "input_path"])
+      .where("id", "=", runId)
+      .executeTakeFirst();
+    if (run?.status !== "running" || !run.input_path) return false;
+    const written = await writeInputLine(run.input_path, buildClaudeInterruptRequest());
+    if (written) logger.info("Interrupted the current step of run {runId}", { runId });
+    return written;
+  });
+
+/** Whether the run's CLI has taken the message in (echoed it where the model got it). */
+export const hasTakenMessage = async (
+  run: Pick<ChatRun, "log_file_path">,
+  messageId: string,
+): Promise<boolean> =>
+  takenUuids(await readRunEvents(run.log_file_path)).has(typeIdToUuid(messageId) ?? messageId);
 
 /** Whether this host already ended the run's input. */
 export const isRunInputEnded = (runId: string): boolean => endedInputs.has(runId);

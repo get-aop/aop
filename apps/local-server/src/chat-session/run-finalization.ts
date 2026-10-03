@@ -120,8 +120,14 @@ const steeredInto = async (trx: Kysely<Database>, runId: string): Promise<Set<st
   );
 
 // A steer part stands for a message written into this run; any other echo the log held is not one.
+// When a step started only matters while the turn is written.
 const withKnownSteers = (parts: readonly TurnPart[], steered: ReadonlySet<string>): TurnPart[] =>
-  parts.filter((part) => part.type !== "steer" || steered.has(part.messageId));
+  parts.flatMap((part): TurnPart[] => {
+    if (part.type === "steer") return steered.has(part.messageId) ? [part] : [];
+    if (part.type !== "tool" || part.startedAt === undefined) return [part];
+    const { startedAt: _startedAt, ...settled } = part;
+    return [settled];
+  });
 
 const readCliVersion = async (run: ChatRun): Promise<string | null> => {
   const field = findAgentCli(run.runtime)?.initVersionField;

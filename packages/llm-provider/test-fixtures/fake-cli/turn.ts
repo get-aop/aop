@@ -24,6 +24,10 @@ export const planTurn = (directives: Directives, ctx: TurnContext): TurnPlan => 
       { kind: "shell", command: `echo step ${step}`, output: `step ${step}` },
     );
   }
+  if (directives.holdMs) {
+    const seconds = Math.ceil(directives.holdMs / 1000);
+    beats.push({ kind: "hold", command: `sleep ${seconds}`, ms: directives.holdMs });
+  }
   for (const name of directives.tools ?? []) beats.push({ kind: "tool", name });
   for (const call of directives.calls ?? []) beats.push({ kind: "call", call });
   if (directives.ask) beats.push({ kind: "ask", ask: directives.ask });

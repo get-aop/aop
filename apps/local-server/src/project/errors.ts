@@ -70,6 +70,10 @@ export const describeServiceError = (error: ServiceError): string => {
       return "The path must be a file inside the thread's worktree";
     case "FILE_NOT_FOUND":
       return "The thread has no change to that file";
+    case "MESSAGE_NOT_FOUND":
+      return "Message not found";
+    case "MESSAGE_NOT_WAITING":
+      return "The message is not waiting on a running turn, so there is nothing to interrupt";
     case "THREAD_BUSY":
       return "The thread is busy: a turn is running, queued or waiting on a usage limit, or its pull request is landing; stop it or wait for it first";
   }

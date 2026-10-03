@@ -40,7 +40,7 @@ export {
 export { terminateProcessTree } from "./process-tree";
 export { createProvider } from "./provider-factory";
 export { ClaudeCodeProvider } from "./providers/claude-code";
-export { buildClaudeUserMessage } from "./providers/claude-code-input";
+export { buildClaudeInterruptRequest, buildClaudeUserMessage } from "./providers/claude-code-input";
 export {
   endInput,
   type InputChannel,
