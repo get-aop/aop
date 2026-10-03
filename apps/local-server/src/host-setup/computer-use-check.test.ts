@@ -111,15 +111,13 @@ describe("computerUseCheck", () => {
     expect(check.detail).toBe(
       `Missing: Accessibility. CUA Driver ${CUA_DRIVER_VERSION} is installed.`,
     );
-    expect(check.actions).toEqual([
-      {
-        kind: "how-to",
-        steps: [
-          "On Marcelos-MacBook-Pro, run this in a terminal. It starts CUA Driver and asks macOS for the permissions it needs.",
-        ],
-        command: "aop computer-use setup",
-      },
-    ]);
+    const [howTo] = check.actions;
+    if (howTo?.kind !== "how-to") throw new Error("expected a how-to");
+    // The guide's own macOS steps, with where to grant the permission by hand.
+    expect(howTo.steps[0]).toBe("On Marcelos-MacBook-Pro, in a terminal:");
+    expect(howTo.steps.some((step) => step.includes("Accessibility"))).toBe(true);
+    expect(howTo.steps.join("\n")).not.toContain("`");
+    expect(howTo.command).toBeTruthy();
   });
 
   test("optional when no project uses computer use", () => {

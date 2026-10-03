@@ -1,4 +1,10 @@
-import { type CuaLeaseState, type CuaStatus, cuaHolderName, type SetupCheck } from "@aop/common";
+import {
+  type CuaLeaseState,
+  type CuaStatus,
+  cuaHolderName,
+  cuaSetupSteps,
+  type SetupCheck,
+} from "@aop/common";
 import type { ComputerUseLook } from "./probes.ts";
 
 const TITLE = "Computer use";
@@ -111,12 +117,26 @@ const fixAction = (status: CuaStatus, command: string): SetupCheck["actions"][nu
     };
   }
   if (status.fix.command) return { kind: "fix", label: "Fix" };
-  // macOS permissions are granted in dialogs that only a terminal session on the Mac may open.
+  return macHowTo(status, command);
+};
+
+// macOS permissions are granted in dialogs that only a terminal session on the Mac may open:
+// the guide's own steps (cuaSetupSteps, the one place they are written), with where to click.
+const macHowTo = (status: CuaStatus, command: string): SetupCheck["actions"][number] => {
+  const guide = cuaSetupSteps(status);
+  const steps = guide.flatMap((step) => [
+    `${step.title}: ${step.body.replaceAll("`", "")}`,
+    ...step.commands.slice(1).map((extra) => `${extra.label}: ${extra.command}`),
+    ...step.places.map((place) => `Or by hand: ${place}`),
+  ]);
   return {
     kind: "how-to",
-    steps: [
-      `On ${status.host.name}, run this in a terminal. It starts CUA Driver and asks macOS for the permissions it needs.`,
-    ],
-    command,
+    steps:
+      steps.length > 0
+        ? [`On ${status.host.name}, in a terminal:`, ...steps]
+        : [
+            `On ${status.host.name}, run this in a terminal. It starts CUA Driver and asks macOS for the permissions it needs.`,
+          ],
+    command: guide[0]?.commands[0]?.command ?? command,
   };
 };

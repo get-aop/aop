@@ -1,14 +1,14 @@
-import { type CuaCheck, type CuaSetupStep, type CuaStatus, cuaSetupSteps } from "@aop/common";
+import type { CuaCheck, CuaStatus } from "@aop/common";
 import { CheckIcon, MinusIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
+import { openSettingsDialog } from "../../shell/dialog-store";
 import type { CuaStatusState } from "./use-cua-status";
 
 /**
- * CUA Driver on the AOP host as the host checked it, and the steps that make it ready. The steps
- * come from `cuaSetupSteps` in @aop/common, the one place they are written. Every command is for
- * the host, whichever device shows this.
+ * CUA Driver on the AOP host as the host checked it. What makes it ready is set up once for the
+ * host, on AOP settings › Host (its Computer use item, with Fix or How to), not per project.
  */
 export const CuaHostStatus = ({
   cua,
@@ -28,26 +28,28 @@ export const CuaHostStatus = ({
     );
   }
   const ready = status.status === "ready";
-  const steps = cuaSetupSteps(status);
   return (
     <Frame tone={ready ? "ok" : "warn"} title={titleOf(status, chosen)} cua={cua}>
       {status.status === "not-ready" ? <p className="text-text-muted">{status.detail}</p> : null}
       <CheckList checks={status.checks} />
-      {steps.length > 0 ? (
-        <div data-testid="settings-cua-guide" className="flex flex-col gap-3 pt-1">
-          <p data-testid="settings-cua-host" className="font-medium text-text">
+      {ready ? null : (
+        <div data-testid="settings-cua-guide" className="flex flex-wrap items-center gap-2 pt-1">
+          <p data-testid="settings-cua-host" className="text-text">
             {owner
-              ? `Run these on this machine, ${status.host.name}: it is the AOP host.`
-              : `Run these on the AOP host, ${status.host.name}, not on this device.`}{" "}
-            <span className="font-normal text-text-muted">Then press Check again.</span>
+              ? `Set it up on this machine, ${status.host.name}: it is the AOP host.`
+              : `Set it up on the AOP host, ${status.host.name}, not on this device.`}
           </p>
-          <ol className="flex flex-col gap-3">
-            {steps.map((step, index) => (
-              <SetupStep key={step.id} step={step} number={index + 1} />
-            ))}
-          </ol>
+          <Button
+            type="button"
+            size="xs"
+            variant="secondary"
+            data-testid="settings-cua-open-host"
+            onClick={() => openSettingsDialog("host")}
+          >
+            Open AOP settings › Host
+          </Button>
         </div>
-      ) : null}
+      )}
     </Frame>
   );
 };
@@ -86,53 +88,6 @@ const CheckList = ({ checks }: { checks: CuaCheck[] }) => (
     ))}
   </ul>
 );
-
-const SetupStep = ({ step, number }: { step: CuaSetupStep; number: number }) => (
-  <li data-testid={`settings-cua-step-${step.id}`} className="flex gap-2">
-    <span className="w-4 shrink-0 font-medium text-text tabular-nums">{number}.</span>
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-      <p className="font-medium text-text">{step.title}</p>
-      <p className="text-text-muted">
-        <WithCode text={step.body} />
-      </p>
-      {step.commands.map((command) => (
-        <CopyCommand key={command.command} label={command.label} command={command.command} />
-      ))}
-      {step.places.length > 0 ? (
-        <ul className="flex flex-col gap-0.5 text-text-muted">
-          {step.places.map((place) => (
-            <li key={place}>Or by hand: {place}</li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  </li>
-);
-
-// The guide's text marks commands and paths with backticks, as the docs do.
-const WithCode = ({ text }: { text: string }) => (
-  <>
-    {segmentsOf(text).map(({ at, part, code }) =>
-      code ? (
-        <code key={at} className="rounded bg-canvas px-1 text-[11.5px] text-text">
-          {part}
-        </code>
-      ) : (
-        <span key={at}>{part}</span>
-      ),
-    )}
-  </>
-);
-
-/** Splits on backticks; each part is keyed by where it starts in the text. */
-const segmentsOf = (text: string): { at: number; part: string; code: boolean }[] => {
-  let at = 0;
-  return text.split("`").map((part, position) => {
-    const segment = { at, part, code: position % 2 === 1 };
-    at += part.length + 1;
-    return segment;
-  });
-};
 
 /**
  * A command to run on the host, with a button that copies it. `testId` prefixes the command's
