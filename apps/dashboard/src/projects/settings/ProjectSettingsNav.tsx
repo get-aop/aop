@@ -2,6 +2,7 @@ import {
   BellIcon,
   BrainIcon,
   ChartLineIcon,
+  CircleDotIcon,
   FolderGit2Icon,
   type LucideIcon,
   MonitorSmartphoneIcon,
@@ -52,6 +53,12 @@ export const SECTIONS: Record<
     icon: FolderGit2Icon,
     description: "The repositories this project's threads work in.",
   },
+  issues: {
+    label: "Issue sources",
+    icon: CircleDotIcon,
+    description:
+      "Where the Issues tab lists issues from besides the repositories' GitHub issues. Keys and tokens stay on the host.",
+  },
   memory: {
     label: "Memory",
     icon: BrainIcon,
@@ -73,7 +80,7 @@ export const SECTIONS: Record<
 /** The nav's groups: what a person sets, what the project holds, then the actions. */
 const GROUPS: ProjectSettingsSection[][] = [
   ["general", "models", "threads", "computer-use", "notifications"],
-  ["environment", "memory", "usage"],
+  ["environment", "issues", "memory", "usage"],
   ["advanced"],
 ];
 

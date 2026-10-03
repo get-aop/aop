@@ -76,7 +76,7 @@ describe("contentSecurityPolicy", () => {
     expect(policy).toContain("script-src 'self'");
     expect(policy).toContain("connect-src 'self' https://mac.tail1234.ts.net");
     expect(policy).toContain(
-      "img-src 'self' data: blob: https://mac.tail1234.ts.net https://avatars.githubusercontent.com https://public.linear.app;",
+      "img-src 'self' data: blob: https://mac.tail1234.ts.net https://avatars.githubusercontent.com https://public.linear.app https://avatar-management--avatars.us-west-2.prod.public.atl-paas.net https://secure.gravatar.com;",
     );
     expect(policy).toContain("object-src 'none'");
     // A PDF artifact is framed from memory; no page of anywhere else can be.
@@ -99,7 +99,7 @@ describe("contentSecurityPolicy", () => {
       .find((directive) => directive.startsWith("img-src"));
 
     expect(imgSrc).toBe(
-      "img-src 'self' data: blob: https://avatars.githubusercontent.com https://public.linear.app",
+      "img-src 'self' data: blob: https://avatars.githubusercontent.com https://public.linear.app https://avatar-management--avatars.us-west-2.prod.public.atl-paas.net https://secure.gravatar.com",
     );
   });
 

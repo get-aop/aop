@@ -1,15 +1,31 @@
 import { describe, expect, test } from "bun:test";
-import type { IssueListQuery, LinearConnection, Message } from "@aop/common";
+import {
+  type IssueListQuery,
+  JIRA_NOT_CONNECTED,
+  type JiraConnection,
+  type LinearConnection,
+  type Message,
+} from "@aop/common";
 import { makeUserMessage } from "@aop/common/test-utils";
 import { Hono } from "hono";
 import { createIssueRoutes } from "./routes.ts";
 import type { IssueError, IssueService } from "./service.ts";
+import { projectIssue } from "./test-utils.ts";
 
 const connection: LinearConnection = {
   configured: true,
   scope: { kind: "team", id: "t1", name: "Eng" },
   workspace: "Acme",
   viewer: "sam",
+};
+
+const jira: JiraConnection = {
+  configured: true,
+  deployment: "cloud",
+  siteUrl: "https://acme.atlassian.net",
+  account: "Sam Rivera",
+  filter: { projects: ["APP"], jql: null },
+  linkPullRequests: true,
 };
 
 /** Routes over a service that records its calls and answers `failure` when one is set. */
@@ -41,6 +57,32 @@ const setup = (failure: IssueError | null = null) => {
     linearCatalog: async (projectId, input) => {
       calls.push(["linearCatalog", projectId, input]);
       return answer({ catalog: { workspace: "Acme", viewer: "sam", teams: [], projects: [] } });
+    },
+    detail: async (projectId, key) => {
+      calls.push(["detail", projectId, key]);
+      return answer({
+        detail: { issue: projectIssue(), body: "b", sections: [], comments: [], commentCount: 0 },
+      });
+    },
+    jiraConnection: {
+      connection: async (projectId) => {
+        calls.push(["jiraConnection", projectId]);
+        return answer({ connection: JIRA_NOT_CONNECTED });
+      },
+      test: async (projectId, input) => {
+        calls.push(["testJira", projectId, input]);
+        return answer({
+          result: { account: { displayName: "Sam", email: null, avatarUrl: null }, projects: [] },
+        });
+      },
+      connect: async (projectId, input) => {
+        calls.push(["connectJira", projectId, input]);
+        return answer({ connection: jira });
+      },
+      disconnect: async (projectId) => {
+        calls.push(["disconnectJira", projectId]);
+        return answer({});
+      },
     },
   };
   const app = new Hono().route("/api/projects", createIssueRoutes(service));
@@ -100,6 +142,72 @@ describe("the issues routes", () => {
       ["disconnectLinear", "p1"],
       ["linearCatalog", "p1", {}],
     ]);
+  });
+
+  test("GET /issues/detail reads one issue by its key", async () => {
+    const { send, calls } = setup();
+    const res = await send("GET", `/p1/issues/detail?key=${encodeURIComponent("jira:APP-3")}`);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { detail: { body: string } }).detail.body).toBe("b");
+    expect((await send("GET", "/p1/issues/detail")).status).toBe(400);
+    expect(calls).toEqual([["detail", "p1", "jira:APP-3"]]);
+  });
+
+  test("the Jira routes take credentials and a filter, and answer the connection", async () => {
+    const { send, calls } = setup();
+    const credentials = {
+      deployment: "cloud",
+      siteUrl: "https://acme.atlassian.net/",
+      email: "sam@acme.test",
+      apiToken: "tok",
+    };
+    const filter = { projects: ["app"], jql: "" };
+    const put = await send("PUT", "/p1/jira", { credentials, filter });
+    expect(put.status).toBe(200);
+    expect(await put.json()).toEqual({ connection: jira });
+    expect((await send("GET", "/p1/jira")).status).toBe(200);
+    expect((await send("POST", "/p1/jira/test")).status).toBe(200);
+    expect((await send("DELETE", "/p1/jira")).status).toBe(204);
+    expect(calls).toEqual([
+      [
+        "connectJira",
+        "p1",
+        {
+          credentials: { ...credentials, siteUrl: "https://acme.atlassian.net" },
+          filter: { projects: ["APP"], jql: null },
+          linkPullRequests: true,
+        },
+      ],
+      ["jiraConnection", "p1"],
+      ["testJira", "p1", {}],
+      ["disconnectJira", "p1"],
+    ]);
+  });
+
+  test("a Jira filter with nothing in it, or a site over plain http, is refused", async () => {
+    const { send, calls } = setup();
+    const credentials = { deployment: "datacenter", siteUrl: "https://jira.acme.test", token: "t" };
+    const empty = await send("PUT", "/p1/jira", {
+      credentials,
+      filter: { projects: [], jql: " " },
+    });
+    expect(empty.status).toBe(400);
+    const http = { ...credentials, siteUrl: "http://jira.acme.test" };
+    expect((await send("POST", "/p1/jira/test", { credentials: http })).status).toBe(400);
+    const local = { ...credentials, siteUrl: "http://127.0.0.1:25495" };
+    expect((await send("POST", "/p1/jira/test", { credentials: local })).status).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  test.each([
+    [{ code: "JIRA_NOT_CONFIGURED" }, 409],
+    [{ code: "JIRA_UNAUTHORIZED" }, 422],
+    [{ code: "JIRA_BAD_FILTER", message: "Field 'x' does not exist." }, 422],
+  ] as [IssueError, number][])("a Jira failure %o answers %d", async (failure, status) => {
+    const { send } = setup(failure);
+    const res = await send("PUT", "/p1/jira", { filter: { projects: ["APP"], jql: null } });
+    expect(res.status).toBe(status);
+    expect(((await res.json()) as { code: string }).code).toBe(failure.code);
   });
 
   test.each([

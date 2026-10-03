@@ -5,8 +5,9 @@ import {
   EllipsisIcon,
   GitBranchPlusIcon,
   MessageSquareIcon,
+  PanelRightOpenIcon,
 } from "lucide-react";
-import { memo } from "react";
+import { type MouseEvent, memo } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import {
@@ -18,15 +19,17 @@ import {
 } from "@/ui/dropdown-menu";
 import { Spinner } from "@/ui/spinner";
 import { formatAge, formatAgo } from "../selectors";
-import { AvatarStack, LabelBadge, StageIcon } from "./issue-bits";
+import { AvatarStack, LabelBadge, PriorityIcon, StageIcon } from "./issue-bits";
 import { LinkedPullRequestChips } from "./LinkedPullRequestChips";
 import { SOURCE_NAME, SourceMark } from "./source-marks";
+import { openIssueView } from "./view/open-issue-view";
 
 const MAX_LABELS = 3;
 
 /**
- * One issue: its source and number, its title (a link to it), its labels and linked pull
- * requests, who it is assigned to, its comments and when it last changed. It reflows with the
+ * One issue: its source and number, its title (which opens it in the issue view; with Cmd or
+ * Ctrl, at its source), its priority, labels and linked pull requests, who it is assigned to,
+ * its comments and when it last changed. It reflows with the
  * panel: narrow, the meta wraps under the title; wide (a container query), the comments and the
  * age stand in columns of their own. Actions are behind the row's menu, and Start thread is also
  * a button that shows on hover or focus.
@@ -37,12 +40,15 @@ export const IssueRow = memo(
     projectId,
     now,
     starting,
+    selected = false,
     onStartThread,
   }: {
     issue: ProjectIssue;
     projectId: string;
     now: number;
     starting: boolean;
+    /** The issue is the one open in the issue view. */
+    selected?: boolean;
     onStartThread: (issue: ProjectIssue) => void;
   }) => {
     const shownLabels = issue.labels.slice(0, MAX_LABELS);
@@ -52,7 +58,12 @@ export const IssueRow = memo(
         data-testid="issue-row"
         data-key={issue.key}
         data-source={issue.source}
-        className="group/row relative flex items-start gap-2.5 rounded-row px-2.5 py-2 transition-colors duration-[120ms] hover:bg-hover focus-within:bg-hover"
+        data-selected={selected}
+        aria-current={selected ? "true" : undefined}
+        className={cn(
+          "group/row relative flex items-start gap-2.5 rounded-row px-2.5 py-2 transition-colors duration-[120ms] hover:bg-hover focus-within:bg-hover",
+          selected && "bg-active hover:bg-active",
+        )}
       >
         <span className="mt-[3px] flex shrink-0 items-center gap-1.5">
           <StageIcon stage={issue.stage} color={issue.stateColor} />
@@ -72,12 +83,14 @@ export const IssueRow = memo(
               rel="noreferrer noopener"
               data-testid="issue-title"
               title={issue.title}
+              onClick={(event) => openInView(event, projectId, issue.key)}
               className="min-w-0 truncate text-[14px] font-medium leading-snug text-text hover:underline focus-visible:underline focus-visible:outline-none"
             >
               {issue.title}
             </a>
           </div>
           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+            {issue.priority ? <PriorityIcon priority={issue.priority} /> : null}
             {shownLabels.map((label) => (
               <LabelBadge key={label.name} label={label} />
             ))}
@@ -103,12 +116,26 @@ export const IssueRow = memo(
             <AvatarStack people={issue.assignees} />
           </span>
           <StartThreadButton issue={issue} starting={starting} onStart={onStartThread} />
-          <RowMenu issue={issue} starting={starting} onStartThread={onStartThread} />
+          <RowMenu
+            issue={issue}
+            projectId={projectId}
+            starting={starting}
+            onStartThread={onStartThread}
+          />
         </div>
       </li>
     );
   },
 );
+
+// A plain click opens the issue in the view; a modified or middle click keeps the browser's own
+// meaning (a new tab at the source), as the PR chips do.
+const openInView = (event: MouseEvent<HTMLAnchorElement>, projectId: string, key: string) => {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+    return;
+  event.preventDefault();
+  openIssueView(projectId, key);
+};
 
 /** Comments and age under the title, while the panel is too narrow for columns. */
 const InlineMeta = ({ issue, now }: { issue: ProjectIssue; now: number }) => (
@@ -178,10 +205,12 @@ const StartThreadButton = ({
 
 const RowMenu = ({
   issue,
+  projectId,
   starting,
   onStartThread,
 }: {
   issue: ProjectIssue;
+  projectId: string;
   starting: boolean;
   onStartThread: (issue: ProjectIssue) => void;
 }) => (
@@ -204,6 +233,13 @@ const RowMenu = ({
       >
         <GitBranchPlusIcon />
         Start a thread
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        data-testid="issue-menu-view"
+        onSelect={() => openIssueView(projectId, issue.key)}
+      >
+        <PanelRightOpenIcon />
+        View issue
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem data-testid="issue-menu-open" asChild>

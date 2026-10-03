@@ -287,18 +287,30 @@ describe("the Issues tab's notices and empty states", () => {
     );
   });
 
-  test("the owner is invited to connect Linear, can dismiss it for good, and a device is told who can", async () => {
+  test("the owner is invited to connect Linear or Jira, can dismiss it for good, and a device is told who can", async () => {
     await renderTab(issueList(SAMPLE));
     await screen.findByTestId("issues-linear-connect");
-    fireEvent.click(screen.getByTestId("issues-notice-linear-dismiss"));
-    expect(screen.queryByTestId("issues-notice-linear")).toBeNull();
+    expect(screen.getByTestId("issues-jira-connect")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("issues-notice-trackers-dismiss"));
+    expect(screen.queryByTestId("issues-notice-trackers")).toBeNull();
     cleanup();
     api?.restore();
     localStorage.clear();
 
     await renderTab(issueList(SAMPLE), { owner: false });
-    expect(screen.getByTestId("issues-notice-linear").textContent).toContain("host owner");
+    expect(screen.getByTestId("issues-notice-trackers").textContent).toContain("host owner");
     expect(screen.queryByTestId("issues-linear-connect")).toBeNull();
+  });
+
+  test("once either tracker is connected, nothing invites to connect the other", async () => {
+    await renderTab(
+      issueList(SAMPLE, [
+        sourceStatus(),
+        LINEAR_NOT_CONFIGURED,
+        sourceStatus({ source: "jira", id: "jira", name: "acme.atlassian.net" }),
+      ]),
+    );
+    expect(screen.queryByTestId("issues-notice-trackers")).toBeNull();
   });
 
   test("a refused Linear key offers to reconnect", async () => {
@@ -336,4 +348,94 @@ describe("the Issues tab's notices and empty states", () => {
     await renderTab(issueList([makeIssue()]));
     expect(screen.getByTestId("issues-count").textContent).toBe("1 issue");
   });
+
+  test("a Jira issue lists beside the others with its source, key, priority and labels", async () => {
+    await renderTab(
+      issueList([...SAMPLE, JIRA_ISSUE], [sourceStatus(), LINEAR_NOT_CONFIGURED, JIRA_OK]),
+    );
+    const row = screen.getAllByTestId("issue-row").find((item) => item.dataset.source === "jira");
+    if (!row) throw new Error("no Jira row");
+    const inRow = within(row);
+    expect(inRow.getByTestId("issue-source").getAttribute("aria-label")).toBe("Jira");
+    expect(inRow.getByTestId("issue-identifier").textContent).toBe("APP-3");
+    expect(inRow.getByTestId("issue-priority").getAttribute("aria-label")).toBe("Priority: High");
+    expect(inRow.getAllByTestId("issue-label").map((label) => label.textContent)).toEqual([
+      "auth",
+      "Backend",
+    ]);
+    expect(screen.getByTestId("issues-count").textContent).toBe("5 issues");
+    expect(groups().map(([label]) => label)).toContain("In Review1");
+  });
+
+  test("a title opens the issue in the view; with Cmd or Ctrl it is left to the browser", async () => {
+    await renderTab(issueList([JIRA_ISSUE], [sourceStatus(), LINEAR_NOT_CONFIGURED, JIRA_OK]));
+    const title = screen.getByTestId("issue-title");
+    expect(fireEvent.click(title, { metaKey: true })).toBe(true);
+    expect(window.location.pathname).toBe("/projects/p1/issues");
+    expect(fireEvent.click(title)).toBe(false);
+    expect(window.location.pathname).toBe("/projects/p1/issues/issue/jira%3AAPP-3");
+    await waitFor(() => expect(screen.getByTestId("issue-row").dataset.selected).toBe("true"));
+  });
+
+  test("a refused Jira token offers to reconnect, which opens the Jira dialog on its token step", async () => {
+    await renderTab(
+      issueList(SAMPLE, [
+        sourceStatus(),
+        LINEAR_NOT_CONFIGURED,
+        { ...JIRA_OK, status: "unauthorized", message: "Jira refused the token" },
+      ]),
+      {
+        respond: (call) =>
+          call.path === "/projects/p1/jira"
+            ? Response.json({
+                connection: {
+                  configured: true,
+                  deployment: "cloud",
+                  siteUrl: "https://acme.atlassian.net",
+                  account: "Sam Rivera",
+                  filter: { projects: ["APP"], jql: null },
+                  linkPullRequests: true,
+                },
+              })
+            : undefined,
+      },
+    );
+    expect(screen.getByTestId("issues-notice-jira-refused").textContent).toContain(
+      "Jira refused the saved token",
+    );
+    fireEvent.click(screen.getByTestId("issues-jira-reconnect"));
+    const site = (await screen.findByTestId("jira-site")) as HTMLInputElement;
+    expect(site.value).toBe("https://acme.atlassian.net");
+    expect(screen.queryByTestId("jira-connected")).toBeNull();
+    fireEvent.click(screen.getByTestId("jira-back"));
+    expect(screen.getByTestId("jira-connected")).toBeTruthy();
+  });
+});
+
+const JIRA_OK = sourceStatus({ source: "jira", id: "jira", name: "acme.atlassian.net" });
+
+const JIRA_ISSUE = makeIssue({
+  key: "jira:APP-3",
+  source: "jira",
+  repoId: null,
+  container: "Mobile App",
+  identifier: "APP-3",
+  title: "Sign in with SSO",
+  url: "https://acme.atlassian.net/browse/APP-3",
+  stage: "started",
+  stateName: "In Review",
+  labels: [
+    { name: "auth", color: null },
+    { name: "Backend", color: null },
+  ],
+  priority: { name: "High", level: "high" },
+  assignees: [
+    {
+      login: "Mia Krystof",
+      name: "Mia Krystof",
+      avatarUrl: "https://secure.gravatar.com/avatar/abc?s=48",
+    },
+  ],
+  commentCount: null,
+  updatedAt: "2026-09-06T10:00:00.000Z",
 });

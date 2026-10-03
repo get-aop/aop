@@ -1,4 +1,6 @@
 import {
+  type IssueDetail,
+  IssueDetailSchema,
   type IssueList,
   IssueListSchema,
   type IssueStateFilter,
@@ -25,6 +27,16 @@ export const listIssues = async (
   });
   return IssueListSchema.parse(await request<unknown>(`${base(projectId)}/issues?${query}`));
 };
+
+/** One issue whole, read fresh from its source by the host: its description and comments. */
+export const getIssueDetail = async (projectId: string, key: string): Promise<IssueDetail> =>
+  IssueDetailSchema.parse(
+    (
+      await request<{ detail: unknown }>(
+        `${base(projectId)}/issues/detail?${new URLSearchParams({ key })}`,
+      )
+    ).detail,
+  );
 
 /** Asks the coordinator to start a thread for the issue; answers with the message it was sent. */
 export const startThreadFromIssue = async (projectId: string, key: string): Promise<Message> =>

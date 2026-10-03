@@ -1,31 +1,37 @@
 import type { IssueSourceStatus } from "@aop/common";
-import { CopyIcon, TriangleAlertIcon, XIcon } from "lucide-react";
+import { CircleDotIcon, CopyIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/cn";
 import { Button } from "@/ui/button";
 import { useLocalStorage } from "../../hooks/use-local-storage";
 import { formatAgo } from "../selectors";
-import { GithubMark, LinearMark } from "./source-marks";
+import { GithubMark, JiraMark, LinearMark, SOURCE_NAME } from "./source-marks";
 
 export const GH_LOGIN_COMMAND = "gh auth login";
 
 /**
  * What stands between the tab and some of the project's issues, each with what to do about it:
- * `gh` signed out on the host, a repository that is not on GitHub, Linear not connected or its
- * key refused, a source that failed (with how old the issues shown are). Linear's invitation
- * can be dismissed; the problems cannot.
+ * `gh` signed out on the host, a repository that is not on GitHub, Linear's key or Jira's token
+ * refused (Reconnect), a source that failed (with how old the issues shown are), and, while
+ * neither tracker is connected, an invitation to connect one. The invitation can be dismissed;
+ * the problems cannot.
  */
 export const IssueSourceNotices = ({
   projectId,
   sources,
   owner,
   onConnectLinear,
+  onConnectJira,
+  onReconnectJira = onConnectJira,
 }: {
   projectId: string;
   sources: readonly IssueSourceStatus[];
   owner: boolean;
   onConnectLinear: () => void;
+  onConnectJira: () => void;
+  /** A refused token: the dialog opens on its token step. */
+  onReconnectJira?: () => void;
 }) => {
   const github = sources.filter((source) => source.source === "github");
   const signedOut = github.find(
@@ -34,15 +40,27 @@ export const IssueSourceNotices = ({
   const offGithub = github.filter((source) => source.status === "no-github-remote");
   const failing = sources.filter((source) => source.status === "error");
   const linear = sources.find((source) => source.source === "linear");
+  const jira = sources.find((source) => source.source === "jira");
+  // Someone on one tracker rarely wants the other, so the invitation goes once either is there.
+  const noTracker = Boolean(linear || jira) && unconnected(linear) && unconnected(jira);
 
   const notices = [
     signedOut ? <GithubSignedOut key="gh" source={signedOut} /> : null,
     ...failing.map((source) => <SourceFailed key={`error:${source.id}`} source={source} />),
     linear?.status === "unauthorized" ? (
-      <LinearRefused key="linear" owner={owner} onConnect={onConnectLinear} />
+      <Refused key="linear" tracker="linear" owner={owner} onConnect={onConnectLinear} />
     ) : null,
-    linear?.status === "not-configured" ? (
-      <LinearInvite key="linear" projectId={projectId} owner={owner} onConnect={onConnectLinear} />
+    jira?.status === "unauthorized" ? (
+      <Refused key="jira" tracker="jira" owner={owner} onConnect={onReconnectJira} />
+    ) : null,
+    noTracker ? (
+      <TrackerInvite
+        key="invite"
+        projectId={projectId}
+        owner={owner}
+        onConnectLinear={onConnectLinear}
+        onConnectJira={onConnectJira}
+      />
     ) : null,
     offGithub.length > 0 ? <OffGithub key="off" sources={offGithub} /> : null,
   ].filter(Boolean);
@@ -53,6 +71,9 @@ export const IssueSourceNotices = ({
     </div>
   );
 };
+
+const unconnected = (source: IssueSourceStatus | undefined): boolean =>
+  !source || source.status === "not-configured";
 
 const Notice = ({
   testId,
@@ -161,7 +182,7 @@ const SourceFailed = ({ source }: { source: IssueSourceStatus }) => (
     testId="issues-notice-error"
     tone="warning"
     icon={<TriangleAlertIcon />}
-    title={`Could not read ${source.source === "linear" ? "Linear" : source.name}`}
+    title={`Could not read ${source.source === "github" ? source.name : SOURCE_NAME[source.source]}`}
   >
     {sentence(source.message ?? "")}
     {source.stale && source.fetchedAt
@@ -170,40 +191,69 @@ const SourceFailed = ({ source }: { source: IssueSourceStatus }) => (
   </Notice>
 );
 
-const LinearRefused = ({ owner, onConnect }: { owner: boolean; onConnect: () => void }) => (
-  <Notice
-    testId="issues-notice-linear-refused"
-    tone="warning"
-    icon={<LinearMark />}
-    title="Linear refused the saved API key"
-    action={
-      owner ? (
-        <Button
-          size="xs"
-          variant="secondary"
-          data-testid="issues-linear-reconnect"
-          onClick={onConnect}
-        >
-          Reconnect Linear
-        </Button>
-      ) : null
-    }
-  >
-    {owner
-      ? "It may have been revoked. Paste a new key to see this project's Linear issues again."
-      : "It may have been revoked. The host owner can reconnect Linear on the host machine."}
-  </Notice>
-);
+const REFUSED = {
+  linear: {
+    mark: <LinearMark />,
+    title: "Linear refused the saved API key",
+    what: "a new key",
+  },
+  jira: {
+    mark: <JiraMark />,
+    title: "Jira refused the saved token",
+    what: "a new API token",
+  },
+} as const;
 
-const LinearInvite = ({
-  projectId,
+/** A tracker's key or token stopped working (revoked, expired): the Reconnect state. */
+const Refused = ({
+  tracker,
   owner,
   onConnect,
 }: {
-  projectId: string;
+  tracker: "linear" | "jira";
   owner: boolean;
   onConnect: () => void;
 }) => {
+  const { mark, title, what } = REFUSED[tracker];
+  const name = SOURCE_NAME[tracker];
+  return (
+    <Notice
+      testId={`issues-notice-${tracker}-refused`}
+      tone="warning"
+      icon={mark}
+      title={title}
+      action={
+        owner ? (
+          <Button
+            size="xs"
+            variant="secondary"
+            data-testid={`issues-${tracker}-reconnect`}
+            onClick={onConnect}
+          >
+            Reconnect {name}
+          </Button>
+        ) : null
+      }
+    >
+      {owner
+        ? `It may have expired or been revoked. Give ${what} to see this project's ${name} issues again.`
+        : `It may have expired or been revoked. The host owner can reconnect ${name} on the host machine.`}
+    </Notice>
+  );
+};
+
+const TrackerInvite = ({
+  projectId,
+  owner,
+  onConnectLinear,
+  onConnectJira,
+}: {
+  projectId: string;
+  owner: boolean;
+  onConnectLinear: () => void;
+  onConnectJira: () => void;
+}) => {
+  // The key Linear's own invitation used: whoever dismissed that is not asked again.
   const [dismissed, setDismissed] = useLocalStorage<boolean>(
     `aop:issues-linear-invite-dismissed:v1:${projectId}`,
     false,
@@ -211,26 +261,38 @@ const LinearInvite = ({
   if (dismissed === true) return null;
   return (
     <Notice
-      testId="issues-notice-linear"
-      icon={<LinearMark />}
-      title="Linear is not connected"
+      testId="issues-notice-trackers"
+      icon={<CircleDotIcon />}
+      title="Connect an issue tracker"
       onDismiss={() => setDismissed(true)}
       action={
         owner ? (
-          <Button
-            size="xs"
-            variant="secondary"
-            data-testid="issues-linear-connect"
-            onClick={onConnect}
-          >
-            Connect Linear
-          </Button>
+          <>
+            <Button
+              size="xs"
+              variant="secondary"
+              data-testid="issues-linear-connect"
+              onClick={onConnectLinear}
+            >
+              <LinearMark />
+              Connect Linear
+            </Button>
+            <Button
+              size="xs"
+              variant="secondary"
+              data-testid="issues-jira-connect"
+              onClick={onConnectJira}
+            >
+              <JiraMark />
+              Connect Jira
+            </Button>
+          </>
         ) : null
       }
     >
       {owner
-        ? "Connect a Linear team or project to list its issues here beside GitHub's."
-        : "The host owner can connect a Linear team or project on the host machine."}
+        ? "List a Linear team's or Jira projects' issues here beside GitHub's."
+        : "The host owner can connect Linear or Jira on the host machine."}
     </Notice>
   );
 };

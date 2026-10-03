@@ -1,58 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { GithubAuth, GithubProjectRepo, Message } from "@aop/common";
-import { makeUserMessage } from "@aop/common/test-utils";
-import type { GithubService } from "../github/index.ts";
-import { createGithubIssueLoader } from "./github-issues.ts";
-import { createLinearIssueLoader } from "./linear-issues.ts";
-import { createIssueService } from "./service.ts";
-import {
-  githubNode,
-  linearConnection,
-  linearNode,
-  memoryLinearStore,
-  repoRef,
-  SIGNED_IN,
-  scriptedGithub,
-  scriptedLinear,
-} from "./test-utils.ts";
+import { githubNode, linearConnection, repoRef, scriptedIssueService } from "./test-utils.ts";
 
-/** An issue service over scripted GitHub and Linear, and a coordinator that keeps what it is sent. */
-const setup = (
-  options: {
-    repos?: GithubProjectRepo[] | null;
-    auth?: GithubAuth;
-    githubIssues?: ReturnType<typeof githubNode>[];
-    githubFail?: string | null;
-    linear?: Record<string, ReturnType<typeof linearConnection>>;
-  } = {},
-) => {
-  const scripted = scriptedGithub({
-    issues: options.githubIssues ?? [githubNode()],
-    fail: options.githubFail ?? null,
-  });
-  const repos = options.repos === undefined ? [repoRef()] : options.repos;
-  const github = {
-    ...scripted.github,
-    authStatus: async () => options.auth ?? SIGNED_IN,
-    resolveProjectRepos: async (projectId: string) =>
-      projectId === "proj_1" && repos ? repos.map((repo) => ({ ...repo, path: "/x" })) : null,
-  } as Pick<GithubService, "authStatus" | "resolveProjectRepos" | "graphql" | "restGet">;
-  const linear = scriptedLinear([linearNode()]);
-  const store = memoryLinearStore(options.linear ?? {});
-  const sent: string[] = [];
-  const service = createIssueService({
-    github,
-    githubIssues: createGithubIssueLoader(github),
-    linear: linear.api,
-    linearIssues: createLinearIssueLoader(linear.api),
-    linearStore: store.store,
-    sendToCoordinator: async (_projectId, text) => {
-      sent.push(text);
-      return { success: true, message: makeUserMessage({ text }) as Message };
-    },
-  });
-  return { service, sent, store, calls: scripted.calls, linearKeys: linear.keys };
-};
+const setup = scriptedIssueService;
 
 const query = { state: "open" as const, limit: 100, refresh: false };
 
@@ -72,6 +21,7 @@ describe("listing a project's issues", () => {
     ).toEqual([
       { source: "github", name: "acme/app", status: "ok" },
       { source: "linear", name: "Engineering", status: "ok" },
+      { source: "jira", name: "Jira", status: "not-configured" },
     ]);
   });
 
@@ -91,6 +41,7 @@ describe("listing a project's issues", () => {
     expect(result.list.sources.map(({ name, status }) => ({ name, status }))).toEqual([
       { name: "notes", status: "no-github-remote" },
       { name: "Linear", status: "not-configured" },
+      { name: "Jira", status: "not-configured" },
     ]);
     expect(calls).toEqual([]);
   });
@@ -179,7 +130,7 @@ describe("starting a thread from an issue", () => {
     for (const key of [
       "github:other/repo#1",
       "github:acme/app#x",
-      "jira:ABC-1",
+      "gitlab:ABC-1",
       "github:acme/app#99",
     ]) {
       expect(await service.startThread("proj_1", key)).toEqual({

@@ -17,6 +17,7 @@ export const makeIssue = (overrides: Partial<ProjectIssue> = {}): ProjectIssue =
   assignees: [],
   author: { login: "ada", name: null, avatarUrl: null },
   milestone: null,
+  priority: null,
   commentCount: 0,
   createdAt: "2026-09-01T10:00:00.000Z",
   updatedAt: "2026-09-02T10:00:00.000Z",
@@ -44,9 +45,17 @@ export const LINEAR_NOT_CONFIGURED = sourceStatus({
   fetchedAt: null,
 });
 
+export const JIRA_NOT_CONFIGURED = sourceStatus({
+  source: "jira",
+  id: "jira",
+  name: "Jira",
+  status: "not-configured",
+  fetchedAt: null,
+});
+
 export const issueList = (
   issues: ProjectIssue[],
-  sources: IssueSourceStatus[] = [sourceStatus(), LINEAR_NOT_CONFIGURED],
+  sources: IssueSourceStatus[] = [sourceStatus(), LINEAR_NOT_CONFIGURED, JIRA_NOT_CONFIGURED],
 ): IssueList => ({ issues, sources });
 
 /** A few issues across states, labels, people and sources. */

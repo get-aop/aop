@@ -1,4 +1,4 @@
-import type { IssueList, IssueSourceStatus, IssueStateFilter } from "@aop/common";
+import type { IssueList, IssueSource, IssueSourceStatus, IssueStateFilter } from "@aop/common";
 import { CircleDotIcon, SearchXIcon, TriangleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/ui/button";
@@ -51,7 +51,7 @@ const State = ({
     {children ? (
       <p className="max-w-xs text-meta leading-relaxed text-text-subtle">{children}</p>
     ) : null}
-    {action ? <div className="mt-2">{action}</div> : null}
+    {action ? <div className="mt-2 flex flex-wrap justify-center gap-2">{action}</div> : null}
   </div>
 );
 
@@ -79,21 +79,23 @@ const UNATTACHED: ReadonlySet<IssueSourceStatus["status"]> = new Set([
 ]);
 
 /**
- * Nothing to list. With no source at all (no GitHub repository, no Linear) it says how to add
- * one. A source that is there but cannot be read (gh signed out, an outage, a refused key) has
- * its notice above, so nothing more is said here; otherwise it is just that: no issues in this
- * state.
+ * Nothing to list. With no source at all (no GitHub repository, no Linear, no Jira) it says how
+ * to add one. A source that is there but cannot be read (gh signed out, an outage, a refused
+ * key) has its notice above, so nothing more is said here; otherwise it is just that: no issues
+ * in this state.
  */
 export const IssuesEmpty = ({
   list,
   state,
   owner,
   onConnectLinear,
+  onConnectJira,
 }: {
   list: IssueList;
   state: IssueStateFilter;
   owner: boolean;
   onConnectLinear: () => void;
+  onConnectJira: () => void;
 }) => {
   if (!list.sources.some((source) => !UNATTACHED.has(source.status))) {
     return (
@@ -102,20 +104,17 @@ export const IssuesEmpty = ({
         icon={<CircleDotIcon />}
         title="No issue source yet"
         action={
-          owner && list.sources.some((source) => source.status === "not-configured") ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              data-testid="issues-empty-linear"
-              onClick={onConnectLinear}
-            >
-              Connect Linear
-            </Button>
+          owner ? (
+            <ConnectButtons
+              list={list}
+              onConnectLinear={onConnectLinear}
+              onConnectJira={onConnectJira}
+            />
           ) : null
         }
       >
-        Attach a GitHub repository in the project's settings, or connect Linear, and their issues
-        show here.
+        Attach a GitHub repository in the project's settings, or connect Linear or Jira, and their
+        issues show here.
       </State>
     );
   }
@@ -124,6 +123,44 @@ export const IssuesEmpty = ({
     <State testId="issues-empty" icon={<CircleDotIcon />} title={`No ${STATE_WORD[state]}issues`}>
       {state === "open" ? "Nothing open in this project's repositories right now." : null}
     </State>
+  );
+};
+
+/** A Connect button for each tracker the project has not connected. */
+const ConnectButtons = ({
+  list,
+  onConnectLinear,
+  onConnectJira,
+}: {
+  list: IssueList;
+  onConnectLinear: () => void;
+  onConnectJira: () => void;
+}) => {
+  const open = (source: IssueSource) =>
+    list.sources.some((item) => item.source === source && item.status === "not-configured");
+  return (
+    <>
+      {open("linear") ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          data-testid="issues-empty-linear"
+          onClick={onConnectLinear}
+        >
+          Connect Linear
+        </Button>
+      ) : null}
+      {open("jira") ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          data-testid="issues-empty-jira"
+          onClick={onConnectJira}
+        >
+          Connect Jira
+        </Button>
+      ) : null}
+    </>
   );
 };
 
