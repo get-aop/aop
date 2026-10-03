@@ -11,7 +11,7 @@ import type { IssueError, IssueResult } from "../service.ts";
 import type { JiraApi, JiraFailure } from "./jira-api.ts";
 import type { JiraConnectionStore, StoredJiraConnection } from "./jira-connection-store.ts";
 import type { JiraIssueLoader } from "./jira-issues.ts";
-import { jiraListJql } from "./jira-jql.ts";
+import { jiraListJql, splitOrderBy } from "./jira-jql.ts";
 
 export interface JiraConnectionService {
   /** Whether Jira is connected and to what; any client may ask. Never the token or the email. */
@@ -114,6 +114,10 @@ const tryFilter = async (
   credentials: JiraCredentials,
   filter: JiraFilter,
 ): Promise<IssueError | null> => {
+  // Jira refuses a query with nothing but an ORDER BY ("unbounded"); the All tab would send one.
+  if (filter.projects.length === 0 && splitOrderBy(filter.jql ?? "").where === "") {
+    return { code: "JIRA_BAD_FILTER", message: "Pick a project or give the query a condition" };
+  }
   const tried = await jira.searchPage(credentials, {
     jql: jiraListJql(filter, "open"),
     fields: ["summary"],

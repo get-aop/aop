@@ -98,7 +98,12 @@ export const IssueDetailView = ({
         <MarkdownOr text={detail.body} empty="No description provided." />
       </Section>
       {detail.sections.map((section) => (
-        <Section key={section.title} title={section.title} testId="issue-detail-section">
+        <Section
+          // Two custom fields can share a name; their text tells them apart.
+          key={`${section.title}\n${section.body}`}
+          title={section.title}
+          testId="issue-detail-section"
+        >
           <MarkdownOr text={section.body} empty="" />
         </Section>
       ))}

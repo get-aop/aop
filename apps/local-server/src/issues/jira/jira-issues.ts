@@ -39,6 +39,8 @@ export const createJiraIssueLoader = (
   const entries = new Map<string, Entry>();
   const inFlight = new Map<string, Promise<JiraIssues>>();
   const quietUntil = new Map<string, { at: number; failure: JiraFailure }>();
+  // Bumped by `forget`, so a read that started before a connection changed is not kept.
+  const generation = new Map<string, number>();
 
   const read = async (
     key: string,
@@ -47,7 +49,9 @@ export const createJiraIssueLoader = (
     state: IssueStateFilter,
     limit: number,
   ): Promise<JiraIssues> => {
+    const started = generation.get(projectId) ?? 0;
     const pages = await readPages(api, connection, state, limit);
+    if ((generation.get(projectId) ?? 0) !== started) return failed(undefined, limit, CHANGED);
     if ("failure" in pages) {
       const { retryAfterMs } = pages.failure;
       if (retryAfterMs !== undefined) {
@@ -70,21 +74,29 @@ export const createJiraIssueLoader = (
       if (current && !refresh && isFresh(current, limit, now() - reuseMs)) {
         return served(current, limit);
       }
-      const running = inFlight.get(key);
+      // A read for fewer issues cannot answer one for more (Load older issues).
+      const flight = `${key}|${limit}`;
+      const running = inFlight.get(flight);
       if (running) return running;
       const loading = read(key, projectId, connection, state, limit).finally(() =>
-        inFlight.delete(key),
+        inFlight.delete(flight),
       );
-      inFlight.set(key, loading);
+      inFlight.set(flight, loading);
       return loading;
     },
     forget: (projectId) => {
+      generation.set(projectId, (generation.get(projectId) ?? 0) + 1);
       quietUntil.delete(projectId);
       for (const key of entries.keys()) {
         if (key.startsWith(`${projectId}|`)) entries.delete(key);
       }
     },
   };
+};
+
+const CHANGED: JiraFailure = {
+  kind: "error",
+  message: "The Jira connection changed while reading; refresh to read again",
 };
 
 // Jira's search pages hold at most 100 issues with fields.

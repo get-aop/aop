@@ -71,17 +71,15 @@ export const contentSecurityPolicy = (surface: AppSurface, hostOrigin: string | 
 // The PR View, the PRs tab and the Issues tab show people's pictures straight from these hosts.
 // Only the avatar hosts: any other image (one linked in a pull request's markdown) stays blocked,
 // so whoever wrote it cannot tell when, or from where, it was read. Jira Cloud's avatars are on
-// Atlassian's avatar host, or on Gravatar, whose default picture redirects through one of
-// i0-i2.wp.com (Gravatar picks the shard by the address's hash).
-// A Jira Data Center site serves its own, behind its login, so those fall back to initials.
+// Atlassian's avatar host or on Gravatar. Gravatar's default picture redirects through
+// i0-i2.wp.com, an open image proxy that would let any image through, so it is left out: a
+// person without a Gravatar picture shows their initial. A Jira Data Center site serves its own
+// avatars, behind its login, so those fall back to initials too.
 const AVATAR_ORIGINS = [
   "https://avatars.githubusercontent.com",
   "https://public.linear.app",
   "https://avatar-management--avatars.us-west-2.prod.public.atl-paas.net",
   "https://secure.gravatar.com",
-  "https://i0.wp.com",
-  "https://i1.wp.com",
-  "https://i2.wp.com",
 ].join(" ");
 
 const CONTENT_TYPES: Record<string, string> = {

@@ -191,7 +191,7 @@ const detailOf = (node: DetailNode, scope: LinearScope): LinearIssueDetail => ({
 
 // Linear answers an identifier it does not know with an "Entity not found" error.
 const notFoundAsNull = <T>(read: Extract<LinearRead<T>, { ok: false }>): LinearRead<null> =>
-  /not found/i.test(read.message) ? { ok: true, value: null } : read;
+  /entity not found/i.test(read.message) ? { ok: true, value: null } : read;
 
 const STAGES: readonly IssueStage[] = [
   "triage",

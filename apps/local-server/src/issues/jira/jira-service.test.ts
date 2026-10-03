@@ -151,6 +151,15 @@ describe("the Jira connection", () => {
       success: false,
       error: { code: "JIRA_BAD_FILTER", message: "Field 'bogus' does not exist." },
     });
+    const unbounded = await service.jiraConnection.connect("proj_1", {
+      credentials,
+      filter: { projects: [], jql: "ORDER BY created DESC" },
+      linkPullRequests: true,
+    });
+    expect(unbounded).toEqual({
+      success: false,
+      error: { code: "JIRA_BAD_FILTER", message: "Pick a project or give the query a condition" },
+    });
     expect(jiraStore.held.size).toBe(0);
   });
 

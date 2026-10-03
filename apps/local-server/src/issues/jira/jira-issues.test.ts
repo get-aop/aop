@@ -99,4 +99,20 @@ describe("the Jira issue loader", () => {
     loader.forget("proj_1");
     expect((await load()).failure).toBeNull();
   });
+
+  test("Load older issues during a smaller read gets its own read", async () => {
+    const { jira, load } = setup(230);
+    const [small, large] = await Promise.all([load({ limit: 100 }), load({ limit: 200 })]);
+    expect(small.issues).toHaveLength(100);
+    expect(large.issues).toHaveLength(200);
+    expect(jira.calls.length).toBeGreaterThan(1);
+  });
+
+  test("a read that started before the connection changed is not kept", async () => {
+    const { loader, load } = setup();
+    const reading = load();
+    loader.forget("proj_1");
+    expect((await reading).failure?.message).toContain("connection changed");
+    expect((await load()).failure).toBeNull();
+  });
 });

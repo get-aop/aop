@@ -78,7 +78,7 @@ A row's title opens the issue where the coordinator chat is (`/projects/:id/…/
 
 ## Avatars in the desktop app
 
-The desktop app's content security policy lists the image hosts the Issues tab, the PRs tab and the PR View load people's pictures from (`apps/desktop/electron/app-protocol.ts`): GitHub's and Linear's, and for Jira Cloud `avatar-management--avatars.us-west-2.prod.public.atl-paas.net` and `secure.gravatar.com`, whose default picture redirects through `i0.wp.com`, `i1.wp.com` or `i2.wp.com`. Nothing else: a picture an issue links to stays blocked. A picture that does not load shows the person's initial.
+The desktop app's content security policy lists the image hosts the Issues tab, the PRs tab and the PR View load people's pictures from (`apps/desktop/electron/app-protocol.ts`): GitHub's and Linear's, and for Jira Cloud `avatar-management--avatars.us-west-2.prod.public.atl-paas.net` and `secure.gravatar.com`. Nothing else: a picture an issue links to stays blocked. Gravatar's default picture (a person with no Gravatar) redirects through `i0`–`i2.wp.com`, WordPress's open image proxy, which would let any image through, so it is not allowed and those people show their initial in the desktop app (the browser, which the host serves without a CSP, shows the picture). A picture that does not load shows the person's initial.
 
 ## Pull request chips
 
