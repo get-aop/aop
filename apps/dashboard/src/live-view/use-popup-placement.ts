@@ -149,12 +149,13 @@ const keepClearIn = (column: { left: number; right: number }): Rect[] =>
     return isOnTop(element, x, box.top + box.height / 2) ? [box] : [];
   });
 
-// The popup itself may be over the point: what is under it counts.
+// Floating things that come and go (the popup itself, a toast, a menu) do not hide a composer.
+const FLOATING =
+  "[data-testid=live-view-popup], [data-sonner-toaster], [data-radix-popper-content-wrapper]";
+
 const isOnTop = (element: Element, x: number, y: number): boolean => {
   if (typeof document.elementsFromPoint !== "function") return true;
-  const top = document
-    .elementsFromPoint(x, y)
-    .find((hit) => !hit.closest("[data-testid=live-view-popup]"));
+  const top = document.elementsFromPoint(x, y).find((hit) => !hit.closest(FLOATING));
   return top === undefined || element.contains(top);
 };
 
