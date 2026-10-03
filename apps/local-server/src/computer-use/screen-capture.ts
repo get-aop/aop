@@ -92,6 +92,10 @@ export const ffmpegArgv = (ffmpeg: string, display: string): string[] => [
   "pipe:1",
 ];
 
+// Frame ids keep counting across captures, so a viewer's ETag from an earlier capture never
+// matches a different picture from a later one.
+let nextFrameId = 0;
+
 const runFfmpeg = (child: CaptureProcess): ScreenCapture => {
   let latest: Frame | null = null;
   let lastHash: bigint | number | null = null;
@@ -103,7 +107,8 @@ const runFfmpeg = (child: CaptureProcess): ScreenCapture => {
     const hash = Bun.hash(jpeg);
     if (latest && hash === lastHash) return;
     lastHash = hash;
-    latest = { id: (latest?.id ?? 0) + 1, jpeg };
+    nextFrameId += 1;
+    latest = { id: nextFrameId, jpeg };
   });
 
   void pump(child.stdout, (chunk) => parser.push(chunk));

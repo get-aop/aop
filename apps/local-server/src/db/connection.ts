@@ -3,7 +3,9 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { aopPaths } from "@aop/infra";
 import { Kysely } from "kysely";
-import { BunSqliteDialect } from "kysely-bun-sqlite";
+// The package's ESM build: its default entry is CommonJS, and that build's `require("kysely")` of
+// the ESM-only kysely fails under Bun 1.3 depending on load order ("require() async module").
+import { BunSqliteDialect } from "kysely-bun-sqlite/dist/index.js";
 import type { Database } from "./schema.ts";
 
 export const getDefaultDbPath = (): string => aopPaths.db();

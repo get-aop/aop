@@ -61,15 +61,16 @@ describe("createScreenCapture", () => {
 
     host.ffmpeg.frame([0xff, 0xd8, 1, 0xff, 0xd9]);
     await settle();
-    expect(capture.latest()?.id).toBe(1);
+    const first = capture.latest()?.id ?? 0;
+    expect(first).toBeGreaterThan(0);
 
     host.ffmpeg.frame([0xff, 0xd8, 1, 0xff, 0xd9]);
     await settle();
-    expect(capture.latest()?.id).toBe(1);
+    expect(capture.latest()?.id).toBe(first);
 
     host.ffmpeg.frame([0xff, 0xd8, 2, 0xff, 0xd9]);
     await settle();
-    expect(capture.latest()?.id).toBe(2);
+    expect(capture.latest()?.id).toBe(first + 1);
     expect([...(capture.latest()?.jpeg ?? [])]).toEqual([0xff, 0xd8, 2, 0xff, 0xd9]);
   });
 
@@ -84,6 +85,22 @@ describe("createScreenCapture", () => {
     expect(capture.failure()).toBe(
       "the capture stopped (ffmpeg exited with 1: [x11grab] Cannot open display :99, error 1.).",
     );
+  });
+
+  test("a later capture never reuses an earlier capture's frame ids", async () => {
+    const earlier = linuxHost();
+    const one = earlier.start();
+    if ("unavailable" in one) throw new Error("expected a capture");
+    earlier.ffmpeg.frame([0xff, 0xd8, 1, 0xff, 0xd9]);
+    await settle();
+
+    const later = linuxHost();
+    const two = later.start();
+    if ("unavailable" in two) throw new Error("expected a capture");
+    later.ffmpeg.frame([0xff, 0xd8, 9, 0xff, 0xd9]);
+    await settle();
+
+    expect((two.latest()?.id ?? 0) > (one.latest()?.id ?? 0)).toBe(true);
   });
 
   test("stopping kills ffmpeg and is no failure", async () => {

@@ -2,7 +2,9 @@ import { Database as BunDatabase } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Generated } from "kysely";
 import { Kysely, sql } from "kysely";
-import { BunSqliteDialect } from "kysely-bun-sqlite";
+// The package's ESM build: its default entry is CommonJS, and that build's `require("kysely")` of
+// the ESM-only kysely fails under Bun 1.3 depending on load order ("require() async module").
+import { BunSqliteDialect } from "kysely-bun-sqlite/dist/index.js";
 import { createCrudHelpers } from "./repository-helpers.ts";
 
 interface ItemsTable {
