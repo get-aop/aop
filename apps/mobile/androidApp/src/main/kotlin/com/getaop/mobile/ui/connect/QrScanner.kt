@@ -41,7 +41,7 @@ import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
 import java.util.concurrent.Executors
 
-/** Reads the QR code the host's Devices page shows next to a pairing code. */
+/** Reads the QR code AOP settings › Host › Pair a device shows next to a pairing code. */
 @Composable
 fun QrScanner(onResult: (PairingPayload) -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current

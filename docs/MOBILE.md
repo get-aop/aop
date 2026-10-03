@@ -18,7 +18,7 @@ Android may say the app is from an unknown developer. Google's developer verific
 
 The phone reaches the host over [Tailscale](./HOST.md#reach-the-host-with-tailscale): install the Tailscale app on the phone and sign in to the same tailnet as the host.
 
-1. On the host, open AOP settings › Devices and choose **Generate pairing code**. The code is shown with a QR code. A pairing code can only be made on the host itself (see [Pair a device](./HOST.md#pair-a-device)).
+1. Get a pairing code: in AOP on your computer, open AOP settings › Host › **Pair a device** and choose **Generate pairing code** (the code is shown with a QR code), or run `aop pair` on the host. See [Pair a device](./HOST.md#pair-a-device) for who may make one.
 2. In the app, scan the QR code, or type the host's address (the `tailscale serve` URL, such as `https://my-host.my-tailnet.ts.net:25150`) and the code.
 3. Name the phone and choose **Connect**. Allow notifications when Android asks.
 
@@ -37,7 +37,7 @@ Notifications need no Google or Firebase account. While **Stay connected** is on
 
 ## What a phone may do
 
-A paired phone is a paired device, with the same rights as the desktop app on another computer: it can read and write chats, answer threads and change project settings, but not administer the host (pair or revoke devices, update the host, change computer use or skip-permission settings). The device token is encrypted with a key held in the phone's Android Keystore and is never backed up or copied to a new phone.
+A paired phone is a paired device, with the same rights as the desktop app on another computer: it can read and write chats, answer threads and change project settings. Whether it may also look after the host (update it, pair or remove devices) follows the host's setting ([Managing the host](./HOST.md#managing-the-host)); owner-only settings such as computer use stay on the host. The device token is encrypted with a key held in the phone's Android Keystore and is never backed up or copied to a new phone.
 
 ## Build it yourself
 

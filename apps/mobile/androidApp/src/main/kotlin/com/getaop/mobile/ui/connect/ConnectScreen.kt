@@ -72,7 +72,7 @@ fun ConnectScreen(viewModel: ConnectViewModel) {
         ) {
             Text("Connect to your AOP host", style = MaterialTheme.typography.headlineSmall)
             Text(
-                "On the computer running AOP, open AOP settings › Devices and choose Generate pairing code. " +
+                "In AOP on your computer, open AOP settings › Host › Pair a device and choose Generate pairing code, or run aop pair on the host. " +
                     "This phone reaches the host over Tailscale, so keep Tailscale on.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

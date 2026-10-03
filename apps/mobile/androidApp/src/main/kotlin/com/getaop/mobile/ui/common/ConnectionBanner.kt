@@ -50,7 +50,7 @@ fun ConnectionBanner(
         }
         Connection.Unauthorized -> Triple(
             "This phone was removed from $hostName",
-            "Pair it again with a new code from AOP settings › Devices on the host.",
+            "Pair it again with a new code from AOP settings › Host › Pair a device, or aop pair on the host.",
         ) { TextButton(onClick = onPairAgain) { Text("Pair again") } }
         is Connection.Incompatible -> Triple(connection.message, "The app and the host need matching versions.") {}
         Connection.Live, Connection.Connecting -> null
