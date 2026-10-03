@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { LLMProvider, RunOptions, RunResult } from "@aop/llm-provider";
+import { FAKE_CLI_PATH } from "@aop/llm-provider/test-fixtures";
 import { closeSpawnGate } from "../agent-cli/spawn-gate.ts";
 import type { ChatSession } from "../db/schema.ts";
 import { isProcessAlive } from "../process/liveness.ts";
@@ -82,6 +83,38 @@ describe("runSessionPrompt", () => {
       return;
     }
     process.env.AOP_MCP_URL = previousMcpUrl;
+  });
+
+  test("a runtime whose command is missing fails the turn at once, saying why", async () => {
+    const result = await runSessionPrompt({
+      session: session({ runtime_alias: "/nonexistent/aop-missing-cli" }),
+      repoPath: "/tmp/repo",
+      prompt: "hello",
+    });
+
+    expect(result.failed).toBe(true);
+    expect(result.text).toContain("`/nonexistent/aop-missing-cli` was not found");
+    expect(result.text).toContain("AOP settings › Runtimes");
+  });
+
+  test("a runtime that is logged out fails the turn at once, saying why", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "aop-logged-out-"));
+    const wrapper = join(dir, "logged-out-claude");
+    await writeFile(wrapper, `#!/bin/sh\nFAKE_CLI_LOGGED_OUT=1 exec "${FAKE_CLI_PATH}" "$@"\n`, {
+      mode: 0o755,
+    });
+    try {
+      const result = await runSessionPrompt({
+        session: session({ runtime_alias: wrapper }),
+        repoPath: "/tmp/repo",
+        prompt: "hello",
+      });
+
+      expect(result.failed).toBe(true);
+      expect(result.text).toContain("is not logged in");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("creates the provider named by the session runtime", async () => {

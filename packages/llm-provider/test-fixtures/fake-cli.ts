@@ -4,7 +4,13 @@
 import { writeSync } from "node:fs";
 import { linesOf } from "./fake-cli/input-lines";
 import { createMcpConnection } from "./fake-cli/mcp-client";
+import { answerMetaCommand } from "./fake-cli/meta";
 import { runFakeCli } from "./fake-cli/run";
+
+const metaExitCode = answerMetaCommand(process.argv.slice(2), process.env, (text) =>
+  writeSync(1, text),
+);
+if (metaExitCode !== null) process.exit(metaExitCode);
 
 const exitCode = await runFakeCli(
   {

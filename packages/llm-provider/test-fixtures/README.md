@@ -36,6 +36,10 @@ Bind the session to that runtime configuration (the dashboard runtime picker, or
 
 The file needs its executable bit (it is committed with mode 755) and `bun` on `PATH`. macOS and Linux only; the shebang does not run on native Windows.
 
+## Version and login
+
+AOP looks at a runtime before a turn and on AOP settings › Runtimes (`runtime-configuration/readiness.ts`). The fake answers both looks: `--version` prints `0.0.0-fake (Claude Code)`, and `auth status` prints Claude Code's JSON with `"loggedIn": true`. Run it with `FAKE_CLI_LOGGED_OUT=1` (a two-line wrapper script that exports it, used as a runtime's command) to make `auth status` report `"loggedIn": false`, so the runtime shows as not ready and its turns fail with the reason.
+
 ## Partial messages
 
 When the launch passes `--include-partial-messages` (AOP's chat runs do, with `-p`), every content block streams first the way Claude Code 2.1.286 writes it: a `stream_event` `message_start`, a `content_block_start`, `content_block_delta`s (a couple of words per `text_delta` or `thinking_delta`, one `input_json_delta` for a tool's input), the finished block as its `assistant` event, then `content_block_stop`. Without the flag only the `assistant` events are written.

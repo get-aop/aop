@@ -24,7 +24,12 @@ export const makeThread = (overrides: Overrides = {}): Thread =>
     projectId: "prj_1",
     title: "Fix the cold start",
     status: "working",
-    runtime: { provider: "claude-code", model: "claude-opus-5", effort: "high" },
+    runtime: {
+      provider: "claude-code",
+      runtimeId: "claude-code",
+      model: "claude-opus-5",
+      effort: "high",
+    },
     target: { kind: "host" },
     repoId: null,
     branch: null,

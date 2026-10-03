@@ -13,7 +13,7 @@ afterEach(cleanup);
 
 const onDefault = makeThread({
   projectId: "p1",
-  runtime: { provider: "claude-code", model: null, effort: null },
+  runtime: { provider: "claude-code", runtimeId: "claude-code", model: null, effort: null },
 });
 
 const renderChips = (project: Project, thread: Thread = onDefault) => {
@@ -60,7 +60,12 @@ describe("ThreadRuntimeChips", () => {
       }),
       makeThread({
         projectId: "p1",
-        runtime: { provider: "claude-code", model: "claude-sonnet-4-6", effort: "high" },
+        runtime: {
+          provider: "claude-code",
+          runtimeId: "claude-code",
+          model: "claude-sonnet-4-6",
+          effort: "high",
+        },
       }),
     );
     expect(chips()).toEqual(["Sonnet 4.6", "High"]);

@@ -1,8 +1,11 @@
 import {
   CreateProjectInputSchema,
+  DEFAULT_COORDINATOR_PREFERENCE,
+  DEFAULT_THREAD_PREFERENCE,
   describeIssuesByField,
   PROJECT_GOAL_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
+  type RuntimePreferenceInput,
 } from "@aop/common";
 import { FolderIcon, PlusIcon, TriangleAlertIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -19,10 +22,12 @@ import {
 import { Label } from "@/ui/label";
 import { Textarea } from "@/ui/textarea";
 import type { RegisteredRepo } from "../api/client";
+import { useRuntimeConfiguration } from "../hooks/runtime-configuration";
 import { closeNewProjectDialog, openAttachRepoDialog, useDialogs } from "../shell/dialog-store";
 import { navigate, projectPath } from "../shell/router";
 import { type AppearanceChoice, NameAndIconInput } from "./NameAndIconInput";
 import { PROJECT_FIELD_LABELS, projectNameProblem } from "./project-fields";
+import { RuntimeNotReady, RuntimeSelect } from "./RuntimeSelect";
 import { useProjectActions } from "./use-project-actions";
 import { useRegisteredRepos } from "./use-registered-repos";
 
@@ -57,6 +62,8 @@ const NewProjectForm = () => {
   const [instructions, setInstructions] = useState("");
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [lookAround, setLookAround] = useState(true);
+  // Null follows the host's default runtime, which the host applies when none is sent.
+  const [runtimes, setRuntimes] = useState<Runtimes>({ coordinator: null, thread: null });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const repos = useRegisteredRepos((repoId) =>
@@ -94,6 +101,8 @@ const NewProjectForm = () => {
         goal: parsed.data.goal,
         instructions: parsed.data.instructions,
         repoIds: parsed.data.repoIds,
+        coordinator: withRuntime(DEFAULT_COORDINATOR_PREFERENCE, runtimes.coordinator),
+        thread: withRuntime(DEFAULT_THREAD_PREFERENCE, runtimes.thread),
         lookAround,
       });
       closeNewProjectDialog();
@@ -180,6 +189,8 @@ const NewProjectForm = () => {
         }
       />
 
+      <RuntimePickers value={runtimes} onChange={setRuntimes} />
+
       <LookAroundOption checked={lookAround} onChange={setLookAround} />
 
       <p
@@ -213,6 +224,56 @@ const NewProjectForm = () => {
         </Button>
       </DialogFooter>
     </form>
+  );
+};
+
+interface Runtimes {
+  coordinator: string | null;
+  thread: string | null;
+}
+
+const withRuntime = (
+  preference: RuntimePreferenceInput,
+  runtimeId: string | null,
+): RuntimePreferenceInput => (runtimeId ? { ...preference, runtimeId } : preference);
+
+// The host's default runtime is chosen until the person picks another; only runtimes the host
+// found ready can be picked (AOP settings › Runtimes says why the others are not).
+const RuntimePickers = ({
+  value,
+  onChange,
+}: {
+  value: Runtimes;
+  onChange: (next: Runtimes) => void;
+}) => {
+  const { defaultRuntimeId } = useRuntimeConfiguration();
+  const roles = [
+    { key: "coordinator", label: "Coordinator runtime" },
+    { key: "thread", label: "Threads runtime" },
+  ] as const;
+  return (
+    <div data-testid="new-project-runtimes" className="grid gap-3 sm:grid-cols-2">
+      {roles.map(({ key, label }) => {
+        const runtimeId = value[key] ?? defaultRuntimeId;
+        return (
+          <div key={key} className="flex min-w-0 flex-col gap-1.5">
+            <Label htmlFor={`new-project-${key}-runtime`}>{label}</Label>
+            <RuntimeSelect
+              id={`new-project-${key}-runtime`}
+              testId={`new-project-${key}-runtime`}
+              label={label}
+              className="w-full"
+              value={runtimeId}
+              onChange={(next) => onChange({ ...value, [key]: next })}
+            />
+            <RuntimeNotReady
+              runtimeId={runtimeId}
+              testId={`new-project-${key}-runtime-not-ready`}
+            />
+          </div>
+        );
+      })}
+    </div>
   );
 };
 

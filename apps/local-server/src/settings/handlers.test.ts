@@ -28,6 +28,7 @@ describe("settings/handlers", () => {
         { key: "agent_cli_check_interval_minutes", value: "60" },
         { key: "agent_cli_skip_permissions", value: "false" },
         { key: "chat_global_instructions", value: "" },
+        { key: "default_runtime_id", value: "claude-code" },
         { key: "display_name", value: "" },
         { key: "library_retention_days", value: "30" },
         { key: "library_project_cap_mb", value: "1024" },
@@ -162,6 +163,18 @@ describe("settings/handlers", () => {
         },
       });
       expect(await ctx.settingsRepository.get(SettingKey.UPDATE_CHECK)).toBe("false");
+    });
+
+    test("new projects start on the built-in runtime until another default is set", async () => {
+      expect(await ctx.settingsRepository.get(SettingKey.DEFAULT_RUNTIME)).toBe("claude-code");
+
+      expect(await setSetting(ctx, "default_runtime_id", "")).toMatchObject({
+        success: false,
+        error: { code: "INVALID_VALUE", key: "default_runtime_id" },
+      });
+      expect(await setSetting(ctx, "default_runtime_id", "rtprov_1")).toMatchObject({
+        success: true,
+      });
     });
 
     test("agent CLI checks run hourly by default, 0 turns them off, and the range is checked", async () => {

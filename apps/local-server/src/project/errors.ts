@@ -30,6 +30,8 @@ export const describeServiceError = (error: ServiceError): string => {
       return `The project is ${error.status}`;
     case "COMPUTER_USE_UNAVAILABLE":
       return `Computer use through ${error.option === "codex" ? "Codex" : "Claude"} is not available yet; choose the model's default or CUA`;
+    case "RUNTIME_NOT_FOUND":
+      return `Runtime not found: ${error.runtimeId}. Pick one listed in AOP settings › Runtimes`;
     case "SESSION_BUSY":
       return `Session ${error.sessionId} is still running`;
     case "INVALID_MESSAGE":

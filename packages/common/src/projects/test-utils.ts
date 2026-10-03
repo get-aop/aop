@@ -7,6 +7,7 @@ import {
   type ProjectSettings,
   ProjectSettingsSchema,
 } from "./project.ts";
+import { BUILT_IN_RUNTIME_ID } from "./runtime.ts";
 
 type Overrides = Record<string, unknown>;
 
@@ -15,6 +16,7 @@ export const LATER = "2026-09-29T11:30:00.000Z";
 
 export const makeRuntimePreference = (overrides: Overrides = {}) => ({
   provider: "claude-code",
+  runtimeId: "claude-code",
   model: "claude-opus-5",
   effort: "high",
   ...overrides,
@@ -68,8 +70,13 @@ export const makeProject = (overrides: Overrides = {}) => ({
   color: null,
   goal: "Keep checkout fast and safe to change",
   instructions: "Never touch the payments schema without asking.",
-  coordinator: { provider: "claude-code", model: null, effort: "low" },
-  thread: { provider: "claude-code", model: "claude-opus-5", effort: "high" },
+  coordinator: { provider: "claude-code", runtimeId: "claude-code", model: null, effort: "low" },
+  thread: {
+    provider: "claude-code",
+    runtimeId: "claude-code",
+    model: "claude-opus-5",
+    effort: "high",
+  },
   notificationLevel: "coordinator",
   threadAccess: "full-access",
   autoFixPullRequests: true,
@@ -85,23 +92,31 @@ export const makeProject = (overrides: Overrides = {}) => ({
 /**
  * A complete `ProjectSettings` for tests that need a real one without listing each setting. Every
  * setting starts at what a create call gives it, so a new required setting takes its default from
- * `CreateProjectInputSchema` and no fixture built here has to change.
+ * `CreateProjectInputSchema` and no fixture built here has to change. Like a create call, it names
+ * no runtime: the host gives the project its default one.
  */
 export const buildProjectSettings = (overrides: Partial<ProjectSettings> = {}): ProjectSettings =>
   ProjectSettingsSchema.parse(
     CreateProjectInputSchema.parse({ name: "checkout-service", ...overrides }),
   );
 
-/** A complete, parsed `Project`; see `buildProjectSettings` for how the defaults are kept current. */
-export const buildProject = (overrides: Partial<Project> = {}): Project =>
-  ProjectSchema.parse({
-    ...buildProjectSettings(),
+/**
+ * A complete, parsed `Project`; see `buildProjectSettings` for how the defaults are kept current.
+ * Its roles run on the built-in runtime, as the host gives a project when none is chosen.
+ */
+export const buildProject = (overrides: Partial<Project> = {}): Project => {
+  const settings = buildProjectSettings();
+  return ProjectSchema.parse({
+    ...settings,
+    coordinator: { ...settings.coordinator, runtimeId: BUILT_IN_RUNTIME_ID },
+    thread: { ...settings.thread, runtimeId: BUILT_IN_RUNTIME_ID },
     id: "prj_1",
     status: "active",
     createdAt: AT,
     updatedAt: AT,
     ...overrides,
   });
+};
 
 export const makeUserMessage = (overrides: Overrides = {}) => ({
   id: "msg_1",

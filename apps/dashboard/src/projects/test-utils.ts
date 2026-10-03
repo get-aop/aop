@@ -42,7 +42,12 @@ export const makeThread = ({
     id: "thr_1",
     projectId: "prj_1",
     title: "Fix 4s cold start regression",
-    runtime: { provider: "claude-code" as const, model: "claude-opus-5", effort: "high" as const },
+    runtime: {
+      provider: "claude-code" as const,
+      runtimeId: "claude-code",
+      model: "claude-opus-5",
+      effort: "high" as const,
+    },
     target: { kind: "host" as const },
     repoId: "repo_1",
     branch: null,

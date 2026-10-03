@@ -11,6 +11,7 @@ import { EXEC_HOSTS_V8_STATEMENTS } from "./exec-hosts-v8.ts";
 import { LIBRARY_V22_STATEMENTS } from "./library-v22.ts";
 import { PROJECT_APPEARANCE_V15_STATEMENTS } from "./project-appearance-v15.ts";
 import { PROJECT_KICKOFF_V12_STATEMENTS } from "./project-kickoff-v12.ts";
+import { PROJECT_RUNTIME_V25_STATEMENTS } from "./project-runtime-v25.ts";
 import { PROJECTS_V2_STATEMENTS } from "./projects-v2.ts";
 import { PULL_REQUEST_WATCH_V7_STATEMENTS } from "./pull-request-watch-v7.ts";
 import { REPORTED_RUNTIME_V13_STATEMENTS } from "./reported-runtime-v13.ts";
@@ -62,6 +63,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 22, name: "routines", statements: ROUTINES_V22_STATEMENTS },
   { version: 23, name: "library", statements: LIBRARY_V22_STATEMENTS },
   { version: 24, name: "artifacts", statements: ARTIFACTS_V24_STATEMENTS },
+  { version: 25, name: "project-runtime", statements: PROJECT_RUNTIME_V25_STATEMENTS },
 ];
 
 export const runMigrations = (db: Kysely<Database>): Promise<void> =>

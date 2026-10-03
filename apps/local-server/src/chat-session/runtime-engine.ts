@@ -19,6 +19,7 @@ import { waitForSpawnGate } from "../agent-cli/spawn-gate.ts";
 import { type CuaThread, cuaActivity } from "../computer-use/cua-activity.ts";
 import type { ChatRuntimeSessionState, ChatSession } from "../db/schema.ts";
 import { runAndReap } from "../process/reaper.ts";
+import { turnBlockReason } from "../runtime-configuration/readiness.ts";
 import { detectRateLimit, type RateLimitHit } from "../scheduling/rate-limit.ts";
 import { observePlanUsage } from "../usage/plan-usage.ts";
 import { isProviderFailureEvent } from "./provider-event-classifier.ts";
@@ -557,6 +558,12 @@ const prepareProviderLaunch = async (input: {
   if (input.handle.owner.interrupted) {
     return interruptedRunResult(input.handle, input.capturedSessionId);
   }
+  // A runtime whose command is missing or logged out fails the turn now, with the reason, instead
+  // of a spawn error or a CLI that waits for a login. An injected provider launches no command.
+  const blocked = input.createProviderFn
+    ? null
+    : await turnBlockReason(input.session.runtime_alias, input.session.runtime);
+  if (blocked) return { text: blocked, runtimeSessionId: input.capturedSessionId, failed: true };
   const factory = input.createProviderFn ?? createProvider;
   const provider = factory(input.session.runtime);
   if (input.handle.owner.interrupted) {

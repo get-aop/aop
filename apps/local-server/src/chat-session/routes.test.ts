@@ -10,6 +10,7 @@ import { Hono as HonoApp } from "hono";
 import { createCommandContext } from "../context.ts";
 import { createTestDb, createTestRepo } from "../db/test-utils.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
+import { SettingKey } from "../settings/types.ts";
 import { createChatSessionRoutes } from "./routes.ts";
 import { sessionRunPhase } from "./runtime-engine.ts";
 import type { ChatSessionServiceDeps } from "./service.ts";
@@ -656,7 +657,7 @@ describe("chat-session routes", () => {
     await teardown(db);
   });
 
-  test("creates a session using the preferred runtime after reordering configuration", async () => {
+  test("creates a session on the host's default runtime", async () => {
     const { db, app, ctx } = await setupWithCtx();
     const runtimeConfigurations = createRuntimeConfigurationRepository(ctx.db);
     const custom = await runtimeConfigurations.createProvider({
@@ -669,11 +670,7 @@ describe("chat-session routes", () => {
       model: "claude-sonnet-4-6",
       thinkingLevels: ["low", "medium", "high"],
     });
-    const providers = await runtimeConfigurations.list();
-    await runtimeConfigurations.reorderProviders([
-      custom.id,
-      ...providers.map((provider) => provider.id).filter((id) => id !== custom.id),
-    ]);
+    await ctx.settingsRepository.set(SettingKey.DEFAULT_RUNTIME, custom.id);
 
     const response = await app.request("/api/chat-sessions", {
       method: "POST",

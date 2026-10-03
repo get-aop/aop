@@ -1,8 +1,10 @@
 import {
+  BUILT_IN_RUNTIME_ID,
   type CliProvider,
   getDefaultRuntimeConfigurationModel,
   type ReasoningEffort,
   type RuntimeConfigurationModel,
+  type RuntimeConfigurationProvider,
   type RuntimePreference,
   resolveRuntimeConfigurationReasoning,
 } from "@aop/common";
@@ -20,20 +22,26 @@ export interface SessionRuntime {
 }
 
 /**
- * Turns a project's runtime preference into concrete session columns. A null model or effort
- * stays null: it means "use default", so the run passes no flag and Claude Code decides, and a
- * plan without AOP's catalog model still runs. The first runnable runtime configuration of the
- * provider supplies the command and, for a model or effort that is named, what it offers; the
- * engine re-applies that configuration on every send, so a named model the configuration does
- * not offer falls back to its default model instead of failing a run.
+ * Turns a project's runtime preference into concrete session columns. The role runs on the
+ * runtime configuration the project names; if that one is gone (or has no models left), on
+ * `fallbackRuntimeId` (the host's default runtime), and then on the built-in Claude Code one. The
+ * configuration supplies the command and, for a model or effort that is named, what it offers;
+ * the engine re-applies it on every send, so a named model the configuration does not offer falls
+ * back to its default model instead of failing a run. A null model or effort stays null: it means
+ * "use default", so the run passes no flag and the CLI decides. Whether the command can run at
+ * all is checked when a turn starts (runtime-configuration/readiness.ts), so a missing or logged
+ * out runtime fails that turn with a reason instead of being swapped for another one here.
  */
 export const resolveSessionRuntime = async (
   configurations: RuntimeConfigurationRepository,
   preference: RuntimePreference,
+  fallbackRuntimeId: string = BUILT_IN_RUNTIME_ID,
 ): Promise<SessionRuntime> => {
-  const configuration = (await configurations.list()).find(
-    (candidate) => candidate.driver === preference.provider && candidate.models.length > 0,
-  );
+  const configuration = pickConfiguration(await configurations.list(), [
+    preference.runtimeId,
+    fallbackRuntimeId,
+    BUILT_IN_RUNTIME_ID,
+  ]);
   const defaultModel = configuration && getDefaultRuntimeConfigurationModel(configuration.models);
   if (!configuration || !defaultModel) {
     return {
@@ -51,13 +59,25 @@ export const resolveSessionRuntime = async (
       : (configuration.models.find((candidate) => candidate.model === preference.model) ??
         defaultModel);
   return {
-    runtime: preference.provider,
+    runtime: configuration.driver,
     runtimeConfigurationId: configuration.id,
     runtimeAlias: configuration.command,
     model: named?.model ?? null,
     // With no model named, the configuration's default model stands in for the one the CLI picks.
     reasoningEffort: resolveEffort(preference.effort, named ?? defaultModel),
   };
+};
+
+// The first of `ids` that names a configuration with models; one without any cannot run a turn.
+const pickConfiguration = (
+  configurations: readonly RuntimeConfigurationProvider[],
+  ids: readonly string[],
+): RuntimeConfigurationProvider | undefined => {
+  for (const id of ids) {
+    const found = configurations.find((candidate) => candidate.id === id);
+    if (found && found.models.length > 0) return found;
+  }
+  return undefined;
 };
 
 // The preferred effort when the model supports it, otherwise the model's own default. A model

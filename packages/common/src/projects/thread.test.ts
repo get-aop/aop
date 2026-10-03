@@ -150,7 +150,12 @@ describe("ThreadSchema", () => {
   });
 
   test("a thread on the CLI's default records no model or effort", () => {
-    const runtime = { provider: "claude-code" as const, model: null, effort: null };
+    const runtime = {
+      provider: "claude-code" as const,
+      runtimeId: "claude-code",
+      model: null,
+      effort: null,
+    };
     expect(ThreadSchema.parse(makeThread({ runtime })).runtime).toEqual(runtime);
   });
 

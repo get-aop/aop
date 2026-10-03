@@ -2,6 +2,7 @@ import type { Project } from "@aop/common";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { ConfirmationHost } from "../../components/ConfirmationHost";
+import { RuntimeConfigurationProvider } from "../../hooks/runtime-configuration";
 import { type ApiCall, mockApi } from "../../test/mock-api";
 import { ProjectsProvider } from "../ProjectsProvider";
 import { makeEntry, makeState, stubLiveProjects } from "../test-utils";
@@ -15,6 +16,7 @@ export const renderSection = async (
   Section: ComponentType<{ project: Project }>,
   project: Project,
   respond: (call: ApiCall) => Response | Promise<Response> | undefined = () => undefined,
+  options: { withRuntimes?: boolean } = {},
 ) => {
   const api = mockApi(
     (call) =>
@@ -24,12 +26,19 @@ export const renderSection = async (
         : undefined),
   );
   const stub = stubLiveProjects(makeState([makeEntry(project)]));
-  const page = (current: Project, open = true) => (
+  const section = (current: Project, open: boolean) => (
     <ProjectsProvider live={stub.live}>
       {open ? <Section project={current} /> : null}
       <ConfirmationHost />
     </ProjectsProvider>
   );
+  // With `withRuntimes`, the runtimes come from the host (`respond` answers their reads).
+  const page = (current: Project, open = true) =>
+    options.withRuntimes ? (
+      <RuntimeConfigurationProvider>{section(current, open)}</RuntimeConfigurationProvider>
+    ) : (
+      section(current, open)
+    );
   const view = render(page(project));
   // Async so the switch's size read (a microtask in the test DOM) lands inside act.
   await act(async () => {});

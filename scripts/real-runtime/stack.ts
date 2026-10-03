@@ -90,7 +90,10 @@ const registerRepo = async (api: string, path: string): Promise<string> => {
   return repoId;
 };
 
-/** The gate becomes the first runtime configuration, with `sonnet` as its model, so projects pick it up. */
+/**
+ * The gate becomes a runtime configuration with `sonnet` as its model, and the host's default
+ * runtime, so every project the scenarios create runs on it.
+ */
 const registerGateRuntime = async (api: string): Promise<void> => {
   const http = createApi(api);
   const base = "/api/runtime-configuration";
@@ -104,7 +107,5 @@ const registerGateRuntime = async (api: string): Promise<void> => {
     model: "sonnet",
     thinkingLevels: ["low", "medium", "high"],
   });
-  const { providers } = await http.get<{ providers: { id: string }[] }>(base);
-  const others = providers.map(({ id }) => id).filter((id) => id !== provider.id);
-  await http.put(`${base}/providers/order`, { providerIds: [provider.id, ...others] });
+  await http.put(`${base}/default`, { runtimeId: provider.id });
 };

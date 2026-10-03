@@ -190,7 +190,12 @@ describe("statusChangeOf", () => {
     id: "isess_1",
     projectId: "proj_1",
     title: "t",
-    runtime: { provider: "claude-code", model: "claude-opus-4-8", effort: "high" },
+    runtime: {
+      provider: "claude-code",
+      runtimeId: "claude-code",
+      model: "claude-opus-4-8",
+      effort: "high",
+    },
     target: { kind: "host" },
     repoId: null,
     branch: null,

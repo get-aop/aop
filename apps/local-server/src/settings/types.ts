@@ -1,4 +1,5 @@
 import {
+  BUILT_IN_RUNTIME_ID,
   buildChannel,
   DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES,
   DEFAULT_LIVE_VIEW_MODE,
@@ -19,6 +20,7 @@ import {
   parseMaxConcurrentRuns,
   parseRoutineMaxActive,
   parseRoutineMinInterval,
+  RuntimeIdSchema,
 } from "@aop/common";
 import type { Setting } from "../db/schema.ts";
 
@@ -48,6 +50,13 @@ export const SettingKey = {
    * (not stored in the visible message transcript).
    */
   CHAT_GLOBAL_INSTRUCTIONS: "chat_global_instructions",
+  /**
+   * The runtime configuration a new project's coordinator and threads start on, and the one a
+   * role falls back to when the runtime its project names is gone (see project/runtime.ts). A
+   * runtime configuration id; `claude-code`, the built-in one, by default. Set through
+   * PUT /api/runtime-configuration/default, which checks the runtime exists.
+   */
+  DEFAULT_RUNTIME: "default_runtime_id",
   /**
    * What the host owner is called, for the dashboard to greet them by. Free text; empty (the
    * default) greets no one by name.
@@ -103,6 +112,7 @@ export const DEFAULT_SETTINGS: Record<SettingKey, string> = {
   [SettingKey.AGENT_CLI_CHECK_INTERVAL]: String(DEFAULT_AGENT_CLI_CHECK_INTERVAL_MINUTES),
   [SettingKey.AGENT_CLI_SKIP_PERMISSIONS]: "false",
   [SettingKey.CHAT_GLOBAL_INSTRUCTIONS]: "",
+  [SettingKey.DEFAULT_RUNTIME]: BUILT_IN_RUNTIME_ID,
   [SettingKey.DISPLAY_NAME]: "",
   [SettingKey.LIBRARY_RETENTION_DAYS]: String(LIBRARY_DEFAULTS.retentionDays),
   [SettingKey.LIBRARY_PROJECT_CAP_MB]: String(LIBRARY_DEFAULTS.projectCapMb),
@@ -198,6 +208,11 @@ const VALUE_RULES: readonly {
     keys: [SettingKey.LIVE_VIEW],
     valid: (value) => LiveViewModeSchema.safeParse(value).success,
     message: (key) => `${key} must be "off", "remote" or "always"`,
+  },
+  {
+    keys: [SettingKey.DEFAULT_RUNTIME],
+    valid: (value) => RuntimeIdSchema.safeParse(value).success,
+    message: (key) => `${key} must be a runtime configuration id`,
   },
   {
     keys: BOOLEAN_KEYS,

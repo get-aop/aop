@@ -1,5 +1,6 @@
 import {
   type BlockedQuestion,
+  BUILT_IN_RUNTIME_ID,
   type PullRequestChecks,
   type PullRequestRef,
   type Thread,
@@ -175,7 +176,13 @@ const toThread = (row: ThreadRow): Thread =>
     id: row.id,
     projectId: row.project_id,
     title: row.title,
-    runtime: { provider: row.runtime, model: row.model, effort: row.reasoning_effort },
+    runtime: {
+      provider: row.runtime,
+      // A thread started before runtimes were bound to sessions ran on the built-in one.
+      runtimeId: row.runtime_configuration_id ?? BUILT_IN_RUNTIME_ID,
+      model: row.model,
+      effort: row.reasoning_effort,
+    },
     target: JSON.parse(row.target_json),
     repoId: row.repo_id,
     branch: row.branch,

@@ -12,7 +12,9 @@ import type { Kysely } from "kysely";
 import { createCommandContext } from "../context.ts";
 import type { Database } from "../db/schema.ts";
 import { createTestDb } from "../db/test-utils.ts";
+import { createRuntimeReadiness } from "./readiness.ts";
 import { createRuntimeConfigurationRoutes } from "./routes.ts";
+import { createRuntimeConfigurationService } from "./service.ts";
 
 const BASE = "/api/runtime-configuration";
 
@@ -23,7 +25,25 @@ describe("runtime configuration routes", () => {
   beforeEach(async () => {
     db = await createTestDb();
     app = new Hono();
-    app.route(BASE, createRuntimeConfigurationRoutes(createCommandContext(db)));
+    const ctx = createCommandContext(db);
+    // No project uses a runtime here; runtime-configuration/service.test.ts covers the ones that do.
+    const noUsers = { list: async () => [], move: async () => {} };
+    // `claude` is found and logged in; any other command is missing.
+    const readiness = createRuntimeReadiness({
+      locate: (command) => (command === "claude" ? "/usr/local/bin/claude" : null),
+      run: async (argv) =>
+        argv.includes("auth")
+          ? { exitCode: 0, output: '{"loggedIn": true}' }
+          : { exitCode: 0, output: "2.1.288 (Claude Code)" },
+      now: () => Date.now(),
+    });
+    app.route(
+      BASE,
+      createRuntimeConfigurationRoutes(
+        ctx,
+        createRuntimeConfigurationService(ctx, noUsers, readiness),
+      ),
+    );
   });
 
   afterEach(async () => {
@@ -341,5 +361,56 @@ describe("runtime configuration routes", () => {
       defaultThinkingLevel: "not-a-level",
     });
     expect(invalid.status).toBe(400);
+  });
+
+  test("lists the host's default runtime, the built-in one until another is chosen", async () => {
+    const before = (await (await app.request(BASE)).json()) as { defaultRuntimeId: string };
+    expect(before.defaultRuntimeId).toBe("claude-code");
+
+    const created = await send("POST", "/providers", { name: "Wrapper", command: "cpe" });
+    const { provider } = (await created.json()) as { provider: RuntimeConfigurationProvider };
+    const chosen = await send("PUT", "/default", { runtimeId: provider.id });
+
+    expect(chosen.status).toBe(200);
+    expect(
+      ((await (await app.request(BASE)).json()) as { defaultRuntimeId: string }).defaultRuntimeId,
+    ).toBe(provider.id);
+  });
+
+  test("refuses a default that is not a runtime", async () => {
+    expect((await send("PUT", "/default", { runtimeId: "rtprov_nope" })).status).toBe(404);
+    expect((await send("PUT", "/default", {})).status).toBe(400);
+  });
+
+  test("reports each runtime's status: found, version, login, and why one is not ready", async () => {
+    const created = await send("POST", "/providers", { name: "Missing", command: "not-here" });
+    const { provider } = (await created.json()) as { provider: RuntimeConfigurationProvider };
+
+    const response = await app.request(`${BASE}/status?fresh=1`);
+    const { statuses } = (await response.json()) as {
+      statuses: { runtimeId: string; ready: boolean; reason: string | null }[];
+    };
+
+    expect(statuses.find((status) => status.runtimeId === "claude-code")).toMatchObject({
+      path: "/usr/local/bin/claude",
+      version: "2.1.288",
+      auth: "logged-in",
+      ready: true,
+      reason: null,
+    });
+    expect(statuses.find((status) => status.runtimeId === provider.id)).toMatchObject({
+      path: null,
+      ready: false,
+      reason: "The command `not-here` was not found on this host's PATH.",
+    });
+  });
+
+  test("removes a custom runtime no project uses, and never the built-in one", async () => {
+    const created = await send("POST", "/providers", { name: "Spare", command: "spare" });
+    const { provider } = (await created.json()) as { provider: RuntimeConfigurationProvider };
+
+    expect((await send("DELETE", `/providers/${provider.id}`)).status).toBe(204);
+    expect((await send("DELETE", "/providers/claude-code")).status).toBe(404);
+    expect((await listProviders()).map((item) => item.id)).toEqual(["claude-code"]);
   });
 });

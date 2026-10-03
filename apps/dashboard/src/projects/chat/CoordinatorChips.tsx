@@ -15,12 +15,16 @@ import { patchProject } from "../../api/projects";
 import { useRuntimeConfiguration } from "../../hooks/runtime-configuration";
 import { useLiveProjects } from "../ProjectsProvider";
 import {
+  changeModel,
+  changeRuntime,
   defaultEffortLabel,
   defaultModelLabel,
   effortLabel,
   effortOptions,
   modelLabel,
   modelOptions,
+  runtimeChoices,
+  runtimeOf,
 } from "./runtime-options";
 
 const DEFAULT_VALUE = "default";
@@ -29,19 +33,22 @@ const CHIP_CLASS =
   "flex h-8 min-w-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 text-meta font-medium text-text-muted transition-colors duration-[120ms] hover:bg-hover hover:text-text disabled:opacity-50";
 
 /**
- * The model and effort the project's coordinator runs on, in the composer's footer as in the
- * apps this one follows. They are the project's own settings: a change here is saved to the
- * project and applies from the coordinator's next turn.
+ * The runtime, model and effort the project's coordinator runs on, in the composer's footer as in
+ * the apps this one follows. They are the project's own settings: a change here is saved to the
+ * project and applies from the coordinator's next turn. The model list is the runtime's, the same
+ * one project settings › Models shows; runtimes that are not ready are listed but not offered.
  */
 export const CoordinatorChips = ({ project }: { project: Project }) => {
   const live = useLiveProjects();
-  const { providers } = useRuntimeConfiguration();
+  const { providers, statuses } = useRuntimeConfiguration();
   const preference = project.coordinator;
   const reported = project.reportedRuntime.coordinator;
   const options = useMemo(
-    () => modelOptions(preference.provider, providers),
-    [preference.provider, providers],
+    () => modelOptions(preference.runtimeId, providers),
+    [preference.runtimeId, providers],
   );
+  const runtimes = runtimeChoices(providers, statuses);
+  const runtimeName = runtimeOf(preference.runtimeId, providers)?.name ?? "Runtime";
   const efforts = useMemo(() => effortOptions(preference, options), [preference, options]);
   const editable = project.status !== "archived";
 
@@ -55,6 +62,47 @@ export const CoordinatorChips = ({ project }: { project: Project }) => {
 
   return (
     <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            data-testid="coordinator-runtime"
+            aria-label="Coordinator runtime"
+            disabled={!editable}
+            className={cn(CHIP_CLASS, "max-w-40")}
+          >
+            <span className="truncate">{runtimeName}</span>
+            <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="top" data-testid="coordinator-runtime-menu">
+          <DropdownMenuLabel>Coordinator runtime</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={preference.runtimeId}
+            onValueChange={(value) => void change(changeRuntime(preference, value, providers))}
+          >
+            {runtimes.map((runtime) => (
+              <DropdownMenuRadioItem
+                key={runtime.id}
+                value={runtime.id}
+                disabled={!runtime.ready && runtime.id !== preference.runtimeId}
+                data-testid={`coordinator-runtime-${runtime.id}`}
+                title={runtime.reason ?? undefined}
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">{runtime.name}</span>
+                  {runtime.ready ? null : (
+                    <span className="max-w-64 truncate text-meta text-text-subtle">
+                      {runtime.reason}
+                    </span>
+                  )}
+                </span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -73,7 +121,7 @@ export const CoordinatorChips = ({ project }: { project: Project }) => {
           <DropdownMenuRadioGroup
             value={preference.model ?? DEFAULT_VALUE}
             onValueChange={(value) =>
-              void change({ ...preference, model: value === DEFAULT_VALUE ? null : value })
+              void change(changeModel(preference, value === DEFAULT_VALUE ? null : value, options))
             }
           >
             <DropdownMenuRadioItem value={DEFAULT_VALUE} data-testid="coordinator-model-default">

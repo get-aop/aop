@@ -22,6 +22,7 @@ import {
   type MessagePageRequest,
   UNKNOWN_PAGE_ANCHOR,
 } from "../project/wire-messages.ts";
+import { readDefaultRuntimeId } from "../runtime-configuration/default-runtime.ts";
 import { createRuntimeConfigurationRepository } from "../runtime-configuration/repository.ts";
 import { recordSuggestionsChanged } from "../suggestion/events.ts";
 import { createSuggestionRepository } from "../suggestion/repository.ts";
@@ -271,11 +272,15 @@ export const createThreadService = (
     const plan = await planSpawn(projectId, input);
     if ("error" in plan) return { success: false, error: plan.error };
     const { project, thread } = plan;
-    const runtime = await resolveSessionRuntime(runtimeConfigurations, {
-      ...project.thread,
-      ...(input.model && { model: input.model }),
-      ...(input.effort && { effort: input.effort }),
-    });
+    const runtime = await resolveSessionRuntime(
+      runtimeConfigurations,
+      {
+        ...project.thread,
+        ...(input.model && { model: input.model }),
+        ...(input.effort && { effort: input.effort }),
+      },
+      await readDefaultRuntimeId(ctx, runtimeConfigurations),
+    );
     // The session is stored before its worktree exists, so everything on disk has an owner in
     // the database; a spawn that stops halfway leaves a thread whose next turn makes the worktree.
     await ctx.eventPublisher.transaction(async (tx) => {
