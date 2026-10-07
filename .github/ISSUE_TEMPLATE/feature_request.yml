@@ -1,0 +1,21 @@
+name: Feature request
+description: Something AOP should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The work you're doing and where AOP gets in the way or falls short.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you'd like it to work, if you have an idea.
+  - type: input
+    id: version
+    attributes:
+      label: AOP version
+      placeholder: "0.11.0"

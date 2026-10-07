@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/get-aop/aop/security/advisories/new
+    about: Please report security problems privately, never in a public issue.
+  - name: Questions and ideas
+    url: https://github.com/get-aop/aop/discussions
+    about: Ask how to do something, or share an idea before it becomes a request.
+  - name: Install and downloads
+    url: https://getaop.com
+    about: The installer, the desktop apps and what each one needs.
